@@ -348,3 +348,49 @@ describe('01B — F7: der Preflight-Merge sieht die lokale Rechnungsseite', () =
     expect(merged?.sentAt).toBeUndefined();
   });
 });
+
+describe('FINANZ-CORE-01A (F-01/RE-05) — eine stornierte Rechnung sperrt die Neuausstellung nicht', () => {
+  const storniert = { cancelledAt: '2026-09-09T10:00:00.000Z', paymentStatus: 'storniert' } as const;
+
+  it('D1: Preflight — gleicher Inhalt einer wirksamen Rechnung bleibt ein Verdacht', () => {
+    seed([schlussInvoice({ id: 'inv-wirksam' })]);
+    const fingerprint = buildInvoiceContentFingerprintFromInvoice(storedInvoice('inv-wirksam'));
+
+    const result = classifyVorgangInvoicesAndIntents({
+      identity: IDENTITY,
+      entries: [],
+      latest: buildPersistedStateSnapshot(),
+      contentFingerprint: fingerprint,
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: 'possible_existing_invoice', existingInvoiceId: 'inv-wirksam' });
+  });
+
+  it('D2: Preflight — derselbe Inhalt einer stornierten Rechnung darf neu ausgestellt werden', () => {
+    seed([schlussInvoice({ id: 'inv-storniert', ...storniert })]);
+    const fingerprint = buildInvoiceContentFingerprintFromInvoice(storedInvoice('inv-storniert'));
+
+    const result = classifyVorgangInvoicesAndIntents({
+      identity: IDENTITY,
+      entries: [],
+      latest: buildPersistedStateSnapshot(),
+      contentFingerprint: fingerprint,
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('D3: Wiederaufnahme — eine stornierte fremde Rechnung gleichen Inhalts ist kein Verdacht', () => {
+    seed([schlussInvoice({ id: 'inv-storniert', ...storniert })]);
+    const invoice = storedInvoice('inv-storniert');
+
+    const result = proveLocalInvoice({
+      identity: IDENTITY,
+      clientInvoiceId: 'inv-neu',
+      contentFingerprint: buildInvoiceContentFingerprintFromInvoice(invoice),
+      request: { invoice: { type: invoice.type } } as never,
+    });
+
+    expect(result.kind).toBe('none');
+  });
+});

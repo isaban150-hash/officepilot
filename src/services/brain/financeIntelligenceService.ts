@@ -13,7 +13,6 @@ import {
   resolveDocumentedDunningLevelFromRecords,
 } from '../dunningDocumentationService';
 import { buildInvoiceCreatePath, buildInvoiceDetailPath } from '../invoiceNavigation';
-import { getContractSkontoOfferForVorgang } from '../contractIntelligenceService';
 import { filterActiveItems, getInboxItemById, getInboxItems } from '../inboxService';
 import { isFinalizedInvoice } from '../invoiceArchiveService';
 import {
@@ -34,8 +33,10 @@ import {
 } from '../invoicePaymentService';
 import { buildLegalNotices, buildSkontoDeadline, parseSkontoFromText } from '../invoiceTaxService';
 import { getNotesForVorgang } from '../vorgangNoteService';
+import { getBusinessDay, shiftToWorkingDay, toBusinessDay } from '../businessDateService';
 import { getAllVorgaenge, getVorgangById, getVorgangInvoice } from '../vorgangService';
 import { isMaterialInvoiceInbox } from './workflowIntelligenceService';
+import { isInvoiceDeliveryBounced } from '../delivery/deliveryBounceRegistry';
 
 export { isExpectingPayment, isSentInvoice };
 
@@ -113,7 +114,8 @@ function isIncomingInvoiceItem(item: InboxItem): boolean {
 function getDueRelation(invoice: VorgangInvoice, today: Date | string): DueRelation {
   if (!invoice.paymentDueDate) return 'none';
   const todayStr = toDateOnly(today);
-  const due = toDateOnly(invoice.paymentDueDate);
+  // FINANZ-CORE-01A (ZAH-10) — § 193 BGB: das wirksame Fristende.
+  const due = shiftToWorkingDay(toDateOnly(invoice.paymentDueDate));
   if (todayStr < due) return 'before';
   if (todayStr === due) return 'on';
   return 'after';
@@ -136,9 +138,15 @@ export function countUnassignedDatevRelevantInbox(): number {
   ).length;
 }
 
+/*
+ * FINANZ-CORE-01A (ZAH-09) — eine Quelle für Hinweis und Zahlungsabgleich: der Skontotext der
+ * Rechnung. Bisher fiel der Hinweis auf das Vertragsskonto zurück, auch wenn es für diese
+ * Rechnung abgelehnt wurde. Zog der Kunde es dann ab, blieb der Abzug offen, die Rechnung wurde
+ * überfällig, und es folgten Aufgabe und Mahnempfehlung.
+ */
 function getOutgoingSkontoWindow(
   invoice: VorgangInvoice,
-  vorgang: Vorgang,
+  _vorgang: Vorgang,
   today: Date | string,
 ): SkontoWindow | null {
   let percent = 0;
@@ -149,14 +157,6 @@ function getOutgoingSkontoWindow(
     if (parsed) {
       percent = parsed.percent;
       days = parsed.days;
-    }
-  }
-
-  if (percent <= 0 || days <= 0) {
-    const contractOffer = getContractSkontoOfferForVorgang(vorgang);
-    if (contractOffer) {
-      percent = contractOffer.percent;
-      days = contractOffer.days;
     }
   }
 
@@ -314,12 +314,31 @@ export function getDocumentedDunningLevel(vorgangId: string, invoiceNumber: stri
   return resolveDocumentedDunningLevelFromRecords(records);
 }
 
+/** FINANZ-CORE-01A (ZAH-05) — volle Kalendertage seit der jüngsten dokumentierten Zahlungserinnerung. */
+function daysSinceLatestPaymentReminder(
+  vorgangId: string,
+  invoiceNumber: string,
+  today: Date | string,
+): number | null {
+  const latest = getDunningDocumentationsByInvoiceNumber(vorgangId, invoiceNumber).find(
+    (doc) => doc.kind === 'payment_reminder',
+  );
+  if (!latest) return null;
+  const todayDay = typeof today === 'string' ? toBusinessDay(today) : getBusinessDay(today);
+  const from = Date.parse(`${latest.documentedAt.slice(0, 10)}T00:00:00.000Z`);
+  const to = Date.parse(`${todayDay.slice(0, 10)}T00:00:00.000Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+  return Math.floor((to - from) / 86_400_000);
+}
+
 function resolveDunningAction(
   invoice: VorgangInvoice,
   vorgang: Vorgang,
   today: Date | string,
 ): DunningAction {
   if (!isExpectingPayment(invoice)) return 'none';
+  // FINANZ-CORE-01A (AUS-10) — nicht zugestellt: kein Verzug, also weder Erinnerung noch Mahnung vorschlagen.
+  if (isInvoiceDeliveryBounced(invoice)) return 'none';
   const summary = calculatePaymentSummary(invoice, today);
   if (summary.openAmount <= 0 || summary.status === 'bezahlt') return 'none';
   if (getDueRelation(invoice, today) !== 'after') return 'none';
@@ -331,7 +350,15 @@ function resolveDunningAction(
   const level = getDocumentedDunningLevel(vorgang.id, invoice.number);
   if (level >= 2) return 'none';
 
-  if (level === 1 && overdueDays >= 7) return 'mahnung';
+  /*
+   * FINANZ-CORE-01A (ZAH-05) — die Mahnung folgt der dokumentierten
+   * Zahlungserinnerung, nicht nur der Fälligkeit: Wer am 6. Verzugstag
+   * erinnerte, bekam sonst schon am nächsten Tag die Mahnung vorgeschlagen.
+   */
+  if (level === 1 && overdueDays >= 7) {
+    const sinceReminder = daysSinceLatestPaymentReminder(vorgang.id, invoice.number, today);
+    return sinceReminder === null || sinceReminder >= 7 ? 'mahnung' : 'none';
+  }
   if (level === 0 && overdueDays >= 3) return 'payment_reminder';
 
   return 'none';

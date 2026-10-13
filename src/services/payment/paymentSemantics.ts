@@ -24,6 +24,8 @@
  * Das ist keine neue Buchhaltungsschicht, sondern eine gemeinsame Rechenregel.
  */
 
+import { fromCents, toCents } from '../invoiceMoney';
+
 /**
  * Der gemeinsame Zustand eines positiven Belegs — ohne Storno, ohne
  * Gutschrift. Beide Fachtypen (`InvoicePaymentStatus`, `ExpensePaymentStatus`)
@@ -57,7 +59,8 @@ export interface SettlementInput {
  */
 export function calculateOverpaidAmount(totalDue: number, paidAmount: number): number {
   if (!Number.isFinite(totalDue) || !Number.isFinite(paidAmount)) return 0;
-  return Math.max(0, paidAmount - totalDue);
+  // FINANZ-CORE-01A — in Cent: 30,30 − (10,10 + 20,20) ist genau 0, nicht 3,6·10⁻¹⁵.
+  return fromCents(Math.max(0, toCents(paidAmount) - toCents(totalDue)));
 }
 
 /**
@@ -79,9 +82,10 @@ export function calculateOverpaidAmount(totalDue: number, paidAmount: number): n
  * Beide Seiten liefern `overdue` ohnehin bereits so.
  */
 export function resolveSettlementStatus(input: SettlementInput): SettlementStatus {
-  if (input.overpaidAmount > 0) return 'ueberbezahlt';
-  if (input.openAmount <= 0) return 'bezahlt';
-  if (input.paidAmount > 0) return input.overdue ? 'ueberfaellig' : 'teilbezahlt';
+  // FINANZ-CORE-01A — Vergleiche in Cent; ein Gleitkommarest ist kein offener Betrag.
+  if (toCents(input.overpaidAmount) > 0) return 'ueberbezahlt';
+  if (toCents(input.openAmount) <= 0) return 'bezahlt';
+  if (toCents(input.paidAmount) > 0) return input.overdue ? 'ueberfaellig' : 'teilbezahlt';
   return input.overdue ? 'ueberfaellig' : 'offen';
 }
 
@@ -94,7 +98,7 @@ export function resolveSettlementStatus(input: SettlementInput): SettlementStatu
  */
 export function getPaymentOverpayAmount(openAmount: number, paymentAmount: number): number {
   if (!Number.isFinite(paymentAmount) || !Number.isFinite(openAmount)) return 0;
-  return Math.max(0, paymentAmount - openAmount);
+  return fromCents(Math.max(0, toCents(paymentAmount) - toCents(openAmount)));
 }
 
 /**

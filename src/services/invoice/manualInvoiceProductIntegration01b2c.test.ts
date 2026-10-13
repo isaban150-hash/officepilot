@@ -385,6 +385,8 @@ describe('MANUAL-INVOICE-01B2c — Rechnung ohne Auftrag im Produkt', () => {
       street: 'Ruhrallee 5',
       zip: '45138',
       city: 'Essen',
+      // FINANZ-CORE-01A (RE-09): Steuernummer oder USt-IdNr. ist Pflichtangabe jeder Rechnung.
+      taxNumber: '133/8150/8159',
     });
     expect(profile.success).toBe(true);
     const draft = buildManualInvoiceDraft({ billing: CUSTOMER }, SETUP);

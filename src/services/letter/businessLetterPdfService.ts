@@ -13,6 +13,7 @@
  * einmal fertiggestellt war, druckt in einem Jahr Zeichen für Zeichen gleich.
  */
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { formatCompanyLegalName } from '../company/companyLegalName';
 import fontkit from '@pdf-lib/fontkit';
 import { loadInvoicePdfFont } from '../invoice/invoicePdfFonts';
 import { toPdfSafeText, downloadInvoicePdfBytes } from '../invoicePdfService';
@@ -294,7 +295,8 @@ async function drawLogo(cursor: Cursor, profil: CompanyProfile): Promise<number>
 /** Absenderzeilen aus den eingefrorenen Firmendaten — ohne leere Bestandteile. */
 function senderLines(profil: CompanyProfile): string[] {
   const zeilen: string[] = [];
-  const name = [profil.companyName, profil.legalForm].map((t) => t?.trim()).filter(Boolean).join(' ');
+  // FINANZ-CORE-01A (WEISS-Nacharbeit N14) — Firmierung ohne doppelte Rechtsform.
+  const name = formatCompanyLegalName(profil.companyName, profil.legalForm);
   if (name) zeilen.push(name);
   if (profil.street?.trim()) zeilen.push(profil.street.trim());
   const ort = [profil.zip, profil.city].map((t) => t?.trim()).filter(Boolean).join(' ');

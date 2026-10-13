@@ -32,6 +32,8 @@ export const deWorkspaceRole = {
    * erst an, statt einen Scheinerfolg zu zeigen.
    */
   'invoice.finance.roleHint': 'Zahlungen erfassen und Rechnungen stornieren nur Inhaber und Verwaltung.',
+  'invoice.approve.roleHint':
+    'Rechnungen freigeben nur Inhaber und Verwaltung. Der Entwurf bleibt gespeichert und kann dort freigegeben werden.',
   'payment.forbidden': 'Zahlungen erfassen nur Inhaber und Verwaltung. Es wurde nichts gebucht.',
   'payment.roleReverted':
     'Die Cloud hat die Zahlung nicht angenommen: Es fehlt die Berechtigung oder die Freigabe des Kontos. Die Zahlung wurde auf diesem Gerät zurückgenommen.',

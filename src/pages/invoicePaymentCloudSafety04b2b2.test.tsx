@@ -26,6 +26,11 @@ import { hydrateWorkspaceStore } from '../services/workspace/workspaceStore';
 import * as supabaseLib from '../lib/supabase';
 import type { InvoicePayment, Vorgang, VorgangInvoice } from '../types/models';
 import { alsInhaber } from '../test/workspaceRoleTestUtils';
+import {
+  getInvoicePaymentResyncBlocks,
+  recordInvoicePaymentResyncBlock,
+  resetInvoicePaymentResyncForTests,
+} from '../services/invoice/invoicePaymentCloudResyncService';
 
 /*
  * GO-LIVE-SECURITY-01 / ABSCHLUSS — Zahlung, Storno, Kontierung, Monatsabschluss und
@@ -316,6 +321,69 @@ describe('OFFICEPILOT-PAYMENT-CLOUD-SAFETY-04B2B2', () => {
     ).toBeNull();
   });
 
+  it('FINANZ-CORE-01A F-02: eine neu erfasste, von der Cloud bestätigte Zahlung gilt sofort als gesichert', async () => {
+    resetTestStores();
+    seed(buildInvoice({ payments: [], paymentStatus: 'offen' }));
+    const cloudRows: Record<string, unknown>[] = [];
+    const log = installClient((name, args) => {
+      if (name === 'add_workspace_invoice_payment') {
+        const row = {
+          id: `row-${cloudRows.length + 1}`,
+          workspace_id: WORKSPACE,
+          client_invoice_id: INVOICE_ID,
+          client_payment_id: String(args.p_client_payment_id),
+          amount: args.p_amount,
+          paid_on: args.p_paid_on,
+          reference: args.p_reference ?? null,
+          note: args.p_note ?? null,
+          created_at: '2026-08-26T09:00:00.000Z',
+          updated_at: '2026-08-26T09:00:00.000Z',
+          row_version: 1,
+          reversed_at: null,
+        };
+        cloudRows.push(row);
+        return [row];
+      }
+      // Der Pull kennt genau, was die Cloud bisher angenommen hat.
+      return [...cloudRows];
+    });
+
+    mounted = renderPage(<InvoiceDetailPage />);
+    await settle();
+    const pullsBefore = log.pulls();
+
+    const open = [...mounted.container.querySelectorAll('button')].find(
+      (node) => node.textContent?.trim() === 'Zahlung erfassen',
+    ) as HTMLElement | undefined;
+    expect(open).toBeTruthy();
+    await act(async () => open!.click());
+    const save = document.querySelector('[data-testid="payment-save"]') as HTMLElement | null;
+    expect(save).not.toBeNull();
+    // Absenden wie in financeRolleGls01: das Formular selbst, der vorgeschlagene offene Betrag.
+    const formular = save!.closest('form') as HTMLFormElement;
+    await act(async () => {
+      formular.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    for (let runde = 0; runde < 6; runde += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
+    const payments = stored().payments ?? [];
+    expect(payments).toHaveLength(1);
+    const paymentId = payments[0]!.id;
+    expect(log.calls.filter((name) => name === 'add_workspace_invoice_payment')).toHaveLength(1);
+    expect(cloudRows.map((row) => row.client_payment_id)).toEqual([paymentId]);
+
+    // Die bestätigte Sicherung gleicht gezielt neu ab — der Hinweis erscheint nicht.
+    expect(log.pulls()).toBeGreaterThan(pullsBefore);
+    expand(mounted.container);
+    expect(
+      mounted.container.querySelector(`[data-testid="payment-unsynced-${paymentId}"]`),
+    ).toBeNull();
+  });
+
   it('B2-C: ohne Supabase wird die Zahlung nicht lokal entfernt', async () => {
     vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(false);
     vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue(null);
@@ -349,5 +417,114 @@ describe('OFFICEPILOT-PAYMENT-CLOUD-SAFETY-04B2B2', () => {
     expect(toast?.textContent).toBe(
       'Ohne Verbindung zur Cloud lässt sich nicht klären, ob diese Zahlung dort gesichert ist. Sie bleibt deshalb bestehen.',
     );
+  });
+});
+
+/*
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N01) — eine endgültig abgewiesene Zahlung trägt einen
+ * dauerhaften Vermerk. Die Seite nennt den Grund; „Sichern" ist die bewusste neue Handlung:
+ * Sie sendet trotz Vermerk, und eine erneute Abweisung wird wieder vermerkt.
+ */
+describe('WEISS-N01 — Vermerk an der Zahlung', () => {
+  let mounted: PageMount | null = null;
+
+  beforeEach(() => {
+    resetTestStores();
+    resetInvoicePaymentResyncForTests();
+    seed();
+  });
+
+  afterEach(() => {
+    if (mounted) {
+      const { root, container } = mounted;
+      act(() => root.unmount());
+      container.remove();
+      mounted = null;
+    }
+    vi.restoreAllMocks();
+    resetInvoicePaymentResyncForTests();
+    resetTestStores();
+  });
+
+  function zeile() {
+    return {
+      id: 'row-1',
+      workspace_id: WORKSPACE,
+      client_invoice_id: INVOICE_ID,
+      client_payment_id: LEGACY_ID,
+      amount: 10000,
+      paid_on: '2026-08-25',
+      reference: null,
+      note: null,
+      created_at: '2026-08-25T09:00:00.000Z',
+      updated_at: '2026-08-25T09:00:00.000Z',
+      row_version: 1,
+      reversed_at: null,
+    };
+  }
+
+  it('N01-UI-a: der Grund steht an der Zahlung; „Sichern" sendet bewusst, eine erneute Abweisung bleibt vermerkt', async () => {
+    recordInvoicePaymentResyncBlock(INVOICE_ID, LEGACY_ID, 'denied');
+    let erlaubt = false;
+    const gesendet: string[] = [];
+    vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(true);
+    vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue({
+      rpc: async (name: string, args: Record<string, unknown>) => {
+        if (name === 'add_workspace_invoice_payment') {
+          gesendet.push(String(args.p_client_payment_id));
+          return erlaubt
+            ? { data: [zeile()], error: null }
+            : { data: null, error: { message: 'finance_forbidden_role', code: '42501' } };
+        }
+        return { data: erlaubt && gesendet.length > 1 ? [zeile()] : [], error: null };
+      },
+    } as never);
+
+    mounted = renderPage(<InvoiceDetailPage />);
+    await settle();
+    expand(mounted.container);
+
+    const grund = mounted.container.querySelector(`[data-testid="payment-resync-blocked-${LEGACY_ID}"]`);
+    expect(grund?.textContent).toContain('nicht automatisch erneut gesendet');
+
+    const knopf = () => mounted!.container.querySelector(`[data-testid="payment-secure-${LEGACY_ID}"]`) as HTMLElement;
+    await act(async () => {
+      knopf().click();
+    });
+    await settle();
+    // Bewusst gesendet — und erneut abgewiesen: der Vermerk steht wieder (über jeden Neustart).
+    expect(gesendet).toEqual([LEGACY_ID]);
+    expect(getInvoicePaymentResyncBlocks(INVOICE_ID)).toEqual({ [LEGACY_ID]: 'denied' });
+    expect(stored().payments).toHaveLength(1);
+
+    // Nach dem Rechtewechsel sichert erst die nächste bewusste Handlung — dann fällt der Vermerk.
+    erlaubt = true;
+    await act(async () => {
+      knopf().click();
+    });
+    await settle();
+    expect(gesendet).toEqual([LEGACY_ID, LEGACY_ID]);
+    expect(getInvoicePaymentResyncBlocks(INVOICE_ID)).toEqual({});
+    expect(mounted.container.querySelector(`[data-testid="payment-resync-blocked-${LEGACY_ID}"]`)).toBeNull();
+  });
+
+  it('N01-UI-b: vermerkt der Hintergrundlauf eine Abweisung, steht der Grund sofort an der offenen Zahlung', async () => {
+    vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(true);
+    vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue({
+      rpc: async () => ({ data: [], error: null }),
+    } as never);
+
+    mounted = renderPage(<InvoiceDetailPage />);
+    await settle();
+    expand(mounted.container);
+    const grund = () => mounted!.container.querySelector(`[data-testid="payment-resync-blocked-${LEGACY_ID}"]`);
+    expect(grund()).toBeNull();
+
+    // Wie der Lauf nach dem Start: die Abweisung kommt, während die Seite offen ist.
+    await act(async () => {
+      recordInvoicePaymentResyncBlock(INVOICE_ID, LEGACY_ID, 'overpayment_unconfirmed');
+    });
+    expect(grund()?.textContent).toContain('Überzahlung');
+    expect(grund()?.textContent).toContain('Ihrer Bestätigung');
   });
 });

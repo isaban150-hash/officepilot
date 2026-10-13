@@ -74,6 +74,8 @@ export interface BankStatementColumnMapping {
   amount?: string;
   debit?: string;
   credit?: string;
+  /** FINANZ-CORE-01A (ZAH-07) — Spalte „Soll/Haben" (S/H) neben einem vorzeichenlosen Umsatz. */
+  debitCreditFlag?: string;
   counterparty?: string;
   counterpartyIban?: string;
   purpose?: string;

@@ -5,6 +5,10 @@ import {
   cancelFinalizedInvoice,
   type CancelInvoiceFailureReason,
 } from '../../services/invoice/invoiceCancellationService';
+import { findFinalInvoiceBlockingCancel } from '../../services/invoice/invoiceCancelEligibility';
+import { formatDisplayDatePadded } from '../../utils/displayFormat';
+import { useOptionalAuth } from '../../context/AuthContext';
+import { isSupabaseConfigured } from '../../lib/supabase';
 import { getInvoiceDocumentTitle } from '../../services/invoiceTypeService';
 import type { VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
@@ -56,6 +60,10 @@ const REASON_MESSAGE_KEYS: Record<CancelInvoiceFailureReason, TranslationKey> = 
   type_not_supported: 'invoice.cancel.error.typeNotSupported',
   not_finalized: 'invoice.cancel.error.notFinalized',
   reason_required: 'invoice.cancel.error.reasonRequired',
+  final_invoice_exists: 'invoice.cancel.error.finalInvoiceExists',
+  sent_not_synced: 'invoice.cancel.error.sentNotSynced',
+  delivery_in_progress: 'invoice.cancel.error.deliveryInProgress',
+  delivery_uncertain: 'invoice.cancel.error.deliveryUncertain',
   not_found: 'invoice.cancel.error.notFound',
   forbidden: 'invoice.cancel.error.forbidden',
   offline: 'invoice.cancel.error.offline',
@@ -84,6 +92,8 @@ export function InvoiceCancelDialog({
   onCancelled,
   translate,
 }: Props) {
+  // FINANZ-CORE-01A (STO-02) — wer storniert; der Dienst sichert damit einen offenen Versandvermerk.
+  const authUser = useOptionalAuth()?.user;
   const [reason, setReason] = useState('');
   const [reasonTouched, setReasonTouched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -117,7 +127,9 @@ export function InvoiceCancelDialog({
   const trimmedReason = reason.trim();
   const reasonMissing = trimmedReason.length === 0;
   const hasLocalPayments = getInvoicePayments(invoice).length > 0;
-  const submitDisabled = busy || locked || reasonMissing || hasLocalPayments;
+  // FINANZ-CORE-01A (SQL-01) — Vorwarnung; die Entscheidung trifft der Server.
+  const blockingFinalInvoice = invoice.cancelledAt ? null : findFinalInvoiceBlockingCancel(vorgangId, invoice);
+  const submitDisabled = busy || locked || reasonMissing || hasLocalPayments || blockingFinalInvoice !== null;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -137,6 +149,7 @@ export function InvoiceCancelDialog({
       vorgangId,
       invoiceId: invoice.id,
       reason: trimmedReason,
+      actor: { userId: authUser?.id, cloudConfigured: isSupabaseConfigured() },
     });
 
     if (!result.ok) {
@@ -204,7 +217,8 @@ export function InvoiceCancelDialog({
           {invoiceDate ? (
             <div className="data-row" data-testid="invoice-cancel-date">
               <span className="data-row__label">{translate('invoice.issueDate')}</span>
-              <span className="data-row__value">{invoiceDate}</span>
+              {/* FINANZ-CORE-01A (F-03) — deutsches Datum statt ISO. */}
+              <span className="data-row__value">{formatDisplayDatePadded(invoiceDate)}</span>
             </div>
           ) : null}
           <div className="data-row" data-testid="invoice-cancel-amount">
@@ -237,9 +251,23 @@ export function InvoiceCancelDialog({
             {translate('invoice.cancel.error.activePayments')}
           </p>
         ) : null}
+        {blockingFinalInvoice ? (
+          <p className="invoice-payment-form__warning" data-testid="invoice-cancel-final-block">
+            {translate('invoice.cancel.error.finalInvoiceBlocks').replace('{number}', blockingFinalInvoice.number)}
+          </p>
+        ) : null}
 
         <label className="invoice-payment-form__field">
           <span>{translate('invoice.cancel.reasonLabel')}</span>
+          {/*
+            * FINANZ-CORE-01A (STO-10) — nach Versand entsteht ein Korrekturbeleg für den
+            * Kunden, und der Grund steht darauf. Das muss vor dem Schreiben klar sein.
+            */}
+          {expectedKind === 'correction' ? (
+            <span className="form-hint" data-testid="invoice-cancel-reason-public">
+              {translate('invoice.cancel.reasonPublicHint')}
+            </span>
+          ) : null}
           <textarea
             className="input invoice-payment-form__textarea"
             rows={3}

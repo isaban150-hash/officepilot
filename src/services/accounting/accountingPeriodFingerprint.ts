@@ -23,6 +23,7 @@ import type {
   AccountingPeriodManifestPayment,
 } from '../../types/accountingPeriod';
 import type { AccountingAssignment } from '../../types/accounting';
+import { canonicalAccountingAssignmentsBySource } from './accountingCanonical';
 import { belegExportKey } from '../steuerberater/monatsmappeModelService';
 import type { MonatsmappeBeleg, MonatsmappeModel } from '../steuerberater/monatsmappeModelService';
 
@@ -57,9 +58,17 @@ export function buildPeriodManifest(
    */
   version: AccountingPeriodFingerprintVersion = 3,
 ): AccountingPeriodManifest {
-  const bySource = new Map<string, AccountingAssignment>();
-  for (const assignment of assignments) {
-    bySource.set(`${assignment.sourceType}:${assignment.sourceId}`, assignment);
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N09) — ab Version 3 dieselbe Kontierung je Beleg wie
+   * Export und Detail. Ältere Fassungen behalten ihre Regel (letzte Zeile gewinnt), damit
+   * ein früherer Abschluss nicht nachträglich umgedeutet wird.
+   */
+  const bySource =
+    version >= 3 ? canonicalAccountingAssignmentsBySource(assignments) : new Map<string, AccountingAssignment>();
+  if (version < 3) {
+    for (const assignment of assignments) {
+      bySource.set(`${assignment.sourceType}:${assignment.sourceId}`, assignment);
+    }
   }
 
   const entries: AccountingPeriodManifestEntry[] = [];

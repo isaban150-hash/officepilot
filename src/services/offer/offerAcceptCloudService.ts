@@ -27,6 +27,8 @@ import { adoptServerVorgang, getVorgangById } from '../vorgangService';
 import { createVorgangFromCloudRow, mapWorkspaceVorgangRow, type WorkspaceVorgangRow } from '../vorgang/vorgangCloudService';
 import { adoptAcceptedOfferFromServer, canAcceptOffer, getOfferById } from './offerService';
 import { mapWorkspaceOfferRow, type WorkspaceOfferRow } from './offerCloudService';
+import { hasOfferSyncConflict } from './offerConflictService';
+import { isBrowserOffline, isOfferNetworkMessage, isOfferVersionConflictMessage } from './offerServerRejection';
 import type { Offer } from '../../types/offer';
 import type { Vorgang } from '../../types/models';
 
@@ -35,6 +37,10 @@ export type AcceptOfferFailure =
   | { ok: false; reason: 'not_acceptable' }
   | { ok: false; reason: 'cloud_required' }
   | { ok: false; reason: 'sync_pending' }
+  /** FINANZ-CORE-01A (ANG-03) — ein Versionskonflikt wartet auf die Entscheidung auf der Sync-Seite. */
+  | { ok: false; reason: 'sync_conflict' }
+  /** FINANZ-CORE-01A (ANG-14) — der Server kennt einen neueren Stand; ein Abgleich holt ihn. */
+  | { ok: false; reason: 'stale_version' }
   | { ok: false; reason: 'server_rejected'; message: string }
   | { ok: false; reason: 'network'; message: string };
 
@@ -76,7 +82,12 @@ export async function acceptOfferWithCloud(offerId: string, client?: SupabaseCli
     } catch {
       /* der erneute Blick unten entscheidet */
     }
-    if (hasActiveOutboxEntry(offerId)) return { ok: false, reason: 'sync_pending' };
+    if (hasOfferSyncConflict(offerId)) return { ok: false, reason: 'sync_conflict' };
+    if (hasActiveOutboxEntry(offerId)) {
+      // FINANZ-CORE-01A (ANG-14) — ohne Verbindung ist das „keine Verbindung", nicht „wird noch gespeichert".
+      if (isBrowserOffline()) return { ok: false, reason: 'network', message: 'offline' };
+      return { ok: false, reason: 'sync_pending' };
+    }
   }
 
   const current = getOfferById(offerId) ?? existing;
@@ -92,7 +103,16 @@ export async function acceptOfferWithCloud(offerId: string, client?: SupabaseCli
     });
     if (response.error) {
       const message = response.error.message ?? 'Unbekannter Fehler';
-      if (message.includes('Failed to fetch') || message.includes('Network')) return { ok: false, reason: 'network', message };
+      if (isOfferVersionConflictMessage(message)) {
+        // FINANZ-CORE-01A (ANG-14) — ein anderes Gerät hat das Angebot geändert; ein Abgleich holt den Stand.
+        try {
+          await runSyncFromUi();
+        } catch {
+          /* Der Nutzer versucht es erneut. */
+        }
+        return { ok: false, reason: 'stale_version' };
+      }
+      if (isOfferNetworkMessage(message)) return { ok: false, reason: 'network', message };
       return { ok: false, reason: 'server_rejected', message };
     }
     data = response.data;

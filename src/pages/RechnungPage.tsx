@@ -5,6 +5,7 @@ import { InvoiceDraftEditForm } from '../components/invoice/InvoiceDraftEditForm
 import { BackLink } from '../components/ui/PageHeader';
 import { Button } from '../components/ui/Button';
 import { Card, DataRow, PageHeader } from '../components/ui/Card';
+import { InvoiceCustomerDriftCard } from '../components/invoice/InvoiceCustomerDriftCard';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { NumericInput } from '../components/ui/NumericInput';
 import { useApp } from '../context/AppContext';
@@ -18,14 +19,23 @@ import {
   setAbschlagDraftCalculationMode,
   updateDraftPositionQuantity,
   updateInvoiceDraftFixedAmountNet,
+  replaceInvoiceDraftCustomerBilling,
   updateInvoiceDraftMetadata,
   updateInvoiceDraftTaxStatus,
   validateInvoiceDraftForApproval,
 } from '../services/invoiceService';
+import {
+  customerBillingDrift,
+  customerDriftFingerprint,
+  sameCustomerBilling,
+  type CustomerBillingField,
+} from '../services/customer/customerBillingCopy';
 import { getCompanyProfile } from '../services/companyProfileService';
 import { resolveDefaultTaxStatus } from '../services/invoice/invoiceDefaults';
 import {
+  customerNameMatchesOrder,
   mapFinalizationFailureToUx,
+  orderTaxStatusLock,
   taxDecisionBlocker as taxDecisionBlockerShared,
 } from '../services/invoice/invoiceApprovalUx';
 import { loadInvoiceDraftRecordByLocator } from '../services/invoice/invoiceDraftDurabilityService';
@@ -35,7 +45,15 @@ import {
   findCriticalCompanyProfileDrift,
   type CriticalCompanyField,
 } from '../services/invoice/companySnapshotDriftService';
-import { getRemainingFixedAmountBillableNetCents } from '../services/orderBillingRules';
+import {
+  getRemainingFixedAmountBillableNetCents,
+  hasDeductibleAbschlag,
+  hasSchlussrechnung,
+} from '../services/orderBillingRules';
+import { EInvoicePrecheckNotice } from '../components/invoice/EInvoicePrecheckNotice';
+import { InvoiceAbschlagSettlementNotice } from '../components/invoice/InvoiceAbschlagSettlementNotice';
+import { findUnsettledAbschlagDeductions, liveSettlementShareOf } from '../services/invoice/abschlagSettlement';
+import { precheckInvoiceDraftForEInvoice } from '../services/invoice/invoiceEInvoicePrecheck';
 import {
   useInvoiceDraftDurabilitySession,
   type InvoiceDraftSessionStatus,
@@ -47,6 +65,7 @@ import {
 } from '../services/invoice/invoiceDraftCloudBridge';
 import { useInvoiceDraftCloudState } from '../services/invoice/useInvoiceDraftCloudState';
 import {
+  INVOICE_FINALIZE_SLOW_NOTICE_MS,
   invoiceDraftCloudPrepMessageKey,
   prepareInvoiceDraftCloudForFinalization,
 } from '../services/invoice/invoiceDraftCloudFinalizePrep';
@@ -60,10 +79,12 @@ import { buildDocumentBlobScopeKey } from '../services/storage/documentBlobScope
 import { getActiveStorageScope } from '../services/storage/storageScopeService';
 import { buildPersistedStateSnapshot } from '../services/persistenceService';
 import { resolveCloudWorkspaceId } from '../services/workspace/workspaceSyncPayloadService';
-import { buildInvoicePrintModel } from '../services/invoicePrintModel';
+import { billingLineTotalMoney } from '../services/invoiceMoney';
+import { buildInvoicePrintModel, formatInvoiceCurrency } from '../services/invoicePrintModel';
 import { buildSkontoText } from '../services/invoiceTaxService';
 /* INVOICE-WIZARD-FULL-SAFE-RESUME-01B — sichere Bedienzustände nach Neuaufbau. */
 import { useUiSessionRestore } from '../hooks/useUiSessionRestore';
+import { useWorkspaceWriteAccess } from '../hooks/useWorkspaceWriteAccess';
 import { useReportUiSession } from '../hooks/useReportUiSession';
 import { applyMainScrollTop } from '../services/uiSession/uiSessionCapture';
 import {
@@ -76,6 +97,7 @@ import {
   CONTRACT_ORDER_INVOICE_TYPES,
   getInvoiceDocumentTitle,
   parseInvoiceDocumentType,
+  usesAbschlagDeductions,
 } from '../services/invoiceTypeService';
 import {
   analyzeContractIntelligenceFromInbox,
@@ -87,6 +109,7 @@ import { getCustomerById } from '../services/customerStoreService';
 import { getVorgangById } from '../services/vorgangService';
 import type {
   CompanyProfile,
+  CustomerBilling,
   InvoiceCalculationMode,
   InvoiceDraft,
   InvoiceDraftMetadataChanges,
@@ -254,6 +277,13 @@ export function RechnungPage() {
   const [acknowledgedCompanyFingerprint, setAcknowledgedCompanyFingerprint] = useState<string | null>(
     null,
   );
+  /*
+   * FINANZ-CORE-01A (KUN-08) — dieselbe Rückfrage für den Kundenstamm: Der Stand, den die Karte
+   * zeigt, ist genau der, den „Übernehmen" schreibt; gemerkt wird, wogegen bestätigt wurde.
+   */
+  const [customerDriftMaster, setCustomerDriftMaster] = useState<CustomerBilling | null>(null);
+  const [customerDriftFields, setCustomerDriftFields] = useState<CustomerBillingField[]>([]);
+  const [acknowledgedCustomerFingerprint, setAcknowledgedCustomerFingerprint] = useState<string | null>(null);
   const [applyContractSkonto, setApplyContractSkonto] = useState(false);
   /*
    * Reiner Darstellungszustand: „Der Nutzer hat die Übernahme versucht."
@@ -272,6 +302,8 @@ export function RechnungPage() {
    */
   const [confirmedDraftSha256, setConfirmedDraftSha256] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
+  /* FINANZ-CORE-01A (RE-12) — der begonnene Abschluss dauert ungewöhnlich lange. */
+  const [approvalSlow, setApprovalSlow] = useState(false);
   const [customerMasterConfirm, setCustomerMasterConfirm] = useState(false);
   const [customerMasterError, setCustomerMasterError] = useState<string | null>(null);
   /**
@@ -303,6 +335,29 @@ export function RechnungPage() {
   const approveLockRef = useRef(false);
 
   const vorgang = id ? getVorgangById(id) : undefined;
+  /*
+   * FINANZ-CORE-01A (SQL-04) — steht schon eine wirksame Schlussrechnung,
+   * entsteht für diesen Auftrag keine weitere Rechnung (auch keine zweite
+   * Schlussrechnung). Die Seite sagt es vorab, statt erst beim Freigeben zu
+   * scheitern; Koordinator und Server prüfen dasselbe noch einmal.
+   */
+  const finalInvoiceExists = vorgang ? hasSchlussrechnung(vorgang) : false;
+  /* FINANZ-CORE-01A (RE-04) — ein Pauschalabschlag wartet auf die Schlussrechnung. */
+  const deductibleAbschlagOpen = vorgang ? hasDeductibleAbschlag(vorgang) : false;
+  /*
+   * FINANZ-CORE-01A (RE-08) — eine Rechnung festschreiben dürfen nur Inhaber und
+   * Verwaltung (R1-SEC-01). Für ein sicher erkanntes Mitglied bietet die Seite
+   * die Freigabe deshalb gar nicht erst an; der Entwurf bleibt erhalten. Eine
+   * ungeklärte Rolle sperrt nicht — dort entscheidet der Server.
+   */
+  const approvalRoleDenied = useWorkspaceWriteAccess().reason === 'member';
+  /*
+   * FINANZ-CORE-01A (RE-07) — ein bestätigter Auftrag gibt den Steuerstatus vor;
+   * der Server lehnt eine abweichende Rechnung ab (`invoice_tax_status_mismatch`).
+   * Die Auswahl bietet deshalb nur noch diesen Status an. Ein Auftrag ohne
+   * Entscheidung („unclear") gibt nichts vor — dann entscheidet die Rechnung.
+   */
+  const orderTaxStatus = orderTaxStatusLock(vorgang?.taxStatus);
   const contractSkontoOffer = useMemo(
     () => (vorgang ? getContractSkontoOfferForVorgang(vorgang) : null),
     [vorgang],
@@ -614,6 +669,19 @@ export function RechnungPage() {
           }
           return;
         }
+        if (result.draftReopened) {
+          /*
+           * FINANZ-CORE-01A (RE-01) — der Server hat die gespeicherte Freigabe
+           * nachweislich ohne Rechnung abgelehnt; der Entwurf ist wieder
+           * bearbeitbar. Den Grund nennen, Cloud-Stand holen, Slot neu laden.
+           */
+          setResumeRecovery(null);
+          showToast(translate(mapFinalizationFailureToUx(result).messageKey));
+          void runSyncFromUi()
+            .catch(() => undefined)
+            .finally(() => setCloudReloadKey((key) => key + 1));
+          return;
+        }
         /*
          * Der Recovery-Zustand wird verständlich abgebildet und steuert die
          * angebotene Aktion. Es wird nie selbsttätig erneut versucht.
@@ -655,11 +723,41 @@ export function RechnungPage() {
   const finalizedInvoiceId = session.record?.finalization?.finalizedInvoiceId ?? null;
 
   const totals = draft ? calculateInvoiceTotals(draft, setup) : null;
+  /*
+   * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — die Vorschau zeigt schon, was die Freigabe
+   * einfriert: je mit Skonto beglichenem Abschlag den gezahlten Teil und das Skonto.
+   */
   const printModel = useMemo(
-    () => (draft ? buildInvoicePrintModel(draft, setup) : null),
-    [draft, setup],
+    () =>
+      draft
+        ? buildInvoicePrintModel(draft, setup, {
+            settlementOf: liveSettlementShareOf((invoiceId) =>
+              (vorgang?.invoices ?? []).find((invoice) => invoice.id === invoiceId),
+            ),
+          })
+        : null,
+    [draft, setup, vorgang],
   );
   const overbillingWarnings = draft ? getOverbillingWarnings(draft) : [];
+  /* FINANZ-CORE-01A (KUN-02) — E-Rechnungs-Vorprüfung, nur in der Vorschau berechnet. */
+  const einvoicePrecheck = useMemo(
+    () => (step === 'preview' && draft && id ? precheckInvoiceDraftForEInvoice(id, draft, setup) : null),
+    [step, draft, id, setup],
+  );
+
+  /*
+   * FINANZ-CORE-01A (WEISS N02/D1) — eine Schlussrechnung zieht nur beglichene Abschläge ab.
+   * Welche noch offen sind, steht vor der Freigabe sichtbar da (die Prüfung sperrt sie ohnehin).
+   */
+  const unsettledAbschlaege = useMemo(
+    () =>
+      draft && vorgang && usesAbschlagDeductions(draft.type)
+        ? findUnsettledAbschlagDeductions(draft.previousAbschlagDeductions, (invoiceId) =>
+            (vorgang.invoices ?? []).find((invoice) => invoice.id === invoiceId),
+          )
+        : [],
+    [draft, vorgang],
+  );
 
   const taxKey = `tax.${draft?.taxStatus ?? resolveDefaultTaxStatus(getCompanyProfile(), setup)}` as TranslationKey;
 
@@ -1014,6 +1112,7 @@ export function RechnungPage() {
               type="button"
               className={`chip ${currentDraft.taxStatus === status ? 'chip--active' : ''}`}
               data-testid={`invoice-tax-${status}`}
+              disabled={orderTaxStatus !== null && status !== orderTaxStatus}
               onClick={() => handleTaxChange(status)}
             >
               {translate(`tax.${status}` as TranslationKey)}
@@ -1028,6 +1127,11 @@ export function RechnungPage() {
         * Bewusst der übersetzte Name und niemals der technische Wert: Der
         * Nutzer soll „§19 Kleinunternehmer" lesen, nicht `kleinunternehmer_19`.
         */}
+      {orderTaxStatus ? (
+        <p className="form-hint" data-testid="invoice-tax-from-order">
+          {translate('invoice.taxStatusFromOrder')}
+        </p>
+      ) : null}
       <p className="invoice-tax-decision__selected" data-testid="invoice-tax-selected">
         {translate('invoice.taxStatusSelected')}:{' '}
         <strong>{translate(`tax.${currentDraft.taxStatus}` as TranslationKey)}</strong>
@@ -1126,13 +1230,8 @@ export function RechnungPage() {
   const masterAddressComplete = Boolean(
     masterCustomer?.street.trim() && masterCustomer.zip.trim() && masterCustomer.city.trim(),
   );
-  const masterMatchesDraft = Boolean(
-    masterBilling &&
-      draft &&
-      (Object.keys(masterBilling) as Array<keyof typeof masterBilling>).every(
-        (field) => masterBilling[field] === draft.customerBilling[field],
-      ),
-  );
+  // FINANZ-CORE-01A (KUN-04) — vollständig verglichen, auch im Stamm gelöschte optionale Felder.
+  const masterMatchesDraft = Boolean(masterBilling && draft && sameCustomerBilling(masterBilling, draft.customerBilling));
 
   const applyMasterBilling = () => {
     if (!vorgang) return;
@@ -1143,9 +1242,7 @@ export function RechnungPage() {
       setCustomerMasterError(translate('invoice.customerMaster.missing'));
       return;
     }
-    mutateDraft((prev) =>
-      updateInvoiceDraftMetadata(prev, { customerBilling: billingFromCustomer(current) }),
-    );
+    mutateDraft((prev) => replaceInvoiceDraftCustomerBilling(prev, billingFromCustomer(current)));
     setCustomerMasterConfirm(false);
     setCustomerMasterError(null);
     showToast(translate('invoice.customerMaster.applied'));
@@ -1156,10 +1253,13 @@ export function RechnungPage() {
     setValidationErrors([]);
   };
 
-  const handleFixedAmountChange = (value: string) => {
-    const parsed = Number(String(value).replace(',', '.'));
+  /*
+   * FINANZ-CORE-01A (RE-10/A4) — der Pauschalbetrag kommt als Zahl aus `NumericInput`:
+   * deutsch gelesen („1.500" sind 1.500 €, nicht 1,50 €) und auf Cent begrenzt.
+   */
+  const handleFixedAmountChange = (value: number) => {
     mutateDraft((prev) =>
-      updateInvoiceDraftFixedAmountNet(prev, Number.isFinite(parsed) ? parsed : 0),
+      updateInvoiceDraftFixedAmountNet(prev, Number.isFinite(value) ? value : 0),
     );
   };
 
@@ -1281,7 +1381,14 @@ export function RechnungPage() {
      * CLOUD-SYNC S5 — erst den Entwurf zur Ruhe bringen: Die Cloud muss genau
      * diesen fachlichen Kern tragen. Sonst wird gar nicht erst begonnen.
      */
-    const cloudReady = await prepareInvoiceDraftCloudForFinalization(record, draft);
+    /*
+     * FINANZ-CORE-01A (RE-15) — auch der Entwurf selbst kommt aus dem gespeicherten
+     * Datensatz, nicht aus der Closure: Schrieb derselbe Klick vorher in den Entwurf
+     * (Firmendaten übernehmen), spiegelte die Cloud sonst kurz den alten Inhalt, und der
+     * erste Versuch scheiterte mit „noch nicht synchronisiert".
+     */
+    const storedDraft = reloaded?.ok ? reloaded.draft : draft;
+    const cloudReady = await prepareInvoiceDraftCloudForFinalization(record, storedDraft);
     if (!cloudReady.ok) {
       approveLockRef.current = false;
       setApproving(false);
@@ -1290,6 +1397,12 @@ export function RechnungPage() {
     }
 
     markFinalizationStarted();
+    /*
+     * FINANZ-CORE-01A (RE-12) — nach dem Start gibt es kein sicheres Abbrechen mehr.
+     * Dauert die Freigabe ungewöhnlich lange (Funkloch), erklärt ein Hinweis die Lage;
+     * die Sperre bleibt, und beim nächsten Öffnen klärt die Wiederaufnahme den Ausgang.
+     */
+    const slowTimer = setTimeout(() => setApprovalSlow(true), INVOICE_FINALIZE_SLOW_NOTICE_MS);
     const result = await startInvoiceDraftFinalization({
       identity: {
         sourceScopeKey: record.sourceScopeKey,
@@ -1301,6 +1414,9 @@ export function RechnungPage() {
       expectedRevision: record.revision,
       approvalOptions: { reverseCharge13bConfirmed },
       overbillingAcknowledged: overbillingWarnings.length > 0,
+    }).finally(() => {
+      clearTimeout(slowTimer);
+      setApprovalSlow(false);
     });
 
     if (!result.ok) {
@@ -1322,7 +1438,11 @@ export function RechnungPage() {
        * Cloud-Stand holen, dann den Slot neu laden — der Editor zeigt danach den
        * Konflikt oder die vorhandene Rechnung.
        */
-      if (result.reason === 'draft_binding_rejected' || result.reason === 'draft_finalized_elsewhere') {
+      if (
+        result.draftReopened ||
+        result.reason === 'draft_binding_rejected' ||
+        result.reason === 'draft_finalized_elsewhere'
+      ) {
         approveLockRef.current = false;
         setApproving(false);
         void runSyncFromUi()
@@ -1349,12 +1469,36 @@ export function RechnungPage() {
    * Übermengenfrage. So entsteht keine Reihenfolge, in der ein Gate das andere
    * verschluckt.
    */
-  const continueAfterCompanyDrift = () => {
+  const continueAfterCustomerDrift = () => {
     if (overbillingWarnings.length > 0) {
       setShowOverbillingConfirm(true);
       return;
     }
     runApproval();
+  };
+
+  /*
+   * FINANZ-CORE-01A (KUN-08) — nach den Firmendaten die Kundendaten: Wurde der Kundenstamm seit
+   * dem Entwurf geändert (etwa eine neue Anschrift oder USt-IdNr.), fragt die Freigabe nach,
+   * statt den alten Stand still einzufrieren. Gelesen wird im Augenblick des Klicks, strikt über
+   * die Kunden-ID des Auftrags. Eine bewusst abweichende Rechnungsanschrift bleibt möglich.
+   */
+  const continueAfterCompanyDrift = () => {
+    const customerId = vorgang?.customerId?.trim() ?? '';
+    const master = customerId ? getCustomerById(customerId) : undefined;
+    if (draft && master) {
+      const masterBilling = billingFromCustomer(master);
+      const drift = customerBillingDrift(draft.customerBilling, masterBilling);
+      if (
+        drift.length > 0 &&
+        acknowledgedCustomerFingerprint !== customerDriftFingerprint(draft.customerBilling, masterBilling)
+      ) {
+        setCustomerDriftFields(drift);
+        setCustomerDriftMaster(masterBilling);
+        return;
+      }
+    }
+    continueAfterCustomerDrift();
   };
 
   /**
@@ -1368,6 +1512,27 @@ export function RechnungPage() {
    * Zeitpunkt, an dem die Frage überhaupt zählt — also wird sie dort gestellt.
    */
   const handleApprove = () => {
+    /*
+     * FINANZ-CORE-01A (RE-07) — zwei Ablehnungen des Servers sind vorhersehbar:
+     * ein vom Auftrag abweichender Steuerstatus und ein Empfängername, der weder
+     * zum Auftrag noch zum Kundenstamm passt. Vorher sagen statt nach `begin`.
+     */
+    if (draft && orderTaxStatus && draft.taxStatus !== orderTaxStatus) {
+      showToast(translate('invoice.approve.taxStatusOrderMismatch'));
+      return;
+    }
+    if (
+      draft &&
+      vorgang &&
+      !customerNameMatchesOrder(
+        draft.customerBilling.name,
+        vorgang.customerBilling?.name ?? vorgang.customer,
+        vorgang.customerId ? getCustomerById(vorgang.customerId)?.name : undefined,
+      )
+    ) {
+      showToast(translate('invoice.approve.customerOrderMismatch'));
+      return;
+    }
     const profile = getCompanyProfile();
     const fingerprint = buildCriticalCompanyFingerprint(profile);
     if (draft && acknowledgedCompanyFingerprint !== fingerprint) {
@@ -1419,6 +1584,26 @@ export function RechnungPage() {
     setAcknowledgedCompanyFingerprint(buildCriticalCompanyFingerprint(getCompanyProfile()));
     setShowCompanyDriftConfirm(false);
     continueAfterCompanyDrift();
+  };
+
+  /** FINANZ-CORE-01A (KUN-08) — „Aktuelle Kundendaten übernehmen": der gezeigte Stand, vollständig. */
+  const handleApplyCustomerDrift = () => {
+    if (!customerDriftMaster) return;
+    const master = customerDriftMaster;
+    mutateDraft((prev) => replaceInvoiceDraftCustomerBilling(prev, master));
+    setAcknowledgedCustomerFingerprint(customerDriftFingerprint(master, master));
+    setCustomerDriftMaster(null);
+    showToast(translate('invoice.customerDrift.applied'));
+    continueAfterCustomerDrift();
+  };
+
+  /** FINANZ-CORE-01A (KUN-08) — „Bisherigen Stand behalten": gilt nur für genau dieses Paar. */
+  const handleKeepCustomerBilling = () => {
+    if (draft && customerDriftMaster) {
+      setAcknowledgedCustomerFingerprint(customerDriftFingerprint(draft.customerBilling, customerDriftMaster));
+    }
+    setCustomerDriftMaster(null);
+    continueAfterCustomerDrift();
   };
 
   const handleConfirmOverbilling = () => {
@@ -1521,6 +1706,16 @@ export function RechnungPage() {
             <p className="form-hint" data-testid="invoice-type-hint">
               {translate(`invoice.typeHint.${draft.type}` as TranslationKey)}
             </p>
+            {deductibleAbschlagOpen && draft.type === 'rechnung' && (
+              <p className="invoice-hint invoice-hint--warning" data-testid="invoice-fixed-abschlag-hint">
+                {translate('invoice.validation.fixedAbschlagRequiresSchluss')}
+              </p>
+            )}
+            {deductibleAbschlagOpen && draft.type === 'teilrechnung' && (
+              <p className="invoice-hint" data-testid="invoice-fixed-abschlag-hint">
+                {translate('invoice.validation.warn.fixedAbschlagDeductedInSchluss')}
+              </p>
+            )}
           </Card>
 
           {draft.type === 'abschlag' && (
@@ -1549,6 +1744,12 @@ export function RechnungPage() {
                 </button>
               </div>
             </Card>
+          )}
+
+          {finalInvoiceExists && !finalizationLocked && (
+            <p className="invoice-hint invoice-hint--warning" data-testid="invoice-final-exists-hint">
+              {translate('invoice.finalInvoiceExistsHint')}
+            </p>
           )}
 
           {progressBillingAllowed && (
@@ -1626,15 +1827,17 @@ export function RechnungPage() {
               <Card>
                 <label className="invoice-edit__field">
                   <span className="invoice-edit__label">{translate('invoice.fixedAmountNet')}</span>
-                  <input
-                    type="number"
+                  <NumericInput
+                    id="invoice-fixed-amount-net"
                     className="input"
+                    mode="decimal"
+                    strict
                     min={0}
-                    step="0.01"
-                    value={draft.fixedAmountNet ?? ''}
+                    maxFractionDigits={2}
+                    value={draft.fixedAmountNet ?? 0}
                     data-testid="invoice-fixed-amount-net"
                     disabled={cloud.blocked}
-                    onChange={(event) => handleFixedAmountChange(event.target.value)}
+                    onChange={handleFixedAmountChange}
                   />
                 </label>
                 {/*
@@ -1744,7 +1947,7 @@ export function RechnungPage() {
                       {pos.unit}
                     </span>
                     <span className="position-price">
-                      {(pos.quantity * pos.unitPrice).toLocaleString('de-DE')} €
+                      {formatInvoiceCurrency(billingLineTotalMoney(pos.quantity, pos.unitPrice))}
                     </span>
                   </div>
                   {quantityBlocked[pos.id] === 'incomplete' && (
@@ -1907,6 +2110,10 @@ export function RechnungPage() {
             </div>
           )}
 
+          <InvoiceAbschlagSettlementNotice unsettled={unsettledAbschlaege} translate={translate} />
+
+          {einvoicePrecheck && <EInvoicePrecheckNotice precheck={einvoicePrecheck} translate={translate} />}
+
           {/*
             * INVOICE-TAX-FLOW-01B — die §13b-Bestätigung stand bis hierher an
             * dieser Stelle, also unterhalb der vollständigen Vorschau. Sie ist
@@ -1989,6 +2196,17 @@ export function RechnungPage() {
             </Card>
           )}
 
+          {customerDriftMaster && (
+            <InvoiceCustomerDriftCard
+              fields={customerDriftFields}
+              draftBilling={draft.customerBilling}
+              masterBilling={customerDriftMaster}
+              translate={translate}
+              onKeep={handleKeepCustomerBilling}
+              onApply={handleApplyCustomerDrift}
+            />
+          )}
+
           {showOverbillingConfirm && (
             <Card className="invoice-confirm">
               <p>{translate('invoice.overbillingConfirm')}</p>
@@ -2048,11 +2266,20 @@ export function RechnungPage() {
             >
               {translate('invoice.edit')}
             </Button>
-            {finalizationLocked ? null : (
+            {approving && approvalSlow ? (
+              <p className="invoice-hint invoice-hint--warning" data-testid="invoice-approve-slow">
+                {translate('invoice.approve.slow')}
+              </p>
+            ) : null}
+            {finalizationLocked ? null : approvalRoleDenied ? (
+              <p className="invoice-hint" data-testid="invoice-approve-role-hint">
+                {translate('invoice.approve.roleHint')}
+              </p>
+            ) : (
               <Button
                 fullWidth
                 onClick={handleApprove}
-                disabled={approving || cloud.blocked}
+                disabled={approving || cloud.blocked || finalInvoiceExists}
                 data-testid="invoice-approve"
               >
                 {approving ? translate('invoice.approve.working') : translate('invoice.approve')}

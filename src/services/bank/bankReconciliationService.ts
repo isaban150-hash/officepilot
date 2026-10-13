@@ -27,7 +27,10 @@ import { persistAll } from '../persistenceService';
 import { getAllInvoiceOverview } from '../invoiceOverviewService';
 import { getAllExpenseOverview } from '../expenseOverviewService';
 import { toCents } from '../invoiceMoney';
-import type { BankSuggestionCandidate } from '../../types/bankSuggestion';
+import { getSkontoSettlementRemainderCents } from '../invoice/skontoSettlement';
+import { detectFinancialActionDenial } from '../auth/financialActionDenial';
+import { findRecordedPaymentMatches } from './bankSuggestionService';
+import type { BankRecordedPaymentMatch, BankSuggestionCandidate } from '../../types/bankSuggestion';
 import type { BankTransaction } from '../../types/bankTransaction';
 import type {
   BankReconciliation,
@@ -48,6 +51,13 @@ export interface BankConfirmPlan {
   paidOn: string;
   /** Eine Teilzahlung ist erlaubt und wird benannt. */
   partial: boolean;
+  /** FINANZ-CORE-01A (ZAH-04) — der Betrag gleicht die Rechnung fristgerecht mit Skonto aus. */
+  skonto: boolean;
+  /**
+   * FINANZ-CORE-01A (ZAH-03) — auf genau diesem Ziel steht schon eine erfasste, unverknüpfte Zahlung
+   * über diesen Betrag. Dann ist „neu buchen" vermutlich eine Doppelbuchung.
+   */
+  recordedMatch: BankRecordedPaymentMatch | null;
   /** `null` heisst: Die Bestätigung darf angeboten werden. */
   refusal: BankReconciliationRefusal | null;
 }
@@ -86,17 +96,32 @@ function aktuellerOffenerBetrag(kandidat: BankSuggestionCandidate): number {
   return Math.max(0, toCents(offen));
 }
 
+/** FINANZ-CORE-01A (ZAH-04) — der Skonto-Rest der Rechnung zum Buchungstag, frisch gelesen. */
+function skontoRestFuer(invoiceId: string, bookingDate: string): number | null {
+  const invoice = getAllInvoiceOverview().find((item) => item.invoice.id === invoiceId)?.invoice;
+  return invoice ? getSkontoSettlementRemainderCents(invoice, bookingDate) : null;
+}
+
 export function planBankConfirmation(
   transaction: BankTransaction,
   kandidat: BankSuggestionCandidate,
 ): BankConfirmPlan {
   const amountCents = Math.abs(transaction.amountCents);
   const openCents = aktuellerOffenerBetrag(kandidat);
+  const skontoRest =
+    kandidat.targetType === 'invoice' ? skontoRestFuer(kandidat.targetId, transaction.bookingDate) : null;
+  const skonto = skontoRest !== null && Math.abs(skontoRest - amountCents) <= 1;
   const basis: Omit<BankConfirmPlan, 'refusal'> = {
     amountCents,
     openCents,
     paidOn: transaction.bookingDate,
-    partial: amountCents < openCents,
+    // FINANZ-CORE-01A (ZAH-04) — mit Skonto bleibt kein Rest offen.
+    partial: amountCents < openCents && !skonto,
+    skonto,
+    recordedMatch:
+      findRecordedPaymentMatches(transaction).find(
+        (treffer) => treffer.targetType === kandidat.targetType && treffer.targetId === kandidat.targetId,
+      ) ?? null,
   };
 
   if (findReconciliationForTransaction(transaction.id)) {
@@ -170,8 +195,35 @@ function deuteFehler(nachricht: string): BankReconciliationRefusal | null {
   if (nachricht.includes('Falsche Richtung')) return 'wrong_direction';
   if (nachricht.includes('Kein offener Betrag')) return 'nothing_open';
   if (nachricht.includes('Bankbewegung nicht gefunden')) return 'transaction_not_found';
+  // FINANZ-CORE-01A (ZAH-03) — Verknüpfung mit einer erfassten Zahlung.
+  if (nachricht.includes('bereits einer Bankbewegung')) return 'payment_already_linked';
+  if (nachricht.includes('passt nicht zur Bankbewegung')) return 'payment_amount_mismatch';
+  if (nachricht.includes('Zahlung storniert')) return 'payment_reversed';
+  if (nachricht.includes('Zahlung nicht gefunden')) return 'payment_not_found';
   if (nachricht.includes('nicht gefunden')) return 'target_not_found';
+  /*
+   * FINANZ-CORE-01A (ZAH-18) — Rolle, Kontosperre oder Lizenz. Bisher wurde daraus „offline,
+   * bitte später erneut versuchen"; ein Mitglied sah eine Netzwerkmeldung statt eines Rollenhinweises.
+   */
+  if (detectFinancialActionDenial(nachricht) || nachricht.includes('Keine Schreibberechtigung') || nachricht.includes('Kein Zugriff')) {
+    return 'not_allowed';
+  }
   return null;
+}
+
+/**
+ * FINANZ-CORE-01A (ZAH-18) — Kennungen je Bestätigung. Sie entstehen einmal, wenn der Nutzer
+ * bestätigt, und bleiben für Wiederholungen derselben Bestätigung gleich: Nach einer verlorenen
+ * Antwort erkennt der Server den zweiten Versuch als Wiederholung (`replayed`) statt
+ * „bereits zugeordnet" zu melden.
+ */
+export interface BankConfirmIds {
+  paymentId: string;
+  reconciliationId: string;
+}
+
+export function createBankConfirmIds(): BankConfirmIds {
+  return { paymentId: generateEntityId('pay'), reconciliationId: generateEntityId('brec') };
 }
 
 /**
@@ -184,6 +236,7 @@ function deuteFehler(nachricht: string): BankReconciliationRefusal | null {
 export async function confirmBankReconciliation(
   transaction: BankTransaction,
   kandidat: BankSuggestionCandidate,
+  ids: BankConfirmIds = createBankConfirmIds(),
 ): Promise<BankReconciliationOutcome> {
   const plan = planBankConfirmation(transaction, kandidat);
   if (plan.refusal) return { ok: false, refusal: plan.refusal };
@@ -204,8 +257,8 @@ export async function confirmBankReconciliation(
     p_bank_transaction_id: transaction.id,
     p_target_type: kandidat.targetType,
     p_client_target_id: kandidat.targetId,
-    p_client_payment_id: generateEntityId('pay'),
-    p_client_reconciliation_id: generateEntityId('brec'),
+    p_client_payment_id: ids.paymentId,
+    p_client_reconciliation_id: ids.reconciliationId,
   });
 
   if (error) {
@@ -220,6 +273,50 @@ export async function confirmBankReconciliation(
   if (!uebernommen) {
     return { ok: false, refusal: 'offline', detail: 'Serverantwort unvollstaendig' };
   }
+
+  applyConfirmedReconciliation(uebernommen);
+  persistAll();
+  return { ok: true, reconciliation: uebernommen };
+}
+
+/**
+ * FINANZ-CORE-01A (ZAH-03) — die Bewegung mit einer bereits erfassten Zahlung verknüpfen.
+ *
+ * Es entsteht **keine** Zahlung: `link_workspace_bank_reconciliation` hält nur fest, dass genau
+ * diese Bewegung genau diese Zahlung belegt — dieselbe Eindeutigkeit, dieselbe Autorisierung wie
+ * beim Bestätigen. Wird die Zahlung später storniert, wird die Bewegung wieder frei.
+ */
+export async function linkBankReconciliation(
+  transaction: BankTransaction,
+  treffer: BankRecordedPaymentMatch,
+  reconciliationId: string = generateEntityId('brec'),
+): Promise<BankReconciliationOutcome> {
+  if (findReconciliationForTransaction(transaction.id)) return { ok: false, refusal: 'already_reconciled' };
+  const eingang = transaction.amountCents > 0;
+  if ((treffer.targetType === 'invoice') !== eingang) return { ok: false, refusal: 'wrong_direction' };
+
+  const client = getSupabaseClient();
+  const sync = getSyncClient();
+  const workspaceId = sync?.serverWorkspaceId ?? sync?.workspaceId ?? null;
+  if (!client || !workspaceId) return { ok: false, refusal: 'offline' };
+
+  const { data, error } = await client.rpc('link_workspace_bank_reconciliation', {
+    p_workspace_id: workspaceId,
+    p_bank_transaction_id: transaction.id,
+    p_target_type: treffer.targetType,
+    p_client_target_id: treffer.targetId,
+    p_client_payment_id: treffer.paymentId,
+    p_client_reconciliation_id: reconciliationId,
+  });
+
+  if (error) {
+    const gedeutet = deuteFehler(error.message ?? '');
+    return gedeutet ? { ok: false, refusal: gedeutet } : { ok: false, refusal: 'offline', detail: error.message };
+  }
+
+  const zeile = (data as { reconciliation?: ServerZuordnung } | null)?.reconciliation;
+  const uebernommen = zeile ? ausServerzeile(zeile) : null;
+  if (!uebernommen) return { ok: false, refusal: 'offline', detail: 'Serverantwort unvollstaendig' };
 
   applyConfirmedReconciliation(uebernommen);
   persistAll();

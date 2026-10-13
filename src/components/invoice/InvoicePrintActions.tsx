@@ -63,6 +63,18 @@ export function InvoicePrintActions({
     };
   }, []);
 
+  /*
+   * FINANZ-CORE-01A (AUS-14) — der konkrete Grund statt „PDF konnte nicht erzeugt werden": Der
+   * Validator nennt ihn, die Meldung verwarf ihn bisher.
+   */
+  const pdfFehlerText = (result: GenerateApprovedInvoicePdfResult): string => {
+    if (!result.ok && result.reason === 'validation_failed') {
+      const grund = result.validation?.blockingErrors[0]?.messageKey;
+      if (grund) return `${translate('invoice.pdf.errorPrefix')} ${translate(grund)}`;
+    }
+    return translate('invoice.pdf.error');
+  };
+
   const runPdfDownload = async (): Promise<void> => {
     if (pdfLoading || holdRef.current) return;
     setPdfLoading(true);
@@ -71,7 +83,7 @@ export function InvoicePrintActions({
     try {
       const result = await generatePdf(current);
       if (!result.ok) {
-        setPdfError(translate('invoice.pdf.error'));
+        setPdfError(pdfFehlerText(result));
         return;
       }
       if (result.statusUnchanged !== current.status) {
@@ -105,7 +117,8 @@ export function InvoicePrintActions({
     setPdfError(null);
     const validation = validateFinalizedInvoiceForPdf(invoiceRef.current);
     if (validation.blockingErrors.length > 0) {
-      setPdfError(translate('invoice.pdf.error'));
+      // FINANZ-CORE-01A (AUS-14) — Drucken ist kein PDF: eigene Meldung mit dem konkreten Grund.
+      setPdfError(`${translate('invoice.print.error')} ${translate(validation.blockingErrors[0]!.messageKey)}`);
       return;
     }
     invoicePrintService.printInvoice({ title });

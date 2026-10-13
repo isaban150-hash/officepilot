@@ -10,6 +10,7 @@ import type { TranslationKey } from '../../i18n';
 import { DateDisplay, MoneyDisplay } from '../ui/Display';
 import { BusinessList, BusinessListItem } from '../ui/Lists';
 import { InlineNotice } from '../ui/States';
+import type { InvoicePaymentResyncBlockReason } from '../../services/invoice/invoicePaymentCloudResyncService';
 
 interface Props {
   invoice: VorgangInvoice;
@@ -25,6 +26,11 @@ interface Props {
    * ist nicht dasselbe wie ungesichert.
    */
   unsyncedPaymentIds?: readonly string[];
+  /**
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N01) — der Server hat diese Zahlungen endgültig
+   * abgewiesen; sie werden nicht automatisch erneut gesendet. Der Grund steht am Hinweis.
+   */
+  blockedPaymentReasons?: Readonly<Record<string, InvoicePaymentResyncBlockReason>>;
   onSecurePayment?: (paymentId: string) => void;
 }
 
@@ -34,6 +40,7 @@ export function InvoicePaymentHistory({
   onRemovePayment,
   allowRemove = true,
   unsyncedPaymentIds,
+  blockedPaymentReasons,
   onSecurePayment,
 }: Props) {
   /* UIUX-FOUNDATION-01G — Confirm-first über den kanonischen Dialog statt window.confirm. */
@@ -83,6 +90,14 @@ export function InvoicePaymentHistory({
                 data-testid={`payment-unsynced-${payment.id}`}
               >
                 <InlineNotice tone="warning">{translate('payment.cloudNotSecured')}</InlineNotice>
+                {blockedPaymentReasons?.[payment.id] ? (
+                  <p
+                    className="invoice-payment-history__blocked"
+                    data-testid={`payment-resync-blocked-${payment.id}`}
+                  >
+                    {translate(`payment.cloudBlocked.${blockedPaymentReasons[payment.id]}` as TranslationKey)}
+                  </p>
+                ) : null}
                 {onSecurePayment && (
                   <Button
                     type="button"

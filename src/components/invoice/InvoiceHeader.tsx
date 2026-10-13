@@ -1,4 +1,5 @@
 import { useApp } from '../../context/AppContext';
+import { formatCompanyLegalName } from '../../services/company/companyLegalName';
 import { INVOICE_DRAFT_LABEL } from '../../services/invoiceNumberService';
 import type { InvoicePrintModel } from '../../types/models';
 import { formatInvoiceDate } from '../../services/invoicePrintModel';
@@ -48,8 +49,8 @@ export function InvoiceHeader({ model }: Props) {
         ) : null}
         <div className="invoice-header__company">
           <p className="invoice-header__name">
-            {company.companyName}
-            {company.legalForm ? ` ${company.legalForm}` : ''}
+            {/* FINANZ-CORE-01A (AUS-06 / WEISS-Nacharbeit N14) — Firmierung ohne doppelte Rechtsform. */}
+            {formatCompanyLegalName(company.companyName, company.legalForm)}
           </p>
           {companyLine && <p className="invoice-header__address">{companyLine}</p>}
           {company.phone && <p>Tel.: {company.phone}</p>}
@@ -64,12 +65,22 @@ export function InvoiceHeader({ model }: Props) {
         <h1 className="invoice-header__title">{model.documentTitle}</h1>
         <dl className="invoice-header__facts">
           {/*
-            * NORMAL-INVOICE-CANCELLATION-01B — ein Korrekturbeleg verbraucht keine
-            * Rechnungsnummer; er nennt die Nummer und das Datum des Originals.
-            * Ohne `correction` bleibt die Darstellung byteidentisch.
+            * NORMAL-INVOICE-CANCELLATION-01B — ein Korrekturbeleg nennt die Nummer und
+            * das Datum des Originals (seit FINANZ-CORE-01A/SQL-11 zusätzlich seine eigene
+            * Korrekturnummer). Ohne `correction` bleibt die Darstellung byteidentisch.
             */}
           {model.correction ? (
             <>
+              {/*
+                * FINANZ-CORE-01A (SQL-11) — seit der Fortsetzung trägt der Korrekturbeleg
+                * eine eigene Nummer aus dem Rechnungskreis; ältere Korrekturen nicht.
+                */}
+              {model.correction.correctionNumber ? (
+                <div>
+                  <dt>Korrekturnummer</dt>
+                  <dd data-testid="invoice-correction-number">{model.correction.correctionNumber}</dd>
+                </div>
+              ) : null}
               <div>
                 <dt>Zu Rechnung Nr.</dt>
                 <dd data-testid="invoice-document-number">{model.correction.originalInvoiceNumber}</dd>

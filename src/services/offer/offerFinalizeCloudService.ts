@@ -29,6 +29,8 @@ import {
   type OfferFinalizeBlocker,
 } from './offerService';
 import { mapWorkspaceOfferRow, type WorkspaceOfferRow } from './offerCloudService';
+import { hasOfferSyncConflict } from './offerConflictService';
+import { isBrowserOffline, isOfferNetworkMessage, isOfferVersionConflictMessage } from './offerServerRejection';
 import type { Offer } from '../../types/offer';
 
 export type FinalizeOfferFailure =
@@ -36,6 +38,10 @@ export type FinalizeOfferFailure =
   | { ok: false; reason: 'blocked'; blockers: OfferFinalizeBlocker[] }
   | { ok: false; reason: 'cloud_required' }
   | { ok: false; reason: 'sync_pending' }
+  /** FINANZ-CORE-01A (ANG-03) — ein Versionskonflikt wartet auf die Entscheidung auf der Sync-Seite. */
+  | { ok: false; reason: 'sync_conflict' }
+  /** FINANZ-CORE-01A (ANG-14) — der Server kennt einen neueren Stand; ein Abgleich holt ihn. */
+  | { ok: false; reason: 'stale_version' }
   | { ok: false; reason: 'already_finalized_elsewhere' }
   /** GO-LIVE-SECURITY-01 — freigeben dürfen nur Inhaber und Admin; endgültig, kein erneuter Versuch. */
   | { ok: false; reason: 'forbidden' }
@@ -46,6 +52,17 @@ export type FinalizeOfferResult = { ok: true; offer: Offer; replayed: boolean } 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** FINANZ-CORE-01A (ANG-14) — der offene Sendeauftrag scheiterte zuletzt an der Verbindung. */
+function hasNetworkFailure(offerId: string): boolean {
+  return getSyncOutboxSnapshot().some(
+    (entry) =>
+      entry.entityType === 'offer' &&
+      entry.entityId === offerId &&
+      Boolean(entry.lastErrorMessage) &&
+      isOfferNetworkMessage(entry.lastErrorMessage ?? ''),
+  );
 }
 
 /** Offene Sendeaufträge zu diesem Angebot — die Freigabe darf keinen alten Entwurf überholen. */
@@ -87,7 +104,15 @@ export async function finalizeOfferWithCloud(
     } catch {
       /* Der erneute Blick unten entscheidet. */
     }
-    if (hasActiveOutboxEntry(offerId)) return { ok: false, reason: 'sync_pending' };
+    if (hasOfferSyncConflict(offerId)) return { ok: false, reason: 'sync_conflict' };
+    if (hasActiveOutboxEntry(offerId)) {
+      /*
+       * FINANZ-CORE-01A (ANG-14) — ohne Verbindung bleibt der Sendeauftrag offen. Das
+       * ist „keine Verbindung", nicht „wird noch gespeichert".
+       */
+      if (isBrowserOffline() || hasNetworkFailure(offerId)) return { ok: false, reason: 'network', message: 'offline' };
+      return { ok: false, reason: 'sync_pending' };
+    }
   }
 
   const current = getOfferById(offerId) ?? existing;
@@ -103,6 +128,12 @@ export async function finalizeOfferWithCloud(
         id: offerId,
         workspaceId: current.workspaceId,
         createdAt: current.createdAt,
+        /*
+         * FINANZ-CORE-01A (ANG-11) — der Nachfolgebezug reist mit (außerhalb des
+         * Fingerabdrucks: er ändert den Beleginhalt nicht). Erst mit ihm ersetzt die
+         * Freigabe das frühere Angebot.
+         */
+        ...(current.supersedesOfferId ? { supersedesOfferId: current.supersedesOfferId } : {}),
       },
       p_fingerprint: candidate.fingerprint,
       p_row_version: rowVersion,
@@ -113,7 +144,19 @@ export async function finalizeOfferWithCloud(
         return { ok: false, reason: 'forbidden' };
       }
       if (message.includes('bereits freigegeben')) return { ok: false, reason: 'already_finalized_elsewhere' };
-      if (message.includes('Failed to fetch') || message.includes('Network')) {
+      if (isOfferVersionConflictMessage(message)) {
+        /*
+         * FINANZ-CORE-01A (ANG-14) — ein anderes Gerät hat den Entwurf geändert. Ein
+         * Abgleich holt den neuen Stand; der Editor übernimmt ihn oder fragt nach (ANG-02).
+         */
+        try {
+          await runSyncFromUi();
+        } catch {
+          /* Der Nutzer versucht es erneut. */
+        }
+        return { ok: false, reason: 'stale_version' };
+      }
+      if (isOfferNetworkMessage(message)) {
         return { ok: false, reason: 'network', message };
       }
       return { ok: false, reason: 'server_rejected', message };

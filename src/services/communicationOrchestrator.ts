@@ -28,6 +28,24 @@ function blockedResult(
   };
 }
 
+/**
+ * FINANZ-CORE-01A (ZAH-12) — kein Erinnerungs- oder Mahnentwurf zu einer
+ * stornierten, nicht versendeten oder beglichenen Rechnung und keine Mahnung
+ * vor dem Zahlungsziel. Ohne Rechnungskontext bleibt alles wie bisher.
+ */
+function resolveInvoiceReminderBlock(
+  intent: CommunicationResult['intent'],
+  context: ReturnType<typeof buildCommunicationContext>,
+): string | null {
+  if (intent !== 'payment_reminder' && intent !== 'dunning_notice' && intent !== 'invoice_followup') return null;
+  const state = context.invoiceSummary?.paymentState;
+  if (state === 'cancelled') return 'communication.block.invoiceCancelled';
+  if (state === 'not_sent') return 'communication.block.invoiceNotSent';
+  if (state === 'settled') return 'communication.block.invoiceSettled';
+  if (state === 'not_due' && intent === 'dunning_notice') return 'communication.block.invoiceNotDue';
+  return null;
+}
+
 function needsInfoResult(
   intent: CommunicationResult['intent'],
   missingInfo: CommunicationResult['missingInfo'],
@@ -55,6 +73,9 @@ export function processCommunicationRequest(request: CommunicationRequest): Comm
   if ((ref.type === 'inbox' || ref.type === 'document') && !context.relevanceAllowed) {
     return blockedResult(context.relevanceBlockReason ?? 'communication.block.notRelevant', intent);
   }
+
+  const reminderBlock = resolveInvoiceReminderBlock(intent, context);
+  if (reminderBlock) return blockedResult(reminderBlock, intent);
 
   if (isDocumentQuestionIntent(intent)) {
     const questionType = detectDocumentQuestionType(request.userText);

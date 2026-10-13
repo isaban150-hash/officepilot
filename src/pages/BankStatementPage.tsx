@@ -24,7 +24,10 @@ import {
 import { buildBankSuggestions } from '../services/bank/bankSuggestionService';
 import {
   confirmBankReconciliation,
+  createBankConfirmIds,
+  linkBankReconciliation,
   planBankConfirmation,
+  type BankConfirmIds,
 } from '../services/bank/bankReconciliationService';
 import { projectBankReconciliationPayment } from '../services/bank/bankPaymentProjection';
 import { findReconciliationForTransaction } from '../services/bank/bankReconciliationStore';
@@ -34,6 +37,7 @@ import type {
 } from '../types/bankReconciliation';
 import type { BankImportOutcome, BankTransaction } from '../types/bankTransaction';
 import type {
+  BankRecordedPaymentMatch,
   BankSuggestionCandidate,
   BankSuggestionResult,
 } from '../types/bankSuggestion';
@@ -591,8 +595,15 @@ function Vorschlag({
 }) {
   const { translate } = useApp();
   const rechnungen = ergebnis.direction === 'incoming';
+  /* FINANZ-CORE-01A (ZAH-03) — „Weitere Möglichkeiten" lassen sich aufklappen und einzeln wählen. */
+  const [weitereOffen, setWeitereOffen] = useState(false);
+  const erfasst = ergebnis.alreadyRecorded ?? [];
+  const erfasstBlock =
+    erfasst.length > 0 ? <BereitsErfasst treffer={erfasst} transaction={transaction} onGeaendert={onGeaendert} /> : null;
 
   if (ergebnis.candidates.length === 0) {
+    // Eine bereits erfasste Zahlung erklärt die Bewegung — dann kein „nichts gefunden".
+    if (erfasstBlock) return erfasstBlock;
     return (
       <span
         className="bank-statement__match bank-statement__match--none"
@@ -605,21 +616,41 @@ function Vorschlag({
 
   if (ergebnis.ambiguous) {
     return (
-      <span
-        className="bank-statement__match bank-statement__match--ambiguous"
-        data-testid={`bank-match-ambiguous-${ergebnis.bankTransactionId}`}
-      >
-        {translate(rechnungen ? 'bankMatch.ambiguousInvoices' : 'bankMatch.ambiguousExpenses').replace(
-          '{count}',
-          /*
-           * Sichtbare Abnahme — gezaehlt werden nur die **gleich guten**
-           * Kandidaten. Vorher stand hier die Gesamtzahl: Bei zwei gleich
-           * passenden und drei schwaecheren meldete die Seite „5 moegliche
-           * Rechnungen“ und uebertrieb damit die Unklarheit.
-           */
-          String(gleichGute(ergebnis)),
-        )}
-      </span>
+      <>
+        {erfasstBlock}
+        <span
+          className="bank-statement__match bank-statement__match--ambiguous"
+          data-testid={`bank-match-ambiguous-${ergebnis.bankTransactionId}`}
+        >
+          {translate(rechnungen ? 'bankMatch.ambiguousInvoices' : 'bankMatch.ambiguousExpenses').replace(
+            '{count}',
+            /*
+             * Sichtbare Abnahme — gezaehlt werden nur die **gleich guten**
+             * Kandidaten. Vorher stand hier die Gesamtzahl: Bei zwei gleich
+             * passenden und drei schwaecheren meldete die Seite „5 moegliche
+             * Rechnungen“ und uebertrieb damit die Unklarheit.
+             */
+            String(gleichGute(ergebnis)),
+          )}
+          {/*
+            FINANZ-CORE-01A (ZAH-03) — mehrdeutig heisst nicht ausweglos: Der Nutzer wählt selbst.
+            Keine Stufe, kein „Treffer" — jede Möglichkeit steht gleichrangig mit eigener Bestätigung.
+          */}
+          <span className="bank-statement__candidates" data-testid={`bank-match-choices-${ergebnis.bankTransactionId}`}>
+            {ergebnis.candidates.map((kandidat) => (
+              <span key={`${kandidat.targetType}-${kandidat.targetId}`} className="bank-statement__candidate-choice">
+                <Kandidat kandidat={kandidat} />
+                <Bestaetigung
+                  kandidat={kandidat}
+                  transaction={transaction}
+                  onGeaendert={onGeaendert}
+                  testIdSuffix={`-${kandidat.targetId}`}
+                />
+              </span>
+            ))}
+          </span>
+        </span>
+      </>
     );
   }
 
@@ -629,6 +660,7 @@ function Vorschlag({
       className="bank-statement__match"
       data-testid={`bank-match-${ergebnis.bankTransactionId}`}
     >
+      {erfasstBlock}
       <b className={`bank-statement__match-grade bank-statement__match-grade--${bester!.grade}`}>
         {translate(`bankMatch.grade.${bester!.grade}` as TranslationKey)}
       </b>
@@ -636,9 +668,31 @@ function Vorschlag({
       <Bestaetigung kandidat={bester!} transaction={transaction} onGeaendert={onGeaendert} />
       {weitere.length > 0 ? (
         <span className="bank-statement__match-more">
-          {translate('bankMatch.more')}: {weitere.length}
+          {translate('bankMatch.more')}: {weitere.length}{' '}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setWeitereOffen((offen) => !offen)}
+            data-testid={`bank-match-more-toggle-${ergebnis.bankTransactionId}`}
+          >
+            {translate(weitereOffen ? 'bankMatch.moreHide' : 'bankMatch.moreShow')}
+          </Button>
         </span>
       ) : null}
+      {weitereOffen
+        ? weitere.map((kandidat) => (
+            <span key={`${kandidat.targetType}-${kandidat.targetId}`} className="bank-statement__candidate-choice">
+              <Kandidat kandidat={kandidat} />
+              <Bestaetigung
+                kandidat={kandidat}
+                transaction={transaction}
+                onGeaendert={onGeaendert}
+                testIdSuffix={`-${kandidat.targetId}`}
+              />
+            </span>
+          ))
+        : null}
       {/*
         Dieselbe Klasse wie die übrigen Zusagen der Seite: Der Satz verneint
         eine Geldwirkung ausdrücklich, er behauptet keine.
@@ -687,15 +741,21 @@ function Bestaetigung({
   kandidat,
   transaction,
   onGeaendert,
+  testIdSuffix = '',
 }: {
   kandidat: BankSuggestionCandidate;
   transaction: BankTransaction;
   onGeaendert: () => void;
+  /** FINANZ-CORE-01A (ZAH-03) — weitere Kandidaten derselben Bewegung bekommen eigene Kennungen. */
+  testIdSuffix?: string;
 }) {
   const { translate, language } = useApp();
   const [offen, setOffen] = useState(false);
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState<BankReconciliationRefusal | null>(null);
+  /* FINANZ-CORE-01A (ZAH-18) — einmal erzeugt, für Wiederholungen derselben Bestätigung gleich. */
+  const kennungen = useRef<BankConfirmIds | null>(null);
+  const tid = (name: string) => `${name}-${transaction.id}${testIdSuffix}`;
 
   const plan = planBankConfirmation(transaction, kandidat);
   const locale = language === 'tr' ? 'tr-TR' : language === 'bg' ? 'bg-BG' : 'de-DE';
@@ -712,7 +772,7 @@ function Bestaetigung({
    */
   if (plan.refusal) {
     return (
-      <span className="bank-statement__confirm-blocked" data-testid={`bank-confirm-blocked-${transaction.id}`}>
+      <span className="bank-statement__confirm-blocked" data-testid={tid('bank-confirm-blocked')}>
         {translate(`bankConfirm.refusal.${plan.refusal}` as TranslationKey)}
       </span>
     );
@@ -724,7 +784,7 @@ function Bestaetigung({
         type="button"
         variant="secondary"
         onClick={() => setOffen(true)}
-        data-testid={`bank-confirm-open-${transaction.id}`}
+        data-testid={tid('bank-confirm-open')}
       >
         {translate('bankConfirm.action')}
       </Button>
@@ -732,7 +792,7 @@ function Bestaetigung({
   }
 
   return (
-    <span className="bank-statement__confirm" data-testid={`bank-confirm-dialog-${transaction.id}`}>
+    <span className="bank-statement__confirm" data-testid={tid('bank-confirm-dialog')}>
       <b>{translate('bankConfirm.title')}</b>
       <span className="bank-statement__notice">{translate('bankConfirm.intro')}</span>
       <span>
@@ -756,12 +816,29 @@ function Bestaetigung({
         {translate('bankConfirm.paidOn')}: {datum}
       </span>
       {plan.partial ? (
-        <span className="bank-statement__confirm-partial" data-testid={`bank-confirm-partial-${transaction.id}`}>
+        <span className="bank-statement__confirm-partial" data-testid={tid('bank-confirm-partial')}>
           {translate('bankConfirm.partial')}
         </span>
       ) : null}
+      {/* FINANZ-CORE-01A (ZAH-04) — fristgerecht mit Skonto: danach ist nichts mehr offen. */}
+      {plan.skonto ? (
+        <span className="bank-statement__notice" data-testid={tid('bank-confirm-skonto')}>
+          {translate('bankConfirm.skonto')}
+        </span>
+      ) : null}
+      {/* FINANZ-CORE-01A (ZAH-03) — vermutlich schon erfasst: lieber verknüpfen als doppelt buchen. */}
+      {plan.recordedMatch ? (
+        <span className="bank-statement__error" role="alert" data-testid={tid('bank-confirm-recorded')}>
+          {translate('bankConfirm.possiblyRecorded')
+            .replace('{date}', new Date(`${plan.recordedMatch.paymentDate}T12:00:00`).toLocaleDateString(locale, {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+            }))}
+        </span>
+      ) : null}
       {fehler ? (
-        <span className="bank-statement__error" role="alert" data-testid={`bank-confirm-error-${transaction.id}`}>
+        <span className="bank-statement__error" role="alert" data-testid={tid('bank-confirm-error')}>
           {translate(`bankConfirm.refusal.${fehler}` as TranslationKey)}
         </span>
       ) : null}
@@ -770,13 +847,15 @@ function Bestaetigung({
           type="button"
           variant="primary"
           disabled={laeuft}
-          data-testid={`bank-confirm-do-${transaction.id}`}
+          data-testid={tid('bank-confirm-do')}
           onClick={() => {
             setLaeuft(true);
             setFehler(null);
-            void confirmBankReconciliation(transaction, kandidat)
+            if (!kennungen.current) kennungen.current = createBankConfirmIds();
+            void confirmBankReconciliation(transaction, kandidat, kennungen.current)
               .then((ergebnis) => {
                 if (ergebnis.ok) {
+                  kennungen.current = null;
                   /*
                    * O1 — die vom Server bestätigte Zahlung sofort lokal
                    * spiegeln. Ohne das trägt der Beleg bis zum nächsten
@@ -794,13 +873,15 @@ function Bestaetigung({
               .finally(() => setLaeuft(false));
           }}
         >
-          {laeuft ? translate('bankConfirm.running') : translate('bankConfirm.confirm')}
+          {laeuft
+            ? translate('bankConfirm.running')
+            : translate(plan.recordedMatch ? 'bankConfirm.confirmAnyway' : 'bankConfirm.confirm')}
         </Button>
         <Button
           type="button"
           variant="secondary"
           disabled={laeuft}
-          data-testid={`bank-confirm-cancel-${transaction.id}`}
+          data-testid={tid('bank-confirm-cancel')}
           onClick={() => {
             setOffen(false);
             setFehler(null);
@@ -809,6 +890,81 @@ function Bestaetigung({
           {translate('bankConfirm.cancel')}
         </Button>
       </span>
+    </span>
+  );
+}
+
+/**
+ * FINANZ-CORE-01A (ZAH-03) — die Bewegung wurde vermutlich schon von Hand erfasst.
+ *
+ * Angeboten wird das Verknüpfen mit der vorhandenen Zahlung — es entsteht keine zweite. Der
+ * Server prüft Betrag, Richtung und dass die Zahlung noch keine andere Bewegung belegt.
+ */
+function BereitsErfasst({
+  treffer,
+  transaction,
+  onGeaendert,
+}: {
+  treffer: BankRecordedPaymentMatch[];
+  transaction: BankTransaction;
+  onGeaendert: () => void;
+}) {
+  const { translate, language } = useApp();
+  const [laeuft, setLaeuft] = useState<string | null>(null);
+  const [fehler, setFehler] = useState<BankReconciliationRefusal | null>(null);
+  /* Je Zahlung eine Kennung, stabil für Wiederholungen (ZAH-18). */
+  const kennungen = useRef(new Map<string, string>());
+  const locale = language === 'tr' ? 'tr-TR' : language === 'bg' ? 'bg-BG' : 'de-DE';
+
+  return (
+    <span className="bank-statement__match bank-statement__recorded" data-testid={`bank-recorded-${transaction.id}`}>
+      <b>{translate('bankLink.title')}</b>
+      <span className="bank-statement__notice">{translate('bankLink.intro')}</span>
+      {treffer.map((eintrag, index) => {
+        const datum = new Date(`${eintrag.paymentDate}T12:00:00`).toLocaleDateString(locale, {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        });
+        const ziel = translate(eintrag.targetType === 'invoice' ? 'bankMatch.invoiceLabel' : 'bankMatch.expenseLabel')
+          .replace('{number}', eintrag.documentNumber)
+          .trim();
+        return (
+          <span key={eintrag.paymentId} className="bank-statement__candidate">
+            <span className="bank-statement__candidate-head">
+              {translate('bankLink.item').replace('{date}', datum).replace('{target}', ziel)}
+              {eintrag.partyName ? ` · ${eintrag.partyName}` : ''}{' '}
+              <MoneyDisplay value={fromCents(eintrag.amountCents)} />
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={laeuft !== null}
+              data-testid={`bank-link-${transaction.id}-${index}`}
+              onClick={() => {
+                setLaeuft(eintrag.paymentId);
+                setFehler(null);
+                const kennung = kennungen.current.get(eintrag.paymentId) ?? `brec-link-${transaction.id}-${eintrag.paymentId}`;
+                kennungen.current.set(eintrag.paymentId, kennung);
+                void linkBankReconciliation(transaction, eintrag, kennung)
+                  .then((ergebnis) => {
+                    if (ergebnis.ok) onGeaendert();
+                    else setFehler(ergebnis.refusal);
+                  })
+                  .finally(() => setLaeuft(null));
+              }}
+            >
+              {translate(laeuft === eintrag.paymentId ? 'bankLink.running' : 'bankLink.action')}
+            </Button>
+          </span>
+        );
+      })}
+      {fehler ? (
+        <span className="bank-statement__error" role="alert" data-testid={`bank-link-error-${transaction.id}`}>
+          {translate(`bankConfirm.refusal.${fehler}` as TranslationKey)}
+        </span>
+      ) : null}
     </span>
   );
 }

@@ -1,4 +1,5 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { formatCompanyLegalName } from './company/companyLegalName';
 import fontkit from '@pdf-lib/fontkit';
 import { loadInvoicePdfFont } from './invoice/invoicePdfFonts';
 import {
@@ -20,6 +21,8 @@ import { resolveBrandingAsset } from './branding/brandingAssetResolver';
 import { encodeDocumentFileRasterToJpeg } from './documentFileRasterEncodeService';
 import { getSyncClient } from './sync/syncClientService';
 import { checkInvoiceOutput } from './invoice/invoiceOutputGuard';
+import { buildCustomerLegalLines } from './invoice/customerLegalLines';
+import { toBusinessDay } from './businessDateService';
 import type { HistoricalInvoiceLogoSource } from '../types/branding';
 import type { InvoicePrintModel, VorgangInvoice } from '../types/models';
 
@@ -104,6 +107,11 @@ export function toPdfSafeText(value: string): string {
   return result;
 }
 
+/** FINANZ-CORE-01A (AUS-17) — ein Abzug: „-x" im Original, „+x" im Korrekturbeleg (negierter Abzug). */
+export function formatSignedDeductionPdf(amount: number): string {
+  return amount < 0 ? `+${formatMoneyPdf(-amount)}` : `-${formatMoneyPdf(amount)}`;
+}
+
 function formatMoneyPdf(value: number): string {
   // Das Eurozeichen bleibt jetzt stehen — die eingebettete Schrift kennt es.
   return toPdfSafeText(formatInvoiceCurrency(value));
@@ -177,6 +185,37 @@ function resolveArchivalTimestamp(invoice: VorgangInvoice): Date {
   return new Date(0);
 }
 
+/**
+ * FINANZ-CORE-01A (STO-16) — ein storniertes Original bleibt druckbar, aber nie ohne Vermerk:
+ * Ein unkommentierter Nachdruck sah aus wie eine gültige Forderung. Nur das PDF trägt das Feld;
+ * die Bildschirmansicht zeigt den Storno daneben.
+ */
+export function withCancellationNotice(model: InvoicePrintModel, invoice: VorgangInvoice): InvoicePrintModel {
+  if (!invoice.cancelledAt || model.correction) return model;
+  return {
+    ...model,
+    cancellationNotice: {
+      cancelledAt: invoice.cancelledAt,
+      ...(invoice.cancellationKind ? { kind: invoice.cancellationKind } : {}),
+      ...(invoice.correctionNumber ? { correctionNumber: invoice.correctionNumber } : {}),
+    },
+  };
+}
+
+/** FINANZ-CORE-01A (STO-16) — die Zeilen des Stornovermerks, wie das PDF sie druckt. */
+export function cancellationNoticeLines(
+  notice: NonNullable<InvoicePrintModel['cancellationNotice']>,
+): [string, string] {
+  const am = formatInvoiceDate(toBusinessDay(notice.cancelledAt));
+  const ersatz =
+    notice.kind === 'correction'
+      ? notice.correctionNumber
+        ? ` – berichtigt durch Korrekturbeleg ${notice.correctionNumber}`
+        : ' – berichtigt durch Korrekturbeleg'
+      : '';
+  return [`STORNIERT am ${am}${ersatz}`, 'Diese Rechnung ist nicht mehr gültig und nicht zu bezahlen.'];
+}
+
 async function buildApprovedInvoicePdf(
   invoice: VorgangInvoice,
   archival: boolean,
@@ -205,7 +244,7 @@ async function buildApprovedInvoicePdf(
 
   let model: InvoicePrintModel;
   try {
-    model = buildInvoicePrintModelFromInvoice(invoice);
+    model = withCancellationNotice(buildInvoicePrintModelFromInvoice(invoice), invoice);
   } catch (error) {
     return {
       ok: false,
@@ -383,17 +422,33 @@ function drawLine(
 ): void {
   const size = options.size ?? 10;
   const activeFont = options.bold ? cursor.fontBold : cursor.font;
-  const safe = toPdfSafeText(text);
-  ensureSpace(cursor, size + LINE_GAP);
-  cursor.page.drawText(safe, {
-    x: MARGIN,
-    y: cursor.y - size,
-    size,
-    font: activeFont,
-    color: rgb(0.1, 0.1, 0.1),
-    maxWidth: CONTENT_WIDTH,
-  });
-  cursor.y -= size + LINE_GAP;
+  /*
+   * FINANZ-CORE-01A (AUS-02) — selbst umbrechen. pdf-lib bricht bei `maxWidth`
+   * zwar um, aber mit eigener Zeilenhöhe, während der Cursor nur um eine Zeile
+   * vorrückte: Lange Kundennamen, Projekttitel oder Abzugszeilen überlagerten
+   * die nächste Zeile. Eine Zeile, die passt, steht unverändert da.
+   */
+  const lines = wrapText(toPdfSafeText(text), activeFont, size, CONTENT_WIDTH);
+  for (const line of lines) {
+    ensureSpace(cursor, size + LINE_GAP);
+    cursor.page.drawText(line, {
+      x: MARGIN,
+      y: cursor.y - size,
+      size,
+      font: activeFont,
+      color: rgb(0.1, 0.1, 0.1),
+    });
+    cursor.y -= size + LINE_GAP;
+  }
+}
+
+/**
+ * FINANZ-CORE-01A (AUS-02) — die Menge so, wie sie am Bildschirm steht:
+ * deutsch, „12,5" statt „12.5". „2.125 m²" las sich im PDF als 2125.
+ */
+export function formatQuantityPdf(quantity: number): string {
+  if (!Number.isFinite(quantity)) return '';
+  return quantity.toLocaleString('de-DE', { maximumFractionDigits: 3 });
 }
 
 function drawWrapped(
@@ -403,7 +458,14 @@ function drawWrapped(
   bold = false,
 ): void {
   const activeFont = bold ? cursor.fontBold : cursor.font;
-  const lines = wrapText(toPdfSafeText(text), activeFont, size, CONTENT_WIDTH);
+  /*
+   * FINANZ-CORE-01A (AUS-16) — Zeilenumbrüche des Textes bleiben stehen (am Bildschirm
+   * `pre-wrap`). Bisher entfernte `toPdfSafeText` sie als Steuerzeichen: „Zeile 1↵Zeile 2"
+   * wurde zu „Zeile 1Zeile 2".
+   */
+  const lines = text
+    .split(/\r?\n/)
+    .flatMap((absatz) => (absatz.trim() ? wrapText(toPdfSafeText(absatz), activeFont, size, CONTENT_WIDTH) : ['']));
   for (const line of lines) {
     ensureSpace(cursor, size + LINE_GAP);
     cursor.page.drawText(line, {
@@ -625,7 +687,8 @@ async function renderInvoicePrintModelToPdf(
   }
 
   const company = model.company;
-  drawLine(cursor, [company.companyName, company.legalForm].filter(Boolean).join(' '), {
+  // FINANZ-CORE-01A (WEISS-Nacharbeit N14) — Firmierung ohne doppelte Rechtsform.
+  drawLine(cursor, formatCompanyLegalName(company.companyName, company.legalForm), {
     size: 14,
     bold: true,
   });
@@ -657,7 +720,11 @@ async function renderInvoicePrintModelToPdf(
   cursor.y -= 8;
   drawLine(cursor, model.documentTitle, { size: 16, bold: true });
   if (model.correction) {
-    // NORMAL-INVOICE-CANCELLATION-01B — Bezug statt eigener Rechnungsnummer.
+    // FINANZ-CORE-01A (SQL-11) — die eigene Nummer des Korrekturbelegs, wenn vergeben.
+    if (model.correction.correctionNumber) {
+      drawLine(cursor, `Korrekturnummer: ${model.correction.correctionNumber}`, { size: 11, bold: true });
+    }
+    // NORMAL-INVOICE-CANCELLATION-01B — der Bezug auf das Original.
     drawLine(
       cursor,
       `Zu Rechnungsnummer: ${model.correction.originalInvoiceNumber} vom ${formatInvoiceDate(model.correction.originalIssueDate)}`,
@@ -673,6 +740,12 @@ async function renderInvoicePrintModelToPdf(
   } else {
     drawLine(cursor, `Rechnungsnummer: ${model.invoiceNumber}`, { size: 11, bold: true });
     drawLine(cursor, `Rechnungsdatum: ${formatInvoiceDate(model.issueDate)}`, { size: 10 });
+    if (model.cancellationNotice) {
+      // FINANZ-CORE-01A (STO-16) — der Stornovermerk steht direkt unter Nummer und Datum.
+      const [vermerk, folge] = cancellationNoticeLines(model.cancellationNotice);
+      drawLine(cursor, vermerk, { size: 11, bold: true });
+      drawLine(cursor, folge, { size: 9 });
+    }
   }
 
   cursor.y -= 6;
@@ -684,6 +757,8 @@ async function renderInvoicePrintModelToPdf(
     .filter(Boolean)
     .join(', ');
   if (customerAddress) drawWrapped(cursor, customerAddress, 9);
+  // FINANZ-CORE-01A (AUS-11) — Land außerhalb Deutschlands und USt-IdNr. des Empfängers.
+  for (const line of buildCustomerLegalLines(customer)) drawLine(cursor, line, { size: 9 });
   if (customer.email?.trim()) drawLine(cursor, customer.email, { size: 9 });
   if (customer.phone?.trim()) drawLine(cursor, customer.phone, { size: 9 });
 
@@ -730,23 +805,51 @@ async function renderInvoicePrintModelToPdf(
   cursor.y -= 6;
   const summary = model.summary;
   drawLine(cursor, `Zwischensumme netto: ${formatMoneyPdf(summary.subtotalNet)}`, { size: 10 });
-  drawLine(
-    cursor,
-    `Umsatzsteuer (${summary.taxRate} %): ${formatMoneyPdf(summary.taxAmount)}`,
-    { size: 10 },
-  );
+  // FINANZ-CORE-01A (AUS-16) — wie am Bildschirm: ohne Umsatzsteuer (§ 19, § 13b, steuerfrei) keine 0-%-Zeile.
+  if (summary.taxRate > 0 || summary.taxAmount !== 0) {
+    drawLine(
+      cursor,
+      `Umsatzsteuer (${summary.taxRate} %): ${formatMoneyPdf(summary.taxAmount)}`,
+      { size: 10 },
+    );
+  }
   drawLine(cursor, `Bruttosumme: ${formatMoneyPdf(summary.grossTotal)}`, {
     size: 10,
     bold: true,
   });
-  for (const deduction of summary.deductionLines) {
+  /*
+   * FINANZ-CORE-01A (AUS-01) — § 14 Abs. 5 S. 2 UStG: In der Schlussrechnung
+   * sind die Teilentgelte **und die auf sie entfallenden Steuerbeträge**
+   * abzusetzen. Je Abschlag deshalb Netto und Umsatzsteuer, wenn der Beleg sie
+   * trägt; ohne Umsatzsteuer (§ 19, § 13b, steuerfrei) bleibt es beim Betrag.
+   */
+  /*
+   * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — ein mit Skonto beglichener Abschlag ist nicht
+   * in voller Höhe gezahlt: Abgesetzt wird das vereinnahmte Teilentgelt („gezahlt"), das
+   * gewährte Skonto steht als eigene Zeile darunter (Entgeltminderung) — dieselbe
+   * Aufteilung wie BT-113 und der Nachlass der E-Rechnung.
+   */
+  const deductionRows = [
+    ...summary.deductionLines.map((line) => ({ line, suffix: line.paidPart ? ', gezahlt' : '' })),
+    ...(summary.skontoLines ?? []).map((line) => ({ line, suffix: '' })),
+  ];
+  for (const { line: deduction, suffix } of deductionRows) {
     const label = deduction.invoiceNumber
-      ? `${deduction.label} (${deduction.invoiceNumber})`
-      : deduction.label;
-    drawLine(cursor, `${label}: -${formatMoneyPdf(deduction.amount)}`, { size: 9 });
+      ? `${deduction.label} (${deduction.invoiceNumber})${suffix}`
+      : `${deduction.label}${suffix}`;
+    const parts =
+      deduction.netAmount !== undefined && deduction.taxAmount !== undefined && deduction.taxAmount !== 0
+        ? ` (netto ${formatMoneyPdf(deduction.netAmount)}, USt ${formatMoneyPdf(deduction.taxAmount)})`
+        : '';
+    // FINANZ-CORE-01A (AUS-17) — im Korrekturbeleg ist der Abzug negiert: „+" statt „--".
+    drawLine(cursor, `${label}: ${formatSignedDeductionPdf(deduction.amount)}${parts}`, { size: 9 });
   }
   if (summary.deductionLines.length > 0) {
-    drawLine(cursor, `Bereits berechnet: ${formatMoneyPdf(summary.deductionsTotal)}`, {
+    const totalParts =
+      summary.deductionsNetTotal !== undefined && summary.deductionsTaxTotal !== undefined && summary.deductionsTaxTotal !== 0
+        ? ` (netto ${formatMoneyPdf(summary.deductionsNetTotal)}, USt ${formatMoneyPdf(summary.deductionsTaxTotal)})`
+        : '';
+    drawLine(cursor, `Bereits berechnet: ${formatMoneyPdf(summary.deductionsTotal)}${totalParts}`, {
       size: 10,
     });
   }
@@ -794,6 +897,25 @@ async function renderInvoicePrintModelToPdf(
   if (model.footerNotes.trim()) {
     cursor.y -= 4;
     drawWrapped(cursor, model.footerNotes.trim(), 8);
+  }
+
+  /*
+   * FINANZ-CORE-01A (AUS-16) — Seitenzahlen bei mehrseitigen Belegen: Ohne „Seite x von y"
+   * ist nicht erkennbar, ob ein Beleg vollständig ist. Ein einseitiger Beleg bleibt unverändert.
+   */
+  const seiten = cursor.pdfDoc.getPages();
+  if (seiten.length > 1) {
+    seiten.forEach((seite, index) => {
+      const text = `Seite ${index + 1} von ${seiten.length}`;
+      const breite = cursor.font.widthOfTextAtSize(text, 8);
+      seite.drawText(text, {
+        x: PAGE_WIDTH - MARGIN - breite,
+        y: MARGIN / 2,
+        size: 8,
+        font: cursor.font,
+        color: rgb(0.35, 0.35, 0.35),
+      });
+    });
   }
 
   /*
@@ -871,8 +993,22 @@ function drawPositionsTable(cursor: PdfCursor, model: InvoicePrintModel): void {
       size,
       cols.desc - 4,
     );
-    const blockHeight = Math.max(rowHeight, descLines.length * (size + 2) + 4);
+    /*
+     * FINANZ-CORE-01A (AUS-02) — Menge und Einheit in der eigenen Spalte selbst
+     * umbrechen. Mit `maxWidth` brach pdf-lib „12.5 Stunden" mit 24 pt
+     * Zeilenhöhe um, und „Stunden" landete in der übernächsten Zeile.
+     */
+    const qtyLines = wrapText(
+      toPdfSafeText(`${formatQuantityPdf(position.quantity)} ${position.unit}`),
+      cursor.font,
+      size,
+      cols.qty - 2,
+    );
+    const blockHeight = Math.max(rowHeight, Math.max(descLines.length, qtyLines.length) * (size + 2) + 4);
+    // FINANZ-CORE-01A (AUS-16) — auf jeder neuen Seite wieder der Tabellenkopf.
+    const seiteVorher = cursor.page;
     ensureSpace(cursor, blockHeight);
+    if (cursor.page !== seiteVorher) drawHeader();
     let x = MARGIN;
     const top = cursor.y - size;
     cursor.page.drawText(String(position.index), {
@@ -893,12 +1029,13 @@ function drawPositionsTable(cursor: PdfCursor, model: InvoicePrintModel): void {
       dy += size + 2;
     }
     x += cols.desc;
-    cursor.page.drawText(toPdfSafeText(`${position.quantity} ${position.unit}`), {
-      x,
-      y: top,
-      size,
-      font: cursor.font,
-      maxWidth: cols.qty - 2,
+    qtyLines.forEach((line, index) => {
+      cursor.page.drawText(line, {
+        x,
+        y: top - index * (size + 2),
+        size,
+        font: cursor.font,
+      });
     });
     x += cols.qty;
     cursor.page.drawText(formatMoneyPdf(position.unitPrice), {

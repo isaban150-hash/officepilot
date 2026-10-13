@@ -7,6 +7,9 @@ import { Page } from '../components/ui/Page';
 import { DetailSection } from '../components/ui/Section';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
+import { useOptionalAuth } from '../context/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { resolveWorkspaceWriteAccess } from '../services/workspace/workspaceRoleService';
 import { buildCustomerDistinguisher, buildCustomerSubline } from '../components/customer/CustomerDecisionChoice';
 import { CustomerDuplicateDecision } from '../components/customer/CustomerDuplicateDecision';
 import { CUSTOMER_DUPLICATE_ERROR_KEY } from '../services/customerService';
@@ -43,6 +46,14 @@ const NEW_CUSTOMER_DRAFT: Customer = Object.freeze({
 export function KundenPage() {
   const { translate, showToast, language } = useApp();
   const navigate = useNavigate();
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N05) — Kundenstammdaten schreiben nur Inhaber und
+   * Verwaltung (Server: can_write_workspace). Ein Mitglied bekam bisher trotzdem ein
+   * speicherbares Formular; der Server wies die Änderung ab, lokal blieb sie stehen.
+   * Wie bei GLS01: ohne bestätigte Schreibberechtigung kein Formular.
+   */
+  const authUser = useOptionalAuth()?.user ?? null;
+  const darfKundenSchreiben = resolveWorkspaceWriteAccess({ userId: authUser?.id, cloudConfigured: isSupabaseConfigured() }).canWrite;
   const [kunden, setKunden] = useState(() => getKundenOverview());
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -68,7 +79,8 @@ export function KundenPage() {
    * Merkmale (Ansprechpartner, E-Mail, Anlagedatum) über den bestehenden
    * Helfer; Altbestand und fehlender Kundenstamm erklären ihre Sonderstellung.
    */
-  const normalizedName = (value: string) => value.trim().toLocaleLowerCase('de-DE').replace(/s+/g, ' ');
+  // FINANZ-CORE-01A (KUN-11) — Leerraum zusammenfassen; `/s+/` ersetzte den Buchstaben „s".
+  const normalizedName = (value: string) => value.trim().toLocaleLowerCase('de-DE').replace(/\s+/g, ' ');
   const nameCount = new Map<string, number>();
   for (const entry of kunden) nameCount.set(normalizedName(entry.name), (nameCount.get(normalizedName(entry.name)) ?? 0) + 1);
   const hasNamesake = (kunde: KundeOverviewEntry) => (nameCount.get(normalizedName(kunde.name)) ?? 0) > 1;
@@ -160,10 +172,10 @@ export function KundenPage() {
       <PageHeader
         title={translate('kunden.title')}
         subtitle={translate('kunden.subtitle')}
-        primaryAction={creating ? undefined : createAction}
+        primaryAction={creating || !darfKundenSchreiben ? undefined : createAction}
       />
 
-      {creating ? (
+      {creating && darfKundenSchreiben ? (
         <DetailSection title={translate('kunden.create.title')} surface testId="kunden-create-section">
           <CustomerEditForm
             customer={NEW_CUSTOMER_DRAFT}

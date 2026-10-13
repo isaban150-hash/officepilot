@@ -14,6 +14,7 @@ import { filterActiveItems, getInboxItemById, getInboxItems } from '../inboxServ
 import {
   getPositionBillingStatus,
   hasAbschlagsrechnung,
+  hasDeductibleAbschlag,
   hasFinalSchlussrechnung,
   hasSchlussrechnung,
   isPositionStillOpen,
@@ -469,6 +470,20 @@ function buildRecommendationsForVorgang(vorgang: Vorgang, inbox: InboxItem[]): W
         params: { vorgang: vorgang.title },
         route: buildInvoiceCreatePath(vorgang.id, 'abschlag'),
         labelKey: 'workflowIntelligence.nextStep.createInvoice',
+        reasonKey: 'workflowIntelligence.nextStep.invoiceReason',
+      });
+    } else if (hasDeductibleAbschlag(vorgang)) {
+      /*
+       * FINANZ-CORE-01A (RE-04) — nach einem Pauschalabschlag rechnet die
+       * Schlussrechnung ab, die ihn abzieht; eine „Rechnung" wäre gesperrt.
+       */
+      recs.push({
+        id: 'create_schluss',
+        priority: PRIORITY_NEXT,
+        messageKey: 'workflowIntelligence.recommend.createSchluss',
+        params: { vorgang: vorgang.title },
+        route: buildInvoiceCreatePath(vorgang.id, 'schluss'),
+        labelKey: 'workflowIntelligence.nextStep.createSchluss',
         reasonKey: 'workflowIntelligence.nextStep.invoiceReason',
       });
     } else {

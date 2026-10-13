@@ -56,7 +56,7 @@ import { generateInvoiceCorrectionPdf } from '../invoicePdfService';
 import { archiveOutgoingInvoice } from '../invoiceArchiveService';
 import { calculatePaymentSummary, recordPayment } from '../invoicePaymentService';
 import { getBilledQuantity, isBillingEffective } from '../orderBillingRules';
-import { findInvoiceLocatorById } from './invoiceRegistryService';
+import { findInvoiceLocatorById, listInvoices } from './invoiceRegistryService';
 import type { CompanyDocument, Vorgang, VorgangInvoice } from '../../types/models';
 import { alsInhaber } from '../../test/workspaceRoleTestUtils';
 
@@ -250,6 +250,21 @@ function installClient(handler: (name: string, args: Record<string, unknown>) =>
       calls.push(name);
       const result = handler(name, args);
       if (result instanceof Error) return { data: null, error: { message: result.message } };
+      /*
+       * FINANZ-CORE-01A (STO-02) — vor dem Storno einer versendeten Rechnung liest
+       * der Dienst den Versandstand der Cloud. Der hier simulierte Server kennt
+       * den Vermerk — er bestätigt das Storno ja als `correction` —, also meldet
+       * er ihn auch, wenn der Test nichts anderes vorgibt.
+       */
+      if (name === 'get_workspace_invoice_sent' && result == null) {
+        const local = listInvoices().find((entry) => entry.id === args.p_client_invoice_id);
+        return {
+          data: local
+            ? { found: true, invoice_status: local.status, sent_at: local.sentAt ?? null, sent_via: local.sentVia ?? null, sent_note: local.sentNote ?? null }
+            : { found: false },
+          error: null,
+        };
+      }
       return { data: result, error: null };
     },
   } as never);
@@ -752,7 +767,8 @@ describe('NORMAL-INVOICE-CANCELLATION-01B', () => {
 
     expect(q(mounted, 'invoice-cancelled-panel')).not.toBeNull();
     expect(q(mounted, 'invoice-cancelled-kind-correction')).not.toBeNull();
-    expect(q(mounted, 'invoice-cancelled-at')?.textContent).toContain('2026-09-05');
+    // FINANZ-CORE-01A (F-03) — der Geschäftstag deutsch geschrieben, nicht als ISO-Text.
+    expect(q(mounted, 'invoice-cancelled-at')?.textContent).toContain('05.09.2026');
     expect(q(mounted, 'invoice-cancelled-reason')?.textContent).toContain('Leistung nicht erbracht');
     expect(q(mounted, 'invoice-cancel-action')).toBeNull();
     expect(q(mounted, 'invoice-correction-archive-pending')).toBeNull();
@@ -807,5 +823,35 @@ describe('NORMAL-INVOICE-CANCELLATION-01B', () => {
     expect(q(mounted, 'invoice-cancelled-panel')).not.toBeNull();
     expect(q(mounted, 'invoice-open-correction')).toBeNull();
     expect(q(mounted, 'invoice-cancel-action')).toBeNull();
+  });
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N12) — die Korrektur einer Schlussrechnung mit Abzug:
+   * Oben stand unbezeichnet die Gesamtsumme (−1.190 €), Beleg und Archiv zeigten −714 €.
+   */
+  it('M7: Korrektur einer Schlussrechnung mit Abzug — Zahlbetrag benannt vorn, Gesamtsumme getrennt beschriftet', async () => {
+    seed({
+      order: orderInvoice({
+        type: 'schluss',
+        positions: [
+          { id: 'l1', orderPositionId: 'op-1', description: 'Dach', quantity: 100, unit: 'm²', unitPrice: 10, lineTotal: 1000 },
+        ],
+        subtotal: 1000,
+        amount: 714,
+        previousAbschlagDeductions: [
+          { invoiceId: 'inv-ab-c01b', invoiceNumber: '2026-0199', abschlagNumber: 1, date: '2026-08-15', subtotal: 400, amount: 476 },
+        ],
+        cancelledAt: '2026-09-05T10:00:00.000Z',
+        cancelReason: 'Schlussrechnung neu',
+        cancellationKind: 'correction',
+        correctionNumber: '2026-0202',
+        correctionDocumentId: `corr-${ORDER_ID}`,
+      }),
+    });
+    mounted = renderAt(`/vorgaenge/${VORGANG_ID}/rechnungen/${ORDER_ID}?doc=korrektur`);
+    await settle();
+    expect(q(mounted, 'invoice-correction-page')).not.toBeNull();
+    const kopf = q(mounted, 'invoice-correction-experience')?.textContent ?? '';
+    expect(kopf).toMatch(/Korrigierter Zahlbetrag: [−-]714,00/);
+    expect(kopf).toMatch(/Gesamtbetrag vor Abzug der Abschläge: [−-]1\.190,00/);
   });
 });

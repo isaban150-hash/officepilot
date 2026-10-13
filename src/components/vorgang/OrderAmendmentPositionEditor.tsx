@@ -19,6 +19,7 @@ import type {
 import {
   formatAmendmentDecimalInput,
   formatAmendmentMoney,
+  hasSubCentPrecision,
   parseAmendmentDecimalInput,
   positionLineTotal,
   resolveParentPositionDescription,
@@ -260,6 +261,8 @@ export function OrderAmendmentPositionEditor({
       next.unitPrice = translate('orderAmendment.validation.unitPriceRequired');
     } else if (unitPriceParsed < 0) {
       next.unitPrice = translate('orderAmendment.validation.unitPriceNonNegative');
+    } else if (hasSubCentPrecision(unitPriceParsed)) {
+      next.unitPrice = translate('orderAmendment.validation.unitPriceCents');
     }
     return next;
   };

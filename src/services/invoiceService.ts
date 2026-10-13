@@ -13,6 +13,7 @@ import {
   getExecutedRemainingQuantity,
   isBillingEffective,
   isPositionBillable,
+  abschlagConsumesOrderQuantity,
 } from './orderBillingRules';
 import {
   getNextInvoiceNumberPreview,
@@ -45,9 +46,16 @@ import {
   isFixedAmountAbschlag,
   resolveInvoiceCalculationMode,
 } from './invoiceCalculationMode';
-import { buildLegalNotices, getTaxRateForStatus } from './invoiceTaxService';
+import {
+  addCalendarDays,
+  buildLegalNotices,
+  getTaxRateForStatus,
+  normalizeLegalNoticesForTaxStatus,
+  PRIVATE_RETENTION_NOTICE,
+} from './invoiceTaxService';
 // E-RECHNUNG-04B — die Währung, die jeder neue Beleg eingefroren trägt.
 import { INVOICE_CURRENCY_CODE } from './einvoice/einvoiceStandards';
+import { freezeAbschlagDeductionSettlements } from './invoice/abschlagSettlement';
 import {
   prefillsOpenQuantity,
   usesAbschlagDeductions,
@@ -56,8 +64,8 @@ import {
 import { getAbschlagDeductionsTotal } from './invoiceDeductions';
 import {
   fromCents,
-  lineTotalCents,
-  lineTotalMoney,
+  billingLineTotalCents,
+  billingLineTotalMoney,
   roundMoney,
   sumCents,
   taxCentsFromNet,
@@ -161,32 +169,7 @@ export function reconcilePaymentTermsWithSkonto(
  * nicht mehr abgezogen. Sonst hielte die Schlussrechnung einen Abzug fest, den
  * `hasAbschlagsrechnung` und die Mengenprojektion längst nicht mehr kennen.
  */
-/**
- * RECHNUNGSINTEGRITAET-03B2 — ein Abschlag verbraucht **entweder** Menge
- * **oder** Geld, nie beides.
- *
- * Realbefund aus der unabhängigen Abnahme: Ein mengenbasierter Abschlag über
- * eine von zwei Einheiten reduzierte korrekt die offene Menge — und wurde in
- * der Schlussrechnung **zusätzlich** monetär abgezogen. Die Schlussrechnung
- * rechnete danach nur noch die verbleibende Einheit (5 €) ab und zog dieselben
- * 5 € nochmals ab: Restbetrag 0 €, obwohl nur die Hälfte bezahlt war.
- *
- * Die Regel folgt dem bestehenden Hybrid des Modells:
- *   • fixed_amount (und jeder Abschlag ohne Positionsmenge) nimmt keine
- *     Auftragsmenge weg — sein Betrag muss abgezogen werden.
- *   • ein mengenbasierter Abschlag hat seine Leistung bereits über
- *     `billedQuantity` verbraucht; sie fehlt in den Positionen der
- *     Schlussrechnung und darf nicht ein zweites Mal als Geld verschwinden.
- *
- * Geprüft wird die tatsächlich verbrauchte Menge, nicht allein der Modus:
- * Altbestand ohne `calculationMode` ist dadurch richtig eingeordnet.
- */
-export function abschlagConsumesOrderQuantity(invoice: VorgangInvoice): boolean {
-  if (invoice.calculationMode === 'fixed_amount') return false;
-  return (invoice.positions ?? []).some(
-    (position) => Number.isFinite(position.quantity) && position.quantity > 0,
-  );
-}
+export { abschlagConsumesOrderQuantity } from './orderBillingRules';
 
 export function getPreviousAbschlagDeductions(vorgang: Vorgang): AbschlagDeduction[] {
   return vorgang.invoices
@@ -906,13 +889,53 @@ export function applyAllOpenPositionsToDraft(
   };
 }
 
+/** FINANZ-CORE-01A (ZAH-10) — Kalendertage zwischen zwei Daten `YYYY-MM-DD`; `null` = nicht bestimmbar. */
+function isoDayDistance(fromIso: string | undefined, toIso: string | undefined): number | null {
+  const day = (value: string | undefined): number | null => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value?.trim() ?? '')) return null;
+    const stamp = Date.parse(`${value!.trim()}T00:00:00.000Z`);
+    return Number.isFinite(stamp) && new Date(stamp).toISOString().slice(0, 10) === value!.trim() ? stamp : null;
+  };
+  const from = day(fromIso);
+  const to = day(toIso);
+  return from === null || to === null ? null : Math.round((to - from) / 86_400_000);
+}
+
+/**
+ * FINANZ-CORE-01A (KUN-04) — „Aus Kundenstamm übernehmen" ersetzt den Empfänger vollständig.
+ *
+ * `updateInvoiceDraftMetadata` mischt Empfängerfelder (richtig für die Eingabe einzelner
+ * Felder). Bei der Übernahme liess das Mischen ein im Stamm gelöschtes optionales Feld im
+ * Entwurf stehen — es wurde mit der Freigabe eingefroren.
+ */
+export function replaceInvoiceDraftCustomerBilling(draft: InvoiceDraft, billing: CustomerBilling): InvoiceDraft {
+  return { ...draft, customerBilling: { ...billing } };
+}
+
 export function updateInvoiceDraftMetadata(
   draft: InvoiceDraft,
   changes: InvoiceDraftMetadataChanges,
 ): InvoiceDraft {
   const next: InvoiceDraft = { ...draft };
 
-  if (changes.issueDate !== undefined) next.issueDate = changes.issueDate;
+  if (changes.issueDate !== undefined) {
+    next.issueDate = changes.issueDate;
+    /*
+     * FINANZ-CORE-01A (ZAH-10) — das Zahlungsziel folgt dem Rechnungsdatum.
+     * Wer das Rechnungsdatum verschob, behielt bisher das alte
+     * Fälligkeitsdatum: Aus „14 Tage" wurden still 10 oder 20, und der
+     * Zahlungstext auf dem Beleg passte nicht mehr zum Datum daneben. Die
+     * Frist bleibt (Tage zwischen bisherigem Rechnungsdatum und Fälligkeit);
+     * ein im selben Schritt ausdrücklich gesetztes Fälligkeitsdatum geht vor,
+     * ein leeres Fälligkeitsfeld bleibt leer.
+     */
+    if (changes.paymentDueDate === undefined) {
+      const termDays = isoDayDistance(draft.issueDate, draft.paymentDueDate);
+      if (termDays !== null && termDays >= 0 && isoDayDistance(changes.issueDate, changes.issueDate) === 0) {
+        next.paymentDueDate = addCalendarDays(changes.issueDate, termDays);
+      }
+    }
+  }
   if (changes.servicePeriodFrom !== undefined) {
     next.servicePeriodFrom = changes.servicePeriodFrom;
   }
@@ -930,6 +953,11 @@ export function updateInvoiceDraftMetadata(
   }
   if (changes.paymentDueDate !== undefined) next.paymentDueDate = changes.paymentDueDate;
   if (changes.paymentTermsText !== undefined) next.paymentTermsText = changes.paymentTermsText;
+  if (changes.privateRetentionNotice !== undefined) {
+    // FINANZ-CORE-01A (AUS-11/EIN-07) — genau ein Hinweis, an letzter Stelle; die übrigen bleiben.
+    const ohne = (next.legalNotices ?? []).filter((text) => text.trim() !== PRIVATE_RETENTION_NOTICE);
+    next.legalNotices = changes.privateRetentionNotice ? [...ohne, PRIVATE_RETENTION_NOTICE] : ohne;
+  }
   if (changes.skontoText !== undefined) {
     next.skontoText = changes.skontoText;
     /*
@@ -979,7 +1007,7 @@ export function calculateLineItemTotals(
   const taxRate = getTaxRateForStatus(taxStatus);
   const lineCents = positions
     .filter((p) => p.quantity > 0)
-    .map((p) => lineTotalCents(p.quantity, p.unitPrice))
+    .map((p) => billingLineTotalCents(p.quantity, p.unitPrice))
     .filter((cents) => Number.isFinite(cents));
   const subtotalCents = sumCents(lineCents);
   const taxCents = taxCentsFromNet(subtotalCents, taxRate);
@@ -1109,6 +1137,8 @@ function validateDraftForFinalize(
             (e) =>
               e.code === 'reverse_charge_unconfirmed' ||
               e.code === 'deductions_exceed_total' ||
+              // FINANZ-CORE-01A (WEISS N02/D1) — nur beglichene Abschläge werden abgezogen.
+              e.code === 'abschlag_unpaid' ||
               /*
                * INVOICE-SERVICE-PERIOD-01B — der Leistungszeitraum ist eine
                * Tatsachenbehauptung auf dem Beleg und muss auch dort greifen,
@@ -1170,7 +1200,7 @@ export function buildInvoiceFinalizationCandidate(
           unit: p.unit,
           unitLabel: p.unitLabel,
           unitPrice: roundMoney(p.unitPrice),
-          lineTotal: lineTotalMoney(p.quantity, p.unitPrice),
+          lineTotal: billingLineTotalMoney(p.quantity, p.unitPrice),
         }));
 
   const invoice: VorgangInvoice = {
@@ -1226,8 +1256,26 @@ export function buildInvoiceFinalizationCandidate(
     companySnapshot: cloneCompanySnapshot(draft.companySnapshot),
     // BRANDING-01F-1: durchreichen, nicht neu bilden — siehe cloneBrandingSnapshot.
     brandingSnapshot: cloneBrandingSnapshot(draft.brandingSnapshot),
-    legalNotices: [...draft.legalNotices],
-    previousAbschlagDeductions: draft.previousAbschlagDeductions.map((item) => ({ ...item })),
+    /*
+     * FINANZ-CORE-01A (SQL-09) — der Pflichthinweis folgt dem Steuerstatus, mit dem
+     * freigegeben wird. Ein Altentwurf trug sonst den Hinweis seines früheren
+     * Status. Nicht Teil des Inhalts-Fingerabdrucks — der bleibt unberührt.
+     */
+    legalNotices: normalizeLegalNoticesForTaxStatus(
+      draft.taxStatus ?? resolveDefaultTaxStatus(getCompanyProfile(), setup),
+      draft.legalNotices,
+      draft.companySnapshot,
+    ),
+    /*
+     * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — mit der Freigabe eingefroren: wie jeder
+     * abgezogene Abschlag beglichen ist, gezahlt und Skonto getrennt. Gelesen aus demselben
+     * Vorgangsstand wie die Freigabeprüfung (`abschlag_unpaid`); der Server prüft die Werte.
+     */
+    previousAbschlagDeductions: usesAbschlagDeductions(draft.type)
+      ? freezeAbschlagDeductionSettlements(draft.previousAbschlagDeductions, (invoiceId) =>
+          (validated.vorgang?.invoices ?? []).find((invoice) => invoice.id === invoiceId),
+        )
+      : draft.previousAbschlagDeductions.map((item) => ({ ...item })),
     introText: draft.introText,
     closingText: draft.closingText,
     baustelle: draft.baustelle,
@@ -1282,7 +1330,7 @@ export function buildInvoiceFinalizationContentFingerprint(
             unit: p.unit,
             unitLabel: p.unitLabel ?? null,
             unitPrice: roundMoney(p.unitPrice),
-            lineTotal: lineTotalMoney(p.quantity, p.unitPrice),
+            lineTotal: billingLineTotalMoney(p.quantity, p.unitPrice),
             billable: p.billable,
           })),
   });

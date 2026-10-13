@@ -19,21 +19,29 @@
  * Rein: keine Stores, keine Cloud, kein Zufall, kein `Date.now()`.
  */
 import type { CompanyProfile, CustomerBilling, VorgangInvoice } from '../../types/models';
+import { formatCompanyLegalName } from '../company/companyLegalName';
 import { isFixedAmountAbschlag } from '../invoiceCalculationMode';
-import { fromCents, lineTotalCents, taxCentsFromNet, toCents } from '../invoiceMoney';
+import { billingLineTotalCents, fromCents, taxCentsFromNet, toCents } from '../invoiceMoney';
 import { resolveDocumentKind, resolveTaxCategory, resolveUnitCode } from './einvoiceCodes';
 import { normalizeCountryCode } from './einvoiceStandards';
+import { toBusinessDay } from '../businessDateService';
+import { PRIVATE_RETENTION_NOTICE, hasPrivateRetentionNotice } from '../invoiceTaxService';
+import { frozenSettlementShare, splitAbschlagDeductions } from '../invoice/abschlagSkontoSplit';
 import type {
   CanonicalAddress,
+  CanonicalAllowance,
   CanonicalBuyer,
   CanonicalDocumentKind,
   CanonicalEInvoice,
   CanonicalEInvoiceIssue,
   CanonicalEInvoiceIssueCode,
+  CanonicalEInvoiceProfile,
   CanonicalEInvoiceResult,
   CanonicalLine,
   CanonicalPrepaymentReference,
+  CanonicalPrepaymentSettlement,
   CanonicalSeller,
+  CanonicalSellerContact,
   CanonicalTaxBreakdown,
   CanonicalTaxCategory,
 } from './canonicalEInvoice';
@@ -65,7 +73,15 @@ const text = (value: unknown): string => (typeof value === 'string' ? value.trim
  * Stammdaten: Der Betrieb kann den Text längst geändert haben.
  */
 function frozenExemptionReason(invoice: VorgangInvoice): string {
-  return (invoice.legalNotices ?? []).map(text).filter(Boolean).join(' ');
+  /*
+   * FINANZ-CORE-01A (AUS-11/EIN-07) — der Hinweis auf die Aufbewahrungspflicht des privaten
+   * Empfängers ist kein Grund der Steuerbefreiung (BT-120) und darf einen fehlenden Grund nicht
+   * ersetzen. Er steht als Belegnotiz (BT-22), siehe unten.
+   */
+  return (invoice.legalNotices ?? [])
+    .map(text)
+    .filter((entry) => entry && entry !== PRIVATE_RETENTION_NOTICE)
+    .join(' ');
 }
 
 /* ------------------------------------------------------------------ */
@@ -101,14 +117,23 @@ function buildAddress(
 
 function buildSeller(
   snapshot: CompanyProfile | undefined,
+  profile: CanonicalEInvoiceProfile,
   issues: IssueLog,
 ): CanonicalSeller | null {
   if (!snapshot) {
     issues.add('seller_snapshot_missing', 'companySnapshot');
     return null;
   }
-  const name = text(snapshot.companyName);
-  if (!name) issues.add('seller_name_missing', 'companySnapshot.companyName');
+  /*
+   * FINANZ-CORE-01A (AUS-06) — BT-27 trägt den Namen so, wie der Beleg ihn druckt:
+   * Firmenname und Rechtsform. Bisher stand die Rechtsform nur im eigenen Feld, das kein
+   * Renderer schrieb — XML und PDF wichen voneinander ab. WEISS-Nacharbeit N14: über
+   * `formatCompanyLegalName`, ohne doppelte Rechtsform — dieselbe Regel wie PDF und Mail.
+   */
+  const companyName = text(snapshot.companyName);
+  if (!companyName) issues.add('seller_name_missing', 'companySnapshot.companyName');
+  // FINANZ-CORE-01A (WEISS-Nacharbeit N14) — Firmierung ohne doppelte Rechtsform.
+  const name = formatCompanyLegalName(companyName, text(snapshot.legalForm));
 
   const address = buildAddress(
     snapshot,
@@ -118,8 +143,13 @@ function buildSeller(
     issues,
   );
 
+  /*
+   * FINANZ-CORE-01A (AUS-18) — die elektronische Adresse (BT-34) verlangt nur die
+   * XRechnung (3.0), EN 16931 nicht.
+   */
+  const strict = profile === 'xrechnung';
   const email = text(snapshot.email);
-  if (!email) issues.add('seller_electronic_address_missing', 'companySnapshot.email');
+  if (!email && strict) issues.add('seller_electronic_address_missing', 'companySnapshot.email');
 
   /*
    * Eine der beiden Steuerkennungen genügt: Ein Kleinbetrieb führt oft nur
@@ -130,30 +160,46 @@ function buildSeller(
   const vatId = text(snapshot.vatId);
   if (!taxNumber && !vatId) {
     issues.add('seller_tax_identity_missing', 'companySnapshot.taxNumber');
+  } else if (!vatId && !text(snapshot.registrationNumber)) {
+    /*
+     * FINANZ-CORE-01A (AUS-03) — EN 16931 BR-CO-26: Ohne USt-IdNr. (BT-31) und
+     * ohne Registernummer (BT-30) hat der Verkäufer keine Kennung, an der ihn
+     * der Empfänger maschinell erkennt; die Steuernummer (BT-32) zählt dafür
+     * nicht. Die Datei würde am Validator scheitern — bisher meldete die App
+     * trotzdem „Interne Prüfung bestanden". Die PDF-Rechnung bleibt unberührt.
+     */
+    issues.add('seller_identifier_missing', 'companySnapshot.vatId');
   }
 
   /*
-   * Der Ansprechpartner ist für eine strukturierte Rechnung Pflicht
-   * (BR-DE-2, BR-DE-5/6/7) — für eine gewöhnliche PDF-Rechnung nicht. Auch
-   * hier gilt: Der Betrieb soll weiter Rechnungen schreiben können, ohne die
-   * E-Rechnung nutzen zu müssen.
+   * Der Ansprechpartner ist für eine XRechnung Pflicht (BR-DE-2, BR-DE-5/6/7) —
+   * für eine gewöhnliche PDF-Rechnung nicht. Auch hier gilt: Der Betrieb soll
+   * weiter Rechnungen schreiben können, ohne die E-Rechnung nutzen zu müssen.
+   * FINANZ-CORE-01A (AUS-18) — EN 16931 (ZUGFeRD) verlangt ihn nicht.
    */
   const contactName = text(snapshot.contactPerson);
   const contactPhone = text(snapshot.phone);
-  if (!contactName || !contactPhone || !email) {
+  if (strict && (!contactName || !contactPhone || !email)) {
     issues.add('seller_contact_missing', 'companySnapshot.contactPerson');
   }
 
-  if (!name || !address || !email || (!taxNumber && !vatId) || !contactName || !contactPhone) {
-    return null;
-  }
+  if (!companyName || !address || (!taxNumber && !vatId)) return null;
+  if (strict && (!email || !contactName || !contactPhone)) return null;
 
-  const seller: CanonicalSeller = {
-    name,
-    address,
-    electronicAddress: { scheme: 'email', value: email },
-    contact: { name: contactName, phone: contactPhone, email },
-  };
+  const seller: CanonicalSeller = { name, address };
+  if (email) seller.electronicAddress = { scheme: 'email', value: email };
+  /*
+   * Ohne Profilpflicht steht der Kontakt (BG-6) nur, wenn es einen Ansprechpartner
+   * oder eine Telefonnummer gibt — die E-Mail allein ist schon die elektronische
+   * Adresse. Was fehlt, bleibt weg; nichts wird aus anderen Feldern ergänzt.
+   */
+  if (contactName || contactPhone) {
+    const contact: CanonicalSellerContact = {};
+    if (contactName) contact.name = contactName;
+    if (contactPhone) contact.phone = contactPhone;
+    if (email) contact.email = email;
+    seller.contact = contact;
+  }
   const legalForm = text(snapshot.legalForm);
   if (legalForm) seller.legalForm = legalForm;
   if (taxNumber) seller.taxNumber = taxNumber;
@@ -168,6 +214,7 @@ function buildSeller(
 function buildBuyer(
   snapshot: CustomerBilling | undefined,
   requiresVatId: boolean,
+  profile: CanonicalEInvoiceProfile,
   issues: IssueLog,
 ): CanonicalBuyer | null {
   if (!snapshot) {
@@ -185,8 +232,10 @@ function buildBuyer(
     issues,
   );
 
+  // FINANZ-CORE-01A (AUS-18) — BT-49 verlangt nur die XRechnung (3.0), EN 16931 nicht.
+  const strict = profile === 'xrechnung';
   const email = text(snapshot.email);
-  if (!email) issues.add('buyer_electronic_address_missing', 'customerSnapshot.email');
+  if (!email && strict) issues.add('buyer_electronic_address_missing', 'customerSnapshot.email');
 
   /*
    * Die Käuferreferenz ist für eine gewöhnliche PDF-Rechnung freiwillig und
@@ -195,22 +244,29 @@ function buildBuyer(
    * Der Betrieb soll weiter Rechnungen schreiben können, auch wenn er nie eine
    * E-Rechnung braucht.
    */
-  const buyerReference = text(snapshot.buyerReference);
-  if (!buyerReference) issues.add('buyer_reference_missing', 'customerSnapshot.buyerReference');
+  /*
+   * FINANZ-CORE-01A (KUN-07) — bei einem öffentlichen Auftraggeber ist die Leitweg-ID
+   * die Käuferreferenz (BT-10): Über sie leiten die Rechnungseingangsplattformen den
+   * Beleg weiter. Bisher stand sie nie im XML, und BT-10 konnte eine andere Referenz
+   * tragen — die Rechnung lief ins Leere. Eine davon abweichende Käuferreferenz geht
+   * nicht verloren: Sie steht als Belegnotiz im Dokument (siehe \`buyerReferenceNote\`).
+   */
+  const leitwegIdForReference = text(snapshot.leitwegId);
+  const buyerReference = leitwegIdForReference || text(snapshot.buyerReference);
+  // FINANZ-CORE-01A (AUS-18) — Pflicht nur für die XRechnung (BR-DE-15); in EN 16931 optional.
+  if (!buyerReference && strict) issues.add('buyer_reference_missing', 'customerSnapshot.buyerReference');
 
   const vatId = text(snapshot.vatId);
   if (requiresVatId && !vatId) {
     issues.add('buyer_vat_id_missing_for_reverse_charge', 'customerSnapshot.vatId');
   }
 
-  if (!name || !address || !email || !buyerReference || (requiresVatId && !vatId)) return null;
+  if (!name || !address || (requiresVatId && !vatId)) return null;
+  if (strict && (!email || !buyerReference)) return null;
 
-  const buyer: CanonicalBuyer = {
-    name,
-    address,
-    electronicAddress: { scheme: 'email', value: email },
-    buyerReference,
-  };
+  const buyer: CanonicalBuyer = { name, address };
+  if (email) buyer.electronicAddress = { scheme: 'email', value: email };
+  if (buyerReference) buyer.buyerReference = buyerReference;
   const contactPerson = text(snapshot.contactPerson);
   if (contactPerson) buyer.contactPerson = contactPerson;
   if (vatId) buyer.vatId = vatId;
@@ -306,6 +362,8 @@ interface MoneyCheck {
   lineNetTotalCents: number;
   taxCents: number;
   grossCents: number;
+  /** FINANZ-CORE-01A (D1) — die abgezogenen Abschläge (brutto, Cent); 0 ohne Abzug. */
+  prepaidCents: number;
 }
 
 /**
@@ -326,7 +384,7 @@ function checkMoney(
   lines.forEach((line, index) => {
     const expected = line.synthetic
       ? toCents(line.lineNetAmount)
-      : lineTotalCents(line.quantity, line.unitPrice);
+      : billingLineTotalCents(line.quantity, line.unitPrice);
     if (toCents(line.lineNetAmount) !== expected) {
       issues.add('money_inconsistent', `positions[${index}].lineTotal`);
     }
@@ -342,19 +400,19 @@ function checkMoney(
   const grossCents = subtotalCents + taxCents;
 
   /*
-   * `amount` ist der gespeicherte Zahlbetrag. Bei einer Schlussrechnung mit
-   * Abzügen liegt er darunter — dieser Fall wird an anderer Stelle ohnehin
-   * abgewiesen, deshalb wird hier nur der abzugsfreie Beleg geprüft.
+   * `amount` ist der gespeicherte Zahlbetrag. FINANZ-CORE-01A (D1) — bei einer
+   * Schlussrechnung mit Abzügen ist er brutto minus abgezogene Abschläge (BR-CO-16:
+   * BT-115 = BT-112 − BT-113); die Abzüge übersteigen nie den Bruttobetrag.
    */
   const deductionCents = (invoice.previousAbschlagDeductions ?? []).reduce(
     (sum, entry) => sum + toCents(entry.amount),
     0,
   );
-  if (deductionCents === 0 && toCents(invoice.amount) !== grossCents) {
+  if (deductionCents < 0 || deductionCents > grossCents || toCents(invoice.amount) !== grossCents - deductionCents) {
     issues.add('money_inconsistent', 'amount');
   }
 
-  return issues.empty ? { lineNetTotalCents, taxCents, grossCents } : null;
+  return issues.empty ? { lineNetTotalCents, taxCents, grossCents, prepaidCents: deductionCents } : null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -369,8 +427,35 @@ function checkMoney(
  * zweiten Parameter für „aktuelle Stammdaten", weil es keinen legitimen Grund
  * gäbe, ihn zu benutzen.
  */
-export function buildCanonicalEInvoice(invoice: VorgangInvoice): CanonicalEInvoiceResult {
+/**
+ * FINANZ-CORE-01A (STO-09/AUS-08) — welche Darstellung entsteht.
+ *
+ *  - `original`: die Rechnung selbst. Eine stornierte Rechnung bekommt keine neue
+ *    E-Rechnung mehr (eine früher abgelegte Datei bleibt lesbar).
+ *  - `correction`: die Rechnungskorrektur einer versendeten, stornierten Rechnung
+ *    als Gutschrift (381) mit eigener Nummer (BT-1), eigenem Datum (BT-2) und dem
+ *    Bezug auf das Original (BT-25/BT-26). Beträge positiv: die Art 381 sagt, dass
+ *    gutgeschrieben wird — das Korrektur-PDF zeigt dieselben Beträge als Gegenbuchung.
+ */
+export interface BuildCanonicalEInvoiceOptions {
+  variant?: 'original' | 'correction';
+  /** FINANZ-CORE-01A (AUS-18) — Zielprofil; Standard `xrechnung` (die strengere Prüfung). */
+  profile?: CanonicalEInvoiceProfile;
+  /**
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N02/D1) — wie die abgezogenen Abschläge
+   * beglichen sind. Fehlt ein Eintrag, gilt der Abschlag als nicht beglichen:
+   * Ohne Nachweis steht kein Betrag als gezahlt in BT-113.
+   */
+  prepaymentSettlements?: readonly CanonicalPrepaymentSettlement[];
+}
+
+export function buildCanonicalEInvoice(
+  invoice: VorgangInvoice,
+  options: BuildCanonicalEInvoiceOptions = {},
+): CanonicalEInvoiceResult {
   const issues = new IssueLog();
+  const variant = options.variant ?? 'original';
+  const profile = options.profile ?? 'xrechnung';
 
   /* --- Herkunft ---------------------------------------------------- */
   if (invoice.status !== 'vorbereitet' && invoice.status !== 'versendet') {
@@ -387,18 +472,37 @@ export function buildCanonicalEInvoice(invoice: VorgangInvoice): CanonicalEInvoi
     issues.add('internal_cancellation_not_exportable', 'cancellationKind');
     return { ok: false, issues: issues.all };
   }
+  if (variant === 'correction' && (!invoice.cancelledAt || invoice.cancellationKind !== 'correction')) {
+    issues.add('correction_not_available', 'cancellationKind');
+    return { ok: false, issues: issues.all };
+  }
+  if (variant === 'original' && invoice.cancelledAt) {
+    issues.add('cancelled_original_not_exportable', 'cancelledAt');
+    return { ok: false, issues: issues.all };
+  }
 
-  const documentKind = resolveDocumentKind(invoice);
+  const documentKind: CanonicalDocumentKind | undefined =
+    variant === 'correction' ? 'correction' : resolveDocumentKind(invoice);
   if (!documentKind) {
     issues.add('tax_status_unsupported', 'type');
     return { ok: false, issues: issues.all };
   }
 
   /* --- Beleg ------------------------------------------------------- */
-  const invoiceNumber = text(invoice.number);
-  if (!invoiceNumber) issues.add('invoice_number_missing', 'number');
+  /*
+   * FINANZ-CORE-01A (SQL-11/AUS-08) — die Korrektur trägt ihre eigene Nummer und das
+   * Korrekturdatum (Geschäftstag des Stornos, wie das Korrektur-PDF). Die Nummer
+   * des Originals steht in BT-25; zwei Belege mit derselben BT-1 darf es nicht geben.
+   */
+  const invoiceNumber = variant === 'correction' ? text(invoice.correctionNumber) : text(invoice.number);
+  if (!invoiceNumber) {
+    if (variant === 'correction') issues.add('correction_number_missing', 'correctionNumber');
+    else issues.add('invoice_number_missing', 'number');
+  }
 
-  const issueDate = text(invoice.issueDate) || text(invoice.date);
+  const originalIssueDate = text(invoice.issueDate) || text(invoice.date);
+  const issueDate =
+    variant === 'correction' && invoice.cancelledAt ? toBusinessDay(invoice.cancelledAt) : originalIssueDate;
   if (!issueDate) issues.add('issue_date_missing', 'issueDate');
 
   /*
@@ -424,16 +528,18 @@ export function buildCanonicalEInvoice(invoice: VorgangInvoice): CanonicalEInvoi
   }
 
   /* --- Beteiligte -------------------------------------------------- */
-  const seller = buildSeller(invoice.companySnapshot, issues);
+  const seller = buildSeller(invoice.companySnapshot, profile, issues);
   const buyer = buildBuyer(
     invoice.customerSnapshot,
     taxMapping?.category === 'reverse_charge',
+    profile,
     issues,
   );
 
   /* --- Zahlung ----------------------------------------------------- */
   const iban = text(invoice.companySnapshot?.iban);
-  if (invoice.companySnapshot && !iban) {
+  // Eine Korrektur wird verrechnet, nicht überwiesen: Sie braucht kein Konto.
+  if (variant === 'original' && invoice.companySnapshot && !iban) {
     issues.add('payment_iban_missing', 'companySnapshot.iban');
   }
 
@@ -441,27 +547,38 @@ export function buildCanonicalEInvoice(invoice: VorgangInvoice): CanonicalEInvoi
    * Die Abzüge einer Schlussrechnung.
    *
    * Sie entstehen aus nicht stornierten Abschlagsrechnungen — das ist der
-   * Nachweis, dass **abgerechnet** wurde, nicht dass **bezahlt** wurde. Der
-   * Zahlungsstand einer Rechnung liegt in `payments`/`paymentStatus` und
-   * gehört ausdrücklich nicht zum Beleg; er verlässt den Client nicht einmal.
+   * Nachweis, dass **abgerechnet** wurde, nicht dass **bezahlt** wurde.
    *
-   * Sie in einem Zielformat als bereits gezahlten Betrag auszuweisen, wäre
-   * deshalb eine Behauptung über Geldflüsse, die OfficeTakt nicht kennt. Bis
-   * geklärt ist, wie eine Schlussrechnung ihre Vorausrechnungen korrekt
-   * ausdrückt, wird dieser Fall nicht exportiert.
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N02/D1) — BT-113 ist der bereits gezahlte
+   * Betrag, und die Schlussrechnung setzt die vereinnahmten Teilentgelte ab
+   * (§ 14 Abs. 5 Satz 2 UStG). Bis hierher stand jeder abgezogene Abschlag in
+   * BT-113, auch ein unbezahlter. Jetzt muss jeder abgezogene Abschlag beglichen
+   * sein — voll bezahlt oder fristgerecht mit dem Skonto des Abschlags; der
+   * Zahlungsstand kommt vom Aufrufer (`prepaymentSettlements`), der Builder bleibt
+   * rein. Seit N02 lässt schon die Freigabe nur beglichene Abschläge zu; die
+   * Prüfung hier fängt Altbelege und später zurückgenommene Zahlungen ab.
+   *
+   * WEISS-Recheck N02-R1 — ein mit Skonto beglichener Abschlag ist nicht in voller Höhe
+   * gezahlt. BT-113 nennt nur das tatsächlich Gezahlte; das gewährte Skonto ist eine
+   * Entgeltminderung (§ 17 UStG) und steht als Nachlass auf Belegebene (BG-20) mit der
+   * Steuerkategorie des Belegs — es mindert Bemessungsgrundlage (BT-109) und Steuer
+   * (BT-110). Der Zahlbetrag BT-115 bleibt der Restbetrag des Belegs. Die Aufteilung ist
+   * mit der Freigabe eingefroren (`paidAmount`/`skontoAmount`) — dieselbe, die das PDF
+   * druckt (`splitAbschlagDeductions`). Ein Altbeleg mit Skonto ohne eingefrorene
+   * Aufteilung wird nicht exportiert (`prepayment_skonto_unfrozen`).
    */
-  const prepayments: CanonicalPrepaymentReference[] = (invoice.previousAbschlagDeductions ?? []).map(
-    (entry) => ({
-      invoiceId: entry.invoiceId,
-      invoiceNumber: entry.invoiceNumber,
-      date: entry.date,
-      netAmount: entry.subtotal,
-      grossAmount: entry.amount,
-    }),
+  const settlements = new Map(
+    (options.prepaymentSettlements ?? []).map((entry) => [entry.invoiceId, entry] as const),
   );
-  if (prepayments.length > 0) {
-    issues.add('final_invoice_deduction_semantics_unsupported', 'previousAbschlagDeductions');
-  }
+  const deductions = invoice.previousAbschlagDeductions ?? [];
+  deductions.forEach((entry, index) => {
+    const settlement = settlements.get(entry.invoiceId);
+    if (!settlement?.settled) {
+      issues.add('prepayment_not_settled', `previousAbschlagDeductions[${index}]`);
+    } else if (!frozenSettlementShare(entry) && toCents(settlement.skonto) > 0) {
+      issues.add('prepayment_skonto_unfrozen', `previousAbschlagDeductions[${index}]`);
+    }
+  });
 
   /* --- Zeilen ------------------------------------------------------ */
   const lines = taxMapping
@@ -476,14 +593,91 @@ export function buildCanonicalEInvoice(invoice: VorgangInvoice): CanonicalEInvoi
   const money = checkMoney(invoice, lines, taxMapping.rate, issues);
   if (!money) return { ok: false, issues: issues.all };
 
+  /* --- Abzüge: gezahlt und Skonto (WEISS-Recheck N02-R1) ------------ */
+  const split = splitAbschlagDeductions(
+    deductions,
+    { subtotalNet: fromCents(money.lineNetTotalCents), taxRate: taxMapping.rate },
+    frozenSettlementShare,
+  );
+  const prepayments: CanonicalPrepaymentReference[] = split.parts.map((part) => ({
+    invoiceId: part.deduction.invoiceId,
+    invoiceNumber: part.deduction.invoiceNumber,
+    date: part.deduction.date,
+    netAmount: part.deduction.subtotal,
+    grossAmount: part.deduction.amount,
+    paidAmount: part.paid,
+    skontoAmount: part.skonto,
+  }));
+  const deductionLabel = (index: number): string => {
+    const deduction = deductions[index];
+    return deduction?.abschlagNumber ? `Abschlag ${deduction.abschlagNumber}` : 'Abschlag';
+  };
+  const allowances: CanonicalAllowance[] = split.parts.flatMap((part, index) =>
+    part.skonto > 0
+      ? [
+          {
+            amount: part.skontoNet,
+            reason: `Skonto auf ${deductionLabel(index)} (Rechnung ${part.deduction.invoiceNumber})`,
+            reasonCode: '95',
+            category: taxMapping.category,
+            rate: taxMapping.rate,
+          },
+        ]
+      : [],
+  );
+  const taxableCents = money.lineNetTotalCents - toCents(split.skontoNetTotal);
+  const taxCents = split.hasSkonto ? toCents(split.taxAfterSkonto) : money.taxCents;
+  const taxInclusiveCents = taxableCents + taxCents;
+  const prepaidCents = toCents(split.paidTotal);
+  const roundingCents = toCents(split.roundingAmount);
+  // BR-CO-16: BT-115 = BT-112 − BT-113 + BT-114 — und BT-115 ist der Restbetrag des Belegs.
+  if (taxInclusiveCents - prepaidCents + roundingCents !== toCents(invoice.amount)) {
+    issues.add('money_inconsistent', 'amount');
+    return { ok: false, issues: issues.all };
+  }
+
   /* --- Zusammensetzen ---------------------------------------------- */
   const taxBreakdown: CanonicalTaxBreakdown = {
     category: taxMapping.category,
     rate: taxMapping.rate,
-    taxableAmount: fromCents(money.lineNetTotalCents),
-    taxAmount: fromCents(money.taxCents),
+    taxableAmount: fromCents(taxableCents),
+    taxAmount: fromCents(taxCents),
   };
   if (taxMapping.requiresReason) taxBreakdown.exemptionReason = exemptionReason;
+
+  const notes: string[] = [];
+  if (variant === 'correction') {
+    notes.push(
+      `Rechnungskorrektur (Storno) zu Rechnung ${text(invoice.number)} vom ${formatGermanDate(originalIssueDate)}. Grund: ${text(invoice.cancelReason)}`,
+    );
+  }
+  /* FINANZ-CORE-01A (KUN-07) — die vom Leitweg abweichende Käuferreferenz bleibt sichtbar. */
+  const buyerReferenceNote = text(invoice.customerSnapshot?.buyerReference);
+  if (buyer.leitwegId && buyerReferenceNote && buyerReferenceNote !== buyer.leitwegId) {
+    notes.push(`Käuferreferenz: ${buyerReferenceNote}`);
+  }
+  if (prepayments.length > 0) {
+    const entries = prepayments.map((entry, index) => {
+      const head = `${deductionLabel(index)} (Rechnung ${entry.invoiceNumber} vom ${formatGermanDate(entry.date)})`;
+      // WEISS-Recheck N02-R1 — mit Skonto beglichen: nur das Gezahlte ist abgesetztes Teilentgelt.
+      return entry.skontoAmount > 0
+        ? `${head} ${formatGermanAmount(entry.paidAmount)} EUR gezahlt von ${formatGermanAmount(entry.grossAmount)} EUR brutto`
+        : `${head} ${formatGermanAmount(entry.grossAmount)} EUR brutto`;
+    });
+    notes.push(`Abzüglich bereits bezahlter Abschläge: ${entries.join('; ')}`);
+    split.parts.forEach((part, index) => {
+      if (!(part.skonto > 0)) return;
+      const parts =
+        part.skontoTax !== 0
+          ? ` (netto ${formatGermanAmount(part.skontoNet)} EUR, USt ${formatGermanAmount(part.skontoTax)} EUR)`
+          : '';
+      notes.push(
+        `Skonto auf ${deductionLabel(index)} (Rechnung ${part.deduction.invoiceNumber}): ${formatGermanAmount(part.skonto)} EUR brutto${parts}, als Nachlass auf Belegebene ausgewiesen (Entgeltminderung).`,
+      );
+    });
+  }
+  /* FINANZ-CORE-01A (AUS-11/EIN-07) — der Aufbewahrungshinweis des Belegs, wie das PDF ihn druckt. */
+  if (hasPrivateRetentionNotice(invoice.legalNotices)) notes.push(PRIVATE_RETENTION_NOTICE);
 
   const canonical: CanonicalEInvoice = {
     sourceInvoiceId: invoice.id,
@@ -495,26 +689,45 @@ export function buildCanonicalEInvoice(invoice: VorgangInvoice): CanonicalEInvoi
     issueDate,
     seller,
     buyer,
-    payment: {
-      means: 'credit_transfer',
-      transfer: buildTransfer(invoice.companySnapshot!, iban),
-      payableAmount: invoice.amount,
-      ...(text(invoice.paymentDueDate) ? { dueDate: text(invoice.paymentDueDate) } : {}),
-      ...(text(invoice.paymentTermsText) ? { termsText: text(invoice.paymentTermsText) } : {}),
-      ...(text(invoice.skontoText) ? { skontoText: text(invoice.skontoText) } : {}),
-    },
+    payment:
+      variant === 'correction'
+        ? {
+            /*
+             * FINANZ-CORE-01A (STO-09/AUS-08) — storniert wird nur ohne Zahlungseingang:
+             * Die Gutschrift wird mit der Rechnung verrechnet, es fliesst kein Geld.
+             * EN 16931 BR-CO-25 verlangt bei positivem Zahlbetrag eine Fälligkeit oder
+             * Zahlungsbedingung — hier die Bedingung, die genau das sagt.
+             */
+            means: 'settlement',
+            payableAmount: invoice.amount,
+            termsText: `Gutschrift zur Rechnung ${text(invoice.number)}. Es ist keine Zahlung zu leisten.`,
+          }
+        : {
+            means: 'credit_transfer',
+            transfer: buildTransfer(invoice.companySnapshot!, iban),
+            payableAmount: invoice.amount,
+            ...(text(invoice.paymentDueDate) ? { dueDate: text(invoice.paymentDueDate) } : {}),
+            ...(text(invoice.paymentTermsText) ? { termsText: text(invoice.paymentTermsText) } : {}),
+            ...(text(invoice.skontoText) ? { skontoText: text(invoice.skontoText) } : {}),
+          },
     lines,
     tax: [taxBreakdown],
+    ...(allowances.length > 0 ? { allowances } : {}),
     totals: {
       lineNetTotal: fromCents(money.lineNetTotalCents),
-      taxExclusiveAmount: invoice.subtotal,
-      taxAmount: fromCents(money.taxCents),
-      taxInclusiveAmount: fromCents(money.grossCents),
+      // Ohne Nachlass das Netto des Belegs; mit Skonto-Nachlass gemindert (BT-109).
+      taxExclusiveAmount: split.hasSkonto ? fromCents(taxableCents) : invoice.subtotal,
+      taxAmount: fromCents(taxCents),
+      taxInclusiveAmount: fromCents(taxInclusiveCents),
       billedPrepayments: prepayments,
+      prepaidAmount: fromCents(prepaidCents),
+      ...(split.hasSkonto ? { allowanceTotal: split.skontoNetTotal } : {}),
+      ...(roundingCents !== 0 ? { roundingAmount: fromCents(roundingCents) } : {}),
       // Der gespeicherte Zahlbetrag, unverändert.
       payableAmount: invoice.amount,
     },
-    references: buildReferences(invoice, documentKind, issueDate),
+    references: buildReferences(invoice, documentKind, originalIssueDate),
+    notes,
   };
 
   const servicePeriod = buildServicePeriod(invoice);
@@ -523,8 +736,29 @@ export function buildCanonicalEInvoice(invoice: VorgangInvoice): CanonicalEInvoi
   return { ok: true, value: canonical };
 }
 
-function buildTransfer(snapshot: CompanyProfile, iban: string) {
-  const bic = text(snapshot.bic);
+/** Deutsches Datum für eine Belegnotiz (TT.MM.JJJJ); unbekannte Formate bleiben, wie sie sind. */
+function formatGermanDate(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : value;
+}
+
+/** Deutscher Betrag für eine Belegnotiz (1.234,50). */
+function formatGermanAmount(value: number): string {
+  return fromCents(toCents(value)).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * FINANZ-CORE-01A (EIN-09) — IBAN und BIC ohne Leerzeichen und in Grossbuchstaben.
+ * Das Firmenprofil speichert die IBAN oft in Vierergruppen; im XML ist das ein
+ * ungültiger Kontowert.
+ */
+function compactAccountId(value: string): string {
+  return value.replace(/\s+/g, '').toUpperCase();
+}
+
+function buildTransfer(snapshot: CompanyProfile, ibanInput: string) {
+  const iban = compactAccountId(ibanInput);
+  const bic = compactAccountId(text(snapshot.bic));
   const accountHolder = text(snapshot.accountHolder);
   return {
     iban,

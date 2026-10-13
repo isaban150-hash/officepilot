@@ -1,5 +1,6 @@
 import { Card, DataRow } from '../ui/Card';
 import type { TranslationKey } from '../../i18n';
+import { fromCents, lineTotalCents, sumCents } from '../../services/invoiceMoney';
 import { sortConfirmedOrderAmendments } from '../../services/orderPlanCompositionService';
 import type { Vorgang } from '../../types/models';
 import { formatAmendmentMoney } from './orderAmendmentUiHelpers';
@@ -12,9 +13,9 @@ interface OrderSummaryPanelProps {
 function confirmedOrderValue(vorgang: Vorgang): number | null {
   const positions = vorgang.contractConfirmation?.positions;
   if (!positions || positions.length === 0) return null;
-  const total = positions.reduce(
-    (sum, position) => sum + position.plannedQuantity * position.unitPrice,
-    0,
+  // FINANZ-CORE-01A — Auftragssumme wie `build_workspace_order_totals`: je Position exakt in Cent.
+  const total = fromCents(
+    sumCents(positions.map((position) => lineTotalCents(position.plannedQuantity, position.unitPrice))),
   );
   return Math.round(total * 100) / 100;
 }

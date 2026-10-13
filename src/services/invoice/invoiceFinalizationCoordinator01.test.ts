@@ -1624,7 +1624,7 @@ describe('01P4D2B — Finalizing-Recovery und Resume', () => {
       ['fingerprint_mismatch', 'not_committed', 'blocked'],
       ['corrupt', 'not_committed', 'blocked'],
       ['unsupported_preparation', 'not_committed', 'blocked'],
-      ['amendment_state_stale', 'not_committed', 'blocked'],
+      // FINANZ-CORE-01A (RE-01) — `amendment_state_stale` gibt den Entwurf zurück: siehe X1b.
     ];
 
     for (const [reason, cloudStateValue, expectedRecovery] of cases) {
@@ -1661,6 +1661,66 @@ describe('01P4D2B — Finalizing-Recovery und Resume', () => {
       }
       spy.mockRestore();
     }
+  });
+
+  it('X1b: FINANZ-CORE-01A (RE-01) — inhaltliche Ablehnung mit belegtem not_committed gibt den Entwurf zurück', async () => {
+    const reasons = [
+      'final_invoice_exists',
+      'quantity_exceeds_available',
+      'server_integrity_rejected',
+      'financial_action_denied',
+      'amendment_state_stale',
+    ];
+
+    for (const reason of reasons) {
+      await resetInvoiceDraftDurabilityDatabaseForTests();
+      localStorage.clear();
+      cloudState.rpcCalls = [];
+      appState.snapshot = buildSnapshot();
+      const prepared = await seedFinalizing();
+
+      const spy = vi
+        .spyOn(preparedModule, 'executePreparedInvoiceFinalization')
+        .mockResolvedValue({ ok: false, reason: reason as never, cloudState: 'not_committed' });
+      const spies = installNoNewPreparationSpies();
+
+      const result = await resumeInvoiceDraftFinalization({ identity: identity() });
+      expect(result, reason).toMatchObject({
+        ok: false,
+        reason,
+        recovery: 'reload_required',
+        cloudState: 'not_committed',
+        draftReopened: true,
+        clientInvoiceId: prepared.clientInvoiceId,
+      });
+      expectNoNewPreparation(spies);
+
+      const record = await loadRecord();
+      expect(record.ok, reason).toBe(true);
+      if (record.ok) {
+        expect(record.record.status, reason).toBe('active');
+        expect(record.record.revision, reason).toBe(3);
+        expect(record.record.finalization, reason).toBeUndefined();
+        expect(record.record.preparationRawJson, reason).toBeUndefined();
+      }
+      spy.mockRestore();
+    }
+
+    // Gegenprobe: derselbe Grund mit unklarem Ausgang gibt nichts zurück.
+    await resetInvoiceDraftDurabilityDatabaseForTests();
+    localStorage.clear();
+    cloudState.rpcCalls = [];
+    appState.snapshot = buildSnapshot();
+    await seedFinalizing();
+    const spy = vi
+      .spyOn(preparedModule, 'executePreparedInvoiceFinalization')
+      .mockResolvedValue({ ok: false, reason: 'server_integrity_rejected' as never, cloudState: 'unknown' });
+    const result = await resumeInvoiceDraftFinalization({ identity: identity() });
+    expect(result.ok).toBe(false);
+    expect(result).not.toHaveProperty('draftReopened');
+    const record = await loadRecord();
+    expect(record.ok && record.record.status).toBe('finalizing');
+    spy.mockRestore();
   });
 
   it('X2: die Reconciliation-Zuordnung unterscheidet vorübergehend und dauerhaft', async () => {

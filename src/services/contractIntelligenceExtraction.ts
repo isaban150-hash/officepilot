@@ -1,3 +1,4 @@
+import { lineTotalMoney } from './invoiceMoney';
 import type {
   ContractFamily,
   ContractPartyRole,
@@ -1573,7 +1574,7 @@ export function extractGenericBillOfQuantitiesFromText(
 
     const quantity = parseGermanMoney(quantityRaw);
     const unitPrice = parseGermanMoney(unitPriceRaw);
-    const lineTotal = lineTotalRaw ? parseGermanMoney(lineTotalRaw) : quantity * unitPrice;
+    const lineTotal = lineTotalRaw ? parseGermanMoney(lineTotalRaw) : lineTotalMoney(quantity, unitPrice);
     if (!Number.isFinite(quantity) || !Number.isFinite(unitPrice) || quantity <= 0 || unitPrice <= 0) continue;
 
     const unit = unitRaw.replace(/\./g, '').toLowerCase();

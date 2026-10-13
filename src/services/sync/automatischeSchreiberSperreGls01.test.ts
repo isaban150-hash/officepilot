@@ -362,6 +362,9 @@ describe('I5 — Vertrag: die bekannten automatischen Schreiber laufen im Schrei
     ['Mitglieds-Angleich Versandstand', 'src/services/invoiceSentService.ts', /runAutomaticSyncWrite\(\(\) => restoreInvoiceSentState\(vorgangId, invoiceId, target\)\)/],
     ['Angebotsablage (Rückverweis)', 'src/services/offer/offerArchiveService.ts', /runAutomaticSyncWrite\(\(\) => attachArchiveDocumentToOffer\(offer\.id, viaBackLink\.id\)\)/],
     ['Angebotsablage (neu)', 'src/services/offer/offerArchiveService.ts', /runAutomaticSyncWrite\(\(\) => attachArchiveDocumentToOffer\(offer\.id, result\.document\.id\)\)/],
+    // FINANZ-CORE-01A (ANG-08/ANG-13) — Ablage unter fester Kennung und Versandstatus aus der Versandhistorie.
+    ['Angebotsablage (Dokument)', 'src/services/offer/offerArchiveService.ts', /runAutomaticSyncWrite\(\(\) => addDocumentWithId\(/],
+    ['Angebot versendet aus Versandhistorie', 'src/services/offer/offerDeliveryStatus.ts', /runAutomaticSyncWrite\(\(\) => markOfferSent\(offerId\)\)/],
     ['Briefablage (Rückverweis)', 'src/services/letter/businessLetterArchiveService.ts', /runAutomaticSyncWrite\(\(\) => attachArchiveDocumentToLetter\(letter\.id, ueberRueckweg\.id\)\)/],
     ['Briefablage (neu)', 'src/services/letter/businessLetterArchiveService.ts', /runAutomaticSyncWrite\(\(\) => attachArchiveDocumentToLetter\(letter\.id, ergebnis\.document\.id\)\)/],
     ['Briefablage (PDF-Bindung)', 'src/services/letter/businessLetterArchiveService.ts', /runAutomaticSyncWrite\(\(\) => persistAll\(\)\)/],

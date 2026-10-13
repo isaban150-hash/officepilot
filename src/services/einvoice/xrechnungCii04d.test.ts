@@ -35,6 +35,7 @@ import type {
   VorgangInvoice,
   VorgangInvoiceLine,
 } from '../../types/models';
+import type { CanonicalPrepaymentSettlement } from './canonicalEInvoice';
 
 const GOLD = path.resolve(__dirname, '__goldfiles__');
 const gold = (name: string) => readFileSync(path.join(GOLD, `${name}.xml`), 'utf8');
@@ -44,8 +45,13 @@ const sha256 = (value: string) => createHash('sha256').update(value, 'utf8').dig
 /* Dieselben Bausteine, aus denen die geprüften Dateien entstanden sind */
 /* ------------------------------------------------------------------ */
 
+/*
+ * FINANZ-CORE-01A (AUS-06) — BT-27 ist Firmenname plus Rechtsform, wie das PDF druckt.
+ * Der Name trägt die Rechtsform deshalb nicht noch einmal; das XML bleibt so
+ * byte-gleich mit den geprüften Dateien („Cirmak Haustechnik GmbH").
+ */
 const SELLER: CompanyProfile = {
-  companyName: 'Cirmak Haustechnik GmbH',
+  companyName: 'Cirmak Haustechnik',
   legalForm: 'GmbH',
   street: 'Ruhrallee 5',
   zip: '45138',
@@ -80,7 +86,10 @@ const BUYER: CustomerBilling = {
   countryCode: 'DE',
   vatId: 'DE987654321',
   buyerReference: 'TEST-BUYER-REF-A',
-  leitwegId: 'TEST-LEITWEG-A',
+  /*
+   * FINANZ-CORE-01A (KUN-07) — ohne Leitweg-ID: Eine vorhandene Leitweg-ID wäre BT-10.
+   * Diese Fälle prüfen Belegarten, kein öffentliches Routing; das hat Fall 13.
+   */
 };
 
 function line(o: Partial<VorgangInvoiceLine> = {}): VorgangInvoiceLine {
@@ -129,8 +138,22 @@ function invoice(o: Partial<VorgangInvoice> = {}): VorgangInvoice {
 }
 
 /** Rendert und verlangt Erfolg — der Normalfall in diesen Tests. */
-function xml(inv: VorgangInvoice): string {
-  const canonical = buildCanonicalEInvoice(inv);
+/**
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N02/D1) — jeder abgezogene Abschlag voll bezahlt.
+ * BT-113 entsteht nur mit Zahlungsnachweis; die Fälle hier sind bezahlte Schlussrechnungen,
+ * der unbelegte Fall steht ausdrücklich in T26.
+ */
+function vollBezahlt(inv: VorgangInvoice): CanonicalPrepaymentSettlement[] {
+  return (inv.previousAbschlagDeductions ?? []).map((entry) => ({
+    invoiceId: entry.invoiceId,
+    paid: entry.amount,
+    skonto: 0,
+    settled: true,
+  }));
+}
+
+function xml(inv: VorgangInvoice, variant: 'original' | 'correction' = 'original'): string {
+  const canonical = buildCanonicalEInvoice(inv, { variant, prepaymentSettlements: vollBezahlt(inv) });
   expect(canonical.ok, canonical.ok ? '' : JSON.stringify(canonical.issues)).toBe(true);
   if (!canonical.ok) throw new Error('canonical');
   const rendered = renderXRechnungCii(canonical.value);
@@ -140,8 +163,11 @@ function xml(inv: VorgangInvoice): string {
 }
 
 /** Gibt es für diesen Beleg ein XML? Für die Fälle, die keines bekommen dürfen. */
-function rendersAtAll(inv: VorgangInvoice): boolean {
-  const canonical = buildCanonicalEInvoice(inv);
+function rendersAtAll(
+  inv: VorgangInvoice,
+  prepaymentSettlements: CanonicalPrepaymentSettlement[] = vollBezahlt(inv),
+): boolean {
+  const canonical = buildCanonicalEInvoice(inv, { prepaymentSettlements });
   if (!canonical.ok) return false;
   return renderXRechnungCii(canonical.value).ok;
 }
@@ -154,7 +180,7 @@ describe('A — die offiziell geprüften Dateien', () => {
    * Konfiguration XRechnung 3.0.2 / 2026-08-31 geprüft und angenommen
    * (XSD, EN16931-CII-Schematron und XRechnung-CIUS-Schematron, alle valid).
    */
-  const faelle: Array<[string, () => VorgangInvoice]> = [
+  const faelle: Array<[string, () => VorgangInvoice, ('original' | 'correction')?]> = [
     ['01-standard-19', () => invoice()],
     [
       '03-reverse-charge',
@@ -188,22 +214,33 @@ describe('A — die offiziell geprüften Dateien', () => {
           amount: 595,
         }),
     ],
+    /*
+     * FINANZ-CORE-01A (AUS-08/STO-09) — die Rechnungskorrektur als Gutschrift 381 mit
+     * eigener Nummer (2026-0050), Korrekturdatum, Bezug BT-25/BT-26 auf 2026-0048 und
+     * Verrechnung statt Zahlungsaufforderung. Die frühere Datei (384, Originalnummer,
+     * Fälligkeit) beschrieb eine erneute Forderung; sie ist durch die mit KoSIT 1.6.3
+     * neu geprüfte Fassung ersetzt.
+     */
     [
       '10-korrektur',
       () =>
         invoice({
           number: '2026-0048',
+          status: 'versendet',
           cancelledAt: '2026-09-25T10:00:00.000Z',
           cancellationKind: 'correction',
           cancelReason: 'Falscher Leistungszeitraum',
+          correctionNumber: '2026-0050',
         }),
+      'correction',
     ],
     [
       '11-sonderzeichen',
       () =>
         invoice({
           number: '2026-0049',
-          companySnapshot: { ...SELLER, companyName: 'Çırmak & Söhne <Test>' },
+          // Ohne Rechtsform: der Fall prüft die Maskierung des Namens, nicht seine Zusammensetzung.
+          companySnapshot: { ...SELLER, companyName: 'Çırmak & Söhne <Test>', legalForm: '' },
           positions: [
             line({
               description: 'Prüfung & Abdichtung "Flachdach" <Nord> — Ø 12 mm, 100 % dicht',
@@ -211,10 +248,48 @@ describe('A — die offiziell geprüften Dateien', () => {
           ],
         }),
     ],
+    /*
+     * FINANZ-CORE-01A (D1) — Schlussrechnung mit Abzug eines Pauschalabschlags: BT-113
+     * trägt den abgezogenen Bruttobetrag, die Belegnotiz nennt Abschlag, Nummer, Datum
+     * und Betrag. 1.000 netto, 1.190 brutto, abzüglich 476 -> 714 zahlbar.
+     */
+    [
+      '12-schluss-abzuege',
+      () =>
+        invoice({
+          number: '2026-0051',
+          type: 'schluss',
+          subtotal: 1000,
+          amount: 714,
+          positions: [line({ quantity: 10, unitPrice: 100, lineTotal: 1000 })],
+          previousAbschlagDeductions: [
+            {
+              invoiceId: 'a1',
+              invoiceNumber: '2026-0031',
+              abschlagNumber: 1,
+              date: '2026-08-01',
+              subtotal: 400,
+              amount: 476,
+            },
+          ],
+        }),
+    ],
+    /*
+     * FINANZ-CORE-01A (KUN-07) — öffentlicher Auftraggeber: die Leitweg-ID ist BT-10;
+     * die abweichende Käuferreferenz steht als Belegnotiz.
+     */
+    [
+      '13-leitweg',
+      () =>
+        invoice({
+          number: '2026-0052',
+          customerSnapshot: { ...BUYER, leitwegId: '04011000-12345-67', buyerReference: 'Bestellung 4711' },
+        }),
+    ],
   ];
 
-  it.each(faelle)('T17/T18: %s bleibt byte- und prüfwertgleich', (name, build) => {
-    const erzeugt = xml(build());
+  it.each(faelle)('T17/T18: %s bleibt byte- und prüfwertgleich', (name, build, variant) => {
+    const erzeugt = xml(build(), variant ?? 'original');
     expect(erzeugt).toBe(gold(name));
     expect(sha256(erzeugt)).toBe(sha256(gold(name)));
   });
@@ -281,17 +356,36 @@ describe('B — Kennungen und Codes', () => {
     expect(xml(invoice({ type: 'schluss' }))).toContain('<ram:TypeCode>877</ram:TypeCode>');
   });
 
-  it('T27: die Korrektur trägt Typ 384 und die Ursprungsnummer', () => {
-    const out = xml(
-      invoice({
-        number: '2026-0048',
-        cancelledAt: '2026-09-25T10:00:00.000Z',
-        cancellationKind: 'correction',
-        cancelReason: 'Falscher Leistungszeitraum',
-      }),
-    );
-    expect(out).toContain('<ram:TypeCode>384</ram:TypeCode>');
+  it('T27: die Korrektur ist eine Gutschrift 381 mit eigener Nummer und Bezug auf das Original', () => {
+    const korrektur = invoice({
+      number: '2026-0048',
+      status: 'versendet',
+      cancelledAt: '2026-09-25T10:00:00.000Z',
+      cancellationKind: 'correction',
+      cancelReason: 'Falscher Leistungszeitraum',
+      correctionNumber: '2026-0050',
+    });
+    const out = xml(korrektur, 'correction');
+    expect(out).toContain('<ram:TypeCode>381</ram:TypeCode>');
+    // BT-1 ist die eigene Nummer, BT-25/BT-26 die berichtigte Rechnung.
+    expect(out).toContain('<ram:ID>2026-0050</ram:ID>');
     expect(out).toContain('<ram:IssuerAssignedID>2026-0048</ram:IssuerAssignedID>');
+    expect(out).toContain('<qdt:DateTimeString format="102">20260923</qdt:DateTimeString>');
+    // Korrekturdatum ist der Geschäftstag des Stornos.
+    expect(out).toContain('<udt:DateTimeString format="102">20260925</udt:DateTimeString>');
+    // Verrechnung: kein Konto, keine Fälligkeit, eine Zahlungsbedingung nach BR-CO-25.
+    expect(out).toContain('<ram:TypeCode>ZZZ</ram:TypeCode>');
+    expect(out).not.toContain('<ram:IBANID>');
+    expect(out).not.toContain('<ram:DueDateDateTime>');
+    expect(out).toContain('Es ist keine Zahlung zu leisten.');
+
+    // Ohne eigene Nummer (Altbestand) keine Korrektur-E-Rechnung; das stornierte Original bekommt keine neue.
+    const alt = buildCanonicalEInvoice({ ...korrektur, correctionNumber: undefined }, { variant: 'correction' });
+    expect(alt.ok).toBe(false);
+    if (!alt.ok) expect(alt.issues.map((i) => i.code)).toContain('correction_number_missing');
+    const original = buildCanonicalEInvoice(korrektur);
+    expect(original.ok).toBe(false);
+    if (!original.ok) expect(original.issues.map((i) => i.code)).toContain('cancelled_original_not_exportable');
   });
 
   it('T5/T6/T7/T8: Käuferreferenz, beide Adressen und Währung stehen im XML', () => {
@@ -336,7 +430,7 @@ describe('C — Maskierung und Zeichen', () => {
   it('die Maskierung landet tatsächlich im Dokument', () => {
     const out = xml(
       invoice({
-        companySnapshot: { ...SELLER, companyName: 'Çırmak & Söhne <Test>' },
+        companySnapshot: { ...SELLER, companyName: 'Çırmak & Söhne <Test>', legalForm: '' },
         positions: [line({ description: 'Prüfung & Abdichtung "Flachdach" <Nord>' })],
       }),
     );
@@ -395,20 +489,27 @@ describe('D — Zahlen, Daten, leere Elemente', () => {
 });
 
 describe('E — was kein XML bekommen darf', () => {
-  it('T26: Schlussrechnung mit Abzügen', () => {
-    expect(
-      rendersAtAll(
-        invoice({
-          type: 'schluss',
-          subtotal: 1000,
-          amount: 690,
-          positions: [line({ quantity: 10, unitPrice: 100, lineTotal: 1000 })],
-          previousAbschlagDeductions: [
-            { invoiceId: 'a1', invoiceNumber: '2026-0031', date: '2026-08-01', subtotal: 400, amount: 476 },
-          ],
-        }),
-      ),
-    ).toBe(false);
+  it('T26: Schlussrechnung mit Abzügen — darstellbar, aber nur in sich stimmig', () => {
+    const schluss = (amount: number) =>
+      invoice({
+        type: 'schluss',
+        subtotal: 1000,
+        amount,
+        positions: [line({ quantity: 10, unitPrice: 100, lineTotal: 1000 })],
+        previousAbschlagDeductions: [
+          { invoiceId: 'a1', invoiceNumber: '2026-0031', date: '2026-08-01', subtotal: 400, amount: 476 },
+        ],
+      });
+    // FINANZ-CORE-01A (D1) — 1.190 brutto minus 476 ergibt 714.
+    const out = xml(schluss(714));
+    expect(out).toContain('<ram:TotalPrepaidAmount>476.00</ram:TotalPrepaidAmount>');
+    expect(out).toContain('<ram:DuePayableAmount>714.00</ram:DuePayableAmount>');
+    expect(out).toContain('Abzüglich bereits bezahlter Abschläge');
+    // Ein Zahlbetrag, der nicht zu Brutto minus Abzügen passt, ergibt keine Datei.
+    expect(rendersAtAll(schluss(690))).toBe(false);
+    // FINANZ-CORE-01A (WEISS N02/D1) — ohne Zahlungsnachweis oder bei Teilzahlung keine Datei.
+    expect(rendersAtAll(schluss(714), [])).toBe(false);
+    expect(rendersAtAll(schluss(714), [{ invoiceId: 'a1', paid: 200, skonto: 0, settled: false }])).toBe(false);
   });
 
   it('T28/T29/T30/T31: interner Storno, tax_free, unclear und Altbeleg', () => {

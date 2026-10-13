@@ -13,10 +13,14 @@
 import { getAllInvoiceOverview } from '../invoiceOverviewService';
 import { getAllExpenseOverview } from '../expenseOverviewService';
 import { toCents } from '../invoiceMoney';
+import { getInvoicePayments, isInvoiceCancelled } from '../invoicePaymentService';
+import { getSkontoSettlementRemainderCents } from '../invoice/skontoSettlement';
+import { getExpensePayments } from '../expensePaymentCalculations';
 import { listBankTransactions } from './bankTransactionStore';
-import { findReconciliationForTransaction } from './bankReconciliationStore';
+import { findReconciliationForTransaction, isPaymentFromBankReconciliation } from './bankReconciliationStore';
 import type { BankTransaction } from '../../types/bankTransaction';
 import type {
+  BankRecordedPaymentMatch,
   BankSuggestionCandidate,
   BankSuggestionGrade,
   BankSuggestionReason,
@@ -128,7 +132,8 @@ function gegenparteiPasst(gegenpartei: string | undefined, partei: string): bool
  */
 function bewerte(reasons: BankSuggestionReason[]): BankSuggestionGrade {
   const nummer = reasons.includes('invoice_number_in_purpose');
-  const betrag = reasons.includes('amount_matches_open');
+  // FINANZ-CORE-01A (ZAH-04) — der Skontobetrag ist ein Betragstreffer wie der offene Betrag.
+  const betrag = reasons.includes('amount_matches_open') || reasons.includes('amount_matches_skonto');
   const partei = reasons.includes('counterparty_matches');
 
   if (nummer && betrag) return 'sehr_passend';
@@ -173,6 +178,7 @@ function pruefeKandidat(
   partyName: string,
   openAmount: number,
   documentDate: string | undefined,
+  skontoRestCents: number | null = null,
 ): BankSuggestionCandidate | null {
   const openCents = toCents(openAmount);
   const bewegungCents = Math.abs(transaction.amountCents);
@@ -183,6 +189,9 @@ function pruefeKandidat(
   }
   if (openCents === bewegungCents) {
     reasons.push('amount_matches_open');
+  } else if (skontoRestCents !== null && Math.abs(skontoRestCents - bewegungCents) <= 1) {
+    // FINANZ-CORE-01A (ZAH-04) — fristgerecht mit Skonto: ein Cent Spielraum wie im Zahlungsausgleich.
+    reasons.push('amount_matches_skonto');
   }
   if (gegenparteiPasst(transaction.counterparty, partyName)) {
     reasons.push('counterparty_matches');
@@ -195,7 +204,7 @@ function pruefeKandidat(
   if (reasons.length === 0) return null;
 
   /* Der abweichende Betrag wird genannt, nicht verschwiegen. */
-  if (!reasons.includes('amount_matches_open')) {
+  if (!reasons.includes('amount_matches_open') && !reasons.includes('amount_matches_skonto')) {
     reasons.push('amount_differs');
   }
 
@@ -226,6 +235,85 @@ function pruefeKandidat(
 /** Höchstens so viele Kandidaten je Bewegung — mehr hilft bei einer Entscheidung nicht. */
 const MAX_KANDIDATEN = 5;
 
+/** FINANZ-CORE-01A (ZAH-03) — so weit darf eine erfasste Zahlung vom Buchungstag entfernt liegen. */
+const ERFASST_TAGE = 10;
+const MAX_ERFASST = 3;
+
+function tageAbstand(a: string, b: string): number {
+  const x = Date.parse(`${a.slice(0, 10)}T00:00:00.000Z`);
+  const y = Date.parse(`${b.slice(0, 10)}T00:00:00.000Z`);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return Number.POSITIVE_INFINITY;
+  return Math.abs(Math.round((x - y) / 86_400_000));
+}
+
+type Uebersicht = {
+  rechnungen: ReturnType<typeof getAllInvoiceOverview>;
+  ausgaben: ReturnType<typeof getAllExpenseOverview>;
+};
+
+/**
+ * FINANZ-CORE-01A (ZAH-03) — wurde diese Bewegung schon von Hand erfasst?
+ *
+ * Gesucht wird eine Zahlung mit genau diesem Betrag, höchstens zehn Tage vom Buchungstag entfernt,
+ * die noch keine Bankbewegung belegt — auch an einer schon voll bezahlten Rechnung. Bisher bot der
+ * Abgleich die Bewegung dann als neue (Teil-)Zahlung an, und eine Bestätigung buchte sie doppelt;
+ * an einer von Hand bezahlten Rechnung blieb sie für immer offen.
+ */
+function findeErfassteZahlungen(transaction: BankTransaction, uebersicht: Uebersicht): BankRecordedPaymentMatch[] {
+  const bewegungCents = Math.abs(transaction.amountCents);
+  const treffer: Array<BankRecordedPaymentMatch & { abstand: number }> = [];
+  if (transaction.amountCents > 0) {
+    for (const item of uebersicht.rechnungen) {
+      if (isInvoiceCancelled(item.invoice)) continue;
+      for (const payment of getInvoicePayments(item.invoice)) {
+        if (toCents(payment.amount) !== bewegungCents || isPaymentFromBankReconciliation(payment.id)) continue;
+        const abstand = tageAbstand(payment.date, transaction.bookingDate);
+        if (abstand > ERFASST_TAGE) continue;
+        treffer.push({
+          targetType: 'invoice',
+          targetId: item.invoice.id,
+          documentNumber: item.invoice.number,
+          partyName: item.customer,
+          paymentId: payment.id,
+          paymentDate: payment.date.slice(0, 10),
+          amountCents: bewegungCents,
+          abstand,
+        });
+      }
+    }
+  } else {
+    for (const item of uebersicht.ausgaben) {
+      for (const payment of getExpensePayments(item.expense)) {
+        if (toCents(payment.amount) !== bewegungCents || isPaymentFromBankReconciliation(payment.id)) continue;
+        const abstand = tageAbstand(payment.date, transaction.bookingDate);
+        if (abstand > ERFASST_TAGE) continue;
+        treffer.push({
+          targetType: 'expense',
+          targetId: item.expense.id,
+          documentNumber: item.expense.invoiceNumber,
+          partyName: item.expense.supplierName,
+          paymentId: payment.id,
+          paymentDate: payment.date.slice(0, 10),
+          amountCents: bewegungCents,
+          abstand,
+        });
+      }
+    }
+  }
+  return treffer
+    .sort((a, b) => a.abstand - b.abstand || a.documentNumber.localeCompare(b.documentNumber, 'de'))
+    .slice(0, MAX_ERFASST)
+    .map(({ abstand: _abstand, ...rest }) => rest);
+}
+
+/** FINANZ-CORE-01A (ZAH-03) — dieselbe Erkennung für eine einzelne Bewegung (Bestätigungsdialog). */
+export function findRecordedPaymentMatches(transaction: BankTransaction): BankRecordedPaymentMatch[] {
+  return findeErfassteZahlungen(transaction, {
+    rechnungen: getAllInvoiceOverview(),
+    ausgaben: getAllExpenseOverview(),
+  });
+}
+
 /**
  * Die Vorschläge für eine Liste von Bankbewegungen.
  *
@@ -240,8 +328,11 @@ export function buildBankSuggestions(
    * stammen aus den Stores des aktuellen Betriebs — die Betriebstrennung
    * entsteht dadurch von selbst, ohne eigene Filterung.
    */
-  const rechnungen = getAllInvoiceOverview().filter((item) => istOffen(item.paymentSummary.openAmount));
-  const ausgaben = getAllExpenseOverview().filter((item) => istOffen(item.paymentSummary.openAmount));
+  const alleRechnungen = getAllInvoiceOverview();
+  const alleAusgaben = getAllExpenseOverview();
+  const rechnungen = alleRechnungen.filter((item) => istOffen(item.paymentSummary.openAmount));
+  const ausgaben = alleAusgaben.filter((item) => istOffen(item.paymentSummary.openAmount));
+  const uebersicht: Uebersicht = { rechnungen: alleRechnungen, ausgaben: alleAusgaben };
 
   const ergebnis = new Map<string, BankSuggestionResult>();
 
@@ -279,6 +370,7 @@ export function buildBankSuggestions(
           item.customer,
           item.paymentSummary.openAmount,
           item.invoice.issueDate ?? item.invoice.date,
+          getSkontoSettlementRemainderCents(item.invoice, transaction.bookingDate),
         );
         if (kandidat) kandidaten.push(kandidat);
       }
@@ -317,6 +409,7 @@ export function buildBankSuggestions(
       direction: eingang ? 'incoming' : 'outgoing',
       candidates: kandidaten.slice(0, MAX_KANDIDATEN),
       ambiguous,
+      alreadyRecorded: findeErfassteZahlungen(transaction, uebersicht),
     });
   }
 

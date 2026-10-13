@@ -1,3 +1,4 @@
+import { fromCents, lineTotalCents, sumCents } from './invoiceMoney';
 import type {
   BusinessConfirmationId,
   BusinessEffectKind,
@@ -920,9 +921,9 @@ function buildConflicts(
     item.recognizedData.Betrag;
   const confirmedPositions = linkedVorgang.contractConfirmation?.positions ?? [];
   if (detectedAmountRaw && confirmedPositions.length > 0) {
-    const confirmedTotal = confirmedPositions.reduce(
-      (sum, position) => sum + position.plannedQuantity * position.unitPrice,
-      0,
+    // FINANZ-CORE-01A — in Cent summiert, Zeilen exakt wie der Server.
+    const confirmedTotal = fromCents(
+      sumCents(confirmedPositions.map((position) => lineTotalCents(position.plannedQuantity, position.unitPrice))),
     );
     const detectedNum = Number(
       String(detectedAmountRaw)

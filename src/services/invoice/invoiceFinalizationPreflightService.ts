@@ -43,6 +43,7 @@ import {
   mergeCloudInvoicesIntoVorgaenge,
 } from './invoiceCloudPullMergeService';
 import { rpcPullWorkspaceInvoiceRows } from './workspaceInvoiceCloudService';
+import { isInvoiceCancelled } from '../invoicePaymentService';
 import { loadInvoiceDraftRecord } from './invoiceDraftDurabilityService';
 import {
   INVOICE_FINALIZE_INTENT_STORAGE_SUFFIX,
@@ -670,7 +671,15 @@ export function classifyVorgangInvoicesAndIntents(input: {
     }
   }
 
+  /*
+   * FINANZ-CORE-01A (F-01/RE-05) — eine stornierte Rechnung ist keine
+   * bestehende Forderung. Genau nach einem Storno wird derselbe Inhalt oft neu
+   * ausgestellt; bisher sperrte der alte Beleg diese Neuausstellung dauerhaft.
+   * Die Fingerabdrücke der stornierten bleiben für die Altintents erhalten.
+   */
+  const cancelledIds = new Set(invoices.filter(isInvoiceCancelled).map((invoice) => invoice.id));
   for (const [invoiceId, fingerprint] of invoiceFingerprints) {
+    if (cancelledIds.has(invoiceId)) continue;
     if (fingerprint === contentFingerprint) {
       return { ok: false, reason: 'possible_existing_invoice', existingInvoiceId: invoiceId };
     }

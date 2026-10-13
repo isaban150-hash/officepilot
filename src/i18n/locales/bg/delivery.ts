@@ -26,7 +26,9 @@ export const bgDelivery = {
   'delivery.dialog.body': 'Съобщение',
   'delivery.dialog.bodyRequired': 'Моля, въведете съобщение.',
   'delivery.dialog.attachment': 'Прикачен файл',
-  'delivery.dialog.attachmentHint': 'Издадената фактура — точно както се показва в детайла и като PDF.',
+  'delivery.dialog.attachmentHint': 'Издадената фактура като PDF – със същите данни като в детайлния изглед.',
+  'delivery.bounced.invoiceWarning':
+    'Имейлът с тази фактура не е доставен. Падежът и напомнянето предполагат, че фактурата е получена – затова не се предлагат напомняния за плащане. Моля, изпратете фактурата отново (друг адрес или по пощата) и отбележете изпращането наново.',
   'delivery.dialog.confirmRecipientChanged': 'Адресът се различава от записания при клиента. Да се изпрати ли все пак на този адрес?',
   'delivery.dialog.confirmResend': 'Тази фактура вече е изпратена чрез OfficeTakt. Наистина ли да се изпрати отново?',
   'delivery.dialog.retryHint': 'Нов опит след неуспешно изпращане. Можете да коригирате получателя и текста.',
@@ -36,6 +38,8 @@ export const bgDelivery = {
   'delivery.phase.creating': 'Заявката за изпращане се създава …',
   'delivery.phase.sending': 'Изпраща се …',
   'delivery.phase.refreshing': 'Статусът се зарежда …',
+  // FINANZ-CORE-01A (AUS-19) — ein durch einen neueren Versuch abgelöster, nie gesendeter Versuch.
+  'delivery.status.superseded': 'Заменено – не е изпратено',
   'delivery.status.queued': 'В обработка',
   'delivery.status.prepared': 'Подготвена',
   'delivery.status.provider_accepted': 'Предадена на имейл услугата',

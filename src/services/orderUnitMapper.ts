@@ -1,3 +1,4 @@
+import { fromCents, lineTotalCents, sumCents, toCents } from './invoiceMoney';
 import type { DetectedOrderPosition, OrderUnit } from '../types/models';
 
 /** How confidently the document unit maps onto a billable OrderUnit. */
@@ -93,8 +94,12 @@ export function formatOrderUnitDisplay(unit: OrderUnit, unitLabel?: string): str
 }
 
 export function computeContractPositionsTotal(positions: DetectedOrderPosition[]): number {
-  return positions.reduce(
-    (sum, position) => sum + (position.lineTotal || position.quantity * position.unitPrice),
-    0,
+  // FINANZ-CORE-01A — in Cent summiert, Zeilen exakt wie der Server.
+  return fromCents(
+    sumCents(
+      positions.map((position) =>
+        position.lineTotal ? toCents(position.lineTotal) : lineTotalCents(position.quantity, position.unitPrice),
+      ),
+    ),
   );
 }

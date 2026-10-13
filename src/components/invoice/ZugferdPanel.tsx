@@ -286,7 +286,8 @@ export function ZugferdPanel({
         <div className="invoice-einvoice__blocked" data-testid="invoice-zugferd-blocked">
           <p>Für diese Rechnung kann keine ZUGFeRD-Rechnung erzeugt werden:</p>
           <ul>
-            {phase.messages.map((message) => (
+            {/* FINANZ-CORE-01A (AUS-18) — gleiche Befunde (etwa zwei Zeilen mit unbekannter Einheit) nur einmal. */}
+            {[...new Set(phase.messages)].map((message) => (
               <li key={message}>{message}</li>
             ))}
           </ul>

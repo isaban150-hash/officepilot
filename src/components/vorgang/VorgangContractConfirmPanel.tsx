@@ -1,6 +1,7 @@
 import { Button } from '../ui/Button';
 import { Card, CardMeta, CardTitle, DataRow } from '../ui/Card';
 import type { TranslationKey } from '../../i18n';
+import { fromCents, lineTotalCents, sumCents } from '../../services/invoiceMoney';
 import { confirmContractOrder } from '../../services/contractConfirmationService';
 import { resolveOrderConfirmationPathForVorgang } from '../../services/orderConfirmationPathService';
 import type { Vorgang } from '../../types/models';
@@ -44,9 +45,9 @@ export function VorgangContractConfirmPanel({
     return null;
   }
 
-  const orderValue = vorgang.orderPositions.reduce(
-    (sum, position) => sum + position.plannedQuantity * position.unitPrice,
-    0,
+  // FINANZ-CORE-01A — Auftragswert wie `build_workspace_order_totals`: je Position exakt in Cent.
+  const orderValue = fromCents(
+    sumCents(vorgang.orderPositions.map((position) => lineTotalCents(position.plannedQuantity, position.unitPrice))),
   );
 
   const handleConfirm = () => {

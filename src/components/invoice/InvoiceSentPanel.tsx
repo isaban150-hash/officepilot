@@ -133,6 +133,9 @@ export function InvoiceSentPanel({
         setErrorKey('invoice.sent.error.via');
       } else if (result.reason === 'not_prepared' || result.reason === 'already_sent') {
         setErrorKey('invoice.sent.error.notPrepared');
+      } else if (result.reason === 'cancelled') {
+        // FINANZ-CORE-01A (STO-04/AUS-09) — storniert ist storniert; ein Vermerk entstünde ohne Korrekturbeleg.
+        setErrorKey('invoice.sent.error.cancelled');
       } else {
         /*
          * INVOICE-SENT-PERSIST-01C — `persist_failed` kommt jetzt aus dem
@@ -393,7 +396,8 @@ export function InvoiceSentPanel({
             <p className="invoice-sent-panel__meta">
               {translate('invoice.sent.notSentYet')}
             </p>
-            {mode === 'closed' && darfVermerken ? (
+            {/* FINANZ-CORE-01A (STO-04/AUS-09) — keine Versandmarkierung nach einem Storno. */}
+            {mode === 'closed' && darfVermerken && !invoice.cancelledAt ? (
               <Button
                 type="button"
                 size="sm"
@@ -402,6 +406,11 @@ export function InvoiceSentPanel({
               >
                 {translate('invoice.sent.mark')}
               </Button>
+            ) : null}
+            {invoice.cancelledAt ? (
+              <p className="invoice-sent-panel__meta" data-testid="invoice-sent-cancelled-hint">
+                {translate('invoice.sent.cancelledHint')}
+              </p>
             ) : null}
           </div>
         )}
@@ -421,6 +430,12 @@ export function InvoiceSentPanel({
               setMode(mode === 'mark' ? 'confirm-mark' : 'confirm-correct');
             }}
           >
+            {/* FINANZ-CORE-01A (AUS-19) — ein OfficeTakt-Versand bleibt belegt; ein abweichender Vermerk ist manuell. */}
+            {mode === 'correct' && invoice.sentSource === 'officepilot' ? (
+              <p className="invoice-sent-panel__hint" data-testid="invoice-sent-officepilot-hint">
+                {translate('invoice.sent.officepilotCorrectHint')}
+              </p>
+            ) : null}
             <label className="invoice-sent-panel__label" htmlFor="invoice-sent-date">
               {translate('invoice.sent.date')}
             </label>
@@ -429,6 +444,8 @@ export function InvoiceSentPanel({
               type="date"
               className="input"
               value={sentAt}
+              // FINANZ-CORE-01A (SQL-15) — kein Versanddatum in der Zukunft.
+              max={getBusinessDay()}
               onChange={(event) => setSentAt(event.target.value)}
               required
               data-testid="invoice-sent-date-input"

@@ -168,6 +168,28 @@ export function mapWorkspaceCustomerRow(row: WorkspaceCustomerRow): {
   };
 }
 
+/**
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N04) — eine Cloud-Zeile als Kunde dieses Geräts,
+ * für die Auflösung eines Kundenkonflikts („Online-Version verwenden").
+ */
+export function customerFromCloudRow(
+  row: WorkspaceCustomerRow,
+  deviceId: string,
+  workspaceId: string,
+): Customer | null {
+  const mapped = mapWorkspaceCustomerRow(row);
+  if (!mapped) return null;
+  return customerFromCloud(
+    mapped.customerId,
+    mapped.payload,
+    mapped.rowVersion,
+    mapped.updatedAt,
+    mapped.deleted,
+    deviceId,
+    workspaceId,
+  );
+}
+
 function customerFromCloud(
   customerId: string,
   payload: CustomerCloudPayload,
@@ -196,12 +218,29 @@ function customerFromCloud(
  * `mergeSyncEntities`-Engine. Kein Feld-Merge, keine Last-Write-Wins-Regel:
  * Gleiche Version mit abweichendem Inhalt meldet einen Konflikt, statt eine
  * ungesynchronisierte lokale Änderung stillschweigend zu verwerfen.
+ *
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N04/N05) — der Dirty-Zustand entscheidet mit:
+ *
+ *   - `dirtyIds`: Kunden mit offenem Sendeauftrag (wartend, Fehler, Konflikt). Eine
+ *     neuere Cloud-Fassung überschrieb bisher die ungesicherte lokale Änderung allein
+ *     nach der Versionszahl. Jetzt: gleicher Inhalt → Cloud übernehmen; abweichender
+ *     Inhalt → Konflikt, die lokale Fassung bleibt stehen (Auflösung auf der Sync-Seite).
+ *     Bei gleicher Version mit offenem Auftrag ist der Unterschied die eigene, noch zu
+ *     sendende Änderung — kein Konflikt.
+ *   - `rejectedIds`: Kunden, deren Sendeauftrag der Server endgültig abgewiesen hat
+ *     (`failed`, etwa ein Mitglied ohne Schreibrecht). Die abgewiesene Änderung gehört
+ *     nicht in den Bestand: Die Cloud-Fassung gilt (Abweisungsrücknahme).
+ *
+ * Ein Konflikt betrifft nur seine eigene Zeile; der Aufrufer übernimmt das übrige
+ * Ergebnis (N05).
  */
 export function mergeCustomersFromPull(
   localCustomers: Customer[],
   remoteRows: WorkspaceCustomerRow[],
   deviceId: string,
   workspaceId: string,
+  dirtyIds: ReadonlySet<string> = new Set(),
+  rejectedIds: ReadonlySet<string> = new Set(),
 ): { customers: Customer[]; conflicts: string[] } {
   const conflicts: string[] = [];
   const byId = new Map(localCustomers.map((customer) => [customer.id, customer]));
@@ -229,6 +268,11 @@ export function mergeCustomersFromPull(
      * verschwindet der Kunde aus dem aktiven Bestand.
      */
     if (mapped.deleted) {
+      // N04 — auch ein Grabstein löscht keine ungesicherte lokale Änderung still.
+      if (local && dirtyIds.has(mapped.customerId)) {
+        conflicts.push(`customer:${mapped.customerId}`);
+        continue;
+      }
       byId.delete(mapped.customerId);
       continue;
     }
@@ -238,17 +282,41 @@ export function mergeCustomersFromPull(
       continue;
     }
 
+    const sameContent = buildCustomerCloudContentKey(local) === buildCustomerCloudContentKey(remote);
+    const dirty = dirtyIds.has(mapped.customerId);
+
+    /*
+     * N05 — endgültig abgewiesen (und nicht erneut geändert): Die Cloud-Fassung gilt.
+     * Eine neue lokale Änderung danach hat wieder einen offenen Auftrag und geht vor.
+     */
+    if (!dirty && rejectedIds.has(mapped.customerId)) {
+      byId.set(remote.id, remote);
+      continue;
+    }
+
     /*
      * Gleiche Version: Nur ein abweichender **fachlicher** Inhalt ist ein
      * Konflikt. Stimmt er überein, wird lediglich die Serverversion
-     * übernommen — ohne Push und ohne Konfliktmeldung.
+     * übernommen — ohne Push und ohne Konfliktmeldung. N04: Mit offenem
+     * Sendeauftrag ist der Unterschied die eigene, noch zu sendende Änderung.
      */
     if (local.sync && local.sync.version === mapped.rowVersion) {
-      if (buildCustomerCloudContentKey(local) === buildCustomerCloudContentKey(remote)) {
+      if (sameContent) {
         byId.set(remote.id, remote);
-      } else {
+      } else if (!dirty) {
         conflicts.push(`customer:${mapped.customerId}`);
       }
+      continue;
+    }
+
+    /*
+     * N04 — die Cloud ist weiter, und hier wartet eine eigene Änderung. Die
+     * Versionszahl allein darf sie nicht verwerfen: gleicher Inhalt → übernehmen,
+     * sonst Konflikt mit stehender lokaler Fassung.
+     */
+    if (dirty && mapped.rowVersion !== (local.sync?.version ?? 0)) {
+      if (sameContent) byId.set(remote.id, remote);
+      else conflicts.push(`customer:${mapped.customerId}`);
       continue;
     }
 

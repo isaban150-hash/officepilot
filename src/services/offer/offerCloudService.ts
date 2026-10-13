@@ -22,6 +22,7 @@ import type { BrandingSnapshot } from '../../types/branding';
 import { OFFER_STATUSES, type Offer, type OfferPosition, type OfferStatus, type OfferTotals } from '../../types/offer';
 import type { SyncMeta } from '../../types/sync';
 import { normalizeOfferPosition } from './offerService';
+import { copyCustomerBilling } from '../customer/customerBillingCopy';
 
 /** Zeile aus `public.workspace_offers` — exakt die Spalten der Migration. */
 export interface WorkspaceOfferRow {
@@ -87,16 +88,9 @@ function resolveStatus(value: unknown): OfferStatus {
   return OFFER_STATUSES.includes(value as OfferStatus) ? (value as OfferStatus) : 'entwurf';
 }
 
+// FINANZ-CORE-01A (KUN-01) — die E-Rechnungsfelder reisen über den Sync mit.
 function stripCustomer(c: CustomerBilling): CustomerBilling {
-  return {
-    name: c.name ?? '',
-    contactPerson: c.contactPerson ?? '',
-    street: c.street ?? '',
-    zip: c.zip ?? '',
-    city: c.city ?? '',
-    email: c.email ?? '',
-    phone: c.phone ?? '',
-  };
+  return copyCustomerBilling(c);
 }
 
 function stripPosition(p: OfferPosition): OfferPosition {

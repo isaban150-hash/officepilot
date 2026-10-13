@@ -8,6 +8,7 @@ import { DEFAULT_SETUP } from '../../data/mockData';
 import { InvoiceDetailPage } from '../../pages/InvoiceDetailPage';
 import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
 import { InvoiceCancelDialog } from './InvoiceCancelDialog';
+import { canOfferInvoiceCancel } from '../../services/invoice/invoiceCancelEligibility';
 import { getPaymentBadgeClass } from './InvoicePaymentBadge';
 import { calculatePaymentSummary } from '../../services/invoicePaymentService';
 import { hasFinalSchlussrechnung, hasSchlussrechnung } from '../../services/orderBillingRules';
@@ -146,16 +147,12 @@ afterEach(async () => {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Die Seite entscheidet über die Sichtbarkeit; hier steht die Regel als reine
- * Funktion, damit sie einzeln prüfbar bleibt und nicht die ganze Detailseite
- * samt Routing montiert werden muss.
+ * FINANZ-CORE-01A — die echte Regel der Seite (`canOfferInvoiceCancel`), keine Testkopie mehr.
+ * Die frühere Kopie kannte nur Schlussrechnungen; die Seite storniert seit 01B auch normale
+ * Rechnungen, Teilrechnungen und Abschläge (diese nur mit Auftrag).
  */
-function canCancel(entry: VorgangInvoice): boolean {
-  return (
-    entry.type === 'schluss' &&
-    (entry.status === 'vorbereitet' || entry.status === 'versendet') &&
-    !(entry.paymentStatus === 'storniert' || Boolean(entry.cancelledAt))
-  );
+function canCancel(entry: VorgangInvoice, vorgangId: string | null = 'v-cancel'): boolean {
+  return canOfferInvoiceCancel(entry, vorgangId);
 }
 
 describe('Sichtbarkeit der Stornoaktion', () => {
@@ -164,10 +161,16 @@ describe('Sichtbarkeit der Stornoaktion', () => {
     expect(canCancel(invoice({ status: 'vorbereitet' }))).toBe(true);
   });
 
-  it('B: eine Abschlagsrechnung bietet sie nicht an', () => {
-    expect(canCancel(invoice({ type: 'abschlag', abschlagNumber: 1 }))).toBe(false);
-    for (const type of ['rechnung', 'teilrechnung', 'gutschrift', 'storno'] as const) {
-      expect(canCancel(invoice({ type })), type).toBe(false);
+  it('B: Rechnung, Teilrechnung und Abschlag mit Auftrag ja; ohne Auftrag nur die Rechnung; Gutschrift/Storno nie', () => {
+    for (const type of ['rechnung', 'teilrechnung', 'abschlag'] as const) {
+      expect(canCancel(invoice({ type, abschlagNumber: type === 'abschlag' ? 1 : undefined })), type).toBe(true);
+    }
+    expect(canCancel(invoice({ type: 'rechnung' }), null)).toBe(true);
+    for (const type of ['teilrechnung', 'abschlag', 'schluss'] as const) {
+      expect(canCancel(invoice({ type }), null), `${type} ohne Auftrag`).toBe(false);
+    }
+    for (const type of ['gutschrift', 'storno'] as const) {
+      expect(canCancel(invoice({ type } as never)), type).toBe(false);
     }
   });
 
@@ -201,7 +204,8 @@ describe('Bestätigungsdialog', () => {
     expect(testId('invoice-cancel-dialog')).toBeTruthy();
     expect(testId('invoice-cancel-number')?.textContent).toContain('2026-0400');
     expect(testId('invoice-cancel-type')?.textContent).toContain('Schlussrechnung');
-    expect(testId('invoice-cancel-date')?.textContent).toContain('2026-06-01');
+    // FINANZ-CORE-01A (F-03) — das Rechnungsdatum deutsch geschrieben, nicht als ISO-Text.
+    expect(testId('invoice-cancel-date')?.textContent).toContain('01.06.2026');
     expect(testId('invoice-cancel-amount')?.textContent).toContain('1.190,00');
     /* Die Aussagen über Erhalt und Endgültigkeit stehen im Dialog. */
     expect(testId('invoice-cancel-notice')).toBeTruthy();
@@ -289,6 +293,8 @@ describe('Bestätigungsdialog', () => {
       invoiceId: 'inv-cancel-1',
       /* Getrimmt — Leerraum gehört nicht in die Buchhaltung. */
       reason: 'Falscher Leistungszeitraum',
+      /* FINANZ-CORE-01A (STO-02) — wer storniert; der Dienst sichert damit einen offenen Versandvermerk. */
+      actor: expect.objectContaining({ cloudConfigured: expect.any(Boolean) }),
     });
     expect(onClose).toHaveBeenCalled();
   });
@@ -518,7 +524,8 @@ describe('Darstellung nach dem Storno', () => {
 
     expect(html).toContain('data-testid="invoice-cancelled-panel"');
     expect(html).toContain('data-testid="invoice-cancelled-at"');
-    expect(html).toContain('2026-06-20');
+    // FINANZ-CORE-01A (F-03) — der Geschäftstag deutsch geschrieben, nicht als ISO-Text.
+    expect(html).toContain('20.06.2026');
     expect(html).toContain('data-testid="invoice-cancelled-reason"');
     expect(html).toContain('Leistungszeitraum falsch');
     /* Kein erneutes Storno, und keine Zahlungserfassung auf einem stornierten Beleg. */

@@ -18,6 +18,7 @@ import { buildMonatsmappeModel } from '../steuerberater/monatsmappeModelService'
 import { collectMonatsmappeInput } from '../steuerberater/monatsmappeInputService';
 import { getAllAccountingAssignments } from './accountingStore';
 import { getChartOfAccounts } from './accountingSettingsService';
+import { isAccountingTaxInLineWithSource } from './accountingCanonical';
 import {
   buildPeriodFingerprint,
   buildPeriodManifest,
@@ -88,6 +89,11 @@ function blocker(
  */
 export function collectPeriodBlockers(
   manifest: AccountingPeriodManifest,
+  /**
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N06) — der Steuerstatus je Beleg (`sourceType:sourceId`),
+   * soweit bekannt. Eine Bestätigung mit anderer Steuer als der Beleg ist noch zu prüfen.
+   */
+  sourceTaxBySource: ReadonlyMap<string, string> = new Map(),
 ): AccountingPeriodBlocker[] {
   const unassigned: string[] = [];
   const needsReview: string[] = [];
@@ -113,6 +119,15 @@ export function collectPeriodBlockers(
          * hinweggehen darf.
          */
         if (!entry.accountNumber.trim()) confirmedWithoutAccount.push(entry.sourceId);
+        // FINANZ-CORE-01A (WEISS N06) — eine Bestätigung mit ungeklärter oder anderer Steuer als der Beleg ist noch zu prüfen.
+        else if (
+          !isAccountingTaxInLineWithSource(
+            entry.taxTreatment,
+            sourceTaxBySource.get(`${entry.sourceType}:${entry.sourceId}`),
+          )
+        ) {
+          needsReview.push(entry.sourceId);
+        }
         break;
       default:
         break;
@@ -193,7 +208,7 @@ export function buildAccountingPeriodState(
     activeClosure ? closureFingerprintVersion(activeClosure) : 3,
   );
   const fingerprint = buildPeriodFingerprint(manifest);
-  const blockers = collectPeriodBlockers(manifest);
+  const blockers = collectPeriodBlockers(manifest, sourceTaxOf(model));
 
   return {
     monthKey: model.monthKey,
@@ -205,6 +220,18 @@ export function buildAccountingPeriodState(
     isCurrentClosureValid: activeClosure !== null && activeClosure.fingerprint === fingerprint,
     revisionHistory: [...closures].sort((a, b) => b.revision - a.revision),
   };
+}
+
+/** FINANZ-CORE-01A (WEISS-Nacharbeit N06) — der Steuerstatus je Beleg des Monats. */
+function sourceTaxOf(model: MonatsmappeModel): Map<string, string> {
+  const bySource = new Map<string, string>();
+  for (const beleg of [...model.ausgangsrechnungen, ...model.eingangsbelege, ...model.stornos]) {
+    if (!beleg.steuerstatus) continue;
+    const sourceType =
+      beleg.belegart === 'ausgangsrechnung' || beleg.belegart === 'rechnungsstorno' ? 'invoice' : 'expense';
+    bySource.set(`${sourceType}:${beleg.id}`, beleg.steuerstatus);
+  }
+  return bySource;
 }
 
 /** Bequemer Zugriff über den Monatsschlüssel (`YYYY-MM`). */

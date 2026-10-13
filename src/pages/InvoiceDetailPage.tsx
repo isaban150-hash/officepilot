@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { releaseReconciliationForPayment } from '../services/bank/bankReconciliationStore';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { InvoiceDocumentView } from '../components/invoice/InvoiceDocumentView';
 import { InvoicePrintActions } from '../components/invoice/InvoicePrintActions';
 import { EInvoicePanel } from '../components/invoice/EInvoicePanel';
+import { XRechnungPanel } from '../components/invoice/XRechnungPanel';
+import { Card } from '../components/ui/Card';
 import {
   getPaymentSavedToastKey,
   InvoicePaymentForm,
 } from '../components/invoice/InvoicePaymentForm';
 import { InvoiceCancelDialog } from '../components/invoice/InvoiceCancelDialog';
+import { canOfferInvoiceCancel } from '../services/invoice/invoiceCancelEligibility';
 import { InvoicePaymentHistory } from '../components/invoice/InvoicePaymentHistory';
 import { InvoicePaymentSummary } from '../components/invoice/InvoicePaymentSummary';
 import { AccountingAssignmentPanel } from '../components/accounting/AccountingAssignmentPanel';
@@ -35,6 +38,7 @@ import { useApp } from '../context/AppContext';
 import { isFinalizedInvoice, buildPrintTitle } from '../services/invoiceArchiveService';
 import { buildInvoicePrintModelFromInvoice, formatInvoiceDate } from '../services/invoicePrintModel';
 import {
+  acknowledgeInvoicePaymentOverpayment,
   calculatePaymentSummary,
   canRecordInvoicePayment,
   formatPaymentCurrency,
@@ -50,7 +54,17 @@ import {
   isInvoicePaymentCloudSilent,
   pullInvoicePaymentsFromCloud,
 } from '../services/invoice/workspaceInvoicePaymentCloudService';
-import { getLastPersistSuccess } from '../services/persistenceService';
+import {
+  getInvoicePaymentResyncBlocks,
+  isFinalInvoicePaymentResyncOutcome,
+  markInvoicePaymentResyncNeeded,
+  recordInvoicePaymentResyncBlock,
+  releaseInvoicePaymentResyncConflict,
+  subscribeInvoicePaymentResyncBlocks,
+} from '../services/invoice/invoicePaymentCloudResyncService';
+import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
+import { formatDisplayDate, formatEuroAmount } from '../utils/displayFormat';
+import { getLastPersistSuccess, persistAll } from '../services/persistenceService';
 import { printInvoice } from '../services/invoicePrintService';
 import { getVorgangById } from '../services/vorgangService';
 import { resolveInvoiceDetailRoute } from '../services/invoice/invoiceDetailRouteResolver';
@@ -83,6 +97,7 @@ import { validateFinalizedInvoiceForPdf } from '../services/invoiceValidationSer
 import type { VorgangInvoice } from '../types/models';
 import type { TranslationKey } from '../i18n';
 import { toBusinessDay } from '../services/businessDateService';
+import { formatDisplayDatePadded } from '../utils/displayFormat';
 
 export function InvoiceDetailPage() {
   /*
@@ -143,6 +158,12 @@ export function InvoiceDetailPage() {
   }, [invoice]);
 
   /*
+   * FINANZ-CORE-01A (KUN-12) — Kopf und Karte nennen den Empfänger des Belegs (eingefrorener
+   * Snapshot), nicht den heutigen Auftragskunden; nur ein Altbeleg ohne Namen fällt zurück.
+   */
+  const belegEmpfaenger = printModel?.customer.name?.trim() || vorgang?.customer || '';
+
+  /*
    * GO-LIVE-SECURITY-01 — ohne Schreibrecht gibt eine lokale Bestätigung des
    * Leistungszeitraums Druck, PDF und ZUGFeRD erst frei, wenn die Cloud sie
    * nachweislich trägt (siehe `invoiceOutputClearance`). Inhaber, Verwaltung
@@ -184,10 +205,19 @@ export function InvoiceDetailPage() {
     </p>
   ) : null;
 
+  /*
+   * FINANZ-CORE-01A (AUS-05) — `?auto=print` druckt genau einmal je Rechnung und
+   * Ansicht. Ohne diesen Schutz lief der Effekt bei jeder neuen Rechnungskopie
+   * erneut (Zahlung, Versandvermerk, Cloud-Abgleich; unter StrictMode doppelt):
+   * Es öffneten sich zweite und dritte Druckdialoge.
+   */
+  const autoPrintedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!printModel || !invoice) return;
     const auto = searchParams.get('auto');
     if (auto !== 'print') return;
+    const autoPrintKey = `${invoice.id}:${correctionView ? 'korrektur' : 'rechnung'}`;
+    if (autoPrintedRef.current === autoPrintKey) return;
     // GO-LIVE-SECURITY-01 — auch der Direktaufruf wartet auf den Nachweis.
     if (outputHold) return;
     /*
@@ -199,9 +229,11 @@ export function InvoiceDetailPage() {
     // 01B — in der Korrekturansicht steht das Korrekturdokument im DOM; nur der Titel wechselt.
     if (correctionView) {
       if (invoice.cancellationKind !== 'correction') return;
+      autoPrintedRef.current = autoPrintKey;
       printInvoice({ title: `Rechnungskorrektur ${invoice.number}` });
       return;
     }
+    autoPrintedRef.current = autoPrintKey;
     printInvoice({ title: buildPrintTitle(printModel) });
   }, [printModel, invoice, searchParams, correctionView, outputHold]);
 
@@ -382,21 +414,83 @@ export function InvoiceDetailPage() {
     return findLocallyOnlyPayments(invoice, cloudPaymentIds).map((payment) => payment.id);
   }, [invoice, cloudPaymentIds]);
 
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N01) — endgültig abgewiesene Zahlungen tragen einen
+   * dauerhaften Vermerk; der Hinweis an der Zahlung nennt den Grund. Neu gelesen nach jeder
+   * eigenen Sicherung und jedem Abgleich.
+   */
+  const [resyncBlockVersion, setResyncBlockVersion] = useState(0);
+  const resyncBlocks = useMemo(
+    () => (invoiceId ? getInvoicePaymentResyncBlocks(invoiceId) : {}),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- neu gelesen auf Signal, nicht auf Objektwechsel
+    [invoiceId, resyncBlockVersion, cloudPaymentIds],
+  );
+  // Auch ein Vermerk des Hintergrundlaufs (nach dem Start, nach einem Abgleich) erscheint sofort.
+  useEffect(() => subscribeInvoicePaymentResyncBlocks(() => setResyncBlockVersion((version) => version + 1)), []);
+
+  /**
+   * FINANZ-CORE-01A (SQL-05/ZAH-02) — Zahlung, die der Server als unbestätigte
+   * Überzahlung abwies. Der Nutzer entscheidet: doppelt erfasst (entfernen) oder echte
+   * Überzahlung (bestätigen).
+   */
+  const [overpaymentQuestionId, setOverpaymentQuestionId] = useState<string | null>(null);
+
   /** Überträgt eine vorhandene Zahlung — niemals eine neue. */
-  const handleSecurePayment = async (paymentId: string) => {
-    if (!invoice) return;
-    const payment = getInvoicePayments(invoice).find((item) => item.id === paymentId);
+  const handleSecurePayment = async (paymentId: string, current: VorgangInvoice | undefined = invoice) => {
+    if (!current) return;
+    const payment = getInvoicePayments(current).find((item) => item.id === paymentId);
     if (!payment) return;
 
-    const outcome = await syncInvoicePaymentToCloud(invoice.id, payment);
+    /*
+     * FINANZ-CORE-01A (WEISS-Nacharbeit N01) — „Sichern" ist die bewusste neue Handlung:
+     * Ein früherer Vermerk dieser Zahlung fällt. Weist der Server erneut endgültig ab,
+     * wird das wieder dauerhaft vermerkt — der Hintergrunddienst sendet sie dann nicht
+     * still, auch nicht nach einem Neustart oder Rechtewechsel.
+     */
+    releaseInvoicePaymentResyncConflict(current.id, paymentId);
+    const outcome = await syncInvoicePaymentToCloud(current.id, payment);
     if (!isInvoicePaymentCloudSynced(outcome)) {
+      if (isFinalInvoicePaymentResyncOutcome(outcome)) {
+        recordInvoicePaymentResyncBlock(current.id, paymentId, outcome);
+      } else {
+        // FINANZ-CORE-01A (ZAH-02) — Netz oder Server: der nächste erfolgreiche Abgleich versucht es erneut.
+        markInvoicePaymentResyncNeeded();
+      }
+      setResyncBlockVersion((version) => version + 1);
+      if (outcome === 'overpayment_unconfirmed') {
+        setOverpaymentQuestionId(paymentId);
+        return;
+      }
       /* R1-SEC-01 — Ablehnung beim Namen nennen, statt sie als Netzproblem auszugeben. */
-      showToast(translate(outcome === 'denied' ? 'payment.cloudDenied' : 'payment.cloudOnlyLocal'));
+      showToast(
+        translate(
+          outcome === 'denied'
+            ? 'payment.cloudDenied'
+            : outcome === 'conflict'
+              ? 'payment.cloudConflict'
+              : outcome === 'invoice_cancelled'
+                ? 'payment.cloudInvoiceCancelled'
+                : 'payment.cloudOnlyLocal',
+        ),
+      );
       return;
     }
     showToast(translate('payment.cloudSecured'));
+    setResyncBlockVersion((version) => version + 1);
     // Ausdrücklicher Erfolg — hier ist ein neuer Abgleich gewollt.
     setCloudRefreshToken((token) => token + 1);
+  };
+
+  const handleAcknowledgeOverpayment = async (paymentId: string) => {
+    if (vorgangId === undefined || !invoiceId) return;
+    const result = acknowledgeInvoicePaymentOverpayment(vorgangId, invoiceId, paymentId);
+    if (!result.success) {
+      showToast(translate(result.errorKey as never));
+      return;
+    }
+    setInvoice(result.invoice);
+    releaseInvoicePaymentResyncConflict(invoiceId, paymentId);
+    await handleSecurePayment(paymentId, result.invoice);
   };
 
   /**
@@ -448,7 +542,8 @@ export function InvoiceDetailPage() {
      * im selben Augenblick auf dem Geraet, damit die Bankbewegung nicht bis
      * zum naechsten Abzug weiter „Zugeordnet“ zeigt.
      */
-    releaseReconciliationForPayment(paymentId);
+    // FINANZ-CORE-01A (ZAH-20) — die Freigabe auch dauerhaft, nicht nur im Arbeitsspeicher.
+    if (releaseReconciliationForPayment(paymentId) > 0) persistAll();
     setInvoice(result.invoice);
     showToast(translate('payment.removedSuccess'));
   };
@@ -535,14 +630,8 @@ export function InvoiceDetailPage() {
    * mengenbasierte Abschlag verbraucht Menge, der pauschale nimmt Geld vorweg,
    * das die Schlussrechnung abzieht. Beides muss sich zurücknehmen lassen.
    */
-  const canCancelInvoice =
-    (invoice.type === 'rechnung' ||
-      ((invoice.type === 'teilrechnung' ||
-        invoice.type === 'abschlag' ||
-        invoice.type === 'schluss') &&
-        vorgangId !== null)) &&
-    (invoice.status === 'vorbereitet' || invoice.status === 'versendet') &&
-    !invoiceCancelled;
+  // FINANZ-CORE-01A — dieselbe Regel, die der Test prüft (invoiceCancelEligibility).
+  const canCancelInvoice = canOfferInvoiceCancel(invoice, vorgangId) && !invoiceCancelled;
 
   const autoDownloadPdf = searchParams.get('auto') === 'pdf';
   const correctionPath = `${buildInvoiceReachPath(vorgangId, invoice.id)}?doc=korrektur`;
@@ -590,12 +679,24 @@ export function InvoiceDetailPage() {
               .replace('{number}', invoice.number)
               .replace('{date}', formatInvoiceDate(invoice.issueDate ?? invoice.date))}
             assistantMessage={`${translate('invoice.correction.reasonLabel')}: ${invoice.cancelReason}`}
+            /*
+             * FINANZ-CORE-01A (WEISS-Nacharbeit N12) — der operative Betrag der Korrektur ist ihr
+             * Zahlbetrag. Bei einer Schlussrechnung mit Abzügen stand hier unbezeichnet die
+             * Gesamtsumme (−1.190 €), während Beleg und Archiv −714 € zeigten. Jetzt steht der
+             * Zahlbetrag benannt vorn; die Gesamtsumme nur bei Abzügen, ausdrücklich als solche.
+             */
             highlights={[
               `${translate('invoice.correction.issueDate')}: ${formatInvoiceDate(correctionModel.issueDate)}`,
-              formatPaymentCurrency(correctionModel.summary.grossTotal),
+              `${translate('invoice.correction.amountDueLabel')}: ${formatPaymentCurrency(correctionModel.summary.amountDue)}`,
+              ...(correctionModel.summary.deductionLines.length > 0
+                ? [
+                    `${translate('invoice.correction.grossTotalLabel')}: ${formatPaymentCurrency(correctionModel.summary.grossTotal)}`,
+                  ]
+                : []),
             ]}
             actions={
               <InvoicePrintActions
+                key={`print-correction-${invoice.id}`}
                 invoice={invoice}
                 model={correctionModel}
                 translate={translate}
@@ -619,6 +720,18 @@ export function InvoiceDetailPage() {
               </Link>
             </p>
           ) : null}
+          {/*
+            * FINANZ-CORE-01A (STO-09/AUS-08) — die Rechnungskorrektur als E-Rechnung:
+            * Gutschrift (381) mit eigener Nummer und Bezug auf das Original. Ein
+            * ZUGFeRD-PDF gibt es dafür nicht: Das Korrektur-PDF zeigt die Beträge als
+            * Gegenbuchung, die Gutschrift positiv — beides in einer Datei wäre widersprüchlich.
+            */}
+          <Card className="invoice-einvoice" data-testid="invoice-correction-einvoice-panel">
+            <h3 className="ui-section-header__title">E-Rechnung</h3>
+            <div className="invoice-einvoice__formats">
+              <XRechnungPanel invoice={invoice} variant="correction" outputBlocked={Boolean(outputHold)} />
+            </div>
+          </Card>
         </div>
         <div
           className={`invoice-detail__document invoice-print-document${printBlockedClass}`}
@@ -647,7 +760,9 @@ export function InvoiceDetailPage() {
         onCloudStateChange={setServicePeriodCloudConfirmed}
         roleAligned={servicePeriodRoleAligned}
       />
+      {/* FINANZ-CORE-01A (AUS-14) — Meldung und ?auto=pdf gehören zu genau dieser Rechnung. */}
       <InvoicePrintActions
+        key={`print-${invoice.id}`}
         invoice={invoice}
         model={printModel}
         translate={translate}
@@ -678,7 +793,8 @@ export function InvoiceDetailPage() {
             <div className="data-row" data-testid="invoice-cancelled-at">
               <span className="data-row__label">{translate('invoice.cancel.cancelledAt')}</span>
               {/* 03D — der Serverzeitpunkt ist UTC; gezeigt wird der lokale Tag. */}
-              <span className="data-row__value">{toBusinessDay(invoice.cancelledAt)}</span>
+              {/* FINANZ-CORE-01A (F-03) — der Geschäftstag, deutsch geschrieben. */}
+              <span className="data-row__value">{formatDisplayDatePadded(toBusinessDay(invoice.cancelledAt))}</span>
             </div>
           ) : null}
           {invoice.cancelReason ? (
@@ -724,12 +840,14 @@ export function InvoiceDetailPage() {
         </section>
       )}
       {/* EMAIL-01B3 — echter Versand per OfficePilot; die manuelle Markierung bleibt darunter getrennt. */}
-      <InvoiceDeliveryPanel vorgangId={vorgangId} invoice={invoice} onInvoiceUpdated={setInvoice} />
+      {/* FINANZ-CORE-01A (AUS-04) — je Rechnung neu montiert: die Route behält die Seite beim Wechsel zwischen Rechnungen, und ein Entwurf von A darf nie auf B erscheinen. */}
+      <InvoiceDeliveryPanel key={`delivery-${invoice.id}`} vorgangId={vorgangId} invoice={invoice} onInvoiceUpdated={setInvoice} />
       {/* EMAIL-01B4 — Korrekturbeleg der stornierten Rechnung: gleicher Unterbau, eigener Bereich, Original bleibt unberührt. */}
       {invoice.cancellationKind === 'correction' && invoice.correctionDocumentId ? (
-        <InvoiceDeliveryPanel vorgangId={vorgangId} invoice={invoice} onInvoiceUpdated={setInvoice} documentKind="invoice_correction" />
+        <InvoiceDeliveryPanel key={`delivery-correction-${invoice.id}`} vorgangId={vorgangId} invoice={invoice} onInvoiceUpdated={setInvoice} documentKind="invoice_correction" />
       ) : null}
       <InvoiceSentPanel
+        key={`sent-${invoice.id}`}
         vorgangId={vorgangId}
         invoice={invoice}
         translate={translate}
@@ -827,7 +945,7 @@ export function InvoiceDetailPage() {
           */}
         <PageHeader
           title={printModel.documentTitle}
-          subtitle={`${printModel.invoiceNumber} · ${vorgang ? vorgang.customer : printModel.customer.name}`}
+          subtitle={`${printModel.invoiceNumber} · ${belegEmpfaenger}`}
           status={<StatusBadge tone={paymentStatusTone(paymentSummary.status)} label={translate(statusKey)} data-testid="invoice-detail-status" />}
           backLabel={fromOverview || isFreeInvoice ? translate('overview.backToOverview') : translate('common.back')}
           backHref={backPath}
@@ -840,9 +958,7 @@ export function InvoiceDetailPage() {
         <div className="work-detail-grid__main">
         <DetailExperienceCard
           recognizedTitle={printModel.documentTitle}
-          recognizedSummary={`${printModel.invoiceNumber} · ${
-            vorgang ? vorgang.customer : printModel.customer.name
-          }`}
+          recognizedSummary={`${printModel.invoiceNumber} · ${belegEmpfaenger}`}
           assistantMessage={translate('invoice.experience.finalized').replace(
             '{amount}',
             formatPaymentCurrency(paymentSummary.totalDue),
@@ -880,6 +996,8 @@ export function InvoiceDetailPage() {
             onChanged={() => setAccountingToken((value) => value + 1)}
             translate={translate}
             testIdPrefix="invoice"
+            // FINANZ-CORE-01A (WEISS-Nacharbeit N06) — die Steuer der Kontierung folgt der Rechnung.
+            sourceTaxTreatment={invoice.taxStatus}
           />
         </AccountingSection>
 
@@ -913,6 +1031,7 @@ export function InvoiceDetailPage() {
             onRemovePayment={handleRemovePayment}
             allowRemove={darfFinanzen}
             unsyncedPaymentIds={unsyncedPaymentIds ?? undefined}
+            blockedPaymentReasons={resyncBlocks}
             onSecurePayment={darfFinanzen ? handleSecurePayment : undefined}
           />
         </DetailSection>
@@ -961,6 +1080,8 @@ export function InvoiceDetailPage() {
         onClose={() => setShowPaymentForm(false)}
         onSaved={handlePaymentSaved}
         onReverted={setInvoice}
+        // FINANZ-CORE-01A (F-02) — bestätigte Sicherung: gezielt neu abgleichen, wie nach „Sichern“.
+        onCloudSynced={() => setCloudRefreshToken((token) => token + 1)}
         translate={translate}
       />
 
@@ -983,6 +1104,32 @@ export function InvoiceDetailPage() {
           translate={translate}
         />
       )}
+      {(() => {
+        const pending = getInvoicePayments(invoice).find((entry) => entry.id === overpaymentQuestionId);
+        return (
+          <SimpleConfirmDialog
+            open={Boolean(pending)}
+            title={translate('payment.overpaymentQuestionTitle')}
+            message={
+              pending
+                ? `${translate('payment.overpaymentQuestionMessage')} ${formatDisplayDate(pending.date)} · ${formatEuroAmount(pending.amount)}`
+                : translate('payment.overpaymentQuestionMessage')
+            }
+            confirmLabel={translate('payment.overpaymentQuestionConfirm')}
+            cancelLabel={translate('common.cancel')}
+            dialogTestId="payment-overpayment-dialog"
+            confirmTestId="payment-overpayment-confirm"
+            cancelTestId="payment-overpayment-cancel"
+            onConfirm={() => {
+              const id = pending?.id;
+              setOverpaymentQuestionId(null);
+              if (id) void handleAcknowledgeOverpayment(id);
+              return true;
+            }}
+            onCancel={() => setOverpaymentQuestionId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

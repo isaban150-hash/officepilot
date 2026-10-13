@@ -12,6 +12,7 @@ import type { AppPersistedState } from '../../types/models';
 import type { SyncEntityType } from '../../types/sync';
 import { enqueueBackfillSyncOutbox } from '../sync/syncOutboxService';
 import { isEntitySyncActive } from '../sync/syncMetaService';
+import { isGeneratedInvoiceDocumentKind } from './generatedInvoiceDocumentKind';
 import { buildBindingEntityId, isCloudSyncBlockedMockInboxId, isCloudSyncedBindingKind, type CloudBindingKind } from './intakeCloudSyncService';
 import { buildExpensePaymentEntityId, isCloudSyncBlockedMockExpenseId } from '../expense/expenseCloudSyncService';
 
@@ -41,7 +42,7 @@ export function planIntakeBackfill(state: AppPersistedState): IntakeBackfillPlan
   const heldFileRefIds = new Set<string>();
   for (const document of state.documents ?? []) {
     if (!isEntitySyncActive(document)) continue;
-    if (document.linkedInvoiceId && document.category === 'ausgangsrechnung') continue; // generated invoice: eigener Pfad
+    if (isGeneratedInvoiceDocumentKind(document)) continue; // generated invoice: eigener Pfad (FINANZ-CORE-01A STO-03)
     if (isCloudSyncBlockedMockInboxId(document.sourceInboxItemId)) continue;
     if (document.fileRefId) heldFileRefIds.add(document.fileRefId);
     if (document.sync) continue;

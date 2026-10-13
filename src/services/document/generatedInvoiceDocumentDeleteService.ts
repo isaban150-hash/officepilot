@@ -10,8 +10,9 @@
  * Zustand — lokal gelöscht, Cloud aktiv.
  *
  * Betroffen ist ausschliesslich das erzeugte Ausgangsrechnungs-Dokument.
- * Tankbelege, Verträge, Briefe und Fotos behalten unverändert den rein lokalen
- * Löschweg aus fa953da.
+ * Tankbelege, Verträge, Briefe und Fotos behalten den lokalen Löschweg aus
+ * fa953da — seit BARZAHLUNG-V1 NACHTRAG 1 mit einer einzigen lesenden
+ * Rückfrage vorab, ob das Dokument der Nachweis einer Zahlung ist.
  */
 import {
   DOCUMENT_DELETE_FINALIZED_INVOICE_KEY,
@@ -22,11 +23,11 @@ import {
 import type { CompanyDocument } from '../../types/models';
 import {
   isDocumentCloudSynced,
+  isDocumentPaymentProofInCloud,
   pullDocumentsFromCloud,
   tombstoneDocumentInCloud,
 } from './workspaceDocumentCloudService';
 import { isCloudEligibleGeneratedInvoiceDocument } from './documentCloudPullOrchestrator';
-import { isDocumentPaymentProofInCloud } from './workspaceDocumentCloudService';
 import { isFinalPermissionDenialMessage } from '../sync/syncRoleDenial';
 import {
   resolveWorkspaceWriteAccess,
@@ -36,8 +37,6 @@ import {
 
 /** Die Ablehnung aus `tombstone_workspace_document` (20261019120000). */
 const FINALIZED_INVOICE_SERVER_MESSAGE = 'festgeschriebenen Rechnung kann nicht geloescht werden';
-
-/** GO-LIVE-SECURITY-01 — die Rollenabweisung aus `tombstone_workspace_document`. */
 
 /** Fehlerschlüssel, wenn die Cloud-Löschung nicht bewiesen werden konnte. */
 export const DOCUMENT_DELETE_CLOUD_UNCONFIRMED_KEY = 'document.delete.cloudUnconfirmed';
@@ -55,7 +54,7 @@ export type GeneratedInvoiceDocumentDeleteResult =
  *
  * Der Ablauf:
  *
- *   1. Fremddokument? Dann unverändert der bestehende lokale Weg.
+ *   1. Fremddokument? Dann der bestehende lokale Weg (nach der Nachweis-Rückfrage).
  *   2. Cloud-Grabstein setzen. `synced` → lokal löschen.
  *   3. Sonst **nachweisen**: Ein erfolgreicher Pull, in dem diese Rechnung kein
  *      aktives Dokument hat, beweist, dass keine Kopie zurückkehren kann.
@@ -108,7 +107,7 @@ export async function deleteGeneratedInvoiceDocumentWithCloud(
     return { ok: false, errorKey: 'document.delete.blocked.paymentProof' };
   }
 
-  // Fremddokumente: unveränderter lokaler Löschweg, kein einziger Cloud-Aufruf.
+  // Fremddokumente: lokaler Löschweg — ausser der lesenden Nachweis-Rückfrage oben kein Cloud-Aufruf.
   if (!isCloudEligibleGeneratedInvoiceDocument(document)) {
     return finishLocalDelete(documentId);
   }

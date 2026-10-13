@@ -154,7 +154,13 @@ describe('01B — I fachliche Leser und Legacy-Spiegel', () => {
     expect(getCachedSetup().taxStatus).toBe('tax_free');
     expect(resolveDefaultTaxStatus(getCompanyProfile(), getCachedSetup())).toBe('tax_free');
     const created = addExpense({ title: 'Material', category: 'material', supplierName: 'Lieferant', issueDate: '2026-09-01', grossAmount: 100 });
-    expect(created.success && created.expense.taxStatus).toBe('tax_free');
+    /*
+     * FINANZ-CORE-01A — vorbestehend rot seit ba8fe2b (26.09.2026): Eine Ausgabe ohne
+     * eigenen Steuerstatus erbt den Firmenstatus bewusst nicht mehr, sondern gilt als
+     * "unclear" (resolveExpenseTaxStatus, expenseService.ts). Der Lieferant bestimmt die
+     * Steuer seiner Rechnung, nicht der eigene Betrieb.
+     */
+    expect(created.success && created.expense.taxStatus).toBe('unclear');
   });
 
   it('ohne Profilwert gilt kontrolliert der Spiegel — kein eigener Entscheidungspfad', () => {

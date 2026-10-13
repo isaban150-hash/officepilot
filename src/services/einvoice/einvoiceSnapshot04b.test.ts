@@ -10,6 +10,7 @@
  * Kein XML, keine Serialisierung, keine Codelisten — das kommt in 04C.
  * Neutrale Beispieldaten, kein Netzwerk.
  */
+// FINANZ-CORE-01A (KUN-09) — USt-IdNr. und Leitweg-ID in gültiger Schreibweise; die Kundenpflege prüft sie jetzt.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   buildInvoiceDraftForType,
@@ -77,9 +78,9 @@ function testKunde(): Customer {
       email: 'buero@az-testbau.invalid',
       phone: '0521 4711',
       countryCode: 'DE',
-      vatId: 'DE-TEST-A',
+      vatId: 'DE811111111',
       buyerReferenceDefault: 'TEST-BUYER-REF-A',
-      leitwegId: 'TEST-LEITWEG-A',
+      leitwegId: '04011000-11111-11',
     },
     { allowDuplicate: true },
   );
@@ -188,9 +189,9 @@ describe('C — Kundenstamm', () => {
   it('T3/T4/T5/T6: die vier neuen Angaben werden gespeichert', () => {
     const kunde = testKunde();
     expect(kunde.countryCode).toBe('DE');
-    expect(kunde.vatId).toBe('DE-TEST-A');
+    expect(kunde.vatId).toBe('DE811111111');
     expect(kunde.buyerReferenceDefault).toBe('TEST-BUYER-REF-A');
-    expect(kunde.leitwegId).toBe('TEST-LEITWEG-A');
+    expect(kunde.leitwegId).toBe('04011000-11111-11');
   });
 
   it('ein nicht gepflegtes Feld bleibt abwesend statt leer', () => {
@@ -205,9 +206,9 @@ describe('C — Kundenstamm', () => {
     const push = buildCustomerCloudPushPayload(kunde) as { payload: Record<string, unknown> };
     const zurueck = parseCustomerCloudPayload(push.payload);
     expect(zurueck?.countryCode).toBe('DE');
-    expect(zurueck?.vatId).toBe('DE-TEST-A');
+    expect(zurueck?.vatId).toBe('DE811111111');
     expect(zurueck?.buyerReferenceDefault).toBe('TEST-BUYER-REF-A');
-    expect(zurueck?.leitwegId).toBe('TEST-LEITWEG-A');
+    expect(zurueck?.leitwegId).toBe('04011000-11111-11');
   });
 });
 
@@ -217,17 +218,17 @@ describe('D — vom Kundenstamm in den Entwurf', () => {
     const billing = billingFromCustomer(kunde);
     expect(billing.buyerReference).toBe('TEST-BUYER-REF-A');
     expect(billing.countryCode).toBe('DE');
-    expect(billing.vatId).toBe('DE-TEST-A');
-    expect(billing.leitwegId).toBe('TEST-LEITWEG-A');
+    expect(billing.vatId).toBe('DE811111111');
+    expect(billing.leitwegId).toBe('04011000-11111-11');
   });
 
   it('ohne Standard belegt die Leitweg-ID vor — der B2G-Fall', () => {
     const created = createCustomer(
-      { name: 'Amt für Hochbau', leitwegId: 'L-991-XYZ' },
+      { name: 'Amt für Hochbau', leitwegId: '991-33333-33' },
       { allowDuplicate: true },
     );
     if (!created.success) throw new Error(created.errorKey);
-    expect(billingFromCustomer(created.customer).buyerReference).toBe('L-991-XYZ');
+    expect(billingFromCustomer(created.customer).buyerReference).toBe('991-33333-33');
   });
 
   it('ohne beides bleibt die Käuferreferenz leer — kein Fantasiewert', () => {
@@ -246,9 +247,9 @@ describe('D — vom Kundenstamm in den Entwurf', () => {
       const draft = buildInvoiceDraftForType(VID, testSetup, type);
       expect(draft, type).not.toBeNull();
       expect(draft!.customerBilling.countryCode, type).toBe('DE');
-      expect(draft!.customerBilling.vatId, type).toBe('DE-TEST-A');
+      expect(draft!.customerBilling.vatId, type).toBe('DE811111111');
       expect(draft!.customerBilling.buyerReference, type).toBe('TEST-BUYER-REF-A');
-      expect(draft!.customerBilling.leitwegId, type).toBe('TEST-LEITWEG-A');
+      expect(draft!.customerBilling.leitwegId, type).toBe('04011000-11111-11');
       expect(draft!.currencyCode, type).toBe(INVOICE_CURRENCY_CODE);
     }
   });
@@ -278,7 +279,7 @@ describe('D — vom Kundenstamm in den Entwurf', () => {
     // Der Stammsatz bleibt unberührt.
     expect(kunde.buyerReferenceDefault).toBe('TEST-BUYER-REF-A');
     // Und alles andere am Empfänger bleibt stehen.
-    expect(geaendert.customerBilling.vatId).toBe('DE-TEST-A');
+    expect(geaendert.customerBilling.vatId).toBe('DE811111111');
     expect(geaendert.customerBilling.name).toBe('AZ Testbau GmbH');
   });
 });
@@ -302,9 +303,9 @@ describe('E — der freigegebene Beleg friert ein', () => {
 
     expect(invoice.currencyCode, 'T2 Währung').toBe('EUR');
     expect(invoice.customerSnapshot?.buyerReference, 'T10').toBe('TEST-BUYER-REF-A');
-    expect(invoice.customerSnapshot?.vatId, 'T11').toBe('DE-TEST-A');
+    expect(invoice.customerSnapshot?.vatId, 'T11').toBe('DE811111111');
     expect(invoice.customerSnapshot?.countryCode, 'T12').toBe('DE');
-    expect(invoice.customerSnapshot?.leitwegId).toBe('TEST-LEITWEG-A');
+    expect(invoice.customerSnapshot?.leitwegId).toBe('04011000-11111-11');
     expect(invoice.companySnapshot?.vatId, 'T13').toBe('DE111111111');
     expect(invoice.companySnapshot?.iban, 'T13').toBe('DE89370400440532013000');
   });
@@ -315,21 +316,21 @@ describe('E — der freigegebene Beleg friert ein', () => {
     const alt = finalisiere(buildInvoiceDraftForType(VID, testSetup, 'rechnung')!);
 
     const geaendert = updateCustomer(kunde.id, {
-      vatId: 'DE-TEST-B',
+      vatId: 'DE822222222',
       buyerReferenceDefault: 'TEST-BUYER-REF-B',
-      leitwegId: 'TEST-LEITWEG-B',
+      leitwegId: '04011000-22222-22',
     });
     expect(geaendert.success, JSON.stringify(geaendert)).toBe(true);
 
     // T14 — der bereits freigegebene Beleg trägt weiterhin die A-Werte.
-    expect(alt.customerSnapshot?.vatId).toBe('DE-TEST-A');
+    expect(alt.customerSnapshot?.vatId).toBe('DE811111111');
     expect(alt.customerSnapshot?.buyerReference).toBe('TEST-BUYER-REF-A');
-    expect(alt.customerSnapshot?.leitwegId).toBe('TEST-LEITWEG-A');
+    expect(alt.customerSnapshot?.leitwegId).toBe('04011000-11111-11');
 
     // T15 — ein neuer Entwurf übernimmt die B-Werte.
     hydrateVorgangStore([vorgangMit(geaendert.success ? geaendert.customer : kunde)]);
     const neu = buildInvoiceDraftForType(VID, testSetup, 'rechnung')!;
-    expect(neu.customerBilling.vatId).toBe('DE-TEST-B');
+    expect(neu.customerBilling.vatId).toBe('DE822222222');
     expect(neu.customerBilling.buyerReference).toBe('TEST-BUYER-REF-B');
   });
 

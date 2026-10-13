@@ -8,7 +8,7 @@ import {
 import { filterActiveItems, getInboxItems } from '../inboxService';
 import {
   getAllInvoiceOverview,
-  getOpenInvoices,
+  getOutstandingInvoices,
   summarizeInvoiceOverview,
 } from '../invoiceOverviewService';
 import { getKnowledgeFacts } from '../knowledgeService';
@@ -33,7 +33,8 @@ export function buildBrainSnapshot(referenceDate: string = getTodayIso()): Brain
   const invoiceOverview = getAllInvoiceOverview(referenceDate);
   const invoiceTotals = summarizeInvoiceOverview(invoiceOverview);
   const openInvoices = limit(
-    getOpenInvoices(referenceDate).map((item) => ({
+    // FINANZ-CORE-01A (ZAH-08) — teilbezahlte und überfällige Rechnungen sind offen; der Status steht je Eintrag dabei.
+    getOutstandingInvoices(referenceDate).map((item) => ({
       number: item.invoice.number,
       vorgangTitle: item.vorgangTitle,
       customer: item.customer,

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -60,8 +60,13 @@ describe('Storno-Wahrheit im Schema', () => {
   });
 });
 
-describe('cancel_workspace_invoice', () => {
-  it('C: nur Schlussrechnungen sind stornierbar', () => {
+/*
+ * FINANZ-CORE-01A — dieser Block prüft die HISTORISCHE Fassung aus 01C (die Datei ändert sich nie).
+ * Er allein gab Scheinsicherheit: „nur Schlussrechnungen" gilt seit 01B nicht mehr. Die geltende
+ * Fassung prüft der Block „geltende Fassung" unten.
+ */
+describe('cancel_workspace_invoice (historische Fassung 01C)', () => {
+  it('C: in 01C waren nur Schlussrechnungen stornierbar', () => {
     expect(cancelFn).toContain("v_existing.invoice_type is distinct from 'schluss'");
     expect(cancelFn).toContain('invoice_cancel_type_not_supported');
   });
@@ -228,5 +233,57 @@ describe('Stornogründe erreichen den Aufrufer benennbar', () => {
     expect(classifyInvoiceCloudErrorForTests({ message: 'invoice_final_already_exists' }).code).toBe(
       'final_invoice_exists',
     );
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* FINANZ-CORE-01A — die geltende Fassung (letzte Definition über alle Migrationen) */
+/* -------------------------------------------------------------------------- */
+
+const geltend = (() => {
+  try {
+    const verzeichnis = resolve(process.cwd(), 'supabase/migrations');
+    let letzte = '';
+    for (const datei of readdirSync(verzeichnis).filter((name) => name.endsWith('.sql')).sort()) {
+      const inhalt = readFileSync(resolve(verzeichnis, datei), 'utf8').replace(/\r\n/g, '\n');
+      const start = inhalt.lastIndexOf('create or replace function public.cancel_workspace_invoice(');
+      if (start < 0) continue;
+      const ende = inhalt.indexOf('$$;', inhalt.indexOf('as $$', start) + 5);
+      letzte = inhalt.slice(start, ende);
+    }
+    return letzte;
+  } catch {
+    return '';
+  }
+})();
+
+describe('cancel_workspace_invoice — geltende Fassung', () => {
+  it('G1: Rechnung, Teilrechnung, Abschlag und Schlussrechnung sind stornierbar', () => {
+    expect(geltend).toContain("invoice_type not in ('rechnung', 'teilrechnung', 'abschlag', 'schluss')");
+    expect(geltend).toContain('invoice_cancel_type_not_supported');
+  });
+
+  it('G2: Finanzautorisierung vor allem anderen; Replay vor jeder Prüfung', () => {
+    const auth = geltend.indexOf('assert_financial_action_allowed(p_workspace_id)');
+    const replay = geltend.indexOf('v_existing.cancelled_at is not null');
+    const typ = geltend.indexOf("invoice_type not in ('rechnung', 'teilrechnung', 'abschlag', 'schluss')");
+    expect(auth).toBeGreaterThan(-1);
+    expect(replay).toBeGreaterThan(auth);
+    expect(typ).toBeGreaterThan(replay);
+  });
+
+  it('G3: nach wirksamer Schlussrechnung kein früherer Beleg (SQL-01); aktive Zahlung sperrt', () => {
+    expect(geltend).toContain('invoice_cancel_final_invoice_exists');
+    expect(geltend).toContain('invoice_cancel_has_active_payments');
+  });
+
+  it('G4: kein Storno während eines Versands; kein internes bei unklarem Ausgang (SQL-07)', () => {
+    expect(geltend).toContain('invoice_cancel_delivery_in_progress');
+    expect(geltend).toContain('invoice_cancel_delivery_uncertain');
+  });
+
+  it('G5: der Korrekturbeleg bekommt eine eigene Nummer aus dem Rechnungskreis (SQL-11)', () => {
+    expect(geltend).toContain('workspace_invoice_sequence_floor(p_workspace_id, v_correction_year, v_correction_locked)');
+    expect(geltend).toContain('correction_number = v_correction_number');
   });
 });

@@ -7,6 +7,7 @@ import { useApp } from '../context/AppContext';
 import { getInvoiceNumberSequenceSnapshot } from '../services/invoiceNumberService';
 import { createDefaultSetupWizardDraft } from '../types/setup';
 import { syncCompanyDataAfterSetup } from '../services/sync/syncUiService';
+import { ensureInvoiceNumberStartOnServer } from '../services/invoice/invoiceNumberStartService';
 
 export function SetupPage() {
   const { setup, companyProfile, completeSetupWizard, translate, showToast } = useApp();
@@ -69,6 +70,12 @@ export function SetupPage() {
              * nicht auf — der Hinweis „noch nicht gesichert“ bleibt sichtbar.
              */
             void syncCompanyDataAfterSetup();
+            /*
+             * FINANZ-CORE-01A (RE-02) — die angegebene letzte Rechnungsnummer
+             * erreicht den Server, bevor er die erste Nummer vergibt. Gelingt
+             * es hier nicht, holt die erste Freigabe es nach.
+             */
+            void ensureInvoiceNumberStartOnServer().catch(() => undefined);
             showToast(translate('setup.completed'));
             navigate('/', { replace: true });
           }

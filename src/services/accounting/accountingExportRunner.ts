@@ -27,6 +27,7 @@ import { buildAccountingExportPackage } from './accountingExportPackageService';
 import { getWorkspaceStoreSnapshot } from '../workspace/workspaceStore';
 import { collectSteuerberaterMonthFindings, getSteuerberaterHandoverStatus } from '../steuerberaterOverviewService';
 import type { AccountingExportReadiness } from './accountingExportGateService';
+import { pdfLoadFailureDetail } from './accountingExportPdfCheck';
 
 export type AccountingExportOutcome =
   | { outcome: 'exported'; fileName: string; documentCount: number; manifest: Record<string, unknown> }
@@ -131,19 +132,22 @@ async function defaultLoadersFor(
   const invoiceById = new Map(data.invoices.map((entry) => [entry.invoice.id, entry.invoice]));
   const refById = new Map(data.fileRefs.map((ref) => [ref.id, ref]));
 
+  // FINANZ-CORE-01A (BUH-05) — der konkrete Prüfgrund reist mit (siehe `pdfLoadFailureDetail`).
+  const pdfFehler = pdfLoadFailureDetail;
+
   return {
     invoicePdf: async (invoiceId) => {
       const invoice = invoiceById.get(invoiceId);
       if (!invoice) throw new Error('invoice_not_found');
       const result = await generateApprovedInvoicePdf(invoice);
-      if (!result.ok) throw new Error(`pdf_${result.reason}`);
+      if (!result.ok) throw new Error(pdfFehler(result));
       return result.bytes;
     },
     invoiceCorrectionPdf: async (invoiceId) => {
       const invoice = invoiceById.get(invoiceId);
       if (!invoice) throw new Error('invoice_not_found');
       const result = await generateInvoiceCorrectionPdf(invoice);
-      if (!result.ok) throw new Error(`pdf_${result.reason}`);
+      if (!result.ok) throw new Error(pdfFehler(result));
       return result.bytes;
     },
     fileRefBytes: async (fileRefId) => {

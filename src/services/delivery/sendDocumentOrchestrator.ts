@@ -10,6 +10,7 @@ import { deliveryIdentityDocumentId, isInvoiceDeliveryIdentity, type DeliveryDoc
 import { getDocumentById } from '../documentService';
 import { validateFinalizedInvoiceForPdf } from '../invoiceValidationService';
 import { checkInvoiceOutput } from '../invoice/invoiceOutputGuard';
+import { toBusinessDay } from '../businessDateService';
 import type { VorgangInvoice } from '../../types/models';
 import { isDeliveryErrorCategory, isDeliveryStatus, isValidRecipientEmail, normalizeRecipientEmail } from './documentDeliveryContract';
 import {
@@ -231,7 +232,11 @@ export function applyAcceptedDeliveryToLocalInvoice(vorgangId: string | null, in
       : undefined;
   const updated = updateInvoiceSentFields(vorgangId, invoice.id, {
     status: 'versendet',
-    sentAt: (delivery.providerAcceptedAt ?? delivery.requestedAt).slice(0, 10),
+    /*
+     * FINANZ-CORE-01A (AUS-15) — der Geschäftstag (Europe/Berlin) wie auf dem Server. Der UTC-Tag
+     * gab einem Versand zwischen 0 und 2 Uhr bis zum nächsten Abgleich das Datum des Vortags.
+     */
+    sentAt: toBusinessDay(delivery.providerAcceptedAt ?? delivery.requestedAt),
     sentVia: 'email',
     sentSource: 'officepilot',
     sentDeliveryId: delivery.id,

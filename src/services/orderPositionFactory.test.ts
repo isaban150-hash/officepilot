@@ -25,6 +25,31 @@ describe('parseOfferAmount', () => {
   it('returns 0 for unparseable text', () => {
     expect(parseOfferAmount('unbekannt')).toBe(0);
   });
+
+  /*
+   * FINANZ-CORE-01A (ANG-04) — „8.500,- €" ergab bisher 8,5 und „8.500,00 €
+   * netto" ebenfalls: ein um den Faktor 1000 zu niedriger Auftragspreis ohne
+   * Hinweis. Unklares ergibt jetzt 0 und damit „Preis fehlt".
+   */
+  it.each([
+    ['8.500,- €', 8500],
+    ['8.500,-- EUR', 8500],
+    ['8.500,00 € netto', 8500],
+    ['8.500,00 € zzgl. MwSt.', 8500],
+    ['ca. 12.345,67 Euro brutto', 12345.67],
+    ['€ 1.250.000', 1250000],
+    ['8500.50', 8500.5],
+    ['950', 950],
+  ])('liest %s als %s', (text, expected) => {
+    expect(parseOfferAmount(text)).toBe(expected);
+  });
+
+  it.each([['8.500.-'], ['8.500 € laut Angebot vom 3.9.'], ['ab 8.500 €'], ['8,5 Tsd. €'], ['8.50.0']])(
+    'liest %s nicht als Betrag (0 → Hinweis „Preis fehlt")',
+    (text) => {
+      expect(parseOfferAmount(text)).toBe(0);
+    },
+  );
 });
 
 describe('buildOrderPositionsFromInbox', () => {

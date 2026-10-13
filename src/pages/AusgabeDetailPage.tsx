@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { releaseReconciliationForPayment } from '../services/bank/bankReconciliationStore';
+import { persistAll } from '../services/persistenceService';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ExpenseAllocationDialog } from '../components/expenses/ExpenseAllocationDialog';
 import { ExpenseCancelDialog } from '../components/expenses/ExpenseCancelDialog';
@@ -137,7 +138,8 @@ export function AusgabeDetailPage() {
      * im selben Augenblick auf dem Gerät, damit die Bankbewegung nicht bis
      * zum nächsten Abzug weiter „Zugeordnet" zeigt.
      */
-    releaseReconciliationForPayment(paymentId);
+    // FINANZ-CORE-01A (ZAH-20) — die Freigabe auch dauerhaft, nicht nur im Arbeitsspeicher.
+    if (releaseReconciliationForPayment(paymentId) > 0) persistAll();
     setExpense(result.expense);
     showToast(translate('expense.payment.removedSuccess'));
   };
@@ -314,6 +316,9 @@ export function AusgabeDetailPage() {
           onChanged={() => setAccountingToken((value) => value + 1)}
           translate={translate}
           testIdPrefix="ausgabe"
+          // FINANZ-CORE-01A (WEISS-Nacharbeit N06) — die Steuer der Kontierung folgt diesem Beleg.
+          sourceTaxTreatment={expense.taxStatus}
+          onClarifyTax={darfFinanzen && !cancelled ? () => setIsEditing(true) : undefined}
         />
       </DetailSection>
 

@@ -26,7 +26,7 @@
  *    Zahlungen stornierter Belege werden nicht als aktiv gefuehrt.
  */
 import type { Expense, ExpensePayment } from '../../types/expense';
-import type { CompanyDocument, InboxItem, InvoicePayment, PaymentMethod, VorgangInvoice } from '../../types/models';
+import type { CompanyDocument, InboxItem, InvoicePayment, PaymentMethod, TaxStatus, VorgangInvoice } from '../../types/models';
 import type { DocumentFileRef } from '../../types/documentFileRef';
 import type { EmployeePayment, EmployeePaymentKind, EmployeePaymentMethod } from '../../types/employee';
 import { isFinalizedInvoice } from '../invoiceArchiveService';
@@ -37,6 +37,10 @@ import { isEntitySyncActive } from '../sync/syncMetaService';
 import { isCloudSyncBlockedMockExpenseId } from '../expense/expenseCloudSyncService';
 import { isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
 import { negateMoney, resolveCorrectionIssueDate } from '../invoice/invoiceCorrectionModel';
+import { fromCents, sumCents, toCents } from '../invoiceMoney';
+import { getTaxRateForStatus } from '../invoiceTaxService';
+import { usesAbschlagDeductions } from '../invoiceTypeService';
+import { toBusinessDay } from '../businessDateService';
 
 export type MonatsmappeBelegart = 'ausgangsrechnung' | 'eingangsbeleg' | 'rechnungsstorno' | 'ausgabenstorno';
 export type MonatsmappeBelegStatus = 'aktiv' | 'storniert' | 'storno';
@@ -77,6 +81,23 @@ export interface MonatsmappeBeleg {
    * Rückwärtskompatibilität alter Abschlüsse (Fingerprint v1) mitgeführt.
    */
   spaeterStorniertAm?: string;
+  /**
+   * FINANZ-CORE-01A (BUH-10) — Leistungszeitraum der Ausgangsrechnung (`JJJJ-MM-TT` bzw.
+   * `JJJJ-MM-TT bis JJJJ-MM-TT`), so wie er auf dem Beleg steht.
+   */
+  leistungszeitraum?: string;
+  /**
+   * FINANZ-CORE-01A (BUH-10) — der Skontoabzug zum Monatsende: Die Rechnung ist durch eine
+   * fristgerechte Zahlung abzüglich Skonto ausgeglichen. Bisher glich das Skonto die Rechnung
+   * still aus; die Minderung des Entgelts (§ 17 UStG) war im Paket nicht erkennbar.
+   */
+  skontoAbzug?: number;
+  /**
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N06) — der Steuerstatus des Belegs (Rechnung bzw.
+   * Ausgabe). Die Kontierung folgt ihm; Übersicht, Export und Monatsabschluss werten eine
+   * Bestätigung mit anderer Steuer als „zu prüfen". Nicht Teil des Fingerprints.
+   */
+  steuerstatus?: TaxStatus;
 }
 
 /**
@@ -249,9 +270,13 @@ export function resolveInvoiceStornoDatum(invoice: VorgangInvoice): string | nul
   return resolveCorrectionIssueDate({ cancelledAt: invoice.cancelledAt, cancelReason: invoice.cancelReason ?? '' });
 }
 
-/** Kanonisches Stornodatum einer Ausgabe — nur `cancelledAt`, nie ein technisches Datum. */
+/**
+ * Kanonisches Stornodatum einer Ausgabe — nur `cancelledAt`, nie ein technisches Datum.
+ * FINANZ-CORE-01A (BUH-13) — der Geschäftstag (Europe/Berlin): Ein Storno um 0:30 Uhr am
+ * Monatsersten gehörte nach dem UTC-Tag in den Vormonat.
+ */
 export function resolveExpenseStornoDatum(expense: Expense): string | null {
-  return expense.cancelledAt ? expense.cancelledAt.slice(0, 10) : null;
+  return expense.cancelledAt ? toBusinessDay(expense.cancelledAt) : null;
 }
 
 /** Filesystem-sicherer Namensteil: ASCII, keine Pfadzeichen, begrenzt. */
@@ -302,17 +327,72 @@ function isInvoiceCancelledAsOf(invoice: VorgangInvoice, monthEnd: string): bool
   return Boolean(stornoDatum) && stornoDatum! <= monthEnd;
 }
 
+/**
+ * FINANZ-CORE-01A (BUH-01) — die Buchungsbeträge einer Rechnung.
+ *
+ * Eine Schlussrechnung mit Abschlagsabzug weist die Gesamtleistung aus und
+ * setzt die Abschläge ab: `subtotal` ist das volle Netto, `amount` aber der
+ * Restbetrag. Bisher wurde daraus „Steuer = Brutto − Netto" — negativ —, und
+ * der Umsatz stand doppelt im Paket, weil jeder Abschlag bereits ein eigener
+ * Beleg ist. Gebucht wird deshalb der Rest: Netto und Umsatzsteuer abzüglich
+ * der Abschläge, beides aus deren eigenen Belegen. Über alle Belege eines
+ * Auftrags ergeben sich so genau einmal Umsatz und Umsatzsteuer.
+ */
+function invoiceBookingAmounts(invoice: VorgangInvoice): { netto: number; steuer: number; brutto: number } {
+  const brutto = Number(invoice.amount ?? 0);
+  const deductions = usesAbschlagDeductions(invoice.type) ? (invoice.previousAbschlagDeductions ?? []) : [];
+  if (deductions.length === 0) {
+    const netto = Number(invoice.subtotal ?? 0);
+    return { netto, steuer: Math.round((brutto - netto) * 100) / 100, brutto };
+  }
+  const bruttoCents = toCents(brutto);
+  if (deductions.every((entry) => Number.isFinite(entry.subtotal))) {
+    const nettoCents = toCents(Number(invoice.subtotal ?? 0)) - sumCents(deductions.map((entry) => toCents(entry.subtotal)));
+    return { netto: fromCents(nettoCents), steuer: fromCents(bruttoCents - nettoCents), brutto };
+  }
+  // Altbestand ohne Netto im Abzug: die Steuer des Rests über den Satz der Rechnung.
+  const rate = getTaxRateForStatus(invoice.taxStatus);
+  const steuerCents = rate > 0 ? Math.round((bruttoCents * rate) / (100 + rate)) : 0;
+  return { netto: fromCents(bruttoCents - steuerCents), steuer: fromCents(steuerCents), brutto };
+}
+
+/** FINANZ-CORE-01A (BUH-01) — Hinweis für den Steuerberater: Gesamtleistung und Abzug. */
+function finalInvoiceDeductionHint(invoice: VorgangInvoice): string | undefined {
+  const deductions = usesAbschlagDeductions(invoice.type) ? (invoice.previousAbschlagDeductions ?? []) : [];
+  if (deductions.length === 0) return undefined;
+  const nummern = deductions.map((entry) => entry.invoiceNumber).filter(Boolean).join(', ');
+  const netto = Number(invoice.subtotal ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `Schlussrechnung über netto ${netto} €; gebucht ist der Rest nach Abzug der Abschläge ${nummern}`;
+}
+
+/** FINANZ-CORE-01A (BUH-10) — Leistungszeitraum, wie der Beleg ihn trägt. */
+function invoiceLeistungszeitraum(invoice: VorgangInvoice): string | undefined {
+  const von = (invoice.servicePeriodFrom ?? '').trim().slice(0, 10);
+  const bis = (invoice.servicePeriodTo ?? '').trim().slice(0, 10);
+  if (!von && !bis) return undefined;
+  if (!von || !bis || von === bis) return von || bis;
+  return `${von} bis ${bis}`;
+}
+
 function buildInvoiceBeleg(invoice: VorgangInvoice): MonatsmappeBeleg {
   const monthEnd = monthEndOf(monthKeyOf(resolveInvoiceBelegDatum(invoice)));
   // 02B — ein Storno nach dem Monatsende ist ein Vorgang des Stornomonats.
   const cancelled = isInvoiceCancelledAsOf(invoice, monthEnd);
   const summary = calculatePaymentSummary(invoiceAsOf(invoice, monthEnd, cancelled), monthEnd);
-  const netto = Number(invoice.subtotal ?? 0);
-  const brutto = Number(invoice.amount ?? 0);
+  const { netto, steuer, brutto } = invoiceBookingAmounts(invoice);
   const base = `${safeFileNamePart(invoice.number)}_${shortId(invoice.id)}`;
   // Die Korrektur-PDF gehoert in die Periode des Stornos (siehe buildInvoiceStornoBeleg).
   const documents: MonatsmappeDocumentSource[] = [{ kind: 'invoice_pdf', fileName: `${base}.pdf` }];
   const stornoDatum = resolveInvoiceStornoDatum(invoice);
+  const leistungszeitraum = invoiceLeistungszeitraum(invoice);
+  /*
+   * FINANZ-CORE-01A (BUH-10) — ausgeglichen (nichts offen), aber weniger gezahlt als berechnet:
+   * Das ist der Skontoabzug (getOpenAmount gleicht nur über eine fristgerechte Skontozahlung aus).
+   */
+  const skontoAbzug =
+    !cancelled && summary.openAmount <= 0 && summary.paidAmount > 0
+      ? fromCents(Math.max(0, toCents(Number(invoice.amount ?? 0)) - toCents(summary.paidAmount)))
+      : 0;
   return {
     belegart: 'ausgangsrechnung',
     id: invoice.id,
@@ -320,7 +400,7 @@ function buildInvoiceBeleg(invoice: VorgangInvoice): MonatsmappeBeleg {
     datum: resolveInvoiceBelegDatum(invoice),
     gegenpartei: invoiceGegenpartei(invoice),
     netto,
-    steuer: Math.round((brutto - netto) * 100) / 100,
+    steuer,
     brutto,
     status: cancelled ? 'storniert' : 'aktiv',
     zahlungsstatus: cancelled ? 'storniert' : summary.status,
@@ -331,9 +411,12 @@ function buildInvoiceBeleg(invoice: VorgangInvoice): MonatsmappeBeleg {
       ? invoice.cancellationKind === 'correction'
         ? `Storniert am ${stornoDatum}, Korrektur ${invoice.correctionNumber ?? `zu ${invoice.number}`}`
         : `Storniert am ${stornoDatum}`
-      : undefined,
+      : finalInvoiceDeductionHint(invoice),
     offenerBetrag: cancelled ? 0 : summary.openAmount,
     ...(!cancelled && stornoDatum ? { spaeterStorniertAm: stornoDatum } : {}),
+    ...(leistungszeitraum ? { leistungszeitraum } : {}),
+    ...(skontoAbzug > 0 ? { skontoAbzug } : {}),
+    ...(invoice.taxStatus ? { steuerstatus: invoice.taxStatus } : {}),
   };
 }
 
@@ -350,8 +433,10 @@ function buildInvoiceStornoBeleg(invoice: VorgangInvoice, stornoDatum: string): 
    */
   const isCorrection = invoice.cancellationKind === 'correction';
   const correctionLabel = invoice.correctionNumber ?? `Korrektur-${invoice.number}`;
-  const netto = negateMoney(Number(invoice.subtotal ?? 0));
-  const brutto = negateMoney(Number(invoice.amount ?? 0));
+  // FINANZ-CORE-01A (BUH-01) — dieselben Buchungsbeträge wie der Originalbeleg, nur negiert.
+  const original = invoiceBookingAmounts(invoice);
+  const netto = negateMoney(original.netto);
+  const brutto = negateMoney(original.brutto);
   const base = `${safeFileNamePart(invoice.number)}_${shortId(invoice.id)}`;
   return {
     belegart: 'rechnungsstorno',
@@ -369,7 +454,14 @@ function buildInvoiceStornoBeleg(invoice: VorgangInvoice, stornoDatum: string): 
     documents: isCorrection ? [{ kind: 'invoice_correction_pdf', fileName: `Korrektur_zu_${base}.pdf` }] : [],
     hinweis: isCorrection
       ? `Rechnungskorrektur zu ${invoice.number} vom ${resolveInvoiceBelegDatum(invoice)}`
-      : `Interner Storno zu ${invoice.number} vom ${resolveInvoiceBelegDatum(invoice)} (kein Korrekturbeleg)`,
+      : invoice.cancellationKind === 'internal'
+        ? `Interner Storno zu ${invoice.number} vom ${resolveInvoiceBelegDatum(invoice)} (kein Korrekturbeleg)`
+        : /*
+           * FINANZ-CORE-01A (STO-18) — Altstorno ohne erfasste Art (vor 01B). Nicht als „intern"
+           * ausgeben: Die Rechnung kann versendet gewesen sein.
+           */
+          `Storno zu ${invoice.number} vom ${resolveInvoiceBelegDatum(invoice)} (Altbestand, Art nicht erfasst – bitte prüfen, ob ein Korrekturbeleg nötig ist)`,
+    ...(invoice.taxStatus ? { steuerstatus: invoice.taxStatus } : {}),
   };
 }
 
@@ -502,6 +594,7 @@ function buildExpenseBeleg(expense: Expense, input: MonatsmappeInput): Monatsmap
     hinweis: resolveExpenseBelegHinweis(expense, Boolean(ref), cancelled),
     offenerBetrag: cancelled ? 0 : summary.openAmount,
     ...(!cancelled && expense.status === 'storniert' && stornoDatum ? { spaeterStorniertAm: stornoDatum } : {}),
+    ...(expense.taxStatus ? { steuerstatus: expense.taxStatus } : {}),
   };
 }
 
@@ -522,6 +615,7 @@ function buildExpenseStornoBeleg(expense: Expense, stornoDatum: string): Monatsm
     documentStatus: 'none',
     documents: [],
     hinweis: `Storno zu Eingangsbeleg vom ${expense.issueDate.slice(0, 10)}${expense.cancelReason ? ` — ${expense.cancelReason}` : ''}`,
+    ...(expense.taxStatus ? { steuerstatus: expense.taxStatus } : {}),
   };
 }
 
@@ -601,7 +695,8 @@ export function buildMitarbeiterZahlungen(
     if (gesehen.has(payment.id)) continue;
     gesehen.add(payment.id);
     const zahlungsdatum = (payment.paymentDate ?? '').slice(0, 10);
-    const stornoDatum = payment.reversedAt ? payment.reversedAt.slice(0, 10) : undefined;
+    // FINANZ-CORE-01A (BUH-13) — die Rücknahme ist ein Zeitstempel; es zählt der Geschäftstag.
+    const stornoDatum = payment.reversedAt ? toBusinessDay(payment.reversedAt) : undefined;
     const grund = (payment.reversalReason ?? '').trim();
     const gemeinsam = {
       zahlungId: payment.id,

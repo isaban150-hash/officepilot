@@ -49,6 +49,18 @@ export type WorkspaceInvoiceCloudErrorCode =
   | 'cancel_not_finalized'
   | 'cancel_has_active_payments'
   | 'cancel_reason_required'
+  /**
+   * FINANZ-CORE-01A (SQL-01) — der Beleg ist in einer wirksamen
+   * Schlussrechnung abgerechnet; zuerst muss sie storniert werden.
+   */
+  | 'cancel_final_invoice_exists'
+  /**
+   * FINANZ-CORE-01A (RE-02) — der Nummernkreis des Jahres ist schon benutzt;
+   * eine Startnummer verschiebt ihn nie.
+   */
+  | 'number_start_locked'
+  /** FINANZ-CORE-01A (RE-02) — der Server kennt die Funktion noch nicht (Migration nicht angewendet). */
+  | 'number_start_unsupported'
   /*
    * RECHNUNGSINTEGRITAET-03B — die fachlichen Befunde der serverseitigen
    * Rechnungspruefung. Alle sind fail-closed: Es wurde keine Rechnung
@@ -61,6 +73,21 @@ export type WorkspaceInvoiceCloudErrorCode =
   | 'tax_status_mismatch'
   | 'totals_mismatch'
   | 'customer_mismatch'
+  /**
+   * FINANZ-CORE-01A (RE-09) — dem Firmenstand des Belegs fehlen Pflichtangaben
+   * (Anschrift, Steuernummer oder USt-IdNr.). Vor dem Insert: nichts geschrieben.
+   */
+  | 'company_incomplete'
+  /** FINANZ-CORE-01A (SQL-15) — Rechnungsdatum oder Leistungszeitraum ungültig bzw. in der Zukunft. */
+  | 'date_invalid'
+  /** FINANZ-CORE-01A (SQL-09) — die Abschlagsnummer ist im Vorgang schon vergeben. */
+  | 'abschlag_number_taken'
+  /**
+   * FINANZ-CORE-01A (SQL-07) — für diese Rechnung läuft gerade ein E-Mail-Versand
+   * bzw. sein Ausgang ist unklar. Nichts storniert.
+   */
+  | 'cancel_delivery_in_progress'
+  | 'cancel_delivery_uncertain'
   | 'not_found'
   /**
    * R1-SEC-01 — der Server hat die Finanzaktion nicht erlaubt (Rolle, Freigabe
@@ -262,6 +289,37 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
    * abgelehnt, nichts geschrieben und keine Nummer verbraucht. Deshalb
    * dieselbe Klasse statt einer zweiten Fehler-UX.
    */
+  /*
+   * FINANZ-CORE-01A (RE-09, SQL-09, SQL-13, SQL-15) — die neuen Prüfbefunde der
+   * Freigabe. Alle laufen vor dem Insert: nichts geschrieben, keine Nummer
+   * verbraucht. Unbenannt liefen sie als „unbekannt" und sperrten den Entwurf.
+   */
+  if (message.includes('invoice_company_incomplete') || message.includes('invoice_company_tax_id_missing')) {
+    return new WorkspaceInvoiceCloudError(message, 'company_incomplete', false);
+  }
+  if (
+    message.includes('invoice_issue_date_invalid') ||
+    message.includes('invoice_issue_date_in_future') ||
+    message.includes('invoice_service_period_invalid')
+  ) {
+    return new WorkspaceInvoiceCloudError(message, 'date_invalid', false);
+  }
+  if (message.includes('invoice_abschlag_number_taken')) {
+    return new WorkspaceInvoiceCloudError(message, 'abschlag_number_taken', false);
+  }
+  if (message.includes('invoice_legal_notice_missing')) {
+    return new WorkspaceInvoiceCloudError(message, 'tax_status_mismatch', false);
+  }
+  if (message.includes('invoice_deductions_exceed_total')) {
+    return new WorkspaceInvoiceCloudError(message, 'totals_mismatch', false);
+  }
+  // FINANZ-CORE-01A (SQL-07) — Storno gegen laufenden oder unklaren Versand.
+  if (message.includes('invoice_cancel_delivery_in_progress')) {
+    return new WorkspaceInvoiceCloudError(message, 'cancel_delivery_in_progress', false);
+  }
+  if (message.includes('invoice_cancel_delivery_uncertain')) {
+    return new WorkspaceInvoiceCloudError(message, 'cancel_delivery_uncertain', false);
+  }
   if (
     message.includes('invoice_position_mismatch') ||
     message.includes('invoice_positions_missing') ||
@@ -276,8 +334,15 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
   if (
     message.includes('invoice_totals_mismatch') ||
     message.includes('invoice_deductions_mismatch') ||
+    // FINANZ-CORE-01A (WEISS N02/D1) — ein abgezogener Abschlag ist auf dem Server nicht beglichen.
+    message.includes('invoice_abschlag_unpaid') ||
+    // WEISS-Recheck N02-R1 — gezahlt/Skonto der Abzüge passen nicht zu den gebuchten Zahlungen.
+    message.includes('invoice_abschlag_settlement_mismatch') ||
     message.includes('invoice_fixed_amount_invalid') ||
     message.includes('invoice_fixed_amount_with_positions') ||
+    // FINANZ-CORE-01A (RE-04) — Pauschalgrenze und „Rechnung" nach Pauschalabschlag.
+    message.includes('invoice_fixed_amount_exceeds_remaining') ||
+    message.includes('invoice_requires_final_after_fixed_abschlag') ||
     message.includes('invoice_quantity_invalid')
   ) {
     return new WorkspaceInvoiceCloudError(message, 'totals_mismatch', false);
@@ -308,9 +373,19 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
    */
   if (
     message.includes('invoice_final_already_exists') ||
-    message.includes('workspace_invoices_single_final_invoice')
+    message.includes('workspace_invoices_single_final_invoice') ||
+    /*
+     * FINANZ-CORE-01A (SQL-04) — nach einer wirksamen Schlussrechnung entsteht
+     * keine weitere Rechnung. Derselbe fachliche Ausgang, derselbe Beweis:
+     * Der Guard läuft vor dem Insert, für diese Freigabe wurde nichts geschrieben.
+     */
+    message.includes('invoice_after_final_invoice')
   ) {
     return new WorkspaceInvoiceCloudError(message, 'final_invoice_exists', false);
+  }
+  // FINANZ-CORE-01A (SQL-01) — vor der allgemeinen Validierungsregel, wie die übrigen Stornogründe.
+  if (message.includes('invoice_cancel_final_invoice_exists')) {
+    return new WorkspaceInvoiceCloudError(message, 'cancel_final_invoice_exists', false);
   }
   /*
    * 01C — die Stornogründe stehen **vor** der allgemeinen Validierungsregel:
@@ -1242,10 +1317,113 @@ export async function rpcPullWorkspaceInvoices(
  * unverändert zurück — der Server behandelt den zweiten Aufruf als Replay,
  * nicht als Fehler.
  */
+/**
+ * FINANZ-CORE-01A (RE-02) — die Startnummer aus der Einrichtung auf den Server.
+ * Nur für ein Jahr ohne vergebene Nummer; derselbe Wert erneut ist kein Fehler.
+ */
+export async function rpcSetWorkspaceInvoiceNumberStart(
+  input: { workspaceId: string; year: number; lastSequence: number },
+  client?: SupabaseClient | null,
+): Promise<{ applied: boolean; year: number; lastSequence: number }> {
+  if (!input.workspaceId.trim()) {
+    throw new WorkspaceInvoiceCloudError('workspace_id fehlt', 'validation', false);
+  }
+  if (!Number.isInteger(input.year) || !Number.isInteger(input.lastSequence) || input.lastSequence < 0) {
+    throw new WorkspaceInvoiceCloudError('invoice_number_start_invalid', 'validation', false);
+  }
+
+  const supabase = getClient(client);
+  const { data, error } = await supabase.rpc('set_workspace_invoice_number_start', {
+    p_workspace_id: input.workspaceId,
+    p_year: input.year,
+    p_last_sequence: input.lastSequence,
+  });
+
+  if (error) {
+    // PostgREST: Funktion unbekannt — der Server ist älter als dieser Client.
+    if (error.code === 'PGRST202') {
+      throw new WorkspaceInvoiceCloudError(error.message ?? 'unbekannt', 'number_start_unsupported', false);
+    }
+    if ((error.message ?? '').includes('invoice_number_start_locked')) {
+      throw new WorkspaceInvoiceCloudError(error.message ?? '', 'number_start_locked', false);
+    }
+    throw classifyInvoiceCloudError(error);
+  }
+
+  const row = (data ?? {}) as { applied?: unknown; year?: unknown; last_sequence?: unknown };
+  if (typeof row.applied !== 'boolean' || row.year !== input.year || typeof row.last_sequence !== 'number') {
+    throw new WorkspaceInvoiceCloudError('Ungültige Server-Antwort bei der Startnummer.', 'unknown', false);
+  }
+  return { applied: row.applied, year: row.year, lastSequence: row.last_sequence };
+}
+
+/**
+ * FINANZ-CORE-01A (STO-06) — was eine Stornoantwort aussagt: ausschliesslich die Stornospalten.
+ *
+ * Bisher lief die Antwort durch die strenge Prüfung der ganzen Pull-Zeile. Lehnte sie eine
+ * (etwa ältere) Zeile ab, meldete der Dienst „unklar", obwohl die Cloud storniert hatte — und
+ * weil der Pull dieselbe Zeile ebenfalls überspringt, blieb die Rechnung lokal dauerhaft aktiv,
+ * während der Korrekturbeleg im Archiv erschien.
+ */
+export interface CancelledInvoiceFacts {
+  cancelledAt?: string;
+  cancelReason?: string;
+  cancellationKind?: 'internal' | 'correction';
+  correctionDocumentId?: string;
+  correctionNumber?: string;
+}
+
+function textOrUndefined(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  const text = String(value).trim();
+  return text ? text : undefined;
+}
+
+/** Liest nur die Stornospalten einer Rohzeile — nach Betrieb und Rechnung geprüft. */
+export function readCancelFactsFromRow(
+  raw: unknown,
+  expected: { workspaceId: string; clientInvoiceId: string },
+): CancelledInvoiceFacts | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const row = raw as Record<string, unknown>;
+  if (row.workspace_id !== expected.workspaceId || row.client_invoice_id !== expected.clientInvoiceId) return null;
+  const cancelledAt = textOrUndefined(row.cancelled_at);
+  if (!cancelledAt) return {};
+  const kind = textOrUndefined(row.cancellation_kind);
+  return {
+    cancelledAt,
+    ...(textOrUndefined(row.cancel_reason) ? { cancelReason: textOrUndefined(row.cancel_reason) } : {}),
+    ...(kind === 'internal' || kind === 'correction' ? { cancellationKind: kind } : {}),
+    ...(textOrUndefined(row.correction_document_id) ? { correctionDocumentId: textOrUndefined(row.correction_document_id) } : {}),
+    ...(textOrUndefined(row.correction_number) ? { correctionNumber: textOrUndefined(row.correction_number) } : {}),
+  };
+}
+
+/**
+ * FINANZ-CORE-01A (STO-06) — nach einem unklaren Ausgang (Netz weg, Antwort unlesbar) einmal
+ * nachlesen, ob die Cloud storniert hat: die seit kurz vor dem Versuch geänderten Rechnungen.
+ * `null`, wenn auch das nicht gelingt — dann bleibt der Ausgang unklar.
+ */
+export async function readWorkspaceInvoiceCancelFacts(
+  input: { workspaceId: string; clientInvoiceId: string; since: string },
+  client?: SupabaseClient | null,
+): Promise<CancelledInvoiceFacts | null> {
+  try {
+    const rows = await rpcPullWorkspaceInvoiceRows(input.workspaceId, { since: input.since, client });
+    for (const raw of rows) {
+      const facts = readCancelFactsFromRow(raw, input);
+      if (facts) return facts;
+    }
+    return {};
+  } catch {
+    return null;
+  }
+}
+
 export async function rpcCancelWorkspaceInvoice(
   input: { workspaceId: string; clientInvoiceId: string; reason: string },
   client?: SupabaseClient | null,
-): Promise<MappedWorkspaceInvoicePull> {
+): Promise<{ invoice: CancelledInvoiceFacts }> {
   if (!input.workspaceId.trim()) {
     throw new WorkspaceInvoiceCloudError('workspace_id fehlt', 'validation', false);
   }
@@ -1280,14 +1458,26 @@ export async function rpcCancelWorkspaceInvoice(
   }
 
   const parsed = parseWorkspaceInvoicePullRow(rows[0]);
-  if (!parsed || parsed.workspace_id !== input.workspaceId) {
-    throw new WorkspaceInvoiceCloudError(
-      'Ungültige Server-Antwort bei Rechnungsstornierung.',
-      'unknown',
-      false,
-    );
+  if (parsed && parsed.workspace_id === input.workspaceId) {
+    const invoice = mapWorkspaceInvoicePullRowToVorgangInvoice(parsed).invoice;
+    return {
+      invoice: {
+        ...(invoice.cancelledAt ? { cancelledAt: invoice.cancelledAt } : {}),
+        ...(invoice.cancelReason ? { cancelReason: invoice.cancelReason } : {}),
+        ...(invoice.cancellationKind ? { cancellationKind: invoice.cancellationKind } : {}),
+        ...(invoice.correctionDocumentId ? { correctionDocumentId: invoice.correctionDocumentId } : {}),
+        ...(invoice.correctionNumber ? { correctionNumber: invoice.correctionNumber } : {}),
+      },
+    };
   }
-  return mapWorkspaceInvoicePullRowToVorgangInvoice(parsed);
+  // FINANZ-CORE-01A (STO-06) — die Vollzeile ist unlesbar; die Stornospalten entscheiden.
+  const facts = readCancelFactsFromRow(rows[0], input);
+  if (facts?.cancelledAt) return { invoice: facts };
+  throw new WorkspaceInvoiceCloudError(
+    'Ungültige Server-Antwort bei Rechnungsstornierung.',
+    'unknown',
+    false,
+  );
 }
 
 /**

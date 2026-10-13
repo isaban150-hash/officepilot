@@ -18,7 +18,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from '../test/workspaceRoleTestUtils';
 import { AppProvider } from '../context/AppContext';
 import { AuthProvider } from '../context/AuthContext';
 import { DEFAULT_SETUP } from '../data/mockData';
@@ -64,6 +65,10 @@ beforeEach(() => {
 });
 
 describe('UIUX-FOUNDATION-01F — Kunden (A/B)', () => {
+  // FINANZ-CORE-01A (WEISS-Nacharbeit N05) — die Hauptaktion „Kunde anlegen" sieht nur, wer Kunden schreiben darf.
+  beforeEach(() => alsInhaber());
+  afterEach(() => vi.restoreAllMocks());
+
   it('Liste: Hauptaktion im Header, Business-Zeilen mit Adresse; Detail: Back-Link, Sections', () => {
     const created = createCustomer({ name: 'Bau Nord GmbH', street: 'Industrieweg 3', zip: '80331', city: 'München', contactPerson: 'M. Nord', email: '', phone: '' });
     expect(created.success).toBe(true);

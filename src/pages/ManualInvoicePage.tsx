@@ -17,6 +17,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CustomerDecisionChoice, type CustomerDecisionMode } from '../components/customer/CustomerDecisionChoice';
 import { CustomerDuplicateDecision } from '../components/customer/CustomerDuplicateDecision';
 import { CUSTOMER_DUPLICATE_ERROR_KEY } from '../services/customerService';
+import { useOptionalAuth } from '../context/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { resolveWorkspaceWriteAccess } from '../services/workspace/workspaceRoleService';
 import {
   findCustomerDuplicateCandidates,
   type CustomerDuplicateCandidate,
@@ -35,8 +38,10 @@ import { ManualInvoicePositionsEditor } from '../components/invoice/ManualInvoic
 import { ManualInvoiceStepper } from '../components/invoice/ManualInvoiceStepper';
 import { Button } from '../components/ui/Button';
 import { Card, DataRow, PageHeader } from '../components/ui/Card';
+import { InvoiceCustomerDriftCard } from '../components/invoice/InvoiceCustomerDriftCard';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
+import { useWorkspaceWriteAccess } from '../hooks/useWorkspaceWriteAccess';
 import { billingFromCustomer, createCustomer } from '../services/customerService';
 import { getCustomerById } from '../services/customerStoreService';
 import { getCompanyProfile } from '../services/companyProfileService';
@@ -46,6 +51,11 @@ import {
   findCriticalCompanyProfileDrift,
   type CriticalCompanyField,
 } from '../services/invoice/companySnapshotDriftService';
+import {
+  customerBillingDrift,
+  customerDriftFingerprint,
+  type CustomerBillingField,
+} from '../services/customer/customerBillingCopy';
 import { loadInvoiceDraftRecordByLocator } from '../services/invoice/invoiceDraftDurabilityService';
 import {
   resumeInvoiceDraftFinalization,
@@ -81,14 +91,19 @@ import {
 } from '../services/invoice/invoiceDraftCloudBridge';
 import { useInvoiceDraftCloudState } from '../services/invoice/useInvoiceDraftCloudState';
 import {
+  INVOICE_FINALIZE_SLOW_NOTICE_MS,
   invoiceDraftCloudPrepMessageKey,
   prepareInvoiceDraftCloudForFinalization,
 } from '../services/invoice/invoiceDraftCloudFinalizePrep';
+import { formatDisplayDate } from '../utils/displayFormat';
 import { InvoiceDraftCloudPanel } from '../components/invoice/InvoiceDraftCloudPanel';
+import { EInvoicePrecheckNotice } from '../components/invoice/EInvoicePrecheckNotice';
+import { precheckInvoiceDraftForEInvoice } from '../services/invoice/invoiceEInvoicePrecheck';
 import { runSyncFromUi } from '../services/sync/syncUiService';
 import {
   buildManualInvoiceDraft,
   calculateInvoiceTotals,
+  replaceInvoiceDraftCustomerBilling,
   updateInvoiceDraftMetadata,
   updateInvoiceDraftTaxStatus,
   validateInvoiceDraftForApproval,
@@ -155,6 +170,13 @@ export function ManualInvoicePage() {
   );
 
   const [cloudReloadKey, setCloudReloadKey] = useState(0);
+  /*
+   * FINANZ-CORE-01A (RE-08) — eine Rechnung festschreiben dürfen nur Inhaber und
+   * Verwaltung (R1-SEC-01). Für ein sicher erkanntes Mitglied bietet die Seite
+   * die Freigabe deshalb gar nicht erst an; der Entwurf bleibt erhalten. Eine
+   * ungeklärte Rolle sperrt nicht — dort entscheidet der Server.
+   */
+  const approvalRoleDenied = useWorkspaceWriteAccess().reason === 'member';
   const session = useInvoiceDraftDurabilitySession({
     locator,
     createDraft,
@@ -293,6 +315,15 @@ export function ManualInvoicePage() {
   /* ---------------- Schritt 1: Kunde ---------------- */
 
   const [customerMode, setCustomerMode] = useState<CustomerDecisionMode | null>(null);
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N05) — einen neuen Kunden legen nur Inhaber und
+   * Verwaltung an (Server: can_write_workspace); ein Mitglied wählt einen vorhandenen.
+   */
+  const authUserForCustomers = useOptionalAuth()?.user ?? null;
+  const darfKundenAnlegen = resolveWorkspaceWriteAccess({
+    userId: authUserForCustomers?.id,
+    cloudConfigured: isSupabaseConfigured(),
+  }).canWrite;
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerExtra, setNewCustomerExtra] = useState<CustomerExtraFields>(createEmptyCustomerExtraFields);
@@ -332,6 +363,7 @@ export function ManualInvoicePage() {
       return;
     }
     if (customerMode === 'new') {
+      if (!darfKundenAnlegen) return;
       const input = buildCustomerInputFromUi(newCustomerName, newCustomerExtra);
       if (!options?.allowDuplicateCustomer) {
         const duplicates = findCustomerDuplicateCandidates(input);
@@ -378,6 +410,8 @@ export function ManualInvoicePage() {
   /* ---------------- Schritt 4: Freigabe ---------------- */
 
   const [approving, setApproving] = useState(false);
+  /* FINANZ-CORE-01A (RE-12) — der begonnene Abschluss dauert ungewöhnlich lange. */
+  const [approvalSlow, setApprovalSlow] = useState(false);
   const approveLockRef = useRef(false);
   const [validationErrors, setValidationErrors] = useState<TranslationKey[]>([]);
   const [validationWarnings, setValidationWarnings] = useState<TranslationKey[]>([]);
@@ -386,6 +420,10 @@ export function ManualInvoicePage() {
   const [companyDriftFields, setCompanyDriftFields] = useState<CriticalCompanyField[]>([]);
   const [companyDriftProfile, setCompanyDriftProfile] = useState<CompanyProfile | null>(null);
   const [acknowledgedCompanyFingerprint, setAcknowledgedCompanyFingerprint] = useState<string | null>(null);
+  /* FINANZ-CORE-01A (KUN-08) — Rückfrage zu geänderten Kundendaten (Kunden-ID des Entwurfs). */
+  const [customerDriftMaster, setCustomerDriftMaster] = useState<CustomerBilling | null>(null);
+  const [customerDriftFields, setCustomerDriftFields] = useState<CustomerBillingField[]>([]);
+  const [acknowledgedCustomerFingerprint, setAcknowledgedCustomerFingerprint] = useState<string | null>(null);
 
   const runApproval = async () => {
     if (!draft || approveLockRef.current || approving) return;
@@ -425,8 +463,12 @@ export function ManualInvoicePage() {
         return;
       }
 
-      /* CLOUD-SYNC S5 — erst den Entwurf zur Ruhe bringen; sonst gar nicht erst beginnen. */
-      const cloudReady = await prepareInvoiceDraftCloudForFinalization(record, draft);
+      /*
+       * CLOUD-SYNC S5 — erst den Entwurf zur Ruhe bringen; sonst gar nicht erst beginnen.
+       * FINANZ-CORE-01A (RE-15) — mit dem gespeicherten Entwurf, nicht dem der Closure.
+       */
+      const storedDraft = reloaded?.ok ? reloaded.draft : draft;
+      const cloudReady = await prepareInvoiceDraftCloudForFinalization(record, storedDraft);
       if (!cloudReady.ok) {
         showToast(translate(invoiceDraftCloudPrepMessageKey(cloudReady.reason)));
         approveLockRef.current = false;
@@ -435,6 +477,8 @@ export function ManualInvoicePage() {
       }
 
       finalizationStarted = true;
+      // FINANZ-CORE-01A (RE-12) — wie im Auftragsweg: ein Hinweis statt endloser Ladeanzeige.
+      const slowTimer = setTimeout(() => setApprovalSlow(true), INVOICE_FINALIZE_SLOW_NOTICE_MS);
       const result = await startInvoiceDraftFinalization({
         identity: {
           sourceScopeKey: record.sourceScopeKey,
@@ -446,6 +490,9 @@ export function ManualInvoicePage() {
         expectedRevision: record.revision,
         approvalOptions: { reverseCharge13bConfirmed },
         overbillingAcknowledged: false,
+      }).finally(() => {
+        clearTimeout(slowTimer);
+        setApprovalSlow(false);
       });
 
       if (!result.ok) {
@@ -456,8 +503,16 @@ export function ManualInvoicePage() {
           approveLockRef.current = false;
           setApproving(false);
         }
-        // CLOUD-SYNC S5 — wie im Auftragsweg: Cloud-Stand holen, dann den Slot neu laden.
-        if (result.reason === 'draft_binding_rejected' || result.reason === 'draft_finalized_elsewhere') {
+        /*
+         * CLOUD-SYNC S5 — wie im Auftragsweg: Cloud-Stand holen, dann den Slot neu laden.
+         * FINANZ-CORE-01A (RE-01) — ebenso nach jeder nachweislich ohne Rechnung
+         * abgelehnten Freigabe: Der Entwurf ist wieder bearbeitbar.
+         */
+        if (
+          result.draftReopened ||
+          result.reason === 'draft_binding_rejected' ||
+          result.reason === 'draft_finalized_elsewhere'
+        ) {
           approveLockRef.current = false;
           setApproving(false);
           void runSyncFromUi()
@@ -487,6 +542,44 @@ export function ManualInvoicePage() {
     }
   };
 
+  /*
+   * FINANZ-CORE-01A (KUN-08) — nach den Firmendaten die Kundendaten: Hängt die freie Rechnung an
+   * einem Kundenstamm, der sich seit der Übernahme geändert hat, fragt die Freigabe nach.
+   */
+  const continueAfterCompanyDrift = () => {
+    const customerId = draft?.customerId?.trim() ?? '';
+    const master = customerId ? getCustomerById(customerId) : undefined;
+    if (draft && master) {
+      const masterBilling = billingFromCustomer(master);
+      const drift = customerBillingDrift(draft.customerBilling, masterBilling);
+      if (
+        drift.length > 0 &&
+        acknowledgedCustomerFingerprint !== customerDriftFingerprint(draft.customerBilling, masterBilling)
+      ) {
+        setCustomerDriftFields(drift);
+        setCustomerDriftMaster(masterBilling);
+        return;
+      }
+    }
+    void runApproval();
+  };
+  const handleApplyCustomerDrift = () => {
+    if (!customerDriftMaster) return;
+    const master = customerDriftMaster;
+    mutateDraft((prev) => ({ ...replaceInvoiceDraftCustomerBilling(prev, master), customer: master.name }));
+    setAcknowledgedCustomerFingerprint(customerDriftFingerprint(master, master));
+    setCustomerDriftMaster(null);
+    showToast(translate('invoice.customerDrift.applied'));
+    void runApproval();
+  };
+  const handleKeepCustomerBilling = () => {
+    if (draft && customerDriftMaster) {
+      setAcknowledgedCustomerFingerprint(customerDriftFingerprint(draft.customerBilling, customerDriftMaster));
+    }
+    setCustomerDriftMaster(null);
+    void runApproval();
+  };
+
   /** Firmen-Drift zuerst — dieselbe Regel wie im Auftragsweg, im Augenblick des Klicks. */
   const handleApprove = () => {
     const profile = getCompanyProfile();
@@ -501,7 +594,7 @@ export function ManualInvoicePage() {
       }
       setAcknowledgedCompanyFingerprint(fingerprint);
     }
-    void runApproval();
+    continueAfterCompanyDrift();
   };
   const handleApplyCompanyDrift = () => {
     const current = companyDriftProfile ?? getCompanyProfile();
@@ -509,12 +602,12 @@ export function ManualInvoicePage() {
     setAcknowledgedCompanyFingerprint(buildCriticalCompanyFingerprint(current));
     setShowCompanyDriftConfirm(false);
     showToast(translate('invoice.companyDrift.applied'));
-    void runApproval();
+    continueAfterCompanyDrift();
   };
   const handleKeepCompanySnapshot = () => {
     setAcknowledgedCompanyFingerprint(buildCriticalCompanyFingerprint(getCompanyProfile()));
     setShowCompanyDriftConfirm(false);
-    void runApproval();
+    continueAfterCompanyDrift();
   };
 
   /* ---------------- Wiederaufnahme einer begonnenen Finalisierung ---------------- */
@@ -550,6 +643,19 @@ export function ManualInvoicePage() {
           );
           return;
         }
+        if (result.draftReopened) {
+          /*
+           * FINANZ-CORE-01A (RE-01) — der Server hat die gespeicherte Freigabe
+           * nachweislich ohne Rechnung abgelehnt; der Entwurf ist wieder
+           * bearbeitbar. Den Grund nennen, Cloud-Stand holen, Slot neu laden.
+           */
+          setResumeRecovery(null);
+          showToast(translate(mapFinalizationFailureToUx(result).messageKey));
+          void runSyncFromUi()
+            .catch(() => undefined)
+            .finally(() => setCloudReloadKey((key) => key + 1));
+          return;
+        }
         setResumeRecovery(result.recovery);
         showToast(
           translate(
@@ -578,6 +684,11 @@ export function ManualInvoicePage() {
 
   const totals = draft ? calculateInvoiceTotals(draft, setup) : null;
   const printModel = useMemo(() => (draft ? buildInvoicePrintModel(draft, setup) : null), [draft, setup]);
+  /* FINANZ-CORE-01A (KUN-02) — E-Rechnungs-Vorprüfung, nur im Prüfschritt berechnet. */
+  const einvoicePrecheck = useMemo(
+    () => (step === 'review' && draft ? precheckInvoiceDraftForEInvoice(null, draft, setup) : null),
+    [step, draft, setup],
+  );
   const needsServicePeriodConfirmation =
     Boolean(draft?.servicePeriodFrom.trim() && draft?.servicePeriodTo.trim()) &&
     draft?.servicePeriodConfirmed !== true;
@@ -648,6 +759,18 @@ export function ManualInvoicePage() {
           {translate(sessionStatus === 'blocked_conflict' ? 'invoice.session.conflict' : 'invoice.session.storage')}
         </p>
       )}
+      {/*
+        FINANZ-CORE-01A (RE-13) — ein begonnener Entwurf wird fortgesetzt; bisher still. „Neue
+        Rechnung" öffnete so den Entwurf eines anderen Kunden, ohne es zu sagen.
+      */}
+      {session.restored &&
+      session.record?.status === 'active' &&
+      draft &&
+      (hasManualInvoiceCustomer(draft) || draft.positions.length > 0) ? (
+        <p className="form-hint" data-testid="manual-invoice-resumed">
+          {translate('manualInvoice.resumed').replace('{date}', formatDisplayDate(session.record.updatedAt))}
+        </p>
+      ) : null}
       <InvoiceDraftCloudPanel
         cloud={cloud}
         translate={translate}
@@ -699,6 +822,7 @@ export function ManualInvoicePage() {
                   setCustomerDuplicates([]);
                 }}
                 allowNone={false}
+                allowNew={darfKundenAnlegen}
               />
               {customerMode === 'new' && customerDuplicates.length > 0 ? (
                 <CustomerDuplicateDecision
@@ -794,6 +918,7 @@ export function ManualInvoicePage() {
             draft={draft}
             onChange={(changes) => mutateDraft((prev) => updateInvoiceDraftMetadata(prev, changes))}
             disabled={!editable}
+            withOrder={false}
           />
         </section>
       )}
@@ -808,6 +933,7 @@ export function ManualInvoicePage() {
             <DataRow label={translate('invoice.total')} value={formatInvoiceCurrency(totals.total)} />
           </Card>
           <p className="hint-text" data-testid="invoice-preview-hint">{translate('invoice.previewHint')}</p>
+          {einvoicePrecheck && <EInvoicePrecheckNotice precheck={einvoicePrecheck} translate={translate} />}
 
           {needsServicePeriodConfirmation && (
             <Card className="invoice-confirm" data-testid="invoice-service-period-confirm">
@@ -859,6 +985,17 @@ export function ManualInvoicePage() {
                 </Button>
               </div>
             </Card>
+          )}
+
+          {customerDriftMaster && draft && (
+            <InvoiceCustomerDriftCard
+              fields={customerDriftFields}
+              draftBilling={draft.customerBilling}
+              masterBilling={customerDriftMaster}
+              translate={translate}
+              onKeep={handleKeepCustomerBilling}
+              onApply={handleApplyCustomerDrift}
+            />
           )}
 
           {failure && (
@@ -915,20 +1052,32 @@ export function ManualInvoicePage() {
         </section>
       )}
 
+      {approving && approvalSlow ? (
+        <p className="invoice-hint invoice-hint--warning" data-testid="invoice-approve-slow">
+          {translate('invoice.approve.slow')}
+        </p>
+      ) : null}
+
       {/* ---------------- Aktionen ---------------- */}
       {!finalizationLocked && (
         <div className="manual-invoice__actions" data-testid="manual-invoice-actions">
           <Button type="button" variant="outline" onClick={goBack} data-testid="manual-invoice-back">
             {translate('common.back')}
           </Button>
-          <Button
-            type="button"
-            onClick={primary.onClick}
-            disabled={primary.disabled}
-            data-testid={step === 'review' ? 'invoice-approve' : 'manual-invoice-next'}
-          >
-            {primary.label}
-          </Button>
+          {step === 'review' && approvalRoleDenied ? (
+            <p className="invoice-hint" data-testid="invoice-approve-role-hint">
+              {translate('invoice.approve.roleHint')}
+            </p>
+          ) : (
+            <Button
+              type="button"
+              onClick={primary.onClick}
+              disabled={primary.disabled}
+              data-testid={step === 'review' ? 'invoice-approve' : 'manual-invoice-next'}
+            >
+              {primary.label}
+            </Button>
+          )}
         </div>
       )}
     </div>

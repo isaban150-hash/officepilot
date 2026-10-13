@@ -37,6 +37,9 @@
  * Rein: kein Zustand, keine Uhr, kein Netzwerk.
  */
 import type { CanonicalEInvoice } from '../canonicalEInvoice';
+import { formatCompanyLegalName } from '../../company/companyLegalName';
+import { resolveUnitCode } from '../einvoiceCodes';
+import { resolveOrderUnit } from '../../orderUnitMapper';
 import { zugferdLineDescription } from './zugferdLinePresentation';
 import type { InvoicePrintModel } from '../../../types/models';
 
@@ -104,7 +107,16 @@ export function checkZugferdPdfXmlConsistency(
   check('currencyCode', 'EUR', normalizeText(canonical.currencyCode));
 
   /* --- Verkäufer ------------------------------------------------ */
-  check('seller.name', normalizeText(model.company.companyName), normalizeText(canonical.seller.name));
+  /*
+   * FINANZ-CORE-01A (AUS-06) — das PDF druckt Firmenname und Rechtsform; genau so
+   * steht der Name jetzt in BT-27. Verglichen wird, was auf dem Papier steht.
+   */
+  check(
+    'seller.name',
+    // FINANZ-CORE-01A (WEISS-Nacharbeit N14) — dieselbe Firmierung wie PDF und XML.
+    normalizeText(formatCompanyLegalName(model.company.companyName, model.company.legalForm)),
+    normalizeText(canonical.seller.name),
+  );
   check('seller.street', normalizeText(model.company.street), normalizeText(canonical.seller.address.street));
   check('seller.zip', normalizeText(model.company.zip), normalizeText(canonical.seller.address.zip));
   check('seller.city', normalizeText(model.company.city), normalizeText(canonical.seller.address.city));
@@ -140,7 +152,12 @@ export function checkZugferdPdfXmlConsistency(
       normalizeText(zugferdLineDescription(structured)),
     );
     check(`${at}.quantity`, String(printed.quantity), String(structured.quantity));
-    check(`${at}.unit`, normalizeText(printed.unit), normalizeText(structured.unit));
+    /*
+     * FINANZ-CORE-01A (AUS-07) — Papier zeigt die Bezeichnung („lfm"), der
+     * Datensatz die Einheit („Meter", Code MTR). Verglichen wird deshalb der
+     * Einheitencode; nur was sich nicht auflösen lässt, wird als Text verglichen.
+     */
+    check(`${at}.unit`, unitIdentity(printed.unit), unitIdentity(structured.unit));
     check(`${at}.unitPrice`, money(printed.unitPrice), money(structured.unitPrice));
     check(`${at}.lineTotal`, money(printed.lineTotal), money(structured.lineNetAmount));
     /*
@@ -154,27 +171,59 @@ export function checkZugferdPdfXmlConsistency(
   }
 
   /* --- Steuer und Summen ---------------------------------------- */
+  /*
+   * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — mit Skonto auf einem abgezogenen Abschlag
+   * druckt das PDF Netto und Steuer vor dem Nachlass und das Skonto als eigene Abzugszeile;
+   * das XML mindert Bemessungsgrundlage und Steuer um den Nachlass (BG-20) und gleicht einen
+   * Rundungscent über BT-114 aus. Verglichen wird deshalb nach dem Nachlass, aus den Werten
+   * des PDF gerechnet. Ohne Skonto sind alle Zusatzwerte 0 — der Vergleich wie bisher.
+   */
+  const skontoNet = cents(model.summary.skontoNetTotal ?? 0);
+  const skontoTax = cents(model.summary.skontoTaxTotal ?? 0);
+  const skontoGross = cents(model.summary.skontoTotal ?? 0);
+  const rounding = cents(model.summary.roundingAmount ?? 0);
+  const netAfter = (cents(model.summary.subtotalNet) - skontoNet) / 100;
+  const taxAfter = (cents(model.summary.taxAmount) - skontoTax - rounding) / 100;
+  const grossAfter = (cents(model.summary.grossTotal) - skontoGross - rounding) / 100;
   const tax = canonical.tax[0];
   check('tax.rate', String(model.summary.taxRate), String(tax?.rate ?? ''));
-  check('tax.taxableAmount', money(model.summary.subtotalNet), money(tax?.taxableAmount ?? Number.NaN));
-  check('tax.amount', money(model.summary.taxAmount), money(tax?.taxAmount ?? Number.NaN));
-  check('totals.net', money(model.summary.subtotalNet), money(canonical.totals.taxExclusiveAmount));
-  check('totals.tax', money(model.summary.taxAmount), money(canonical.totals.taxAmount));
-  check('totals.gross', money(model.summary.grossTotal), money(canonical.totals.taxInclusiveAmount));
+  check('tax.taxableAmount', money(netAfter), money(tax?.taxableAmount ?? Number.NaN));
+  check('tax.amount', money(taxAfter), money(tax?.taxAmount ?? Number.NaN));
+  check('totals.net', money(netAfter), money(canonical.totals.taxExclusiveAmount));
+  check('totals.tax', money(taxAfter), money(canonical.totals.taxAmount));
+  check('totals.gross', money(grossAfter), money(canonical.totals.taxInclusiveAmount));
+  check('totals.allowance', money(skontoNet / 100), money(canonical.totals.allowanceTotal ?? 0));
+  check('totals.rounding', money(rounding / 100), money(canonical.totals.roundingAmount ?? 0));
 
   /*
    * Der Zahlbetrag ist der heikelste Wert überhaupt: Auf ihn überweist jemand.
    * Im PDF ist es `amountDue` — nach Abzug bereits abgerechneter Abschläge —,
-   * im XML `payableAmount`. Dass beide gleich sein müssen, ist genau der
-   * Grund, warum eine Schlussrechnung mit Abzügen in 04C fail-closed ist:
-   * Solange das XML die Abzüge nicht ausdrücken kann, darf es auch keinen
-   * davon bereinigten Betrag behaupten.
+   * im XML `payableAmount`. FINANZ-CORE-01A (D1) — die Abzüge selbst stehen im
+   * PDF als „Summe Abschläge" und im XML als BT-113; beide müssen übereinstimmen.
+   * WEISS-Recheck N02-R1: BT-113 ist nur das Gezahlte — im PDF die Summe der
+   * gezahlten Abzugszeilen; ohne Skonto dieselbe Summe wie bisher.
    */
   check('totals.payable', money(model.summary.amountDue), money(canonical.totals.payableAmount));
+  check(
+    'totals.prepaid',
+    money(model.summary.deductionsPaidTotal ?? model.summary.deductionsTotal),
+    money(canonical.totals.prepaidAmount),
+  );
 
   /* --- Zahlungsinformationen ------------------------------------ */
-  check('payment.iban', normalizeText(model.company.iban).replace(/\s+/g, ''), normalizeText(canonical.payment.transfer.iban).replace(/\s+/g, ''));
+  check(
+    'payment.iban',
+    normalizeText(model.company.iban).replace(/\s+/g, '').toUpperCase(),
+    normalizeText(canonical.payment.transfer?.iban).replace(/\s+/g, '').toUpperCase(),
+  );
   check('payment.dueDate', normalizeText(model.paymentDueDate), normalizeText(canonical.payment.dueDate));
 
   return mismatches.length === 0 ? { ok: true } : { ok: false, mismatches };
+}
+
+/** FINANZ-CORE-01A (AUS-07) — die Identität einer Einheit: ihr Code, sonst der Text. */
+function unitIdentity(value: string): string {
+  const resolved = resolveOrderUnit(value ?? '');
+  const code = resolveUnitCode(resolved.state === 'known' && resolved.unit ? resolved.unit : value);
+  return code ?? normalizeText(value);
 }

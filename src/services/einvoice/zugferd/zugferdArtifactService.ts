@@ -23,6 +23,7 @@
  * Artefaktkern beweisbar richtig sein.
  */
 import { buildCanonicalEInvoice } from '../canonicalEInvoiceBuilder';
+import { prepaymentSettlementsFor } from '../einvoicePrepaymentSettlements';
 import type { CanonicalEInvoice, CanonicalEInvoiceIssue } from '../canonicalEInvoice';
 import { EINVOICE_STANDARDS } from '../einvoiceStandards';
 import type { ServicePeriodOutputCode } from '../einvoiceOutputRule';
@@ -144,8 +145,16 @@ function attachmentTimestamp(canonical: CanonicalEInvoice): Date {
  * finalisierten Rechnung — oder gar nichts.
  */
 export async function buildZugferdInvoice(invoice: VorgangInvoice): Promise<ZugferdBuildResult> {
-  /* 1 — die fachliche Wahrheit. */
-  const canonical = buildCanonicalEInvoice(invoice);
+  /*
+   * 1 — die fachliche Wahrheit. FINANZ-CORE-01A (AUS-18): im Profil EN 16931 —
+   * ohne die zusätzlichen Pflichten der XRechnung (Käuferreferenz, Ansprechpartner,
+   * elektronische Adressen), die ZUGFeRD bisher erbte.
+   */
+  // FINANZ-CORE-01A (N02) — abgezogene Abschläge nur mit ihrem tatsächlichen Zahlungsstand.
+  const canonical = buildCanonicalEInvoice(invoice, {
+    profile: 'en16931',
+    prepaymentSettlements: prepaymentSettlementsFor(invoice),
+  });
   if (!canonical.ok) {
     return { ok: false, reason: 'canonical_incomplete', issues: canonical.issues };
   }

@@ -20,12 +20,19 @@ import { SummaryList } from '../ui/Section';
 import { Badge } from '../ui/Badge';
 import { InlineNotice } from '../ui/States';
 import {
+  adoptSourceTaxTreatment,
   confirmAccountingAssignment,
+  isResolvedAccountingTaxTreatment,
   markAccountingAssignmentUnclear,
   resolveVisibleSuggestionReason,
   updateAccountingAssignment,
 } from '../../services/accounting/accountingAssignmentService';
-import type { AccountingAssignment, AccountingAssignmentStatus } from '../../types/accounting';
+import { effectiveAccountingStatus } from '../../services/accounting/accountingCanonical';
+import type {
+  AccountingAssignment,
+  AccountingAssignmentStatus,
+  AccountingTaxTreatment,
+} from '../../types/accounting';
 import type { TranslationKey } from '../../i18n';
 
 interface Props {
@@ -42,6 +49,13 @@ interface Props {
    * Aktionen; der Server weist sie ohnehin ab (finance_forbidden_role).
    */
   readOnly?: boolean;
+  /**
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N06) — der aktuelle Steuerstatus des Belegs. Die
+   * Steuerbehandlung der Kontierung folgt ihm; das Panel führt keine zweite Steuer.
+   */
+  sourceTaxTreatment?: AccountingTaxTreatment;
+  /** Der Korrekturweg für eine ungeklärte Steuer: den Beleg bearbeiten (nur wo das geht). */
+  onClarifyTax?: () => void;
 }
 
 /** Zu jedem Stand ein Ton — dieselbe Sprache wie die übrigen Abzeichen. */
@@ -58,6 +72,8 @@ export function AccountingAssignmentPanel({
   translate,
   testIdPrefix,
   readOnly = false,
+  sourceTaxTreatment,
+  onClarifyTax,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [accountNumber, setAccountNumber] = useState('');
@@ -91,7 +107,18 @@ export function AccountingAssignmentPanel({
     );
   }
 
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N06) — eine Steuerwahrheit je Beleg. Trägt die
+   * Kontierung eine andere Steuer als der Beleg (Altbestand), gilt sie als „zu prüfen",
+   * und das Panel bietet an, die Steuer des Belegs zu übernehmen. Ist die Steuer
+   * ungeklärt, führt der Korrekturweg zum Beleg — dort steht sie samt Beträgen.
+   */
+  const status = effectiveAccountingStatus(assignment, sourceTaxTreatment);
+  const taxMismatch = sourceTaxTreatment !== undefined && sourceTaxTreatment !== assignment.taxTreatment;
+  const taxUnclear = !taxMismatch && !isResolvedAccountingTaxTreatment(assignment.taxTreatment) && status !== 'confirmed';
   const visibleReason = resolveVisibleSuggestionReason(assignment);
+  // Sagt der Vorschlagsgrund es schon („Steuerstatus des Belegs ist unklar"), kein zweiter Hinweis.
+  const showTaxUnclearHint = taxUnclear && visibleReason !== 'accounting.reason.taxUnclear';
 
   const handleSave = () => {
     const result = updateAccountingAssignment(assignment.id, {
@@ -109,7 +136,18 @@ export function AccountingAssignmentPanel({
   };
 
   const handleConfirm = () => {
-    const result = confirmAccountingAssignment(assignment.id);
+    const result = confirmAccountingAssignment(assignment.id, { sourceTaxTreatment });
+    if (!result.success) {
+      setErrorKey(result.errorKey);
+      return;
+    }
+    setErrorKey(null);
+    onChanged();
+  };
+
+  const handleAdoptSourceTax = () => {
+    if (sourceTaxTreatment === undefined) return;
+    const result = adoptSourceTaxTreatment(assignment.id, sourceTaxTreatment);
     if (!result.success) {
       setErrorKey(result.errorKey);
       return;
@@ -141,10 +179,10 @@ export function AccountingAssignmentPanel({
           label={translate('accounting.status')}
           value={
             <Badge
-              tone={statusTone(assignment.status)}
+              tone={statusTone(status)}
               data-testid={`${testIdPrefix}-accounting-status`}
             >
-              {translate(`accounting.status.${assignment.status}` as TranslationKey)}
+              {translate(`accounting.status.${status}` as TranslationKey)}
             </Badge>
           }
         />
@@ -206,6 +244,42 @@ export function AccountingAssignmentPanel({
         >
           {translate(visibleReason as TranslationKey)}
         </InlineNotice>
+      ) : null}
+
+      {/* FINANZ-CORE-01A (WEISS-Nacharbeit N06) — die Steuer folgt dem Beleg: angleichen oder dort klären. */}
+      {taxMismatch ? (
+        <InlineNotice tone="warning" testId={`${testIdPrefix}-accounting-tax-mismatch`}>
+          {translate('accounting.taxMismatchHint')}
+          {!readOnly ? (
+            <div className="vorgang-dialog__actions">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAdoptSourceTax}
+                data-testid={`${testIdPrefix}-accounting-adopt-tax`}
+              >
+                {translate('accounting.action.adoptSourceTax')}
+              </Button>
+            </div>
+          ) : null}
+        </InlineNotice>
+      ) : null}
+      {showTaxUnclearHint ? (
+        <InlineNotice tone="warning" testId={`${testIdPrefix}-accounting-tax-unclear`}>
+          {translate('accounting.taxUnclearHint')}
+        </InlineNotice>
+      ) : null}
+      {taxUnclear && !readOnly && onClarifyTax ? (
+        <div className="vorgang-dialog__actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClarifyTax}
+            data-testid={`${testIdPrefix}-accounting-clarify-tax`}
+          >
+            {translate('accounting.action.clarifyTaxOnSource')}
+          </Button>
+        </div>
       ) : null}
 
       {editing ? (
@@ -292,7 +366,7 @@ export function AccountingAssignmentPanel({
             >
               {translate('accounting.action.edit')}
             </Button>
-            {assignment.status !== 'confirmed' ? (
+            {status !== 'confirmed' ? (
               <Button
                 type="button"
                 onClick={handleConfirm}

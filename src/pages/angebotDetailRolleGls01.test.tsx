@@ -113,7 +113,14 @@ beforeEach(() => {
     createdAt: '2026-09-01T00:00:00.000Z',
     syncPolicy: 'cloud_ready',
   });
-  hydrateCompanyProfileStore({ ...createCompanyProfileFromSetup(DEFAULT_SETUP), companyName: 'Beispiel Haustechnik GmbH' });
+  // FINANZ-CORE-01A (ANG-06) — die Freigabe verlangt den Absender mit Anschrift.
+  hydrateCompanyProfileStore({
+    ...createCompanyProfileFromSetup(DEFAULT_SETUP),
+    companyName: 'Beispiel Haustechnik GmbH',
+    street: 'Musterstrasse 5',
+    zip: '33602',
+    city: 'Bielefeld',
+  });
   container = document.createElement('div');
   document.body.appendChild(container);
 });

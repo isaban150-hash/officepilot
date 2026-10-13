@@ -413,8 +413,13 @@ describe('BLOCK 2 — Buchungsexport trägt Zahlungsdatum und Zahlungsart', () =
     const { csv } = baue({ expenses: [expense()] }, [kontierung('expense', 'exp-1')]);
     const [kopf] = buchungszeilen(csv);
     expect(kopf!.slice(0, 5)).toEqual(['Belegart', 'Beleg-ID', 'Belegnummer', 'Belegdatum', 'Gegenpartei']);
-    expect(kopf!.indexOf('Zahlungsstatus zum Monatsende')).toBe(kopf!.length - 4);
-    expect(kopf!.at(-2)).toBe('Zahlungsdatum');
-    expect(kopf!.at(-1)).toBe('Zahlungsart');
+    /*
+     * FINANZ-CORE-01A (BUH-10) — Leistungszeitraum und Skonto sind am Ende angefügt; die bisherigen
+     * Spalten behalten ihre (absolute) Stelle.
+     */
+    expect(kopf!.indexOf('Zahlungsstatus zum Monatsende')).toBe(17);
+    expect(kopf![19]).toBe('Zahlungsdatum');
+    expect(kopf![20]).toBe('Zahlungsart');
+    expect(kopf!.slice(21)).toEqual(['Leistungszeitraum', 'Skonto (Abzug)']);
   });
 });

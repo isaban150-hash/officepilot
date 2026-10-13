@@ -40,6 +40,12 @@ values ('00000000-0000-0000-0000-0000000000cc', 'v-1',
         -- Reichlich Planmenge, damit die mehrfachen Belege dieses Tests nicht an
         -- der Ueberzahlungsgrenze haengenbleiben.
         '{"orderPositions":[{"id":"p1","description":"Anfahrt","plannedQuantity":100,"unit":"Stunden","unitPrice":50,"billable":true}]}'::jsonb);
+-- FINANZ-CORE-01A: eigener Vorgang fuer T8. Auf v-1 steht nach T7 eine wirksame
+-- Ersatz-Schlussrechnung, und danach entsteht fuer diesen Vorgang keine weitere
+-- Rechnung mehr (SQL-04). T8 prueft den Abschlagsstorno, nicht diese Reihenfolge.
+insert into public.workspace_vorgaenge (workspace_id, vorgang_id, payload)
+values ('00000000-0000-0000-0000-0000000000cc', 'v-abschlag',
+        '{"orderPositions":[{"id":"p1","description":"Anfahrt","plannedQuantity":100,"unit":"Stunden","unitPrice":50,"billable":true}]}'::jsonb);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000bbbb","role":"authenticated"}', true);
 
 create function pg_temp.erwarte_storno_fehler(p_label text, p_id text, p_reason text, p_expected text)
@@ -77,7 +83,8 @@ declare
   base_order jsonb;
 begin
   base_free := jsonb_build_object('type','rechnung','issueDate','2026-09-01','positions',pos,'subtotal',100,'amount',119,'taxStatus','standard_19',
-    'companySnapshot', jsonb_build_object('companyName','Muster GmbH'), 'customerSnapshot', jsonb_build_object('name','Beispiel Projektbau GmbH','street','Beispielweg 3','zip','33602','city','Bielefeld'),
+    -- FINANZ-CORE-01A (RE-09): Der Firmenstand des Belegs traegt Anschrift und Steuernummer (§ 14 Abs. 4 Nr. 1/2 UStG).
+    'companySnapshot', jsonb_build_object('companyName','Muster GmbH','street','Musterweg 1','zip','33602','city','Bielefeld','taxNumber','133/8150/8159'), 'customerSnapshot', jsonb_build_object('name','Beispiel Projektbau GmbH','street','Beispielweg 3','zip','33602','city','Bielefeld'),
     'customerId','cust-1','servicePeriodFrom','2026-08-20','servicePeriodTo','2026-08-28');
   base_order := base_free || jsonb_build_object('vorgangTitle','Dachsanierung');
 
@@ -137,9 +144,18 @@ begin
     raise exception 'T14: Original nach Korrektur veraendert';
   end if;
   select coalesce(max(invoice_sequence_number),0) into seq_after from public.workspace_invoices where workspace_id = ws;
+  -- Keine neue Rechnungszeile: Die hoechste Rechnungslaufnummer bleibt.
   if seq_after <> seq_before then raise exception 'T15: Nummernkreis verbraucht'; end if;
-  if c.correction_number is not null then raise exception 'T15: correction_number darf nicht vergeben sein'; end if;
-  raise notice 'OK  T3/T4/T5/T13/T14/T15: versendete freie Rechnung -> Korrekturbeleg, Original und Nummernkreis unveraendert';
+  /*
+   * FINANZ-CORE-01A (SQL-11, Entscheidung D2/D8): Bis hierher war correction_number
+   * "nur Vorbereitung" und musste leer bleiben. Jetzt traegt der Korrekturbeleg eine
+   * eigene Nummer aus dem Rechnungskreis -- am Original und am Beleg dieselbe.
+   */
+  if c.correction_number is null or c.correction_number = row_before.invoice_number
+     or d.payload->>'correctionNumber' is distinct from c.correction_number then
+    raise exception 'T15: Korrekturnummer fehlt oder weicht ab (%)', c.correction_number;
+  end if;
+  raise notice 'OK  T3/T4/T5/T13/T14/T15: versendete freie Rechnung -> Korrekturbeleg mit eigener Nummer, Original unveraendert';
 
   /* ---------- 11/12: identischer Replay, anderer Grund ---------- */
   select * into c from public.cancel_workspace_invoice(ws, 'inv-free-sent', 'Leistung nicht erbracht');
@@ -180,12 +196,12 @@ begin
   -- RECHNUNGSBEREICH-03D (20261004120000, remote angewendet) hat den
   -- Abschlagsstorno bewusst eingefuehrt. Die Zusicherung bleibt bestehen und
   -- prueft jetzt die geltende Regel.
-  r := public.finalize_workspace_invoice(ws, 'v-1', 'inv-abschlag', base_order || '{"type":"abschlag","abschlagNumber":1}'::jsonb);
+  r := public.finalize_workspace_invoice(ws, 'v-abschlag', 'inv-abschlag', base_order || '{"type":"abschlag","abschlagNumber":1}'::jsonb);
   perform public.cancel_workspace_invoice(ws, 'inv-abschlag', 'Testabschlag zurueckgezogen');
   if not exists (
     select 1 from public.workspace_invoices
     where workspace_id = ws and client_invoice_id = 'inv-abschlag'
-      and vorgang_id = 'v-1' and cancelled_at is not null
+      and vorgang_id = 'v-abschlag' and cancelled_at is not null
   ) then
     raise exception 'T8 — Abschlag wurde nicht storniert';
   end if;

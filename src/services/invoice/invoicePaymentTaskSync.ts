@@ -27,8 +27,9 @@ import {
   proposeTasksFromOverdueInvoices,
 } from '../taskEngineService';
 import { buildDedupeKey, isTaskOpen } from '../taskNormalize';
-import { getAllTasksFromStore, replaceTaskInStore } from '../taskStore';
+import { findTasksInStore, getAllTasksFromStore, replaceTaskInStore } from '../taskStore';
 import { runAutomaticSyncWrite } from '../sync/syncOutboxService';
+import { getBusinessDay } from '../businessDateService';
 import { findInvoiceById } from './invoiceRegistryService';
 
 const SETTLED_STATUSES: ReadonlySet<InvoicePaymentStatus> = new Set(['bezahlt', 'ueberbezahlt', 'storniert']);
@@ -83,14 +84,38 @@ export interface InvoicePaymentTaskReconcileResult {
  * angewendeten Cloud-Abgleich und einmal täglich beim App-Start — nie beim
  * Rendern einer Seite. Mit `invoiceId` nur für diese Rechnung.
  */
+/**
+ * FINANZ-CORE-01A (ZAH-06) — eine geschlossene Aufgabe derselben Fälligkeit gilt.
+ *
+ * Wer „Zahlung prüfen" erledigt oder gelöscht hatte (etwa nach einer Zahlungszusage), bekam
+ * sie beim nächsten Abgleich — höchstens 90 Sekunden später — zurück: Der Dedupe sah nur
+ * offene Aufgaben. Eine neue Episode beginnt jetzt mit einer neuen Fälligkeit oder nach einer
+ * Zahlungsrücknahme auf diesem Gerät (`newEpisode`); nimmt ein anderes Gerät eine Zahlung
+ * zurück, bringt der Abgleich dessen neue Aufgabe mit.
+ */
+function hasClosedOverdueTaskForEpisode(invoiceId: string, dueDate: string | undefined): boolean {
+  const expectedKey = buildDedupeKey({ sourceType: 'invoice', sourceId: invoiceId, taskKind: 'payment_overdue' });
+  return (
+    findTasksInStore(
+      (task) =>
+        task.dedupeKey === expectedKey &&
+        task.taskKind === 'payment_overdue' &&
+        (task.dueDate ?? '') === (dueDate ?? '') &&
+        (Boolean(task.sync?.deleted) || task.status === 'done' || task.status === 'archived'),
+    ).length > 0
+  );
+}
+
 export function reconcileInvoicePaymentTasks(
-  options: { invoiceId?: string; today?: Date | string } = {},
+  options: { invoiceId?: string; today?: Date | string; newEpisode?: boolean } = {},
 ): InvoicePaymentTaskReconcileResult {
-  const { invoiceId, today } = options;
+  const { invoiceId, today, newEpisode = false } = options;
   const completed = completeSettledInvoicePaymentTasks(invoiceId);
 
   const proposals = proposeTasksFromOverdueInvoices(today).filter(
-    (proposal) => !invoiceId || proposal.sourceId === invoiceId,
+    (proposal) =>
+      (!invoiceId || proposal.sourceId === invoiceId) &&
+      (newEpisode || !proposal.sourceId || !hasClosedOverdueTaskForEpisode(proposal.sourceId, proposal.dueDate)),
   );
   const before = new Set(getAllTasksFromStore().map((task) => task.id));
   const created = createTasksFromProposals(proposals).filter((task) => !before.has(task.id));
@@ -122,7 +147,8 @@ let lastDailyReconcileDay: string | null = null;
  * Modus) soll die Aufgabe deshalb entstehen — aber nicht bei jedem Rendern.
  */
 export function runDailyInvoicePaymentTaskReconcile(today: Date = new Date()): boolean {
-  const day = today.toISOString().slice(0, 10);
+  // FINANZ-CORE-01A (ZAH-16) — der Geschäftstag; der UTC-Tag lag zwischen 0 und 2 Uhr einen Tag zurück.
+  const day = getBusinessDay(today);
   if (lastDailyReconcileDay === day) return false;
   lastDailyReconcileDay = day;
   // KONTOSPERRE — automatischer Schreiber ohne Nutzeraktion: der Änderungsverfolger nimmt den gesperrten Weg.

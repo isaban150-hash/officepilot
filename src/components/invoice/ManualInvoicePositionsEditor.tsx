@@ -8,6 +8,7 @@ import {
   validateManualPosition,
   type ManualPositionIssue,
 } from '../../services/invoice/manualInvoiceFlow';
+import { billingLineTotalMoney } from '../../services/invoiceMoney';
 import { formatInvoiceCurrency } from '../../services/invoicePrintModel';
 import type { InvoiceDraftPosition, OrderUnit } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
@@ -138,7 +139,7 @@ export function ManualInvoicePositionsEditor({ positions, onChange, disabled, tr
                   {position.quantity} {position.unitLabel ?? position.unit} ×{' '}
                   {formatInvoiceCurrency(position.unitPrice)}
                 </span>
-                <strong>{formatInvoiceCurrency(position.quantity * position.unitPrice)}</strong>
+                <strong>{formatInvoiceCurrency(billingLineTotalMoney(position.quantity, position.unitPrice))}</strong>
               </div>
               <div className="manual-positions__actions">
                 <Button
@@ -225,6 +226,8 @@ export function ManualInvoicePositionsEditor({ positions, onChange, disabled, tr
               mode="decimal"
               strict
               min={0}
+              // FINANZ-CORE-01A (A4) — gedruckt und gerechnet wird der Preis auf Cent.
+              maxFractionDigits={2}
               value={editor.unitPrice}
               disabled={disabled}
               onChange={(value) => setEditor((prev) => ({ ...prev, unitPrice: value }))}

@@ -4,6 +4,8 @@ import type {
   CommunicationDraft,
   CommunicationDraftCore,
 } from '../types/communication';
+import { getBusinessDay } from './businessDateService';
+import { formatDisplayDatePadded } from '../utils/displayFormat';
 
 function recipientLine(context: CommunicationContext, formal: boolean): string {
   const name = context.recipient?.name;
@@ -20,8 +22,33 @@ function closingLine(context: CommunicationContext, formal: boolean): string {
   return `Viele Grüße\n${context.companyName}`;
 }
 
+/**
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N15) — der Briefschluss eines Entwurfs.
+ *
+ * Die Entwurfstexte (Erinnerung, Mahnung, Antwort …) enden bereits mit Grussformel und
+ * Firma. Die Kanaldarstellung hängte trotzdem ihren eigenen Schluss an — in Mahnung und
+ * Erinnerung stand „Mit freundlichen Grüßen" mit Firma zweimal; der Brief setzte zudem
+ * eine zweite Anrede davor. Erkannt wird ein Schluss nur am Ende (Grussformel und höchstens
+ * zwei Zeilen danach), wie beim Anhängen der E-Mail-Signatur (`appendSignatureOnce`).
+ */
+const CLOSING_LINE =
+  /^(mit freundlichen(, vorzüglichen)? grüßen|freundliche grüße|viele grüße|beste grüße|herzliche grüße)\s*,?$/i;
+
+export function splitTrailingClosing(body: string): { main: string; closing: string | null } {
+  const lines = body.replace(/\s+$/, '').split('\n');
+  for (let index = lines.length - 1; index >= Math.max(0, lines.length - 3); index -= 1) {
+    if (CLOSING_LINE.test(lines[index].trim())) {
+      return { main: lines.slice(0, index).join('\n').replace(/\s+$/, ''), closing: lines.slice(index).join('\n') };
+    }
+  }
+  return { main: body.replace(/\s+$/, ''), closing: null };
+}
+
+const SALUTATION = /^Sehr geehrte|^Guten Tag|^Hallo/m;
+
 function shortenBody(body: string): string {
-  const lines = body.split('\n').filter((line) => line.trim());
+  // WEISS N15 — der Schluss des Entwurfs fällt weg; die Kurzfassung bekommt ihren eigenen.
+  const lines = splitTrailingClosing(body).main.split('\n').filter((line) => line.trim());
   const essential = lines.filter(
     (line) =>
       !line.startsWith('Mit freundlichen') &&
@@ -49,30 +76,35 @@ export function renderCommunicationDraft(
     };
   }
 
+  const hasGreeting = SALUTATION.test(coreDraft.body);
+  // WEISS N15 — trägt der Entwurf seinen Schluss schon, kommt keiner hinzu.
+  const ownClosing = splitTrailingClosing(coreDraft.body).closing;
+
   if (channel === 'email') {
-    const hasGreeting = /^Sehr geehrte|^Guten Tag|^Hallo/m.test(coreDraft.body);
     return {
       ...coreDraft,
       channel,
       subject: coreDraft.subject ?? context.subject ?? 'Nachricht',
       greeting: hasGreeting ? undefined : recipientLine(context, true),
       body: coreDraft.body,
-      closing: closingLine(context, true),
+      closing: ownClosing ? undefined : closingLine(context, true),
       tone: coreDraft.tone === 'short' ? 'neutral' : coreDraft.tone,
     };
   }
 
-  // letter – formal
-  const today = new Date().toISOString().slice(0, 10);
+  /*
+   * letter – formal. WEISS N15: Anrede und Schluss nur, wenn der Entwurf sie nicht schon
+   * trägt; das Datum als Geschäftstag (Europe/Berlin) in deutscher Schreibweise statt des
+   * UTC-Tages im ISO-Format.
+   */
+  const today = formatDisplayDatePadded(getBusinessDay());
   const letterBody = [
     context.companyName,
     today,
     '',
-    recipientLine(context, true),
-    '',
+    ...(hasGreeting ? [] : [recipientLine(context, true), '']),
     coreDraft.body,
-    '',
-    closingLine(context, true),
+    ...(ownClosing ? [] : ['', closingLine(context, true)]),
   ].join('\n');
 
   return {

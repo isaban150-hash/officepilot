@@ -33,6 +33,11 @@ interface CustomerDecisionChoiceProps {
    * Vorgangsdialog unverändert bleibt.
    */
   allowNone?: boolean;
+  /**
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N05) — ohne Schreibrecht auf Kundenstammdaten
+   * (Mitglied) entfällt „neuer Kunde"; der Server würde die Anlage abweisen.
+   */
+  allowNew?: boolean;
 }
 
 const EXTRA_FIELD_LABELS: Array<{ field: keyof CustomerExtraFields; labelKey: TranslationKey }> = [
@@ -102,12 +107,13 @@ export function CustomerDecisionChoice({
   extraFields,
   onExtraFieldChange,
   allowNone = true,
+  allowNew = true,
 }: CustomerDecisionChoiceProps) {
   const { translate, language } = useApp();
   const hasCustomers = customers.length > 0;
 
   const options: Array<{ value: CustomerDecisionMode; label: string; disabled?: boolean }> = [
-    { value: 'new', label: translate('customerDecision.new') },
+    ...(allowNew ? [{ value: 'new' as const, label: translate('customerDecision.new') }] : []),
     {
       value: 'existing',
       label: translate('customerDecision.existing'),

@@ -3,6 +3,7 @@ import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { createTestVorgang } from '../test/fixtures';
 import {
   documentDunningDelivery,
+  getDunningDocumentationsForInvoice,
   resetDunningDocumentations,
 } from './dunningDocumentationService';
 import {
@@ -86,12 +87,15 @@ describe('critical flows persist failure', () => {
       documentedAt: '2026-01-10',
       deliveryMethod: 'email',
     });
-    expect(result.ok).toBe(true);
+    /*
+     * FINANZ-CORE-01A (ZAH-20) — erst gespeichert, dann gezählt. Bisher meldete der Dienst Erfolg und
+     * hielt den Nachweis im Arbeitsspeicher; er setzte die Mahnstufe, obwohl er nach dem Neuladen
+     * fehlte. Jetzt: kein Erfolg, kein Nachweis — der Fehlerzustand bleibt wie bisher sichtbar.
+     */
+    expect(result).toEqual({ ok: false, reason: 'persist_failed' });
     expect(getLastPersistSuccess()).toBe(false);
     expect(getPersistenceHealthSnapshot().hasFailure).toBe(true);
-    if (result.ok) {
-      expect(result.documentation.kind).toBe('payment_reminder');
-    }
+    expect(getDunningDocumentationsForInvoice('v-test-1', 'inv-crit-1')).toEqual([]);
   });
 
   it('successful persistAll after failure clears health for subsequent success feedback', () => {

@@ -2,6 +2,7 @@ import {
   formatManagingDirectorLine,
   formatRegisterLine,
 } from '../../services/invoice/companyDocumentLines';
+import { formatCompanyLegalName } from '../../services/company/companyLegalName';
 import type { InvoicePrintModel } from '../../types/models';
 
 interface Props {
@@ -32,8 +33,8 @@ export function InvoiceFooter({ model }: Props) {
       {model.footerNotes.trim() && <p className="invoice-footer__notes">{model.footerNotes}</p>}
       <div className="invoice-footer__legal">
         <p className="invoice-footer__company">
-          {company.companyName}
-          {company.legalForm ? ` ${company.legalForm}` : ''}
+          {/* FINANZ-CORE-01A (AUS-06 / WEISS-Nacharbeit N14) — Firmierung ohne doppelte Rechtsform. */}
+          {formatCompanyLegalName(company.companyName, company.legalForm)}
         </p>
         {address && <p>{address}</p>}
         {directorLine && <p data-testid="invoice-footer-director">{directorLine}</p>}

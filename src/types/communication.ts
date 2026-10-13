@@ -83,7 +83,16 @@ export interface CommunicationInvoiceSummary {
   issueDate?: string;
   currency?: string;
   customerName?: string;
+  /**
+   * FINANZ-CORE-01A (ZAH-12) — Zahlungsstand für Erinnerung und Mahnung:
+   * storniert, nicht versendet, beglichen, noch nicht fällig oder fällig
+   * (Zahlungsziel überschritten oder keines gesetzt).
+   */
+  paymentState?: CommunicationInvoicePaymentState;
 }
+
+/** FINANZ-CORE-01A (ZAH-12) — siehe `CommunicationInvoiceSummary.paymentState`. */
+export type CommunicationInvoicePaymentState = 'cancelled' | 'not_sent' | 'settled' | 'not_due' | 'due';
 
 export interface CommunicationExpenseSummary {
   id: string;

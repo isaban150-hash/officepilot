@@ -19,6 +19,9 @@ import { formatInvoiceCurrency } from '../services/invoicePrintModel';
 import { vorgangStatusTone } from '../services/ui/statusTone';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
+import { useOptionalAuth } from '../context/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { resolveWorkspaceWriteAccess } from '../services/workspace/workspaceRoleService';
 import {
   getKundenWorkspace,
   resolveKundenLinkTargets,
@@ -88,6 +91,14 @@ export function KundenLegacyLinkResolver() {
 
 export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
   const { translate, showToast } = useApp();
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N05) — Kundenstammdaten schreiben nur Inhaber und
+   * Verwaltung (Server: can_write_workspace). Ein Mitglied bekam bisher trotzdem ein
+   * speicherbares Formular; der Server wies die Änderung ab, lokal blieb sie stehen.
+   * Wie bei GLS01: ohne bestätigte Schreibberechtigung kein Formular.
+   */
+  const authUser = useOptionalAuth()?.user ?? null;
+  const darfKundenSchreiben = resolveWorkspaceWriteAccess({ userId: authUser?.id, cloudConfigured: isSupabaseConfigured() }).canWrite;
   const params = useParams<{ customerId?: string; legacyKey?: string }>();
   const navigate = useNavigate();
   // React Router already decodes the parameter — never decode a second time.
@@ -192,7 +203,7 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
     ) : undefined;
   /* Editing exists only for an id-customer; legacy and orphan stay read-only. */
   const editAction =
-    editableCustomer && !editing ? (
+    editableCustomer && !editing && darfKundenSchreiben ? (
       <Button
         variant="secondary"
         data-testid="kunden-edit-action"
@@ -234,7 +245,7 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
       <div className="work-detail-grid work-detail-grid--side-first kunden-detail__grid">
       <div className="work-detail-grid__side">
       <DetailSection title={translate('kunden.detail.contactTitle')} testId="kunden-contact">
-        {editableCustomer && editing ? (
+        {editableCustomer && editing && darfKundenSchreiben ? (
           <CustomerEditForm
             customer={editableCustomer}
             busy={saving}
@@ -251,6 +262,19 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
           <DataRow label={translate('kunden.detail.phone')} value={contact.phone || '—'} />
           <DataRow label={translate('kunden.detail.email')} value={contact.email || '—'} />
           <DataRow label={translate('kunden.detail.address')} value={contact.addressLine || '—'} />
+          {/* FINANZ-CORE-01A (KUN-12) — die Angaben, die auf Rechnung und E-Rechnung landen, auch hier sichtbar. */}
+          {editableCustomer?.countryCode ? (
+            <DataRow label={translate('customer.einvoice.countryCode')} value={editableCustomer.countryCode} />
+          ) : null}
+          {editableCustomer?.vatId ? (
+            <DataRow label={translate('customer.einvoice.vatId')} value={editableCustomer.vatId} />
+          ) : null}
+          {editableCustomer?.leitwegId ? (
+            <DataRow label={translate('customer.einvoice.leitwegId')} value={editableCustomer.leitwegId} />
+          ) : null}
+          {editableCustomer?.buyerReferenceDefault ? (
+            <DataRow label={translate('customer.einvoice.buyerReferenceDefault')} value={editableCustomer.buyerReferenceDefault} />
+          ) : null}
         </SummaryList>
       </DetailSection>
 

@@ -1,29 +1,129 @@
 import { isFixedAmountAbschlag, FIXED_AMOUNT_ABSCHLAG_PRINT_DESCRIPTION } from './invoiceCalculationMode';
 import { calculateInvoiceTotals } from './invoiceService';
 import { getAbschlagDeductionsTotal } from './invoiceDeductions';
-import { fromCents, taxCentsFromNet, toCents } from './invoiceMoney';
+import { billingLineTotalMoney, fromCents, roundMoney, sumCents, taxCentsFromNet, toCents } from './invoiceMoney';
 import { formatOrderUnitDisplay } from './orderUnitMapper';
 import { getTaxRateForStatus } from './invoiceTaxService';
 import { getInvoiceDocumentTitle, usesAbschlagDeductions } from './invoiceTypeService';
 import { selectHistoricalInvoiceLogo } from './invoice/invoiceHistoricalLogo';
+import {
+  frozenSettlementShare,
+  splitAbschlagDeductions,
+  type AbschlagSettlementShare,
+} from './invoice/abschlagSkontoSplit';
 import { DEFAULT_DOCUMENT_TEMPLATE } from '../types/branding';
 import type {
+  AbschlagDeduction,
   CompanySetup,
   InvoiceDraft,
   InvoicePrintDeductionLine,
   InvoicePrintModel,
   InvoicePrintPosition,
+  InvoicePrintSummary,
   VorgangInvoice,
 } from '../types/models';
 
 export { getTaxStatusLabel } from './invoiceTaxService';
 
-function buildDeductionLines(draft: InvoiceDraft): InvoicePrintDeductionLine[] {
-  return draft.previousAbschlagDeductions.map((item, index) => ({
-    label: item.abschlagNumber ? `Abschlag ${item.abschlagNumber}` : `Abschlag ${index + 1}`,
+/**
+ * FINANZ-CORE-01A (AUS-01) — Netto und Umsatzsteuer eines Abzugs aus dem
+ * Abschlag selbst: Netto steht dort als `subtotal`, die Steuer ist der
+ * Unterschied zum Brutto — beides auf Cent, keine Rückrechnung über einen Satz.
+ */
+function deductionTaxParts(item: AbschlagDeduction): Pick<InvoicePrintDeductionLine, 'netAmount' | 'taxAmount'> {
+  if (!Number.isFinite(item.subtotal) || !Number.isFinite(item.amount)) return {};
+  const netCents = toCents(item.subtotal);
+  return { netAmount: fromCents(netCents), taxAmount: fromCents(toCents(item.amount) - netCents) };
+}
+
+function deductionTotals(lines: InvoicePrintDeductionLine[]): Pick<InvoicePrintSummary, 'deductionsNetTotal' | 'deductionsTaxTotal'> {
+  if (lines.length === 0 || lines.some((line) => line.netAmount === undefined || line.taxAmount === undefined)) return {};
+  return {
+    deductionsNetTotal: fromCents(sumCents(lines.map((line) => toCents(line.netAmount!)))),
+    deductionsTaxTotal: fromCents(sumCents(lines.map((line) => toCents(line.taxAmount!)))),
+  };
+}
+
+function deductionLabel(item: AbschlagDeduction, index: number): string {
+  return item.abschlagNumber ? `Abschlag ${item.abschlagNumber}` : `Abschlag ${index + 1}`;
+}
+
+function billedDeductionLines(deductions: readonly AbschlagDeduction[]): InvoicePrintDeductionLine[] {
+  return deductions.map((item, index) => ({
+    label: deductionLabel(item, index),
     invoiceNumber: item.invoiceNumber,
     amount: item.amount,
+    ...deductionTaxParts(item),
   }));
+}
+
+/** Wie ein abgezogener Abschlag beglichen ist — unbekannt heisst: wie abgerechnet. */
+export type DeductionSettlementOf = (deduction: AbschlagDeduction) => AbschlagSettlementShare | null;
+
+type DeductionSummary = Pick<
+  InvoicePrintSummary,
+  | 'deductionLines'
+  | 'deductionsNetTotal'
+  | 'deductionsTaxTotal'
+  | 'skontoLines'
+  | 'deductionsPaidTotal'
+  | 'skontoTotal'
+  | 'skontoNetTotal'
+  | 'skontoTaxTotal'
+  | 'roundingAmount'
+>;
+
+/**
+ * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — die Abzüge einer Schlussrechnung samt Skonto.
+ *
+ * Ohne Skonto unverändert: je Abschlag der abgerechnete Betrag mit Netto und Steuer.
+ * Mit Skonto steht je Abschlag der **gezahlte** Teil (vereinnahmtes Teilentgelt samt
+ * Steuer, § 14 Abs. 5 Satz 2 UStG) und daneben das gewährte Skonto als eigene Zeile —
+ * dieselbe Aufteilung, aus der die E-Rechnung BT-113 und den Nachlass bildet
+ * (`splitAbschlagDeductions`). „Bereits berechnet" und der Restbetrag bleiben, was
+ * abgerechnet wurde.
+ */
+function buildDeductionSummary(
+  deductions: readonly AbschlagDeduction[],
+  invoice: { subtotalNet: number; taxRate: number },
+  settlementOf: DeductionSettlementOf,
+): DeductionSummary {
+  const billed = billedDeductionLines(deductions);
+  const split = splitAbschlagDeductions(deductions, invoice, settlementOf);
+  if (!split.hasSkonto) return { deductionLines: billed, ...deductionTotals(billed) };
+  return {
+    deductionLines: split.parts.map((part, index) =>
+      part.skonto > 0
+        ? {
+            label: deductionLabel(part.deduction, index),
+            invoiceNumber: part.deduction.invoiceNumber,
+            amount: part.paid,
+            netAmount: part.paidNet,
+            taxAmount: part.paidTax,
+            paidPart: true,
+          }
+        : billed[index]!,
+    ),
+    ...deductionTotals(billed),
+    skontoLines: split.parts.flatMap((part, index) =>
+      part.skonto > 0
+        ? [
+            {
+              label: `Skonto auf ${deductionLabel(part.deduction, index)}`,
+              invoiceNumber: part.deduction.invoiceNumber,
+              amount: part.skonto,
+              netAmount: part.skontoNet,
+              taxAmount: part.skontoTax,
+            },
+          ]
+        : [],
+    ),
+    deductionsPaidTotal: split.paidTotal,
+    skontoTotal: split.skontoTotal,
+    skontoNetTotal: split.skontoNetTotal,
+    skontoTaxTotal: split.skontoTaxTotal,
+    roundingAmount: split.roundingAmount,
+  };
 }
 
 function buildPositions(draft: InvoiceDraft): InvoicePrintPosition[] {
@@ -48,17 +148,10 @@ function buildPositions(draft: InvoiceDraft): InvoicePrintPosition[] {
       description: position.description,
       quantity: position.quantity,
       unit: formatOrderUnitDisplay(position.unit, position.unitLabel),
-      unitPrice: position.unitPrice,
-      lineTotal: position.quantity * position.unitPrice,
+      // FINANZ-CORE-01A — dieselbe Zeile wie Freigabe und Server: Preis auf Cent, exakt gerechnet.
+      unitPrice: roundMoney(position.unitPrice),
+      lineTotal: billingLineTotalMoney(position.quantity, position.unitPrice),
     }));
-}
-
-function buildDeductionLinesFromInvoice(invoice: VorgangInvoice): InvoicePrintDeductionLine[] {
-  return (invoice.previousAbschlagDeductions ?? []).map((item, index) => ({
-    label: item.abschlagNumber ? `Abschlag ${item.abschlagNumber}` : `Abschlag ${index + 1}`,
-    invoiceNumber: item.invoiceNumber,
-    amount: item.amount,
-  }));
 }
 
 function buildPositionsFromInvoice(invoice: VorgangInvoice): InvoicePrintPosition[] {
@@ -128,8 +221,9 @@ export function buildInvoicePrintModelFromInvoice(invoice: VorgangInvoice): Invo
       taxRate,
       taxAmount,
       grossTotal,
-      deductionLines: buildDeductionLinesFromInvoice(invoice),
       deductionsTotal,
+      // N02-R1 — die freigegebene Schlussrechnung liest nur ihre eingefrorene Aufteilung.
+      ...buildDeductionSummary(deductions, { subtotalNet: invoice.subtotal, taxRate }, frozenSettlementShare),
       amountDue,
     },
     taxStatus: invoice.taxStatus,
@@ -142,9 +236,19 @@ export function buildInvoicePrintModelFromInvoice(invoice: VorgangInvoice): Invo
   };
 }
 
+export interface InvoicePrintModelOptions {
+  /**
+   * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — der aktuelle Zahlungsstand der abgezogenen
+   * Abschläge, damit die Vorschau schon zeigt, was die Freigabe einfriert. Ohne Angabe
+   * steht jeder Abzug wie abgerechnet da.
+   */
+  settlementOf?: DeductionSettlementOf;
+}
+
 export function buildInvoicePrintModel(
   draft: InvoiceDraft,
   setup: CompanySetup,
+  options: InvoicePrintModelOptions = {},
 ): InvoicePrintModel {
   const totals = calculateInvoiceTotals(draft, setup);
   const grossTotal = fromCents(toCents(totals.subtotal) + toCents(totals.tax));
@@ -173,8 +277,12 @@ export function buildInvoicePrintModel(
       taxRate: totals.taxRate,
       taxAmount: totals.tax,
       grossTotal,
-      deductionLines: buildDeductionLines(draft),
       deductionsTotal,
+      ...buildDeductionSummary(
+        draft.previousAbschlagDeductions,
+        { subtotalNet: totals.subtotal, taxRate: totals.taxRate },
+        options.settlementOf ?? (() => null),
+      ),
       amountDue: usesAbschlagDeductions(draft.type) ? amountDue : grossTotal,
     },
     taxStatus: draft.taxStatus,
@@ -193,8 +301,19 @@ export function formatInvoiceCurrency(value: number): string {
 
 export function formatInvoiceDate(value: string): string {
   if (!value) return '—';
+  /*
+   * FINANZ-CORE-01A (AUS-19) — ein reines Datum wird als Kalendertag gelesen, nicht als
+   * UTC-Mitternacht: In einer Zeitzone westlich von UTC stand sonst der Vortag da. Und ein
+   * unlesbarer Wert erscheint als er selbst statt als „Invalid Date".
+   */
+  const tag = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (tag) {
+    const datum = new Date(Number(tag[1]), Number(tag[2]) - 1, Number(tag[3]), 12);
+    if (!Number.isNaN(datum.getTime())) return datum.toLocaleDateString('de-DE');
+  }
   try {
-    return new Date(value).toLocaleDateString('de-DE');
+    const datum = new Date(value);
+    return Number.isNaN(datum.getTime()) ? value : datum.toLocaleDateString('de-DE');
   } catch {
     return value;
   }

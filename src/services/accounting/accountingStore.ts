@@ -5,6 +5,7 @@
  * der Persistenz. Keine eigene Speicherwelt.
  */
 import type { AccountingAssignment, AccountingSourceType } from '../../types/accounting';
+import { findCanonicalAccountingAssignment } from './accountingCanonical';
 
 let assignments: AccountingAssignment[] = [];
 
@@ -41,9 +42,11 @@ export function getAccountingAssignmentForSource(
   sourceType: AccountingSourceType,
   sourceId: string,
 ): AccountingAssignment | undefined {
-  const found = assignments.find(
-    (item) => item.sourceType === sourceType && item.sourceId === sourceId,
-  );
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N09) — liegen lokal doch zwei vor, wählt die
+   * Detailansicht dieselbe wie Export und Übersicht (`accountingCanonical`), nicht die erste.
+   */
+  const found = findCanonicalAccountingAssignment(assignments, sourceType, sourceId);
   return found ? clone(found) : undefined;
 }
 

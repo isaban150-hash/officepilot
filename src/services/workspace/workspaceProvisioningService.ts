@@ -852,11 +852,22 @@ export function mergeRemoteWorkspacePullIntoState(
    */
   const remoteCustomerRows = pull.customers ?? [];
   if (remoteCustomerRows.length > 0) {
+    /*
+     * FINANZ-CORE-01A (WEISS-Nacharbeit N04/N05) — der Dirty-Zustand aus der Outbox
+     * **dieses** Zustands (wie beim Vorgang): offene Aufträge schützen eine ungesicherte
+     * lokale Änderung; endgültig abgewiesene (`failed`) nehmen den Cloud-Stand an.
+     */
+    const dirtyCustomerIds = activeOutboxEntityIds(state, 'customer');
+    const rejectedCustomerIds = new Set(
+      (state.syncOutbox ?? [])
+        .filter((entry) => entry.entityType === 'customer' && entry.status === 'failed')
+        .map((entry) => entry.entityId),
+    );
     // CREATE-RETRY-CONFLICT-02 — dieselbe Vorab-Wiederherstellung wie beim Vorgang.
     const customerAdoption = planCustomerLostAckAdoption(
       state.customers ?? [],
       remoteCustomerRows,
-      activeOutboxEntityIds(state, 'customer'),
+      dirtyCustomerIds,
     );
     const adoptedCustomerIds = new Set([...customerAdoption.adopt, ...customerAdoption.settle]);
 
@@ -873,14 +884,19 @@ export function mergeRemoteWorkspacePullIntoState(
         : remoteCustomerRows,
       state.syncClient!.deviceId,
       workspaceId,
+      dirtyCustomerIds,
+      rejectedCustomerIds,
     );
 
     applyLostAckAdoptionToOutbox(state, 'customer', customerAdoption);
-    if (customerMerge.conflicts.length > 0) {
-      conflicts.push(...customerMerge.conflicts);
-    } else {
-      next.customers = customerMerge.customers;
-    }
+    /*
+     * FINANZ-CORE-01A (WEISS-Nacharbeit N05) — wie bei Notizen und Angeboten: Das Ergebnis
+     * wird immer übernommen. Bisher verwarf ein einziger strittiger Kunde den ganzen Abzug,
+     * und kein anderer Kunde kam mehr an. Gefahrlos, weil der Merge eine strittige Zeile
+     * nicht anfasst — sie bleibt lokal stehen und wird weiter gemeldet.
+     */
+    conflicts.push(...customerMerge.conflicts);
+    next.customers = customerMerge.customers;
   }
 
   /*

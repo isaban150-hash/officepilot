@@ -26,7 +26,9 @@ export const trDelivery = {
   'delivery.dialog.body': 'Mesaj',
   'delivery.dialog.bodyRequired': 'Lütfen bir mesaj girin.',
   'delivery.dialog.attachment': 'Ek',
-  'delivery.dialog.attachmentHint': 'Onaylanmış fatura — detayda ve PDF olarak gösterildiği haliyle.',
+  'delivery.dialog.attachmentHint': 'Onaylanmış fatura PDF olarak – detay görünümündeki bilgilerle aynı.',
+  'delivery.bounced.invoiceWarning':
+    'Bu faturayı içeren e-posta teslim edilemedi. Vade ve ihtar, faturanın ulaşmış olmasını gerektirir – bu nedenle ödeme hatırlatması önerilmez. Lütfen faturayı yeniden iletin (başka adres veya posta) ve gönderimi yeniden kaydedin.',
   'delivery.dialog.confirmRecipientChanged': 'Adres, müşteride kayıtlı adresten farklı. Yine de bu adrese gönderilsin mi?',
   'delivery.dialog.confirmResend': 'Bu fatura zaten OfficeTakt ile gönderildi. Gerçekten yeniden gönderilsin mi?',
   'delivery.dialog.retryHint': 'Başarısız gönderim sonrası yeni deneme. Alıcıyı ve metni düzenleyebilirsiniz.',
@@ -36,6 +38,8 @@ export const trDelivery = {
   'delivery.phase.creating': 'Gönderim kaydı oluşturuluyor …',
   'delivery.phase.sending': 'Gönderiliyor …',
   'delivery.phase.refreshing': 'Durum yükleniyor …',
+  // FINANZ-CORE-01A (AUS-19) — ein durch einen neueren Versuch abgelöster, nie gesendeter Versuch.
+  'delivery.status.superseded': 'Yerine yenisi geldi – gönderilmedi',
   'delivery.status.queued': 'İşleniyor',
   'delivery.status.prepared': 'Hazırlandı',
   'delivery.status.provider_accepted': 'E-posta servisine iletildi',

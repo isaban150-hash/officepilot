@@ -48,6 +48,11 @@ export interface WorkspaceInvoicePaymentAddInput {
   note?: string;
   /** 02B — optional; nur gesendet, wenn gesetzt. */
   method?: PaymentMethod;
+  /**
+   * FINANZ-CORE-01A (SQL-05) — vom Nutzer bestätigte Überzahlung. Nur gesendet, wenn
+   * gesetzt; ein Server ohne den Parameter prüft ohnehin keine Überzahlung.
+   */
+  overpaymentAcknowledged?: boolean;
 }
 
 /**
@@ -66,6 +71,18 @@ export type InvoicePaymentCloudOutcome =
    * Berechtigung, und ein spaeterer Versuch aendert daran nichts.
    */
   | 'denied'
+  /**
+   * FINANZ-CORE-01A (SQL-05/ZAH-02) — der Server hält die Zahlung für eine
+   * Überzahlung ohne Bestätigung (meist hat ein anderes Gerät inzwischen gesichert).
+   * Kein Netzproblem: Ein neuer Versuch ändert nichts, bis der Nutzer entscheidet —
+   * doppelt erfasst (entfernen) oder echte Überzahlung (bestätigen).
+   */
+  | 'overpayment_unconfirmed'
+  /**
+   * FINANZ-CORE-01A (ZAH-19) — die Rechnung ist inzwischen storniert (etwa auf einem anderen
+   * Gerät). Endgültig: Kein neuer Versuch kann diese Zahlung noch sichern.
+   */
+  | 'invoice_cancelled'
   | 'failed';
 
 export type InvoicePaymentCloudResult =
@@ -192,7 +209,20 @@ function outcomeForMessage(message: string): Exclude<InvoicePaymentCloudOutcome,
   // KONTOSPERRE — auch "Kein Zugriff", "Keine Schreibberechtigung" und account_blocked sind endgueltig:
   // Das Formular nimmt die Zahlung dann zurueck, statt sie als "noch nicht gesichert" stehen zu lassen.
   if (isFinancialActionDenial(message) || isFinalPermissionDenialMessage(message)) return 'denied';
+  // FINANZ-CORE-01A (SQL-05) — eine Fachentscheidung des Nutzers, kein Netzproblem.
+  if (message.includes('invoice_payment_overpayment_unconfirmed')) return 'overpayment_unconfirmed';
+  if (message.includes('Rechnung storniert')) return 'invoice_cancelled';
   return isConflictMessage(message) ? 'conflict' : 'failed';
+}
+
+/**
+ * FINANZ-CORE-01A (SQL-05) — kennt der Server den Bestätigungsparameter noch nicht
+ * (Migration nicht angewendet), antwortet PostgREST mit PGRST202. Dann wird ohne ihn
+ * wiederholt: Ein solcher Server prüft auch keine Überzahlung.
+ */
+function isUnknownRpcSignature(error: { code?: string; message?: string }): boolean {
+  if (error.code === 'PGRST202') return true;
+  return /could not find the function/i.test(error.message ?? '');
 }
 
 /**
@@ -243,7 +273,7 @@ export async function addInvoicePaymentToCloud(
 
   let data: unknown;
   try {
-    const response = await client.rpc('add_workspace_invoice_payment', {
+    const params = {
       p_workspace_id: workspaceId,
       p_client_invoice_id: clientInvoiceId,
       p_client_payment_id: clientPaymentId,
@@ -256,7 +286,15 @@ export async function addInvoicePaymentToCloud(
        * gegen einen Server ohne die Erweiterung gültig.
        */
       ...(method ? { p_method: method } : {}),
+    };
+    let response = await client.rpc('add_workspace_invoice_payment', {
+      ...params,
+      // FINANZ-CORE-01A (SQL-05) — nur wenn bestätigt; sonst entscheidet der Serverstandard (false).
+      ...(input.overpaymentAcknowledged ? { p_overpayment_acknowledged: true } : {}),
     });
+    if (response.error && input.overpaymentAcknowledged && isUnknownRpcSignature(response.error)) {
+      response = await client.rpc('add_workspace_invoice_payment', params);
+    }
     if (response.error) {
       const message = response.error.message ?? '';
       return { outcome: outcomeForMessage(message), detail: message || undefined };

@@ -21,6 +21,7 @@ import {
   replaceAccountingAssignment,
 } from './accountingStore';
 import { getChartOfAccounts } from './accountingSettingsService';
+import { isAccountingTaxInLineWithSource, isResolvedAccountingTaxTreatment } from './accountingCanonical';
 import { suggestExpenseAccounting, suggestInvoiceAccounting } from './accountingSuggestionService';
 import type { Expense } from '../../types/expense';
 import type { VorgangInvoice } from '../../types/models';
@@ -208,12 +209,20 @@ export function updateAccountingAssignment(
  * „Vorhanden" heisst dasselbe wie beim Bestätigen: nicht leer.
  */
 export function resolveVisibleSuggestionReason(
-  assignment: Pick<AccountingAssignment, 'status' | 'suggestionReason' | 'accountNumber'>,
+  assignment: Pick<AccountingAssignment, 'status' | 'suggestionReason' | 'accountNumber'> &
+    Partial<Pick<AccountingAssignment, 'taxTreatment'>>,
 ): string | null {
   if (!assignment.suggestionReason || assignment.status === 'confirmed') return null;
   if (
     assignment.suggestionReason === 'accounting.reason.noAccountCatalog' &&
     assignment.accountNumber.trim()
+  ) {
+    return null;
+  }
+  // FINANZ-CORE-01A (WEISS N06) — „Steuer unklar" ist erledigt, sobald die Kontierung eine geklärte Steuer trägt.
+  if (
+    assignment.suggestionReason === 'accounting.reason.taxUnclear' &&
+    isResolvedAccountingTaxTreatment(assignment.taxTreatment)
   ) {
     return null;
   }
@@ -223,7 +232,16 @@ export function resolveVisibleSuggestionReason(
 export interface ConfirmAccountingOptions {
   /** Wer bestätigt, soweit ein Nutzerkontext vorliegt. */
   confirmedBy?: string;
+  /**
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N06) — der aktuelle Steuerstatus des Belegs, soweit
+   * der Aufrufer ihn kennt. Die Kontierung folgt ihm; eine abweichende Steuer wird nicht
+   * bestätigt.
+   */
+  sourceTaxTreatment?: AccountingTaxTreatment;
 }
+
+// FINANZ-CORE-01A (WEISS-Nacharbeit N06) — eine geklärte Steuerbehandlung; die Regel steht in `accountingCanonical`.
+export { isResolvedAccountingTaxTreatment };
 
 /**
  * Die ausdrückliche Bestätigung.
@@ -231,6 +249,12 @@ export interface ConfirmAccountingOptions {
  * Ohne Sachkonto wird abgewiesen — dieselbe Regel steht serverseitig in
  * `validate_workspace_accounting_payload`. Eine bestätigte Kontierung ohne
  * Konto wäre eine grüne Zeile ohne Buchung.
+ *
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N06) — ebenso ohne geklärte Steuerbehandlung:
+ * Eine bestätigte, exportfähige Kontierung mit „unklar" versteckte eine offene
+ * Steuerfrage hinter einem grünen Haken. Auch das prüft der Server. Und nicht mit
+ * einer anderen Steuer als der des Belegs: Sonst stünde im Export „19 %" an einem
+ * Beleg, der selbst noch „unklar" oder „7 %" sagt.
  */
 export function confirmAccountingAssignment(
   id: string,
@@ -241,6 +265,12 @@ export function confirmAccountingAssignment(
 
   if (!existing.accountNumber.trim()) {
     return { success: false, errorKey: 'accounting.confirmNeedsAccount' };
+  }
+  if (!isResolvedAccountingTaxTreatment(existing.taxTreatment)) {
+    return { success: false, errorKey: 'accounting.confirmNeedsTax' };
+  }
+  if (!isAccountingTaxInLineWithSource(existing.taxTreatment, options.sourceTaxTreatment)) {
+    return { success: false, errorKey: 'accounting.confirmTaxMismatch' };
   }
 
   const timestamp = nowIso();
@@ -281,6 +311,101 @@ export function markAccountingAssignmentUnclear(id: string): AccountingResult {
   enqueue(stored, 'update');
   persistAll();
   return { success: true, assignment: stored };
+}
+
+/** FINANZ-CORE-01A (WEISS-Nacharbeit N06) — was die Kontierung vom Beleg wissen muss. */
+export interface AccountingSourceState {
+  /** Der aktuelle Steuerstatus des Belegs — die Kontierung folgt ihm. */
+  taxTreatment?: AccountingTaxTreatment;
+  /** Hat sich der Beleg fachlich geändert? Ohne Angabe: ja. */
+  changed?: boolean;
+}
+
+/**
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N06) — Stand und Begründung, nachdem die
+ * Kontierung dem Beleg gefolgt ist. Eine ungeklärte Steuer geht in die Klärung; eine
+ * Bestätigung, die einem anderen Stand galt, fällt; eine andere offene Frage (Gutschrift,
+ * ausdrücklich „Klärung nötig") bleibt stehen.
+ */
+function followSourceStatus(
+  existing: AccountingAssignment,
+  taxTreatment: AccountingTaxTreatment,
+  sourceChanged: boolean,
+): Pick<AccountingAssignment, 'status' | 'suggestionReason' | 'confirmedAt' | 'confirmedBy'> {
+  const revoked = { confirmedAt: undefined, confirmedBy: undefined };
+  if (!isResolvedAccountingTaxTreatment(taxTreatment)) {
+    return { status: 'needs_clarification', suggestionReason: 'accounting.reason.taxUnclear', ...revoked };
+  }
+  if (existing.status === 'confirmed') {
+    return {
+      status: 'needs_review',
+      suggestionReason: sourceChanged ? 'accounting.reason.sourceChanged' : 'accounting.reason.sourceTaxChanged',
+      ...revoked,
+    };
+  }
+  if (existing.status === 'needs_clarification' && existing.suggestionReason !== 'accounting.reason.taxUnclear') {
+    return {
+      status: existing.status,
+      suggestionReason: existing.suggestionReason,
+      confirmedAt: existing.confirmedAt,
+      confirmedBy: existing.confirmedBy,
+    };
+  }
+  return { status: 'needs_review', suggestionReason: 'accounting.reason.sourceTaxChanged', ...revoked };
+}
+
+function followSource(
+  existing: AccountingAssignment,
+  source: AccountingSourceState,
+): AccountingAssignment | null {
+  const sourceChanged = source.changed ?? true;
+  const taxTreatment = source.taxTreatment ?? existing.taxTreatment;
+  const taxFollows = taxTreatment !== existing.taxTreatment;
+  const revokes = sourceChanged && existing.status === 'confirmed';
+  if (!taxFollows && !revokes) return null;
+  const next: AccountingAssignment = {
+    ...existing,
+    taxTreatment,
+    ...followSourceStatus(existing, taxTreatment, sourceChanged),
+    updatedAt: nowIso(),
+  };
+  const stored = replaceAccountingAssignment(existing.id, next);
+  if (!stored) return null;
+  enqueue(stored, 'update');
+  return stored;
+}
+
+/**
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N06) — der Beleg hat sich geändert. Die Kontierung
+ * folgt ihm: Sie übernimmt seinen Steuerstatus (eine Steuerwahrheit je Beleg), und hat
+ * er sich fachlich geändert (Betrag, Steuerstatus, Datum, Lieferant, Art), fällt eine
+ * Bestätigung — sie galt dem alten Stand; die Kontierung steht wieder „zu prüfen" mit
+ * einem Hinweis, warum. Gespeichert wird mit der Belegänderung (`persistAll` des Aufrufers).
+ */
+export function requireAccountingReviewAfterSourceChange(
+  sourceType: AccountingSourceType,
+  sourceId: string,
+  source: AccountingSourceState = {},
+): AccountingAssignment | null {
+  const existing = getAccountingAssignmentForSource(sourceType, sourceId);
+  if (!existing) return null;
+  return followSource(existing, source);
+}
+
+/**
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N06) — der ausdrückliche Weg für einen Altbestand,
+ * dessen Kontierung eine andere Steuer trägt als der Beleg: die Steuer des Belegs
+ * übernehmen. Danach ist die Kontierung zu prüfen (oder zu klären) und neu zu bestätigen.
+ */
+export function adoptSourceTaxTreatment(
+  id: string,
+  sourceTaxTreatment: AccountingTaxTreatment,
+): AccountingResult {
+  const existing = findById(id);
+  if (!existing) return { success: false, errorKey: 'accounting.notFound' };
+  const stored = followSource(existing, { taxTreatment: sourceTaxTreatment, changed: false });
+  if (stored) persistAll();
+  return { success: true, assignment: stored ?? existing };
 }
 
 /** Der Speicher ist die einzige Quelle; hier wird nichts nachgebaut. */

@@ -1,8 +1,8 @@
 import { isFixedAmountAbschlag } from './invoiceCalculationMode';
 import {
   fromCents,
+  billingLineTotalCents,
   isValidMoneyNumber,
-  lineTotalCents,
   roundMoney,
   sumCents,
   taxCentsFromNet,
@@ -14,7 +14,15 @@ import { getTaxRateForStatus } from './invoiceTaxService';
 import { usesAbschlagDeductions } from './invoiceTypeService';
 import { selectHistoricalInvoiceLogo } from './invoice/invoiceHistoricalLogo';
 import { getAbschlagDeductionsTotal } from './invoiceDeductions';
-import { getRemainingFixedAmountBillableNetCents } from './orderBillingRules';
+import { getRemainingFixedAmountBillableNetCents, hasDeductibleAbschlag } from './orderBillingRules';
+import { getBusinessDay } from './businessDateService';
+import { findUnsettledAbschlagDeductions } from './invoice/abschlagSettlement';
+import {
+  isPlausibleEmail,
+  isPlausibleLeitwegId,
+  isPlausibleVatId,
+  normalizeCountryCodeInput,
+} from './customer/customerFieldFormat';
 import type {
   CompanyProfile,
   CustomerBilling,
@@ -61,12 +69,42 @@ function customerBlocks(billing: CustomerBilling, errors: InvoiceValidationIssue
   }
 }
 
+/**
+ * FINANZ-CORE-01A (KUN-09) — Schreibfehler in den Empfängerangaben vor der Freigabe zeigen. Sie
+ * werden sonst mit dem Beleg eingefroren und brechen Versand oder E-Rechnung. Ein Hinweis, kein
+ * Stopp: Die Angaben können aus Angebot, Auftrag oder älteren Kundendaten stammen.
+ */
+function customerWarnings(billing: CustomerBilling, warnings: InvoiceValidationIssue[]): void {
+  if (billing.email?.trim() && !isPlausibleEmail(billing.email)) {
+    warnings.push({ code: 'customer_email_format', messageKey: 'invoice.validation.warn.customerEmail' });
+  }
+  if (billing.vatId?.trim() && !isPlausibleVatId(billing.vatId)) {
+    warnings.push({ code: 'customer_vat_id_format', messageKey: 'invoice.validation.warn.customerVatId' });
+  }
+  if (billing.countryCode?.trim() && !normalizeCountryCodeInput(billing.countryCode)) {
+    warnings.push({ code: 'customer_country_format', messageKey: 'invoice.validation.warn.customerCountry' });
+  }
+  if (billing.leitwegId?.trim() && !isPlausibleLeitwegId(billing.leitwegId)) {
+    warnings.push({ code: 'customer_leitweg_format', messageKey: 'invoice.validation.warn.customerLeitweg' });
+  }
+}
+
 function companyBlocks(company: CompanyProfile, errors: InvoiceValidationIssue[]): void {
   if (!company.companyName?.trim()) {
     errors.push({ code: 'company_name', messageKey: 'invoice.validation.companyName' });
   }
   if (!hasUsableAddress(company)) {
     errors.push({ code: 'company_address', messageKey: 'invoice.validation.companyAddress' });
+  }
+  /*
+   * FINANZ-CORE-01A (RE-09/EIN-04) — die Steuernummer oder USt-IdNr. des
+   * Ausstellers ist Pflichtangabe jeder Rechnung (§ 14 Abs. 4 Nr. 2 UStG), auch
+   * beim Kleinunternehmer. Bisher druckte das PDF sie nur, wenn vorhanden; ohne
+   * sie entstand ein nummerierter Beleg ohne Pflichtangabe. Der Server weist
+   * denselben Zustand jetzt ab (`invoice_company_tax_id_missing`).
+   */
+  if (!company.taxNumber?.trim() && !company.vatId?.trim()) {
+    errors.push({ code: 'company_tax_id', messageKey: 'invoice.validation.companyTaxId' });
   }
 }
 
@@ -85,15 +123,21 @@ function companyWarnings(company: CompanyProfile, warnings: InvoiceValidationIss
   if (!company.phone?.trim() && !company.email?.trim()) {
     warnings.push({ code: 'company_contact', messageKey: 'invoice.validation.warn.contact' });
   }
-  if (!company.skontoEnabled && !company.defaultSkonto?.trim()) {
-    warnings.push({ code: 'skonto', messageKey: 'invoice.validation.warn.skonto' });
-  }
+  /*
+   * FINANZ-CORE-01A (RE-16) — „Skonto ist nicht eingerichtet" stand bei jeder Rechnung eines
+   * Betriebs, der bewusst kein Skonto gewährt. Skonto ist eine Entscheidung, kein Mangel.
+   */
 }
 
 /**
  * Central approval validation for invoice drafts.
  * Does not invent missing customer/company/tax data.
  */
+/** FINANZ-CORE-01A (RE-17) — der Hinweis nennt eine Rechtsgrundlage (Paragraph, Gesetz, Artikel). */
+function hasTaxExemptionBasis(notice: string | undefined): boolean {
+  return /§|UStG|Art\.|Artikel|MwStSystRL|Richtlinie/i.test(notice ?? '');
+}
+
 export function validateInvoiceDraftForApproval(
   draft: InvoiceDraft,
   _companyProfile: CompanyProfile,
@@ -105,6 +149,7 @@ export function validateInvoiceDraftForApproval(
 
   // Prefer draft snapshots (what will be stored).
   customerBlocks(draft.customerBilling, blockingErrors);
+  customerWarnings(draft.customerBilling, warnings);
   companyBlocks(draft.companySnapshot, blockingErrors);
   companyWarnings(draft.companySnapshot, warnings);
   /*
@@ -119,6 +164,14 @@ export function validateInvoiceDraftForApproval(
 
   if (!draft.issueDate?.trim() || !isIsoDate(draft.issueDate)) {
     blockingErrors.push({ code: 'issue_date', messageKey: 'invoice.validation.issueDate' });
+  } else if (draft.issueDate.trim() > getBusinessDay()) {
+    /*
+     * FINANZ-CORE-01A (RE-17/SQL-15) — das Rechnungsdatum ist das Datum der
+     * Ausstellung (§ 14 Abs. 4 Nr. 3 UStG) und liegt nie in der Zukunft. Ein
+     * künftiges Datum zog bisher sogar Nummern aus dem Kreis des nächsten
+     * Jahres. Der Server weist es ebenso ab (`invoice_issue_date_in_future`).
+     */
+    blockingErrors.push({ code: 'issue_date_future', messageKey: 'invoice.validation.issueDateFuture' });
   }
   if (
     !draft.servicePeriodFrom?.trim() ||
@@ -173,6 +226,30 @@ export function validateInvoiceDraftForApproval(
       code: 'payment_due_before_issue',
       messageKey: 'invoice.validation.paymentDueBeforeIssue',
     });
+  } else if (draft.paymentDueDate < getBusinessDay()) {
+    // FINANZ-CORE-01A (ZAH-10) — ein alter Entwurf wäre mit der Freigabe sofort überfällig.
+    warnings.push({ code: 'payment_due_past', messageKey: 'invoice.validation.warn.paymentDuePast' });
+  }
+
+  /*
+   * FINANZ-CORE-01A (RE-04) — ein Pauschalabschlag verbraucht keine Menge; nur
+   * die Schlussrechnung zieht ihn ab. Eine „Rechnung" über die offene Leistung
+   * danach berechnete ihn ein zweites Mal, und eine spätere Schlussrechnung
+   * scheiterte an `deductions_exceed_total`. Eine Teilrechnung bleibt möglich
+   * (abgegrenzter Teil, Abzug in der Schlussrechnung) — mit Hinweis.
+   */
+  if (vorgang && hasDeductibleAbschlag(vorgang)) {
+    if (draft.type === 'rechnung') {
+      blockingErrors.push({
+        code: 'fixed_abschlag_requires_schluss',
+        messageKey: 'invoice.validation.fixedAbschlagRequiresSchluss',
+      });
+    } else if (draft.type === 'teilrechnung') {
+      warnings.push({
+        code: 'fixed_abschlag_deducted_in_schluss',
+        messageKey: 'invoice.validation.warn.fixedAbschlagDeductedInSchluss',
+      });
+    }
   }
 
   const fixedAmount = isFixedAmountAbschlag(draft);
@@ -247,7 +324,7 @@ export function validateInvoiceDraftForApproval(
        */
       const billableSubtotalCents = sumCents(
         activePositions
-          .map((p) => lineTotalCents(p.quantity, p.unitPrice))
+          .map((p) => billingLineTotalCents(p.quantity, p.unitPrice))
           .filter(Number.isFinite),
       );
       if (billableSubtotalCents <= 0) {
@@ -284,7 +361,7 @@ export function validateInvoiceDraftForApproval(
           messageKey: 'invoice.validation.positionPrice',
         });
       } else {
-        const lineCents = lineTotalCents(position.quantity, position.unitPrice);
+        const lineCents = billingLineTotalCents(position.quantity, position.unitPrice);
         if (!Number.isFinite(lineCents)) {
           blockingErrors.push({
             code: 'position_line_total',
@@ -322,7 +399,7 @@ export function validateInvoiceDraftForApproval(
   } else {
     const positionCents = draft.positions
       .filter((p) => p.quantity > 0)
-      .map((p) => lineTotalCents(p.quantity, p.unitPrice));
+      .map((p) => billingLineTotalCents(p.quantity, p.unitPrice));
     subtotalCents = sumCents(positionCents.filter(Number.isFinite));
   }
   const taxCents = taxCentsFromNet(subtotalCents, taxRate);
@@ -362,8 +439,51 @@ export function validateInvoiceDraftForApproval(
     });
   }
 
-  if (draft.type === 'rechnung' && !vorgang?.title?.trim()) {
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N02/D1) — abgezogen wird nur ein beglichener
+   * Abschlag (§ 14 Abs. 5 Satz 2 UStG: vereinnahmte Teilentgelte; BT-113 = bereits
+   * gezahlt). Ein unbezahlter oder teilbezahlter Abschlag sperrt die Schlussrechnung,
+   * bis er bezahlt oder — ohne Zahlung — storniert ist. Gelesen wird der Stand des
+   * Abschlags im Vorgang; der Server prüft dasselbe (`invoice_abschlag_unpaid`).
+   */
+  if (
+    usesAbschlagDeductions(draft.type) &&
+    vorgang &&
+    findUnsettledAbschlagDeductions(draft.previousAbschlagDeductions, (invoiceId) =>
+      (vorgang.invoices ?? []).find((invoice) => invoice.id === invoiceId),
+    ).length > 0
+  ) {
+    blockingErrors.push({ code: 'abschlag_unpaid', messageKey: 'invoice.validation.abschlagUnpaid' });
+  }
+
+  // FINANZ-CORE-01A (RE-16) — nur mit Auftrag; eine freie Rechnung hat keine Auftragsbezeichnung.
+  if (draft.type === 'rechnung' && vorgang && !vorgang.title?.trim()) {
     warnings.push({ code: 'vorgang_title', messageKey: 'invoice.validation.warn.project' });
+  }
+
+  /*
+   * FINANZ-CORE-01A (RE-17) — § 14 Abs. 4 Nr. 8 UStG verlangt bei einer steuerfreien
+   * Leistung einen Hinweis auf die Steuerbefreiung. Der Standardtext nennt keine
+   * Rechtsgrundlage. Ein Hinweis vor der Freigabe, kein Stopp: Der Text gehört in die
+   * Rechnungseinstellungen.
+   */
+  if (draft.taxStatus === 'tax_free' && !hasTaxExemptionBasis(draft.companySnapshot?.taxFreeNotice)) {
+    warnings.push({ code: 'tax_free_basis', messageKey: 'invoice.validation.warn.taxFreeBasis' });
+  }
+
+  /*
+   * FINANZ-CORE-01A (RE-17) — die Kleinunternehmerregelung gilt für den ganzen Betrieb. Weist
+   * ein Kleinunternehmer Umsatzsteuer aus (oder umgekehrt), schuldet er sie nach § 14c UStG
+   * bzw. fehlt sie. Ein Hinweis, weil der Steuerstatus der Rechnung bewusst änderbar ist.
+   */
+  const profileTaxStatus = draft.companySnapshot?.defaultTaxStatus;
+  const kleinunternehmerMismatch =
+    (profileTaxStatus === 'kleinunternehmer_19' &&
+      (draft.taxStatus === 'standard_19' || draft.taxStatus === 'standard_7')) ||
+    (draft.taxStatus === 'kleinunternehmer_19' &&
+      (profileTaxStatus === 'standard_19' || profileTaxStatus === 'standard_7'));
+  if (kleinunternehmerMismatch) {
+    warnings.push({ code: 'tax_status_profile', messageKey: 'invoice.validation.warn.taxStatusProfile' });
   }
 
   // Deduplicate by code
@@ -418,11 +538,28 @@ export function validateFinalizedInvoiceForPdf(
   }
 
   const draft = finalizedInvoiceToValidationDraft(invoice);
-  return validateInvoiceDraftForApproval(draft, invoice.companySnapshot, undefined, {
+  const result = validateInvoiceDraftForApproval(draft, invoice.companySnapshot, undefined, {
     // Already approved — do not re-require interactive §13b checkbox.
     reverseCharge13bConfirmed: true,
   });
+  /*
+   * FINANZ-CORE-01A (RE-09, RE-17) — Freigaberegeln, die erst seit dieser Änderung
+   * gelten, sperren keinen festgeschriebenen Beleg: Eine früher ohne Steuer-ID oder
+   * mit künftigem Datum freigegebene Rechnung bleibt druck- und archivierbar
+   * (Aufbewahrungspflicht). Neu ausgestellt wird so nichts mehr.
+   */
+  return {
+    ...result,
+    blockingErrors: result.blockingErrors.filter((issue) => !APPROVAL_ONLY_CODES.has(issue.code)),
+  };
 }
+
+/**
+ * FINANZ-CORE-01A — gelten nur beim Ausstellen, nie beim Nachdruck eines festgeschriebenen Belegs.
+ * `abschlag_unpaid` (WEISS N02): Der Nachdruck einer älteren Schlussrechnung bleibt möglich;
+ * ihre E-Rechnung prüft den Zahlungsstand der Abschläge selbst (`prepayment_not_settled`).
+ */
+const APPROVAL_ONLY_CODES: ReadonlySet<string> = new Set(['company_tax_id', 'issue_date_future', 'abschlag_unpaid']);
 
 function finalizedInvoiceToValidationDraft(invoice: VorgangInvoice): InvoiceDraft {
   const company = invoice.companySnapshot!;

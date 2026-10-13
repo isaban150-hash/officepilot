@@ -49,6 +49,12 @@ function abschlag(amount: number, overrides: Partial<VorgangInvoice> = {}): Vorg
     status: 'vorbereitet',
     date: '2026-03-01',
     createdAt: '2026-03-01T10:00:00.000Z',
+    /*
+     * FINANZ-CORE-01A (WEISS-Nacharbeit N02/D1) — eine Schlussrechnung zieht nur
+     * beglichene Abschläge ab. Diese Suite prüft den Überhang, nicht die Begleichung:
+     * Der Abschlag ist bezahlt (die Begleichungsregel prüft `schlussAbschlagBeglichenFc01a`).
+     */
+    payments: [{ id: 'pay-abschlag-1', date: '2026-03-05', amount, createdAt: '2026-03-05T10:00:00.000Z' }],
     ...overrides,
   };
 }

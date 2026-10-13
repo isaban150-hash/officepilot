@@ -5,6 +5,8 @@ import { ReadOnlyNotice } from '../../components/ui/ReadOnlyNotice';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useFormResume } from '../../hooks/useFormResume';
+import { changedProfileFields, useProfileFormBase } from '../../hooks/useProfileFormBase';
+import { getCompanyProfile } from '../../services/companyProfileService';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { getLastPersistSuccess } from '../../services/persistenceService';
 import { getInvoiceNumberSequenceSnapshot } from '../../services/invoiceNumberService';
@@ -241,6 +243,8 @@ export function CompanySettingsPage() {
   const [saving, setSaving] = useState(false);
 
   resume.observe(draft);
+  // FINANZ-CORE-01A (EIN-03) — Ausgangsstand des Entwurfs; unberührte Felder folgen dem Profil.
+  const baseRef = useProfileFormBase(companyProfile, pickFields, setDraft);
 
   const dirty = isCompanySettingsDirty(draft, companyProfile);
 
@@ -273,7 +277,13 @@ export function CompanySettingsPage() {
        * Geprüft wird das vollständige Profil mit den Seitenwerten darüber —
        * derselbe Validator wie bisher, keine eigene Oberflächenregel.
        */
-      const candidate: CompanyProfile = { ...companyProfile, ...effectiveDraft };
+      /*
+       * FINANZ-CORE-01A (EIN-03) — nur die geänderten Felder, über dem aktuellen Stand des Stores:
+       * Ein inzwischen auf einem anderen Gerät geänderter Wert geht nicht mehr verloren.
+       */
+      const changed = changedProfileFields(effectiveDraft, baseRef.current);
+      if (Object.keys(changed).length === 0) return;
+      const candidate: CompanyProfile = { ...getCompanyProfile(), ...changed };
       const validation = validateCompanyProfileForSettings(
         candidate,
         getInvoiceNumberSequenceSnapshot().lastIssuedNumber,
@@ -286,12 +296,13 @@ export function CompanySettingsPage() {
       setErrors({});
 
       // Ein kanonisches Update mit genau den Feldern dieser Seite.
-      const result = updateCompanyProfile({ ...effectiveDraft });
+      const result = updateCompanyProfile(changed);
       if (!result.success) {
         showToast(translate(result.errorKey as TranslationKey));
         return;
       }
       setDraft(pickFields(result.profile));
+      baseRef.current = pickFields(result.profile);
       resume.clearResume();
       if (!getLastPersistSuccess()) {
         showToast(translate('persist.failed.userAction'));

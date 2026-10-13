@@ -24,6 +24,8 @@ import {
 import { getAllUploadedDocuments } from '../services/uploadedDocumentService';
 import { findInvoiceById } from '../services/invoice/invoiceRegistryService';
 import { formatInvoiceCurrency, formatInvoiceDate } from '../services/invoicePrintModel';
+import { isInvoiceCancelled } from '../services/invoicePaymentService';
+import { negateMoney } from '../services/invoice/invoiceCorrectionModel';
 import { DocumentCardThumbnail } from '../components/documents/DocumentCardThumbnail';
 import { UploadedDocumentsSection } from '../components/documents/UploadedDocumentsSection';
 import {
@@ -224,15 +226,25 @@ export function DokumentePage() {
                     subtitle: doc.linkedCompany || doc.issuer || translate('document.noIssuer'),
                   }
                 : null;
+            /*
+             * FINANZ-CORE-01A (STO-11) — der Korrekturbeleg trägt sein eigenes
+             * Datum und den Gegenwert; bisher zeigte er Datum und Betrag der
+             * Originalrechnung und wirkte wie eine zweite Rechnung. Der
+             * stornierte Originalbeleg ist als solcher erkennbar.
+             */
+            const korrektur = doc.classifiedKind === 'rechnungskorrektur';
             const invoiceView = ownInvoice
               ? {
-                  title:
-                    doc.classifiedKind === 'rechnungskorrektur'
-                      ? doc.title
-                      : `${translate('document.list.invoiceTitle')} ${ownInvoice.number}`,
+                  title: korrektur
+                    ? doc.title
+                    : `${translate('document.list.invoiceTitle')} ${ownInvoice.number}${
+                        isInvoiceCancelled(ownInvoice) ? ` · ${translate('document.list.invoiceCancelled')}` : ''
+                      }`,
                   customer: ownInvoice.customerSnapshot?.name || doc.issuer || translate('document.noIssuer'),
-                  date: formatInvoiceDate(ownInvoice.issueDate ?? ownInvoice.date),
-                  amount: formatInvoiceCurrency(ownInvoice.amount),
+                  date: formatInvoiceDate(
+                    korrektur && doc.issueDate ? doc.issueDate : ownInvoice.issueDate ?? ownInvoice.date,
+                  ),
+                  amount: formatInvoiceCurrency(korrektur ? negateMoney(ownInvoice.amount) : ownInvoice.amount),
                 }
               : null;
             return (

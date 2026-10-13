@@ -9,6 +9,8 @@ import { InvoiceNumberFormatSection } from '../../components/settings/InvoiceNum
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useFormResume } from '../../hooks/useFormResume';
+import { changedProfileFields, useProfileFormBase } from '../../hooks/useProfileFormBase';
+import { getCompanyProfile } from '../../services/companyProfileService';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import {
   COMPANY_PROFILE_TEXT_LIMITS,
@@ -24,6 +26,7 @@ import {
 import { getInvoiceNumberSequenceSnapshot } from '../../services/invoiceNumberService';
 import { formatInvoiceDate } from '../../services/invoicePrintModel';
 import { buildSkontoText } from '../../services/invoiceTaxService';
+import { getBusinessDay } from '../../services/businessDateService';
 import { getLastPersistSuccess } from '../../services/persistenceService';
 import { validateCompanyProfileForSettings } from '../../services/setupValidationService';
 import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
@@ -159,8 +162,15 @@ export function InvoiceSettingsPage() {
   }));
   const [errors, setErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
+  /*
+   * FINANZ-CORE-01A (EIN-08) — Fehler in Feldern, die diese Seite nicht zeigt (Firmendaten). Bisher
+   * scheiterte das Speichern mit einer Sammelmeldung, ohne zu sagen, woran.
+   */
+  const [fremdeFehler, setFremdeFehler] = useState<TranslationKey[]>([]);
 
   resume.observe(draft);
+  // FINANZ-CORE-01A (EIN-03) — Ausgangsstand des Entwurfs; unberührte Felder folgen dem Profil.
+  const baseRef = useProfileFormBase(companyProfile, pickInvoiceSettings, setDraft);
 
   const dirty = isInvoiceSettingsDirty(draft, companyProfile);
 
@@ -198,7 +208,7 @@ export function InvoiceSettingsPage() {
     () => ({ ...companyProfile, ...buildInvoiceSettingsPayload(draft) }),
     [companyProfile, draft],
   );
-  const previewIssueDate = new Date().toISOString().slice(0, 10);
+  const previewIssueDate = getBusinessDay();
   const preview = useMemo(
     () => resolveInvoiceDefaults(candidate, setup, previewIssueDate),
     [candidate, setup, previewIssueDate],
@@ -229,25 +239,40 @@ export function InvoiceSettingsPage() {
     if (!editable || saving || !dirty) return;
     setSaving(true);
     try {
+      // FINANZ-CORE-01A (EIN-03) — nur die geänderten Felder, über dem aktuellen Stand des Stores.
+      const changed = changedProfileFields(
+        buildInvoiceSettingsPayload(draft),
+        buildInvoiceSettingsPayload(baseRef.current),
+      );
+      if (Object.keys(changed).length === 0) return;
       const validation = validateCompanyProfileForSettings(
-        candidate,
+        { ...getCompanyProfile(), ...changed },
         getInvoiceNumberSequenceSnapshot().lastIssuedNumber,
         // B2 — die IBAN steht hier nicht; streng geprüft wird sie in den Firmendaten.
         { ibanCheck: 'shape' },
       );
       if (!validation.valid) {
         setErrors(validation.errors);
-        showToast(translate('settings.company.validationSummary'));
+        const fremd = Object.entries(validation.errors)
+          .filter(([key]) => !(INVOICE_SETTINGS_FIELDS as readonly string[]).includes(key))
+          .map(([, message]) => message)
+          .filter((message): message is TranslationKey => Boolean(message));
+        setFremdeFehler([...new Set(fremd)]);
+        showToast(
+          translate(fremd.length > 0 ? 'settings.invoices.companyDataIncomplete' : 'settings.company.validationSummary'),
+        );
         return;
       }
       setErrors({});
+      setFremdeFehler([]);
 
-      const result = updateCompanyProfile(buildInvoiceSettingsPayload(draft));
+      const result = updateCompanyProfile(changed);
       if (!result.success) {
         showToast(translate(result.errorKey as TranslationKey));
         return;
       }
       setDraft(pickInvoiceSettings(result.profile));
+      baseRef.current = pickInvoiceSettings(result.profile);
       resume.clearResume();
       if (!getLastPersistSuccess()) {
         showToast(translate('persist.failed.userAction'));
@@ -286,6 +311,25 @@ export function InvoiceSettingsPage() {
           {translate('settings.invoices.historicalHint')}
         </p>
       )}
+
+      {fremdeFehler.length > 0 ? (
+        <InlineNotice
+          tone="critical"
+          testId="settings-invoices-company-errors"
+          title={translate('settings.invoices.companyDataIncomplete')}
+          action={
+            <Link to="/einstellungen/firma" data-testid="settings-invoices-company-link">
+              {translate('settings.invoices.openCompanySettings')}
+            </Link>
+          }
+        >
+          <ul>
+            {fremdeFehler.map((message) => (
+              <li key={message}>{translate(message)}</li>
+            ))}
+          </ul>
+        </InlineNotice>
+      ) : null}
 
       {/* 01C — Nummernformat ist Server-/Sequenz-Wahrheit mit eigener Speicherung, kein Profilfeld. */}
       <InvoiceNumberFormatSection editable={editable} />

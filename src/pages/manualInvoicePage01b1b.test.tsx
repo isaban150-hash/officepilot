@@ -10,6 +10,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from '../test/workspaceRoleTestUtils';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { DEFAULT_SETUP } from '../data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
@@ -54,6 +55,13 @@ function LocationProbe() {
   );
 }
 
+/*
+ * FINANZ-CORE-01A (WEISS-Nacharbeit) — jede gerenderte Wurzel wird nach dem Test abgebaut. Vorher
+ * leerte `afterEach` nur das DOM: Der Meldungs-Timer des AppProviders (3,5 s) lief dann unter Last
+ * über das Ende der Testumgebung hinaus („window is not defined", unbehandelter Fehler).
+ */
+const offeneWurzeln = new Set<Root>();
+
 async function renderPage(entry = '/rechnungen/neu'): Promise<Mount> {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -77,6 +85,7 @@ async function renderPage(entry = '/rechnungen/neu'): Promise<Mount> {
     root.render(tree);
     await Promise.resolve();
   });
+  offeneWurzeln.add(root);
   return { container, root };
 }
 
@@ -180,6 +189,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // Ein bereits abgebauter Root ignoriert den zweiten Aufruf.
+  for (const root of offeneWurzeln) await act(async () => root.unmount());
+  offeneWurzeln.clear();
   vi.restoreAllMocks();
   document.body.innerHTML = '';
   await resetInvoiceDraftDurabilityDatabaseForTests();
@@ -227,6 +239,8 @@ describe('01B1B — Schritt 1 Kunde', () => {
   });
 
   it('L5: ein neuer Kunde wird als Stammsatz angelegt und mit seiner echten Kennung übernommen', async () => {
+    // FINANZ-CORE-01A (WEISS-Nacharbeit N05) — einen neuen Kunden legen nur Inhaber und Verwaltung an.
+    alsInhaber();
     const mount = await renderPage();
     await waitFor(() => q(mount, 'manual-invoice-step-customer') !== null);
     await selectRadio(mount, 'customer-decision-new');

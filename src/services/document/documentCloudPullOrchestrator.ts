@@ -327,10 +327,21 @@ export interface DocumentCloudPullApplyResult {
 export function buildArchiveDocumentIdByInvoice(
   documents: readonly CompanyDocument[],
 ): Map<string, string> {
-  const active = documents.filter(
-    (doc) => isEntitySyncActive(doc) && isCloudEligibleGeneratedInvoiceDocument(doc),
+  /*
+   * FINANZ-CORE-01A (STO-08) — auch ein erzeugter Altbeleg aus der Zeit vor
+   * `classifiedKind` (Kategorie Ausgangsrechnung, Rechnungsverknüpfung, ohne
+   * Belegart) ist das Archivdokument seiner Rechnung. Er reist nicht in die
+   * Cloud (`isCloudEligibleGeneratedInvoiceDocument` bleibt streng), aber er
+   * liegt lokal vor — bisher löschte jeder Dokument-Abzug seinen Verweis, ein
+   * erneutes Archivieren setzte ihn wieder: der Link flatterte. Ein Beleg mit
+   * Belegart geht dem Altbeleg vor; Korrekturbelege zählen hier nie.
+   */
+  const active = documents.filter((doc) => isEntitySyncActive(doc) && Boolean(doc.linkedInvoiceId?.trim()));
+  const legacy = active.filter(
+    (doc) => doc.category === 'ausgangsrechnung' && !doc.classifiedKind?.trim(),
   );
-  return new Map(active.map((doc) => [doc.linkedInvoiceId!.trim(), doc.id]));
+  const eligible = active.filter(isCloudEligibleGeneratedInvoiceDocument);
+  return new Map([...legacy, ...eligible].map((doc) => [doc.linkedInvoiceId!.trim(), doc.id]));
 }
 
 /**

@@ -1,4 +1,5 @@
 import { getMergedUserAnswers } from './communicationQuestionService';
+import { formatDisplayDatePadded } from '../utils/displayFormat';
 import type {
   CommunicationContext,
   CommunicationDraftCore,
@@ -169,13 +170,14 @@ function buildPaymentReminderDraft(
     lines.push(`Offener Betrag: ${openAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`);
   }
   if (dueDate) {
-    lines.push(`Zahlungsziel: ${dueDate}`);
+    // FINANZ-CORE-01A (ZAH-12) — der Kunde liest „15.09.2026", nicht „2026-09-15".
+    lines.push(`Zahlungsziel: ${formatDisplayDatePadded(dueDate)}`);
   }
   lines.push('', 'Mit freundlichen Grüßen', context.companyName);
 
   const basedOnFacts = [`Rechnungsbezug: ${invoiceRef}`];
   if (openAmount !== undefined) basedOnFacts.push(`Offener Betrag aus System: ${openAmount}`);
-  if (dueDate) basedOnFacts.push(`Fälligkeit aus System: ${dueDate}`);
+  if (dueDate) basedOnFacts.push(`Fälligkeit aus System: ${formatDisplayDatePadded(dueDate)}`);
 
   return {
     intent: 'payment_reminder',
@@ -204,7 +206,8 @@ function buildDunningNoticeDraft(
     lines.push(`Offener Betrag: ${openAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`);
   }
   if (dueDate) {
-    lines.push(`Zahlungsziel: ${dueDate}`);
+    // FINANZ-CORE-01A (ZAH-12) — der Kunde liest „15.09.2026", nicht „2026-09-15".
+    lines.push(`Zahlungsziel: ${formatDisplayDatePadded(dueDate)}`);
   }
   lines.push(
     '',
@@ -216,7 +219,7 @@ function buildDunningNoticeDraft(
 
   const basedOnFacts = [`Rechnungsbezug: ${invoiceRef}`];
   if (openAmount !== undefined) basedOnFacts.push(`Offener Betrag aus System: ${openAmount}`);
-  if (dueDate) basedOnFacts.push(`Fälligkeit aus System: ${dueDate}`);
+  if (dueDate) basedOnFacts.push(`Fälligkeit aus System: ${formatDisplayDatePadded(dueDate)}`);
 
   return {
     intent: 'dunning_notice',

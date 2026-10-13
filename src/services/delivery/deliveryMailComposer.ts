@@ -19,6 +19,7 @@
  * gespeicherte Vorlage wird hier nie verändert.
  */
 import { t, type TranslationKey } from '../../i18n';
+import { formatCompanyLegalName } from '../company/companyLegalName';
 import type { AppLanguage, CompanyProfile } from '../../types/models';
 import type { DeliveryDocumentKind } from '../../types/documentDelivery';
 
@@ -112,7 +113,8 @@ export function buildDefaultEmailSignature(
   profile: Partial<Pick<CompanyProfile, 'companyName' | 'legalForm' | 'street' | 'zip' | 'city' | 'phone' | 'email'>>,
   language: AppLanguage,
 ): string {
-  const name = [profile.companyName?.trim(), profile.legalForm?.trim()].filter(Boolean).join(' ');
+  // FINANZ-CORE-01A (WEISS-Nacharbeit N14) — Firmierung ohne doppelte Rechtsform.
+  const name = formatCompanyLegalName(profile.companyName, profile.legalForm);
   const place = [profile.zip?.trim(), profile.city?.trim()].filter(Boolean).join(' ');
   const lines = [
     t('delivery.signature.greeting' as TranslationKey, language),

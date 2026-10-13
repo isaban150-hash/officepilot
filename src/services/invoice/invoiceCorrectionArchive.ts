@@ -35,6 +35,8 @@ export interface InvoiceCorrectionCloudPayload {
   companyName: string;
   vorgangTitle: string;
   originalAmount: number | null;
+  /** FINANZ-CORE-01A (SQL-11) — eigene Nummer aus dem Rechnungskreis; leer bei Altbelegen. */
+  correctionNumber: string;
 }
 
 function text(value: unknown): string {
@@ -77,6 +79,7 @@ export function parseInvoiceCorrectionPayload(
     companyName: text(company.companyName),
     vorgangTitle: text(snapshot.vorgangTitle),
     originalAmount: typeof snapshot.amount === 'number' ? snapshot.amount : null,
+    correctionNumber: text(payload.correctionNumber).trim(),
   };
 }
 
@@ -96,13 +99,26 @@ interface CorrectionDocumentFacts {
   customerName: string;
   vorgang: { vorgangId: string; vorgangTitle: string } | null;
   originalAmount: number | null;
+  /** FINANZ-CORE-01A (SQL-11) — leer bei Korrekturen ohne eigene Nummer (Altbestand). */
+  correctionNumber: string;
   createdAt: string;
   sync?: CompanyDocument['sync'];
 }
 
+/**
+ * FINANZ-CORE-01A (SQL-11) — mit eigener Nummer heißt der Beleg
+ * „Rechnungskorrektur 2026-0002 zu Rechnung 2026-0001"; ohne bleibt der bisherige Titel.
+ */
+function correctionTitle(facts: Pick<CorrectionDocumentFacts, 'correctionNumber' | 'originalInvoiceNumber'>): string {
+  return facts.correctionNumber
+    ? `${INVOICE_CORRECTION_DOCUMENT_TITLE} ${facts.correctionNumber} zu Rechnung ${facts.originalInvoiceNumber}`
+    : `${INVOICE_CORRECTION_DOCUMENT_TITLE} zu Rechnung ${facts.originalInvoiceNumber}`;
+}
+
 function buildCorrectionDocument(facts: CorrectionDocumentFacts): CompanyDocument {
   const recognizedText = [
-    `${INVOICE_CORRECTION_DOCUMENT_TITLE} zu Rechnung ${facts.originalInvoiceNumber}`,
+    correctionTitle(facts),
+    ...(facts.correctionNumber ? [`Korrekturnummer: ${facts.correctionNumber}`] : []),
     `Firma: ${facts.companyName}`,
     `Kunde: ${facts.customerName}`,
     ...(facts.vorgang ? [`Vorgang: ${facts.vorgang.vorgangTitle}`] : []),
@@ -117,7 +133,7 @@ function buildCorrectionDocument(facts: CorrectionDocumentFacts): CompanyDocumen
 
   return {
     id: facts.id,
-    title: `${INVOICE_CORRECTION_DOCUMENT_TITLE} zu Rechnung ${facts.originalInvoiceNumber}`,
+    title: correctionTitle(facts),
     category: 'ausgangsrechnung',
     classifiedKind: 'rechnungskorrektur',
     issuer: facts.companyName,
@@ -136,6 +152,7 @@ function buildCorrectionDocument(facts: CorrectionDocumentFacts): CompanyDocumen
     tags: [
       'Rechnungskorrektur',
       'Storno',
+      ...(facts.correctionNumber ? [facts.correctionNumber] : []),
       facts.originalInvoiceNumber,
       ...(facts.customerName ? [facts.customerName] : []),
       ...(facts.vorgang ? [facts.vorgang.vorgangTitle] : []),
@@ -169,6 +186,7 @@ export function buildInvoiceCorrectionDocumentFromCloudRow(
     customerName: parsed.customerName,
     vorgang: vorgangId ? { vorgangId, vorgangTitle: parsed.vorgangTitle } : null,
     originalAmount: parsed.originalAmount,
+    correctionNumber: parsed.correctionNumber,
     createdAt: row.createdAt,
     sync: {
       updatedAt: row.updatedAt,
@@ -207,6 +225,7 @@ export function projectInvoiceCorrectionDocument(
     customerName: invoice.customerSnapshot?.name ?? '',
     vorgang,
     originalAmount: invoice.amount,
+    correctionNumber: invoice.correctionNumber?.trim() ?? '',
     createdAt: invoice.cancelledAt,
   });
 }

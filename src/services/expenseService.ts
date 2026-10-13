@@ -1,5 +1,6 @@
 import { PAPER_FOLDERS } from '../data/mockData';
 import { persistAll } from './persistenceService';
+import { requireAccountingReviewAfterSourceChange } from './accounting/accountingAssignmentService';
 import {
   filterSyncActive,
   generateEntityId,
@@ -327,6 +328,25 @@ function amountChanged(next: number | undefined, current: number): boolean {
   return next !== undefined && Math.abs(next - current) > 0.004;
 }
 
+/**
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N06) — ändert sich an der Ausgabe etwas, das die
+ * Kontierung trägt (Beträge, Steuerstatus, Belegdatum, Lieferant, Art, Gutschrift),
+ * gilt eine frühere Bestätigung der Kontierung nicht mehr. Titel, Beschreibung, Ablage
+ * und Zuordnungen ändern die Buchung nicht.
+ */
+function isAccountingRelevantExpenseChange(before: Expense, after: ExpenseInput): boolean {
+  return (
+    amountChanged(after.grossAmount, before.grossAmount) ||
+    amountChanged(after.netAmount, before.netAmount) ||
+    amountChanged(after.taxAmount, before.taxAmount) ||
+    after.taxStatus !== before.taxStatus ||
+    (after.issueDate ?? '') !== (before.issueDate ?? '') ||
+    (after.supplierName ?? '').trim() !== (before.supplierName ?? '').trim() ||
+    after.category !== before.category ||
+    Boolean(after.isCreditNote) !== Boolean(before.isCreditNote)
+  );
+}
+
 export function updateExpense(id: string, changes: Partial<ExpenseInput>): ExpenseMutationResult {
   const current = getExpenseFromStoreById(id);
   if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
@@ -409,6 +429,16 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
       cancelReason: becomesCancelled ? current.cancelReason : undefined,
     }),
   );
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N06) — die Kontierung folgt dem Beleg: Sie übernimmt
+   * seinen Steuerstatus, und eine Bestätigung galt dem alten Stand, wenn sich Fachliches
+   * geändert hat. Auch ohne fachliche Änderung gleicht das Speichern einen Altbestand an,
+   * dessen Kontierung eine andere Steuer trägt als der Beleg.
+   */
+  requireAccountingReviewAfterSourceChange('expense', id, {
+    taxTreatment: updated.taxStatus,
+    changed: isAccountingRelevantExpenseChange(current, merged),
+  });
   persistAll();
   return { success: true, expense: getExpenseById(id)! };
 }

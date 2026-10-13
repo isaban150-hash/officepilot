@@ -1069,6 +1069,15 @@ export interface AbschlagDeduction {
   date: string;
   subtotal: number;
   amount: number;
+  /**
+   * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — wie der Abschlag bei der Freigabe der
+   * Schlussrechnung beglichen war, eingefroren: tatsächlich gezahlt (brutto, höchstens
+   * `amount`) und als Skonto gewährt (brutto); zusammen `amount`. Nur an freigegebenen
+   * Schlussrechnungen — der Entwurf trägt sie nicht. Der Server prüft beides gegen die
+   * gebuchten Zahlungen (`invoice_abschlag_settlement_mismatch`).
+   */
+  paidAmount?: number;
+  skontoAmount?: number;
 }
 
 export interface PaperFolder {
@@ -1332,6 +1341,12 @@ export interface InvoicePayment {
   /** 02B — optional; siehe `PaymentMethod`. */
   method?: PaymentMethod;
   createdAt: string;
+  /**
+   * FINANZ-CORE-01A (SQL-05/ZAH-02) — der Nutzer hat diese Zahlung ausdrücklich als
+   * Überzahlung bestätigt. Der Server nimmt eine Überzahlung nur mit diesem Merkmal an;
+   * es reist deshalb mit jedem (auch späteren, automatischen) Sicherungsversuch.
+   */
+  overpaymentAcknowledged?: boolean;
 }
 
 export interface InvoicePaymentInput {
@@ -1859,6 +1874,19 @@ export interface InvoicePrintDeductionLine {
   label: string;
   invoiceNumber: string;
   amount: number;
+  /**
+   * FINANZ-CORE-01A (AUS-01) — Netto und Umsatzsteuer des abgezogenen
+   * Abschlags, aus dessen eigenem Beleg (§ 14 Abs. 5 S. 2 UStG: die
+   * Teilentgelte **und die auf sie entfallenden Steuerbeträge** sind
+   * abzusetzen). Fehlt das Netto im Altbestand, bleibt beides leer.
+   */
+  netAmount?: number;
+  taxAmount?: number;
+  /**
+   * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — die Zeile nennt nur den gezahlten Teil eines
+   * mit Skonto beglichenen Abschlags; das Skonto steht in `skontoLines`.
+   */
+  paidPart?: boolean;
 }
 
 export interface InvoicePrintSummary {
@@ -1867,7 +1895,22 @@ export interface InvoicePrintSummary {
   taxAmount: number;
   grossTotal: number;
   deductionLines: InvoicePrintDeductionLine[];
+  /** Summe der Abzüge wie abgerechnet (gezahlt + Skonto); der Restbetrag rechnet damit. */
   deductionsTotal: number;
+  /** FINANZ-CORE-01A (AUS-01) — nur gesetzt, wenn jede Zeile Netto und Steuer kennt. */
+  deductionsNetTotal?: number;
+  deductionsTaxTotal?: number;
+  /**
+   * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — nur bei mit Skonto beglichenen Abschlägen:
+   * das gewährte Skonto je Abschlag, die Summe der Zahlungen (E-Rechnung BT-113), das
+   * Skonto als Nachlass (Netto BT-107, Steueranteil) und der Rundungsbetrag (BT-114).
+   */
+  skontoLines?: InvoicePrintDeductionLine[];
+  deductionsPaidTotal?: number;
+  skontoTotal?: number;
+  skontoNetTotal?: number;
+  skontoTaxTotal?: number;
+  roundingAmount?: number;
   amountDue: number;
 }
 
@@ -1906,6 +1949,11 @@ export interface InvoicePrintModel {
    */
   correction?: InvoicePrintCorrectionContext;
   /**
+   * FINANZ-CORE-01A (STO-16) — nur im PDF eines stornierten Originals: ein Nachdruck trägt den
+   * Stornovermerk. Die Bildschirmansicht setzt das Feld nicht (sie zeigt den Storno daneben).
+   */
+  cancellationNotice?: { cancelledAt: string; kind?: 'internal' | 'correction'; correctionNumber?: string };
+  /**
    * SETTINGS-01B1 — die Vorlage, mit der das Dokument erstellt wurde
    * (aus `brandingSnapshot`; fehlend = `classic`). In V1 rendert jeder Wert
    * das heutige Layout; das Feld friert nur die Wahrheit ein.
@@ -1931,10 +1979,15 @@ export interface InvoicePrintCorrectionContext {
   originalInvoiceNumber: string;
   originalIssueDate: string;
   originalInvoiceId: string;
-  /** Datum des Korrekturbelegs (= Stornodatum, UTC-Tag). */
+  /** Datum des Korrekturbelegs (= Stornodatum als Geschäftstag Europe/Berlin, STO-05). */
   correctionIssueDate: string;
   cancelledAt: string;
   cancelReason: string;
+  /**
+   * FINANZ-CORE-01A (SQL-11) — die eigene, fortlaufende Nummer des Korrekturbelegs aus
+   * dem Rechnungskreis. Fehlt bei Korrekturen von vor dieser Änderung.
+   */
+  correctionNumber?: string;
 }
 
 export interface InvoiceDraftMetadataChanges {
@@ -1951,6 +2004,8 @@ export interface InvoiceDraftMetadataChanges {
   projectTitle?: string;
   projectSite?: string;
   customerBilling?: Partial<CustomerBilling>;
+  /** FINANZ-CORE-01A (AUS-11/EIN-07) — Aufbewahrungshinweis für Privatkunden setzen bzw. entfernen. */
+  privateRetentionNotice?: boolean;
 }
 
 export interface InvoiceTotals {

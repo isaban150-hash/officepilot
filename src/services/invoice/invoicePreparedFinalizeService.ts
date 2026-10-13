@@ -561,7 +561,11 @@ function mapCloudError(
     error.code === 'position_mismatch' ||
     error.code === 'tax_status_mismatch' ||
     error.code === 'totals_mismatch' ||
-    error.code === 'customer_mismatch'
+    error.code === 'customer_mismatch' ||
+    // FINANZ-CORE-01A (RE-09, SQL-09, SQL-15) — ebenfalls vor dem Insert.
+    error.code === 'company_incomplete' ||
+    error.code === 'date_invalid' ||
+    error.code === 'abschlag_number_taken'
   ) {
     return { reason: 'server_integrity_rejected', cloudState: 'not_committed' };
   }

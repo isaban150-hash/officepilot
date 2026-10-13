@@ -61,6 +61,11 @@ interface Props {
    * heruntergeladen.
    */
   outputBlocked?: boolean;
+  /**
+   * FINANZ-CORE-01A (STO-09/AUS-08) — `correction` erzeugt die Rechnungskorrektur als
+   * Gutschrift (381) mit eigener Nummer; sie hängt am Korrekturbeleg, nicht am Original.
+   */
+  variant?: 'original' | 'correction';
 }
 
 type PanelPhase =
@@ -87,7 +92,9 @@ export function XRechnungPanel({
   ensureArtifact = ensureXRechnungArtifact,
   readArtifact = readXRechnungArtifact,
   outputBlocked = false,
+  variant = 'original',
 }: Props) {
+  const korrektur = variant === 'correction';
   const [state, setState] = useState<PanelState>({ invoiceId: invoice.id, phase: { kind: 'idle' } });
   const revokeRef = useRef<(() => void) | null>(null);
 
@@ -105,7 +112,7 @@ export function XRechnungPanel({
 
     void (async () => {
       try {
-        const vorhanden = await readArtifact(invoice);
+        const vorhanden = await readArtifact(invoice, { variant });
         if (!aktuell || !vorhanden) return;
         // Doppelte Sicherung: auch der Dienst muss zur richtigen Rechnung antworten.
         if (vorhanden.sourceInvoiceId !== invoice.id) return;
@@ -118,7 +125,7 @@ export function XRechnungPanel({
     return () => {
       aktuell = false;
     };
-  }, [invoice.id, readArtifact]);
+  }, [invoice.id, readArtifact, variant]);
 
   /** Was für **diese** Rechnung gilt — alles andere zählt nicht. */
   const phase: PanelPhase = state.invoiceId === invoice.id ? state.phase : { kind: 'idle' };
@@ -158,7 +165,7 @@ export function XRechnungPanel({
     };
 
     try {
-      const result = await ensureArtifact(invoice);
+      const result = await ensureArtifact(invoice, { variant });
       if (result.ok) {
         if (!download(result.artifact)) {
           anwenden({ kind: 'failed', message: 'Die XRechnung gehört zu einer anderen Rechnung.' });
@@ -212,10 +219,13 @@ export function XRechnungPanel({
      * nebeneinander hätten zwei getrennte Funktionen behauptet.
      */
     <section className="invoice-einvoice__format" data-testid="invoice-xrechnung-panel">
-      <h4 className="invoice-einvoice__format-title">XRechnung</h4>
+      <h4 className="invoice-einvoice__format-title">
+        {korrektur ? 'XRechnung der Rechnungskorrektur' : 'XRechnung'}
+      </h4>
       <p className="hint-text" data-testid="invoice-xrechnung-hint">
-        Strukturierte XML-Rechnung (XRechnung {EINVOICE_STANDARDS.xrechnung.generation}). Die Datei
-        wird erst auf Ihre Anforderung hin erzeugt und nicht automatisch versendet.
+        {korrektur
+          ? `Die Rechnungskorrektur als strukturierte Gutschrift (XRechnung ${EINVOICE_STANDARDS.xrechnung.generation}, Belegart 381) mit eigener Nummer und Bezug auf die Originalrechnung. Die Datei wird erst auf Ihre Anforderung hin erzeugt und nicht automatisch versendet.`
+          : `Strukturierte XML-Rechnung (XRechnung ${EINVOICE_STANDARDS.xrechnung.generation}). Die Datei wird erst auf Ihre Anforderung hin erzeugt und nicht automatisch versendet.`}
       </p>
 
       <Button
@@ -298,7 +308,8 @@ export function XRechnungPanel({
         <div className="invoice-einvoice__blocked" data-testid="invoice-xrechnung-blocked">
           <p>Für diese Rechnung kann keine XRechnung erzeugt werden:</p>
           <ul>
-            {phase.messages.map((message) => (
+            {/* FINANZ-CORE-01A (AUS-18) — gleiche Befunde (etwa zwei Zeilen mit unbekannter Einheit) nur einmal. */}
+            {[...new Set(phase.messages)].map((message) => (
               <li key={message}>{message}</li>
             ))}
           </ul>

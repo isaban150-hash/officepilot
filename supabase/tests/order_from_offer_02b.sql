@@ -42,7 +42,9 @@ $p$;
 do $$
 declare
   ws constant uuid := '00000000-0000-0000-0000-000000000b01';
-  basis constant jsonb := '{"customer":{"name":"Muster GmbH","contactPerson":"","street":"Weg 1","zip":"33602","city":"Bielefeld","email":"k@example.invalid","phone":""},"customerId":"cust-1","title":"Bad EG","baustelle":"Weg 1","offerDate":"2026-09-21","validUntil":"2026-10-21","positions":[{"id":"p1","description":"Demontage","quantity":4,"unit":"Stunden","unitPrice":55},{"id":"p2","description":"Fliesen","quantity":12.5,"unit":"m²","unitPrice":48.9},{"id":"p0","description":"leer","quantity":0,"unit":"Stück","unitPrice":9}],"taxStatus":"reverse_charge_13b","introText":"Hallo","closingText":"Danke","paymentTermsText":"14 Tage","totals":{"subtotal":866.25,"taxRate":0,"tax":0,"total":866.25},"createdAt":"2026-09-21T10:00:00.000Z"}'::jsonb;
+  -- FINANZ-CORE-01A (SQL-10): Die Summe folgt aus den Positionen (4 x 55 + 12,5 x 48,90 = 831,25);
+  -- die bisherigen 866,25 passten nicht dazu, und die Freigabe prueft das jetzt.
+  basis constant jsonb := '{"customer":{"name":"Muster GmbH","contactPerson":"","street":"Weg 1","zip":"33602","city":"Bielefeld","email":"k@example.invalid","phone":""},"customerId":"cust-1","title":"Bad EG","baustelle":"Weg 1","offerDate":"2026-09-21","validUntil":"2026-10-21","positions":[{"id":"p1","description":"Demontage","quantity":4,"unit":"Stunden","unitPrice":55},{"id":"p2","description":"Fliesen","quantity":12.5,"unit":"m²","unitPrice":48.9},{"id":"p0","description":"leer","quantity":0,"unit":"Stück","unitPrice":9}],"taxStatus":"reverse_charge_13b","introText":"Hallo","closingText":"Danke","paymentTermsText":"14 Tage","totals":{"subtotal":831.25,"taxRate":0,"tax":0,"total":831.25},"createdAt":"2026-09-21T10:00:00.000Z"}'::jsonb;
   r jsonb;
   r2 jsonb;
   o jsonb;

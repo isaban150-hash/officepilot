@@ -40,7 +40,9 @@ export const deOffer = {
   'offer.editor.customer': 'Kunde',
   'offer.editor.customerPlaceholder': 'Kunde wählen',
   'offer.editor.customerHint': 'Die Anschrift wird übernommen und lässt sich hier noch anpassen.',
-  'offer.editor.customerNew': 'Neuen Kunden anlegen',
+  // FINANZ-CORE-01A (ANG-10) — legt den Kunden aus den Eingaben an, ohne die Seite zu verlassen.
+  'offer.editor.customerNew': 'Als neuen Kunden anlegen',
+  'offer.editor.customerDuplicate': 'Es gibt bereits einen ähnlichen Kunden ({name}). Bitte oben auswählen – es wurde kein weiterer Kunde angelegt.',
   'offer.editor.customerName': 'Name / Firma',
   'offer.editor.contactPerson': 'Ansprechpartner',
   'offer.editor.street': 'Strasse und Hausnummer',
@@ -56,6 +58,7 @@ export const deOffer = {
   'offer.editor.offerDate': 'Angebotsdatum',
   'offer.editor.validUntil': 'Gültig bis',
   'offer.editor.taxStatus': 'Steuer',
+  'offer.editor.taxStatusChoose': 'Bitte wählen …',
   'offer.editor.positionsSection': 'Positionen',
   'offer.editor.positionAdd': 'Position hinzufügen',
   'offer.editor.positionRemove': 'Entfernen',
@@ -79,7 +82,7 @@ export const deOffer = {
     'Mit der Freigabe vergibt OfficeTakt die Angebotsnummer. Danach lässt sich das Angebot nicht mehr ändern.',
   'offer.editor.finalizeConfirmTitle': 'Angebot freigeben?',
   'offer.editor.finalizeConfirmText':
-    'Kunde, Positionen, Preise und Texte werden festgeschrieben und bekommen eine Angebotsnummer. Änderungen sind danach nur über ein neues Angebot möglich.',
+    'Kunde, Positionen, Preise und Texte werden festgeschrieben und bekommen eine Angebotsnummer. Änderungen sind danach über „Überarbeiten“ möglich: Es entsteht ein neues Angebot, das dieses mit seiner Freigabe ersetzt.',
   'offer.editor.finalizeConfirm': 'Ja, freigeben',
   'offer.editor.preview': 'Vorschau',
   'offer.editor.back': 'Zurück',
@@ -88,16 +91,32 @@ export const deOffer = {
 
   'offer.detail.title': 'Angebot',
   'offer.detail.frozenHint': 'Dieses Angebot ist freigegeben und wird nicht mehr verändert.',
+  // FINANZ-CORE-01A (ANG-11) — Überarbeiten erzeugt einen Nachfolger, der das Angebot mit seiner Freigabe ersetzt.
+  /* FINANZ-CORE-01A (ANG-17) */
+  'offer.editor.positionZeroHint':
+    'Menge 0: Diese Position erscheint weder im Angebots-PDF noch in der Summe oder im späteren Auftrag. Bedarfs- oder Alternativpositionen bitte im Einleitungs- oder Schlusstext nennen.',
+  'offer.detail.revise': 'Überarbeiten',
+  'offer.detail.copyAsTemplate': 'Als Vorlage kopieren',
+  'offer.detail.supersedes': 'Dieses Angebot ersetzt mit seiner Freigabe das Angebot {number}.',
+  'offer.error.reviseDraft': 'Ein Entwurf wird direkt bearbeitet.',
   'offer.detail.expiredHint': 'Die Gültigkeit dieses Angebots ist abgelaufen.',
   'offer.detail.pdfView': 'PDF ansehen',
   'offer.detail.pdfDownload': 'PDF herunterladen',
   'offer.detail.pdfFailed': 'Das PDF konnte nicht erzeugt werden.',
   'offer.detail.archiveOpen': 'Im Archiv öffnen',
   'offer.detail.archivePending': 'Die Ablage im Archiv wird vorbereitet …',
-  'offer.detail.archiveFailed': 'Die Ablage im Archiv ist fehlgeschlagen.',
+  'offer.detail.archiveFailed': 'Die Ablage im Archiv ist fehlgeschlagen. Ohne Ablage ist kein E-Mail-Versand möglich.',
+  /* FINANZ-CORE-01A (ANG-12/ANG-13) */
+  'offer.detail.archiveRetry': 'Erneut ablegen',
+  'offer.detail.archiveRecheck': 'Erneut prüfen',
+  'offer.detail.archiveMissing':
+    'Die Ablage dieses Angebots liegt auf diesem Gerät noch nicht vor – sie ist noch nicht abgeglichen oder wurde im Archiv gelöscht. Es wird keine zweite angelegt; PDF ansehen und herunterladen geht weiterhin.',
   // HALBZEIT-FIX B4 — Überschrift, keine zweite Sende-Aktion (der Button sitzt im Versandbereich).
   'offer.detail.send': 'E-Mail-Versand',
   'offer.detail.sendHint': 'Der Versand läuft über das archivierte PDF.',
+  /* FINANZ-CORE-01A (ANG-09) */
+  'offer.detail.sendClosed':
+    'Dieses Angebot ist nicht mehr offen (abgelehnt, storniert, ersetzt oder angenommen) und wird deshalb nicht mehr versendet.',
   'offer.detail.markSent': 'Als versendet markieren',
   'offer.detail.reject': 'Als abgelehnt markieren',
   'offer.detail.cancel': 'Angebot stornieren',
@@ -115,9 +134,22 @@ export const deOffer = {
   'offer.finalize.blocked.valid_until_missing': 'Bitte angeben, bis wann das Angebot gilt.',
   'offer.finalize.blocked.valid_until_before_date': 'Die Gültigkeit darf nicht vor dem Angebotsdatum liegen.',
   'offer.finalize.blocked.company_profile_missing': 'Bitte zuerst das Firmenprofil vervollständigen.',
+  /* FINANZ-CORE-01A (ANG-14) */
+  'offer.finalize.blocked.offer_date_invalid': 'Bitte ein gültiges Angebotsdatum angeben (Jahr 2000 bis 2100).',
+  'offer.finalize.stale_version':
+    'Dieses Angebot wurde inzwischen auf einem anderen Gerät geändert. Der neue Stand wird geladen – bitte prüfen und erneut freigeben.',
+  'offer.server.totalsMismatch':
+    'Die Summen passen nicht zu den Positionen. Bitte Einzelpreise mit höchstens zwei Nachkommastellen angeben und erneut versuchen.',
+  'offer.server.dateInvalid': 'Das Angebotsdatum liegt außerhalb des zulässigen Bereichs (Jahr 2000 bis 2100).',
+  'offer.server.deleted': 'Dieses Angebot wurde inzwischen gelöscht.',
+  'offer.finalize.blocked.tax_status_unclear':
+    'Bitte die Steuer festlegen – „noch unklar“ ist für ein verbindliches Angebot keine Angabe.',
   'offer.finalize.cloud_required':
     'Für die Freigabe braucht OfficeTakt eine Verbindung – die Angebotsnummer wird zentral vergeben.',
   'offer.finalize.sync_pending': 'Der Entwurf wird noch gespeichert. Bitte in einem Moment erneut versuchen.',
+  /* FINANZ-CORE-01A (ANG-03) */
+  'offer.finalize.sync_conflict':
+    'Dieses Angebot wurde inzwischen auf einem anderen Gerät geändert. Bitte zuerst unter „Synchronisierung" entscheiden, welche Fassung gilt; danach ist die Freigabe möglich.',
   'offer.finalize.already_finalized_elsewhere':
     'Dieses Angebot wurde bereits auf einem anderen Gerät freigegeben. Bitte neu laden.',
   'offer.finalize.server_rejected': 'Die Freigabe wurde abgelehnt.',
@@ -153,7 +185,13 @@ export const deOffer = {
   'offer.accept.notAcceptable': 'Dieses Angebot kann in seinem Zustand nicht angenommen werden.',
   'offer.accept.cloudRequired': 'Für die Annahme braucht OfficeTakt eine Verbindung – die Auftragsnummer wird zentral vergeben.',
   'offer.accept.syncPending': 'Das Angebot wird noch gespeichert. Bitte in einem Moment erneut versuchen.',
+  /* FINANZ-CORE-01A (ANG-03) */
+  'offer.accept.syncConflict':
+    'Dieses Angebot wurde inzwischen auf einem anderen Gerät geändert. Bitte zuerst unter „Synchronisierung" entscheiden, welche Fassung gilt; danach ist die Annahme möglich.',
   'offer.accept.serverRejected': 'Die Annahme wurde abgelehnt.',
+  /* FINANZ-CORE-01A (ANG-14) */
+  'offer.accept.staleVersion':
+    'Dieses Angebot wurde inzwischen auf einem anderen Gerät geändert. Der neue Stand wird geladen – bitte prüfen und erneut annehmen.',
   'offer.accept.network': 'Keine Verbindung. Bitte später erneut annehmen.',
   'offer.detail.orderOpen': 'Auftrag öffnen',
   'offer.detail.acceptedHint': 'Dieses Angebot wurde angenommen. Der Auftrag führt die Arbeit weiter.',
@@ -163,6 +201,10 @@ export const deOffer = {
   'vorgang.order.date': 'Auftragsdatum',
   'vorgang.order.taxStatus': 'Steuer',
   'vorgang.order.total': 'Auftragssumme',
+  /* FINANZ-CORE-01A (ANG-19, F-04) — Bezug und Maßstab der Summe. */
+  'vorgang.order.totalAtAcceptance': 'Angebotssumme bei Annahme (brutto)',
+  'vorgang.order.totalAtCreation': 'Auftragssumme bei Anlage (brutto)',
+  'vorgang.order.currentNet': 'Aktueller Auftragswert (netto, mit Nachträgen)',
   'vorgang.order.sourceOffer': 'Aus Angebot',
   'vorgang.order.frozenHint': 'Positionen, Preise und Steuerstatus stammen aus dem angenommenen Angebot und ändern sich nur über einen Nachtrag.',
   'vorgang.order.frozenHintManual': 'Positionen, Preise und Steuerstatus sind mit der Auftragsanlage festgeschrieben und ändern sich nur über einen Nachtrag.',

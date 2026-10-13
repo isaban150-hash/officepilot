@@ -16,6 +16,7 @@ import {
   findAcceptedDelivery,
 } from '../../services/delivery/documentDeliveryDefaults';
 import { findOpenUncertainDelivery, isDeliveryInProgress, isDeliveryRetryable } from '../../services/delivery/documentDeliveryContract';
+import { isInvoiceDeliveryBounced, recordInvoiceDeliveryOutcome } from '../../services/delivery/deliveryBounceRegistry';
 import {
   checkDeliveryStatus,
   clearSendDraft,
@@ -115,6 +116,8 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
     if (!cloud || !isFinalizedInvoice(invoice)) return;
     const result = await refreshDeliveries({ vorgangId, invoice, identity });
     if (!result.ok) return;
+    // FINANZ-CORE-01A (AUS-10) — der Zustellausgang des Originals sperrt bei Rücklauf die Mahnempfehlung.
+    if (documentKind === 'invoice') recordInvoiceDeliveryOutcome(invoice.id, result.deliveries);
     setDeliveries(result.deliveries);
     if (result.invoice !== invoice) onInvoiceUpdated(result.invoice);
   }, [cloud, invoice, vorgangId, identity, onInvoiceUpdated]);
@@ -281,6 +284,13 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
           <p className="hint-text" data-testid="invoice-delivery-cloud-required">{translate('delivery.panel.cloudRequired' as TranslationKey)}</p>
         ) : !access.canWrite ? (
           <p className="hint-text" data-testid="invoice-delivery-readonly">{translate('delivery.panel.readOnly' as TranslationKey)}</p>
+        ) : null}
+
+        {/* FINANZ-CORE-01A (AUS-10) — nicht zugestellt: Fälligkeit und Mahnung setzen den Zugang voraus. */}
+        {!isCorrection && deliveries !== null && isInvoiceDeliveryBounced(invoice) ? (
+          <p className="form-error" role="alert" data-testid="invoice-delivery-bounced">
+            {translate('delivery.bounced.invoiceWarning' as TranslationKey)}
+          </p>
         ) : null}
 
         <h4 className="invoice-delivery-panel__history-title">{translate('delivery.history.title' as TranslationKey)}</h4>

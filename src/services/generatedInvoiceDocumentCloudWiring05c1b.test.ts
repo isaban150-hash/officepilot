@@ -418,7 +418,13 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
     const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A);
 
     expect(result.ok).toBe(true);
-    expect(order).toEqual(['tombstone_workspace_document']);
+    /*
+     * FINANZ-CORE-01A (STO-12) — seit BARZAHLUNG-V1 NACHTRAG 1 (a98fb4d) fragt der
+     * Löschweg zuerst lesend, ob das Dokument ein Zahlungsnachweis ist. Der
+     * einzige schreibende Aufruf bleibt der Grabstein — und er kommt vor dem
+     * lokalen Soft-Delete.
+     */
+    expect(order).toEqual(['is_workspace_document_payment_proof', 'tombstone_workspace_document']);
     // Erst danach lokal — und lokal weiterhin als Soft-Delete aus fa953da.
     expect(getDocumentById(DOC_A)).toBeUndefined();
   });
@@ -553,9 +559,26 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
     const result = await deleteGeneratedInvoiceDocumentWithCloud('doc-beleg-1');
 
     expect(result.ok).toBe(true);
-    // Kein einziger Cloud-Aufruf für ein Fremddokument.
-    expect(calls).toEqual([]);
+    // FINANZ-CORE-01A (STO-12) — genau die lesende Nachweis-Rückfrage, nichts Schreibendes.
+    expect(calls).toEqual(['is_workspace_document_payment_proof']);
     expect(getDocumentById('doc-beleg-1')).toBeUndefined();
+  });
+
+  it('K2: meldet der Server einen Zahlungsnachweis, wird nichts gelöscht und kein Grabstein gesetzt', async () => {
+    hydrateDocumentStore([uploadedDocument('doc-nachweis-1')]);
+    const calls: string[] = [];
+    vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue(
+      stubRpc((name) => {
+        calls.push(name);
+        return name === 'is_workspace_document_payment_proof' ? true : [];
+      }),
+    );
+
+    const result = await deleteGeneratedInvoiceDocumentWithCloud('doc-nachweis-1');
+
+    expect(result).toEqual({ ok: false, errorKey: 'document.delete.blocked.paymentProof' });
+    expect(calls).toEqual(['is_workspace_document_payment_proof']);
+    expect(getDocumentById('doc-nachweis-1')).toBeDefined();
   });
 
   /* ---------------------------------------------------------------------- */

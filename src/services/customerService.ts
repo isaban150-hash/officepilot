@@ -13,6 +13,7 @@ import {
   upsertCustomerInStore,
 } from './customerStoreService';
 import { persistAll } from './persistenceService';
+import { checkCustomerFieldFormats } from './customer/customerFieldFormat';
 import { generateEntityId } from './sync/syncMetaService';
 import type { Customer, CustomerBilling } from '../types/models';
 import {
@@ -129,6 +130,9 @@ export function validateCustomerDecisionForCreate(
   const name = text(decision.input?.name);
   if (!name) return { ok: false, errorKey: 'customer.nameRequired' };
   if (isOwnCompanyName(name)) return { ok: false, errorKey: 'customer.ownCompanyNotAllowed' };
+  // FINANZ-CORE-01A (KUN-09) — dieselbe Formatprüfung wie beim Anlegen, vor jeder Änderung.
+  const format = checkCustomerFieldFormats(decision.input ?? {});
+  if (!format.ok) return { ok: false, errorKey: format.errorKey };
   if (!decision.allowDuplicate) {
     const duplicates = findStrongCustomerDuplicateCandidates(decision.input);
     if (duplicates.length > 0) return { ok: false, errorKey: CUSTOMER_DUPLICATE_ERROR_KEY, duplicates };
@@ -143,6 +147,12 @@ export function buildValidatedCustomer(
   const name = text(input.name);
   if (!name) return { ok: false, errorKey: 'customer.nameRequired' };
   if (isOwnCompanyName(name)) return { ok: false, errorKey: 'customer.ownCompanyNotAllowed' };
+  /*
+   * FINANZ-CORE-01A (KUN-09) — E-Mail, USt-IdNr., Ländercode und Leitweg-ID werden geprüft und
+   * vereinheitlicht, bevor sie in den Stamm und von dort auf Rechnungen gelangen.
+   */
+  const format = checkCustomerFieldFormats(input);
+  if (!format.ok) return { ok: false, errorKey: format.errorKey };
   // Confirm-first: ohne bewusste Entscheidung entsteht kein wahrscheinlich doppelter Kunde.
   if (!options?.allowDuplicate) {
     const duplicates = findStrongCustomerDuplicateCandidates(input);
@@ -157,7 +167,7 @@ export function buildValidatedCustomer(
     street: text(input.street),
     zip: text(input.zip),
     city: text(input.city),
-    email: text(input.email),
+    email: format.normalized.email ?? '',
     phone: text(input.phone),
     createdAt: now,
     updatedAt: now,
@@ -167,13 +177,13 @@ export function buildValidatedCustomer(
    * Wert bedeutet „nicht angegeben", und das steht im Datensatz als
    * Abwesenheit, nicht als leerer Text.
    */
-  const countryCode = text(input.countryCode);
+  const countryCode = format.normalized.countryCode;
   if (countryCode) customer.countryCode = countryCode;
-  const vatId = text(input.vatId);
+  const vatId = format.normalized.vatId;
   if (vatId) customer.vatId = vatId;
   const buyerReferenceDefault = text(input.buyerReferenceDefault);
   if (buyerReferenceDefault) customer.buyerReferenceDefault = buyerReferenceDefault;
-  const leitwegId = text(input.leitwegId);
+  const leitwegId = format.normalized.leitwegId;
   if (leitwegId) customer.leitwegId = leitwegId;
   const createdFromInboxId = text(options?.createdFromInboxId);
   if (createdFromInboxId) customer.createdFromInboxId = createdFromInboxId;
@@ -224,6 +234,14 @@ export function updateCustomer(
   if (isOwnCompanyName(nextName)) {
     return { success: false, errorKey: 'customer.ownCompanyNotAllowed' };
   }
+  // FINANZ-CORE-01A (KUN-09) — geprüft wird, was diese Änderung setzt.
+  const format = checkCustomerFieldFormats({
+    email: changes.email,
+    vatId: changes.vatId,
+    countryCode: changes.countryCode,
+    leitwegId: changes.leitwegId,
+  });
+  if (!format.ok) return { success: false, errorKey: format.errorKey };
 
   // id, createdAt and createdFromInboxId are provenance — never taken from changes.
   const updated: Customer = {
@@ -234,7 +252,7 @@ export function updateCustomer(
     street: changes.street === undefined ? current.street : text(changes.street),
     zip: changes.zip === undefined ? current.zip : text(changes.zip),
     city: changes.city === undefined ? current.city : text(changes.city),
-    email: changes.email === undefined ? current.email : text(changes.email),
+    email: changes.email === undefined ? current.email : (format.normalized.email ?? ''),
     phone: changes.phone === undefined ? current.phone : text(changes.phone),
     updatedAt: new Date().toISOString(),
   };
@@ -254,7 +272,7 @@ export function updateCustomer(
   ];
   for (const key of optional) {
     if (changes[key] === undefined) continue;
-    const value = text(changes[key]);
+    const value = key === 'buyerReferenceDefault' ? text(changes[key]) : (format.normalized[key] ?? '');
     if (value) updated[key] = value;
     else delete updated[key];
   }

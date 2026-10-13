@@ -2838,6 +2838,12 @@
   white-space: nowrap;
 }
 
+/* FINANZ-CORE-01A (ANG-17) — der Hinweis zu Menge 0 über die ganze Zeile. */
+.offer-editor__position-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 .offer-editor__totals {
   margin: var(--space-5) 0 0;
   display: grid;

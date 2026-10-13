@@ -21,6 +21,8 @@ import { StatusBadge } from '../components/ui/Badge';
 import type { StatusTone } from '../services/ui/statusTone';
 import { findInvoiceById } from '../services/invoice/invoiceRegistryService';
 import { formatInvoiceCurrency } from '../services/invoicePrintModel';
+import { isInvoiceCancelled } from '../services/invoicePaymentService';
+import { negateMoney } from '../services/invoice/invoiceCorrectionModel';
 import { FileTypeIcon } from '../components/ui/FileTypeIcon';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -324,7 +326,15 @@ export function DokumentDetailPage() {
     document.issueDate
       ? formatSafeDocumentDate(document.issueDate, setup.language, translate('document.date.unrecognized'))
       : null,
-    linkedInvoice ? formatInvoiceCurrency(linkedInvoice.amount) : null,
+    /* FINANZ-CORE-01A (STO-11) — der Korrekturbeleg zeigt den Gegenwert, der stornierte Originalbeleg sein Kennzeichen. */
+    linkedInvoice
+      ? formatInvoiceCurrency(
+          document.classifiedKind === 'rechnungskorrektur' ? negateMoney(linkedInvoice.amount) : linkedInvoice.amount,
+        )
+      : null,
+    linkedInvoice && document.classifiedKind !== 'rechnungskorrektur' && isInvoiceCancelled(linkedInvoice)
+      ? translate('document.list.invoiceCancelled')
+      : null,
   ].filter(Boolean);
   const lifecycleResolved = lifecycle != null;
   const replyOpen = lifecycleResolved && openReasons.includes('reply_open');
@@ -598,9 +608,20 @@ export function DokumentDetailPage() {
         }}
       />
       <div className="detail-actions document-detail__actions">
-        <Button variant="outline" onClick={() => setIsEditing(true)}>
-          {translate('document.edit')}
-        </Button>
+        {/*
+          * FINANZ-CORE-01A (STO-03) — ein erzeugter Rechnungs- oder Korrekturbeleg ist
+          * Teil der Rechnungswahrheit. Titel, Text, Kategorie und Vorgang werden hier
+          * nicht bearbeitet; Korrekturen laufen über Storno und neue Rechnung.
+          */}
+        {isGeneratedInvoice ? (
+          <p className="hint-text" data-testid="document-detail-generated-locked">
+            {translate('document.edit.generatedInvoiceLocked')}
+          </p>
+        ) : (
+          <Button variant="outline" onClick={() => setIsEditing(true)}>
+            {translate('document.edit')}
+          </Button>
+        )}
         {/*
           * P1MA WEISS-FINAL — Quittung oder Nachweis einer Mitarbeiterzahlung
           * (auch einer stornierten) wird nie gelöscht; der Server prüft das

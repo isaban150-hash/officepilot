@@ -101,8 +101,13 @@ export function DunningDocumentationPanel({
         setErrorKey('dunning.doc.error.kind');
       } else if (result.reason === 'not_open') {
         setErrorKey('dunning.doc.error.notOpen');
+      } else if (result.reason === 'not_overdue') {
+        setErrorKey('dunning.doc.error.notOverdue');
       } else if (result.reason === 'draft_or_prepared' || result.reason === 'not_sent') {
         setErrorKey('dunning.doc.error.notSent');
+      } else if (result.reason === 'persist_failed') {
+        // FINANZ-CORE-01A (ZAH-20) — nichts festgehalten, nichts gezählt.
+        setErrorKey('persist.failed.userAction');
       } else {
         setErrorKey('dunning.doc.error.failed');
       }

@@ -4,7 +4,7 @@ import type {
 } from '../types/documentIntelligence';
 import { isResolvedUnit, resolveOrderUnit } from './orderUnitMapper';
 import { parseGermanMoney } from './documentAmountExtractionService';
-import { lineTotalCents, roundMoney, toCents } from './invoiceMoney';
+import { lineTotalCents, lineTotalMoney, roundMoney, toCents } from './invoiceMoney';
 
 /**
  * Unit token shared by every row format. Deliberately open: a structurally
@@ -148,7 +148,7 @@ function buildPosition(
   const quantity = parseGermanMoney(quantityRaw);
   const unitPrice = parseGermanMoney(unitPriceRaw);
   const lineTotalStated = Boolean(lineTotalRaw);
-  const lineTotal = lineTotalRaw ? parseGermanMoney(lineTotalRaw) : roundMoney(quantity * unitPrice);
+  const lineTotal = lineTotalRaw ? parseGermanMoney(lineTotalRaw) : lineTotalMoney(quantity, unitPrice);
   const resolved = resolveOrderUnit(rawUnit);
 
   const reviewReasons: PositionReviewReason[] = [];

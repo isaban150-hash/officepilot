@@ -12,6 +12,7 @@ import { downloadInvoicePdfBytes } from '../../services/invoicePdfService';
 import { getVorgangById } from '../../services/vorgangService';
 import { resolveBusinessLetterCustomerEmail } from '../../services/letter/businessLetterArchiveService';
 import { composeDocumentDeliveryDraft, findAcceptedDelivery } from '../../services/delivery/documentDeliveryDefaults';
+import { syncOfferSentFromDeliveries } from '../../services/offer/offerDeliveryStatus';
 import { resolveDeliveryDocumentFacts } from '../../services/delivery/deliveryDocumentFacts';
 import { findOpenUncertainDelivery, isDeliveryInProgress, isDeliveryRetryable } from '../../services/delivery/documentDeliveryContract';
 import {
@@ -145,6 +146,16 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [document.id, cloud]);
+
+  /*
+   * FINANZ-CORE-01A (ANG-08) — ein angenommener Versand macht das Angebot „versendet",
+   * gleich auf welchem Weg und auch, wenn sich ein unklarer Versand erst später klärt.
+   * Den Angebotsstatus setzen nur Inhaber und Admin (GO-LIVE-SECURITY-01).
+   */
+  useEffect(() => {
+    if (access.canWrite && deliveries && syncOfferSentFromDeliveries(document, deliveries)) onAccepted?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveries, document.id, access.canWrite]);
 
   /* Resume wie beim Rechnungspanel: Serverstatus entscheidet; nie erneut senden bei provider_accepted/unknown. */
   useEffect(() => {

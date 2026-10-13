@@ -33,7 +33,11 @@ export const deDelivery = {
   'delivery.dialog.body': 'Nachricht',
   'delivery.dialog.bodyRequired': 'Bitte eine Nachricht eingeben.',
   'delivery.dialog.attachment': 'Anhang',
-  'delivery.dialog.attachmentHint': 'Die freigegebene Rechnung — genau so, wie sie im Detail und als PDF angezeigt wird.',
+  // FINANZ-CORE-01A (AUS-16) — PDF und Bildschirm sind dieselben Angaben, nicht pixelgleich.
+  'delivery.dialog.attachmentHint': 'Die freigegebene Rechnung als PDF – mit denselben Angaben wie in der Detailansicht.',
+  // FINANZ-CORE-01A (AUS-10)
+  'delivery.bounced.invoiceWarning':
+    'Die E-Mail mit dieser Rechnung wurde nicht zugestellt. Fälligkeit und Mahnung setzen voraus, dass die Rechnung angekommen ist – Zahlungserinnerungen werden deshalb nicht vorgeschlagen. Bitte erneut zustellen (andere Adresse oder per Post) und den Versand dann neu vermerken.',
   'delivery.dialog.confirmRecipientChanged': 'Die Adresse weicht von der beim Kunden hinterlegten Adresse ab. Trotzdem an diese Adresse senden?',
   'delivery.dialog.confirmResend': 'Diese Rechnung wurde bereits per OfficeTakt versendet. Wirklich erneut senden?',
   'delivery.dialog.retryHint': 'Neuer Versuch nach fehlgeschlagenem Versand. Sie können Empfänger und Text anpassen.',
@@ -43,6 +47,8 @@ export const deDelivery = {
   'delivery.phase.creating': 'Versandauftrag wird angelegt …',
   'delivery.phase.sending': 'Wird gesendet …',
   'delivery.phase.refreshing': 'Status wird geladen …',
+  // FINANZ-CORE-01A (AUS-19) — ein durch einen neueren Versuch abgelöster, nie gesendeter Versuch.
+  'delivery.status.superseded': 'Abgelöst – nicht gesendet',
   'delivery.status.queued': 'In Bearbeitung',
   'delivery.status.prepared': 'Vorbereitet',
   'delivery.status.provider_accepted': 'An E-Mail-Dienst übergeben',

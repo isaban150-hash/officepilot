@@ -5,6 +5,7 @@ import type {
 } from '../../types/models';
 import { buildInvoicePrintModelFromInvoice } from '../invoicePrintModel';
 import { fromCents, toCents } from '../invoiceMoney';
+import { toBusinessDay } from '../businessDateService';
 
 /**
  * NORMAL-INVOICE-CANCELLATION-01B — die kanonische Darstellung eines
@@ -25,7 +26,7 @@ export const INVOICE_CORRECTION_DOCUMENT_TITLE = 'Rechnungskorrektur';
 export interface InvoiceCancellationMetadata {
   cancelledAt: string;
   cancelReason: string;
-  /** YYYY-MM-DD; fehlt es, wird der UTC-Tag von `cancelledAt` verwendet. */
+  /** YYYY-MM-DD; fehlt es, gilt der Geschäftstag (Europe/Berlin) von `cancelledAt`. */
   correctionIssueDate?: string;
 }
 
@@ -38,7 +39,13 @@ export function negateMoney(value: number): number {
 export function resolveCorrectionIssueDate(meta: InvoiceCancellationMetadata): string {
   const explicit = meta.correctionIssueDate?.trim();
   if (explicit) return explicit;
-  return meta.cancelledAt.slice(0, 10);
+  /*
+   * FINANZ-CORE-01A (STO-05) — der Geschäftstag, nicht der UTC-Tag. Ein Storno
+   * zwischen 0 und 2 Uhr trug sonst den Vortag; am Monatsersten landete es im
+   * Vormonat und damit im falschen Voranmeldungszeitraum. Die Seite zeigt
+   * „Storniert am" bereits als Geschäftstag.
+   */
+  return toBusinessDay(meta.cancelledAt);
 }
 
 export function buildInvoiceCorrectionModel(
@@ -53,6 +60,8 @@ export function buildInvoiceCorrectionModel(
     correctionIssueDate: resolveCorrectionIssueDate(meta),
     cancelledAt: meta.cancelledAt,
     cancelReason: meta.cancelReason,
+    // FINANZ-CORE-01A (SQL-11) — die eigene Nummer aus dem Rechnungskreis, wenn vergeben.
+    ...(original.correctionNumber?.trim() ? { correctionNumber: original.correctionNumber.trim() } : {}),
   };
 
   return {
@@ -78,6 +87,16 @@ export function buildInvoiceCorrectionModel(
         amount: negateMoney(line.amount),
       })),
       deductionsTotal: negateMoney(base.summary.deductionsTotal),
+      // FINANZ-CORE-01A (WEISS-Recheck N02-R1) — gezahlt und Skonto werden ebenso gegengebucht.
+      ...(base.summary.skontoLines
+        ? {
+            skontoLines: base.summary.skontoLines.map((line) => ({ ...line, amount: negateMoney(line.amount) })),
+          }
+        : {}),
+      ...(base.summary.deductionsPaidTotal !== undefined
+        ? { deductionsPaidTotal: negateMoney(base.summary.deductionsPaidTotal) }
+        : {}),
+      ...(base.summary.skontoTotal !== undefined ? { skontoTotal: negateMoney(base.summary.skontoTotal) } : {}),
       amountDue: negateMoney(base.summary.amountDue),
     },
     // Ein Korrekturbeleg hat kein Zahlungsziel und keinen Skonto.

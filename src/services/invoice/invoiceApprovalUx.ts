@@ -8,7 +8,10 @@
  * Zustand, kein Store, kein Toast; die Seite entscheidet nur noch, **wo** sie
  * den Hinweis zeigt.
  */
-import type { StartInvoiceDraftFinalizationResult } from './invoiceFinalizationCoordinator';
+import type {
+  ResumeInvoiceDraftFinalizationResult,
+  StartInvoiceDraftFinalizationResult,
+} from './invoiceFinalizationCoordinator';
 import type { TaxStatus } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 import {
@@ -32,6 +35,31 @@ export function taxDecisionBlocker(
   return null;
 }
 
+/**
+ * FINANZ-CORE-01A (RE-07) — der Steuerstatus, den ein bestätigter Auftrag
+ * vorgibt. Nur eine getroffene Entscheidung zählt; „unclear" gibt nichts vor
+ * (dieselbe Regel wie `assert_workspace_invoice_integrity`).
+ */
+export function orderTaxStatusLock(orderTaxStatus: TaxStatus | undefined | null): TaxStatus | null {
+  return orderTaxStatus && orderTaxStatus !== 'unclear' ? orderTaxStatus : null;
+}
+
+/**
+ * FINANZ-CORE-01A (RE-07) — passt der Empfängername zum Auftrag? Der Server
+ * verlangt den Namen des Auftrags oder des Kundenstamms
+ * (`invoice_customer_mismatch`). Ohne Namen im Auftrag prüft er nichts.
+ */
+export function customerNameMatchesOrder(
+  draftName: string,
+  orderName: string | undefined | null,
+  masterName: string | undefined | null,
+): boolean {
+  const order = (orderName ?? '').trim();
+  if (!order) return true;
+  const name = draftName.trim();
+  return name === order || (Boolean((masterName ?? '').trim()) && name === (masterName ?? '').trim());
+}
+
 export interface FinalizationFailureUx {
   /** Der Hinweis für den Nutzer — nie ein technischer Grund. */
   messageKey: TranslationKey;
@@ -43,12 +71,49 @@ export interface FinalizationFailureUx {
    * eine Rechnung liegen, und ein zweiter Versuch erzeugte eine zweite.
    */
   unlock: boolean;
-  /** Der Nutzer muss neu laden, damit der Wiederaufnahmeweg greift. */
+  /**
+   * Der Nutzer muss neu laden, damit der Wiederaufnahmeweg greift. Nicht nach
+   * einem nachweislich zurückgegebenen Entwurf (`draftReopened`) — den lädt die
+   * Seite selbst neu.
+   */
   reloadRequired: boolean;
 }
 
+/**
+ * FINANZ-CORE-01A (RE-16, RE-09, SQL-09, SQL-15) — der benannte Grund einer
+ * inhaltlichen Serverablehnung statt des Sammelsatzes „passt nicht mehr zum
+ * Auftrag" (der bei der Rechnung ohne Auftrag ohnehin falsch war). Gelesen wird
+ * der Servercode im Rohtext; gezeigt wird nie der Rohtext selbst.
+ */
+const SERVER_REJECTION_KEYS: ReadonlyArray<[string, TranslationKey]> = [
+  ['invoice_company_tax_id_missing', 'invoice.approve.companyTaxIdMissing'],
+  ['invoice_company_incomplete', 'invoice.approve.companyIncomplete'],
+  ['invoice_customer_address_incomplete', 'invoice.approve.customerAddressIncomplete'],
+  ['invoice_issue_date_in_future', 'invoice.approve.issueDateFuture'],
+  ['invoice_issue_date_invalid', 'invoice.approve.dateInvalid'],
+  ['invoice_service_period_invalid', 'invoice.approve.dateInvalid'],
+  ['invoice_abschlag_number_taken', 'invoice.approve.abschlagNumberTaken'],
+  ['invoice_legal_notice_missing', 'invoice.approve.legalNoticeMissing'],
+  ['invoice_deductions_exceed_total', 'invoice.approve.deductionsExceedTotal'],
+  ['invoice_deductions_mismatch', 'invoice.approve.deductionsMismatch'],
+  // FINANZ-CORE-01A (WEISS N02/D1)
+  ['invoice_abschlag_unpaid', 'invoice.approve.abschlagUnpaid'],
+  // WEISS-Recheck N02-R1
+  ['invoice_abschlag_settlement_mismatch', 'invoice.approve.abschlagSettlementMismatch'],
+];
+
+export function serverRejectionMessageKey(message: string | undefined): TranslationKey {
+  const text = message ?? '';
+  for (const [code, key] of SERVER_REJECTION_KEYS) {
+    if (text.includes(code)) return key;
+  }
+  return 'invoice.approve.serverRejected';
+}
+
 export function mapFinalizationFailureToUx(
-  result: Extract<StartInvoiceDraftFinalizationResult, { ok: false }>,
+  result:
+    | Extract<StartInvoiceDraftFinalizationResult, { ok: false }>
+    | Extract<ResumeInvoiceDraftFinalizationResult, { ok: false }>,
 ): FinalizationFailureUx {
   let messageKey: TranslationKey;
   if (result.reason === 'offline_or_unconfigured') {
@@ -61,11 +126,13 @@ export function mapFinalizationFailureToUx(
     result.reason === 'scope_mismatch'
   ) {
     messageKey = 'invoice.approve.workspace';
-  } else if (
-    result.reason === 'conflict' ||
-    result.reason === 'idempotency_conflict' ||
-    result.reason === 'possible_existing_invoice'
-  ) {
+  } else if (result.reason === 'possible_existing_invoice') {
+    /*
+     * FINANZ-CORE-01A (F-01) — eine Rechnung mit genau diesem Inhalt gibt es
+     * schon. „Konflikt … Entwurf prüfen" liess offen, was zu tun ist.
+     */
+    messageKey = 'invoice.approve.possibleDuplicate';
+  } else if (result.reason === 'conflict' || result.reason === 'idempotency_conflict') {
     messageKey = 'invoice.approve.conflict';
   } else if (result.reason === 'draft_not_synced') {
     // CLOUD-SYNC S5 — der Entwurf ist noch nicht vollständig in der Cloud; nichts wurde begonnen.
@@ -116,13 +183,33 @@ export function mapFinalizationFailureToUx(
       ? financialActionDenialLabelKey(denial)
       : 'invoice.approve.notAllowed';
   } else if (result.reason === 'server_integrity_rejected') {
-    messageKey = 'invoice.approve.serverRejected';
+    messageKey = serverRejectionMessageKey(result.message);
+  } else if (result.reason === 'final_invoice_exists') {
+    /*
+     * FINANZ-CORE-01A (SQL-04) — eine wirksame Schlussrechnung steht schon:
+     * keine zweite und nach ihr keine weitere Rechnung. Bisher hiess das nur
+     * „Freigabe fehlgeschlagen".
+     */
+    messageKey = 'invoice.approve.finalInvoiceExists';
   } else if (result.reason === 'local_persist_failed' || result.reason === 'persist_failed') {
     messageKey = 'invoice.approve.localPersistPending';
+  } else if (result.reason === 'validation_failed') {
+    /*
+     * FINANZ-CORE-01A (RE-16) — der erste Prüfgrund statt „Freigabe fehlgeschlagen". Er ist
+     * ein Schlüssel der Prüfmeldungen (`invoice.validation.*`); sonst die Sammelmeldung.
+     */
+    messageKey =
+      typeof result.detail === 'string' && result.detail.startsWith('invoice.validation.')
+        ? (result.detail as TranslationKey)
+        : 'invoice.approve.blocked';
   } else {
     messageKey = 'invoice.approve.failed';
   }
 
   const unlock = result.recovery === 'retry_allowed' || result.cloudState === 'not_committed';
-  return { messageKey, unlock, reloadRequired: result.recovery === 'reload_required' };
+  return {
+    messageKey,
+    unlock,
+    reloadRequired: result.recovery === 'reload_required' && result.draftReopened !== true,
+  };
 }

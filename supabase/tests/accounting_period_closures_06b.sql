@@ -135,8 +135,11 @@ declare v jsonb; v_count integer;
 begin
   v := pg_temp.ok('A3 identischer Abschluss', pg_temp.abschluss('c1', 2026, 9, 'p1:aaaa:100'));
   if (v->>'noop')::boolean is not true then raise exception 'A3 -- kein Replay erkannt'; end if;
+  -- FINANZ-CORE-01A (SQL-T2) — nur der eigene Betrieb: Fremde Abschluesse (lokale
+  -- Altdaten anderer Pruefungen) gehoeren nicht zu dieser Zusicherung.
   select count(*) into v_count from public.workspace_accounting_period_closures
-   where period_year = 2026 and period_month = 9;
+   where workspace_id = '00000000-0000-0000-0000-0000000b0001'
+     and period_year = 2026 and period_month = 9;
   if v_count <> 1 then raise exception 'A3 -- % Revisionen statt 1', v_count; end if;
 end;
 $$;

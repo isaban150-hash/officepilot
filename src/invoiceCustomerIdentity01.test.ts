@@ -25,6 +25,7 @@ import { finalizeInvoiceDraftWithCloud } from './services/invoice/invoiceCloudFi
 import { resetInvoiceFinalizeIntentsForTests } from './services/invoice/invoiceFinalizeIntentService';
 import * as workspaceInvoiceCloud from './services/invoice/workspaceInvoiceCloudService';
 import {
+  buildInvoiceDraftForType,
   buildRechnungDraft,
   updateDraftPositionQuantity,
   updateInvoiceDraftMetadata,
@@ -190,11 +191,18 @@ function expectSinglePauschalPosition(draft: { positions: readonly unknown[] }):
   expect(positions[0]!.quantity, 'Die Planmenge wurde als Rechnungsmenge übernommen').toBe(0);
 }
 
-/** Entwurf inkl. der vom Nutzer ergänzten Rechnungsanschrift. */
-function buildApprovableDraft(vorgangId: string) {
+/**
+ * Entwurf inkl. der vom Nutzer ergänzten Rechnungsanschrift.
+ *
+ * FINANZ-CORE-01A (RE-04) — `type` für Fall C: Nach einem Pauschalabschlag
+ * rechnet die Schlussrechnung ab, die ihn abzieht. Eine „Rechnung" über die
+ * Pauschalposition (5.000 € nach 1.000 € Abschlag) berechnete den Abschlag ein
+ * zweites Mal und ist seit RE-04 gesperrt.
+ */
+function buildApprovableDraft(vorgangId: string, type: 'rechnung' | 'schluss' = 'rechnung') {
   const vorgang = getVorgangById(vorgangId);
   expect(vorgang).toBeDefined();
-  const base = buildRechnungDraft(vorgangId, testSetup);
+  const base = type === 'rechnung' ? buildRechnungDraft(vorgangId, testSetup) : buildInvoiceDraftForType(vorgangId, testSetup, type);
   expect(base).not.toBeNull();
   expectSinglePauschalPosition(base!);
 
@@ -472,8 +480,13 @@ describe('CORE-COMPLETE-GOLDEN-PATH-01B', () => {
       date: '2026-06-01',
       createdAt: '2026-06-01T10:00:00.000Z',
       issueDate: '2026-06-01',
-      paymentStatus: 'offen',
-      payments: [],
+      /*
+       * FINANZ-CORE-01A (WEISS-Nacharbeit N02/D1) — die Schlussrechnung unten zieht diesen
+       * Abschlag ab; abgezogen wird nur ein beglichener Abschlag. Dieser Fall prüft die
+       * Stammdaten, nicht die Begleichung.
+       */
+      paymentStatus: 'bezahlt',
+      payments: [{ id: 'pay-05b-alt', date: '2026-06-10', amount: 1190, createdAt: '2026-06-10T10:00:00.000Z' }],
       customerSnapshot: { ...firstBilling },
       companySnapshot: getCompanyProfile(),
       legalNotices: [],
@@ -502,8 +515,9 @@ describe('CORE-COMPLETE-GOLDEN-PATH-01B', () => {
     expect(getVorgangById(vorgang.id)!.customerBilling).toEqual(NORDWEST);
 
     // Zweiter Entwurf: erst der Vorgangssnapshot, dann die ausdrückliche Übernahme.
-    // buildApprovableDraft belegt dabei die weiterhin offene Pauschalposition mit Menge 1.
-    const secondBase = buildApprovableDraft(vorgang.id);
+    // buildApprovableDraft belegt dabei die weiterhin offene Pauschalposition mit Menge 1 —
+    // als Schlussrechnung, die den Pauschalabschlag abzieht (FINANZ-CORE-01A, RE-04).
+    const secondBase = buildApprovableDraft(vorgang.id, 'schluss');
     expect(secondBase.customerBilling).toEqual(firstBilling);
     const secondDraft = updateInvoiceDraftMetadata(secondBase, { customerBilling: masterBilling });
     expect(secondDraft.customerBilling).toEqual(masterBilling);

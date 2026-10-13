@@ -2,7 +2,7 @@ import { analyzeContractFromInbox } from './contractAnalysisService';
 import { getAllDocuments } from './documentService';
 import {
   getAllInvoiceOverview,
-  getOpenInvoices,
+  getOutstandingInvoices,
   getOverdueInvoices,
   getPaidInvoices,
   getPartialInvoices,
@@ -29,6 +29,8 @@ import {
   findDocumentForExplanationQuestion,
 } from './memory/documentExplanationService';
 import { getCachedSetup } from './persistenceService';
+import { fromCents, sumCents, toCents } from './invoiceMoney';
+import { formatDisplayDatePadded } from '../utils/displayFormat';
 import { trySearchAssistantAnswer } from './officeSearchService';
 import { getAllVorgaenge } from './vorgangService';
 import {
@@ -379,10 +381,11 @@ function formatTaskBullet(task: Task): string {
 }
 
 function answerInvoicesOpen(todayIso: string): AssistantAnswer {
-  const items = getOpenInvoices(todayIso);
+  // FINANZ-CORE-01A (ZAH-08) — teilbezahlte und überfällige Rechnungen sind offen; dieselbe Zahl wie auf der Heute-Seite.
+  const items = getOutstandingInvoices(todayIso);
   if (items.length === 0) return noDataAnswer('Offene Rechnungen');
 
-  const totalOpen = items.reduce((sum, item) => sum + item.paymentSummary.openAmount, 0);
+  const totalOpen = fromCents(sumCents(items.map((item) => toCents(item.paymentSummary.openAmount))));
   return withBullets(
     'Offene Rechnungen',
     `${items.length} offene Rechnung${items.length === 1 ? '' : 'en'} – gesamt ${formatEuro(totalOpen)} offen.`,
@@ -438,8 +441,13 @@ function answerInvoicesAbschlag(todayIso: string): AssistantAnswer {
 }
 
 function formatInvoiceBullet(item: InvoiceOverviewItem, overdue = false): string {
-  const due = item.invoice.paymentDueDate ? `, fällig ${item.invoice.paymentDueDate}` : '';
-  const suffix = overdue ? ' – überfällig' : '';
+  // FINANZ-CORE-01A — Datum deutsch; Verzug und Teilzahlung sichtbar, seit „offen" beides umfasst.
+  const due = item.invoice.paymentDueDate
+    ? `, fällig ${formatDisplayDatePadded(item.invoice.paymentDueDate)}`
+    : '';
+  const status = item.paymentSummary.status;
+  const suffix =
+    overdue || status === 'ueberfaellig' ? ' – überfällig' : status === 'teilbezahlt' ? ' – teilbezahlt' : '';
   return `${item.invoice.number} – ${item.customer}: ${formatEuro(item.paymentSummary.openAmount)} offen${due}${suffix}`;
 }
 
@@ -675,7 +683,8 @@ function answerActiveBaustellen(): AssistantAnswer {
 }
 
 function answerUnpaidCustomers(todayIso: string): AssistantAnswer {
-  const items = [...getOpenInvoices(todayIso), ...getOverdueInvoices(todayIso)];
+  // FINANZ-CORE-01A (ZAH-08) — auch teilbezahlte Rechnungen sind unbezahlt; jede Rechnung genau einmal.
+  const items = getOutstandingInvoices(todayIso);
   if (items.length === 0) return noDataAnswer('Offene Zahlungen');
 
   const byCustomer = new Map<string, InvoiceOverviewItem[]>();
@@ -686,7 +695,7 @@ function answerUnpaidCustomers(todayIso: string): AssistantAnswer {
   }
 
   const bullets = Array.from(byCustomer.entries()).map(([customer, invoices]) => {
-    const open = invoices.reduce((sum, entry) => sum + entry.paymentSummary.openAmount, 0);
+    const open = fromCents(sumCents(invoices.map((entry) => toCents(entry.paymentSummary.openAmount))));
     return `${customer}: ${invoices.length} Rechnung${invoices.length === 1 ? '' : 'en'}, ${formatEuro(open)} offen`;
   });
 

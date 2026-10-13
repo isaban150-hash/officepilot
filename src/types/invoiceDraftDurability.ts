@@ -414,6 +414,44 @@ export interface ReopenInvoiceDraftAfterBindingRejectionInput {
   now?: string;
 }
 
+/**
+ * FINANZ-CORE-01A (RE-01) — die inhaltlichen Ablehnungen von
+ * `finalize_workspace_invoice`. Der Server wirft jede davon vor dem Insert der
+ * Rechnung oder scheitert am Insert selbst (Backstop der einen
+ * Schlussrechnung); die Transaktion rollt vollstaendig zurueck. Bewiesen ist
+ * damit wie bei der Entwurfsbindung: keine Rechnung zu dieser Kennung, keine
+ * verbrauchte Nummer.
+ *
+ * Anders als ein Netzfehler wiederholt sich jede davon bei derselben
+ * gespeicherten Anfrage: Die Wiederaufnahme koennte den Entwurf nie loesen.
+ * Gelingen kann erst ein korrigierter Entwurf (oder eine geaenderte
+ * Berechtigung) — und dafuer muss er wieder bearbeitbar sein.
+ */
+export type InvoiceFinalizeServerRejection =
+  | 'final_invoice_exists'
+  | 'quantity_exceeds_available'
+  | 'server_integrity_rejected'
+  | 'financial_action_denied'
+  | 'amendment_state_stale';
+
+export const INVOICE_FINALIZE_SERVER_REJECTIONS: readonly InvoiceFinalizeServerRejection[] = [
+  'final_invoice_exists',
+  'quantity_exceeds_available',
+  'server_integrity_rejected',
+  'financial_action_denied',
+  'amendment_state_stale',
+];
+
+/** FINANZ-CORE-01A (RE-01) — derselbe enge Rueckweg, belegt durch eine inhaltliche Ablehnung. */
+export interface ReopenInvoiceDraftAfterServerRejectionInput {
+  identity: InvoiceDraftIdentity;
+  /** Die Revision des `finalizing`-Datensatzes. */
+  expectedRevision: number;
+  clientInvoiceId: string;
+  serverRejection: InvoiceFinalizeServerRejection;
+  now?: string;
+}
+
 /** CLOUD-SYNC S5 — ein gepruefter Datensatz samt Entwurf aus der Workspace-Liste. */
 export interface InvoiceDraftWorkspaceListEntry {
   record: InvoiceDraftRecord;

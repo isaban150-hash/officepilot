@@ -58,6 +58,13 @@ export interface NumericInputProps {
    * Entscheidung.
    */
   onEditingValidityChange?: (isComplete: boolean) => void;
+  /**
+   * FINANZ-CORE-01A (ANG-16) — höchstens so viele Nachkommastellen (nur im strengen
+   * Modus). Ein Einzelpreis wird auf Cent gedruckt und gerechnet; eine dritte Stelle
+   * wurde bisher angenommen, gezeigt und doch nie gedruckt. Ein Tastendruck darüber
+   * hinaus wird abgewiesen statt umgedeutet.
+   */
+  maxFractionDigits?: number;
 }
 
 /**
@@ -67,11 +74,26 @@ export interface NumericInputProps {
  * leerer Text und ein offenes `1,` sind erlaubt — sie sind Zwischenstände,
  * keine Fehler. Alles andere wird gar nicht erst übernommen.
  */
-const STRICT_DECIMAL = /^\d*(?:[.,]\d*)?$/;
+/*
+ * FINANZ-CORE-01A (RE-10) — Punkte als Tausendertrennzeichen und genau ein
+ * Komma sind tippbar: „1.200,50" für 1200,50 €. Vorher war der zweite
+ * Trenner gesperrt; der Nutzer blieb bei „1.200" stehen, und das hiess 1,2.
+ * Ob der Text eine vollständige Zahl ist, entscheidet `parseNumericInput`.
+ */
+const STRICT_DECIMAL = /^\d*(?:\.\d*)*(?:,\d*)?$/;
 const STRICT_INTEGER = /^\d*$/;
 
 function isStrictlyTypeable(raw: string, mode: NumericInputMode): boolean {
   return (mode === 'integer' ? STRICT_INTEGER : STRICT_DECIMAL).test(raw);
+}
+
+/** FINANZ-CORE-01A (ANG-16) — Nachkommastellen eines Anzeigetexts, gelesen wie `parseNumericInput`. */
+function fractionDigits(raw: string): number {
+  const comma = raw.indexOf(',');
+  if (comma >= 0) return raw.length - comma - 1;
+  if (GERMAN_THOUSANDS.test(raw)) return 0;
+  const dot = raw.indexOf('.');
+  return dot >= 0 && dot === raw.lastIndexOf('.') ? raw.length - dot - 1 : 0;
 }
 
 /** Ganze Zahlen ohne Trennzeichen; Dezimalzahlen mit höchstens einem. */
@@ -102,11 +124,48 @@ function sanitize(raw: string, mode: NumericInputMode): string {
  * nie**.
  */
 export function parseNumericInput(text: string): number | null {
-  const normalized = text.replace(',', '.');
+  const normalized = normalizeGermanNumber(text);
   if (!normalized || normalized === '.') return null;
   if (normalized.endsWith('.')) return null;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Tausendergruppen nach deutscher Schreibweise: „1.200", „12.345.678". */
+const GERMAN_THOUSANDS = /^[1-9]\d{0,2}(?:\.\d{3})+$/;
+
+/**
+ * FINANZ-CORE-01A (RE-10) — deutsche Schreibweise vor der Umwandlung.
+ *
+ * Bisher wurde nur das erste Komma zum Punkt: „1.200" — in Deutschland
+ * eintausendzweihundert — ergab 1,2. Bei einem Einzelpreis war das eine
+ * stille Umdeutung um den Faktor 1000.
+ *
+ *  - Mit Komma: Das Komma trennt die Nachkommastellen; Punkte davor müssen
+ *    gültige Tausendergruppen sein („1.200,50"), sonst keine Zahl.
+ *  - Ohne Komma, als Tausendergruppen lesbar („1.200", „1.200.000"):
+ *    Tausenderpunkte.
+ *  - Sonst ein einzelner Punkt als Dezimaltrenner einer Tastatur ohne Komma
+ *    („1.5", „12.50", „0.125").
+ *
+ * `''` steht für „keine vollständige Zahl" — wie ein offenes „2,".
+ */
+function normalizeGermanNumber(text: string): string {
+  if (!text) return '';
+  const comma = text.indexOf(',');
+  if (comma >= 0) {
+    if (text.indexOf(',', comma + 1) >= 0) return '';
+    const integerPart = text.slice(0, comma);
+    const fraction = text.slice(comma + 1);
+    if (fraction.includes('.')) return '';
+    if (integerPart.includes('.') && !GERMAN_THOUSANDS.test(integerPart)) return '';
+    // Ein offenes „2," endet weiter auf dem Trenner und bleibt unvollständig.
+    return `${integerPart.replace(/\./g, '')}.${fraction}`;
+  }
+  if (GERMAN_THOUSANDS.test(text)) return text.replace(/\./g, '');
+  // Mehr als ein Punkt, aber keine Tausendergruppen: keine Zahl.
+  if (text.indexOf('.') !== text.lastIndexOf('.')) return '';
+  return text;
 }
 
 /** Die Anzeige eines gespeicherten Werts — deutsch, ohne unnötige Nachkommastelle. */
@@ -128,6 +187,7 @@ export function NumericInput({
   'data-testid': testId,
   strict = false,
   onEditingValidityChange,
+  maxFractionDigits,
 }: NumericInputProps) {
   /*
    * `null` heisst: Das Feld wird gerade nicht bearbeitet und zeigt den Wert des
@@ -146,6 +206,7 @@ export function NumericInput({
        * So kann aus `-1` nie `1` und aus `1e3` nie `13` werden.
        */
       if (!isStrictlyTypeable(raw, mode)) return;
+      if (maxFractionDigits !== undefined && fractionDigits(raw) > maxFractionDigits) return;
       setDraftText(raw);
 
       const parsed = parseNumericInput(raw);

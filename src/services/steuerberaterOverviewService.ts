@@ -13,7 +13,10 @@
  * Posten, die noch nicht verbucht sind (`unclear`).
  */
 import { getClassificationForItem } from './documentClassificationService';
-import { filterActiveItems, getInboxItems } from './inboxService';
+import { filterSyncActive } from './sync/syncMetaService';
+import { getBusinessDay, toBusinessDay } from './businessDateService';
+import { parseSafeDocumentDate } from '../utils/documentDateDisplay';
+import type { InboxItem, Task } from '../types/models';
 import { getAllTasksFromStore } from './taskStore';
 import { isTaskOpen } from './taskNormalize';
 import { collectMonatsmappeInput } from './steuerberater/monatsmappeInputService';
@@ -101,6 +104,17 @@ export interface SteuerberaterMonthOverview {
    * aussehen, als gäbe es nichts zu übergeben.
    */
   paymentCount: number;
+  /**
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N11) — Zahlungen an Mitarbeiter dieses Monats. Sie
+   * gehören zur Übergabe; ein Monat mit Mitarbeiterzahlung ist nicht „leer".
+   */
+  employeePaymentCount: number;
+  /**
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N10) — offene Steueraufgaben ohne Monatsbezug (keine
+   * Fälligkeit, kein verknüpfter Beleg). Sie sind ein allgemeiner Hinweis und sperren
+   * keinen einzelnen Monat; vorher stand jede in jeder Monatsmappe als „fehlt".
+   */
+  generalTaxTasks: { id: string; title: string }[];
   /** Offene Schritte bis zur vollständigen Übergabe (Abschluss, Lücken, unklare Fälle). */
   openCount: number;
 }
@@ -111,6 +125,8 @@ export interface SteuerberaterMonthFindings {
   model: MonatsmappeModel;
   unclearDocuments: SteuerberaterDocumentEntry[];
   missingItems: { id: string; title: string }[];
+  /** FINANZ-CORE-01A (WEISS-Nacharbeit N10) — Steueraufgaben ohne Monatsbezug. */
+  generalTaxTasks: { id: string; title: string }[];
 }
 
 function monthKeyFromDate(iso: string): string {
@@ -121,9 +137,21 @@ function monthKeyFromParts(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`;
 }
 
-function resolveItemMonth(item: { receivedAt?: string; deadline?: string | null }): string {
-  const raw = item.receivedAt ?? item.deadline ?? new Date().toISOString();
-  return monthKeyFromDate(raw);
+/**
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N07) — der Belegmonat eines Eingangspostens.
+ *
+ * Maßgeblich ist das erkannte Belegdatum — dasselbe, das beim Buchen zum Datum der
+ * Ausgabe wird (`officeActionService`) und damit über ihren Monat in der Monatsmappe
+ * entscheidet. Bisher zählte der Upload-Tag: ein Beleg vom 30.09., am 02.10. eingegangen,
+ * fehlte in der Septemberübergabe und stand im Oktober. Ohne lesbares Belegdatum gilt der
+ * Eingangstag als Geschäftstag (Europe/Berlin), nie eine Handlungsfrist.
+ */
+function resolveItemMonth(item: Pick<InboxItem, 'receivedAt' | 'recognizedData'>): string {
+  const recognized = item.recognizedData ?? {};
+  const belegdatum = parseSafeDocumentDate(recognized.Datum ?? recognized.datum ?? null);
+  if (belegdatum) return monthKeyFromParts(belegdatum.getFullYear(), belegdatum.getMonth() + 1);
+  const eingang = toBusinessDay(item.receivedAt);
+  return /^\d{4}-\d{2}/.test(eingang) ? eingang.slice(0, 7) : getBusinessDay().slice(0, 7);
 }
 
 function formatMonthLabel(monthKey: string, locale = 'de-DE'): string {
@@ -156,11 +184,20 @@ export function buildMonthKeyOptions(count = 6, referenceDate: Date | string = n
 /**
  * Steuerrelevante Eingangsposten, die das Monatsmodell noch nicht als Beleg
  * führt (nicht als Ausgabe gebucht) — sie sind „unklar", nicht „enthalten".
+ *
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N08) — auch abgelegte Posten: Ablegen ist keine
+ * Buchung. Bisher verschwand ein ungebuchter Beleg aus der Übergabe, sobald er abgelegt
+ * war. Erledigt ist ein Posten erst, wenn er gebucht ist (Ausgabe, in jedem Monat) oder
+ * ausdrücklich mit einer Ausgabe oder Rechnung verbunden wurde.
  */
-function collectUnclearInboxEntries(bookedIds: ReadonlySet<string>): SteuerberaterDocumentEntry[] {
+function collectUnclearInboxEntries(
+  items: readonly InboxItem[],
+  bookedIds: ReadonlySet<string>,
+): SteuerberaterDocumentEntry[] {
   const entries: SteuerberaterDocumentEntry[] = [];
-  for (const item of filterActiveItems(getInboxItems())) {
+  for (const item of filterSyncActive([...items])) {
     if (bookedIds.has(item.id)) continue;
+    if (item.financeReference?.confirmedAt) continue;
     const classification = getClassificationForItem(item);
     const kind = classification.classifiedKind;
     const isTaxRelevant =
@@ -201,26 +238,60 @@ function belegEntry(beleg: MonatsmappeBeleg, monthKey: string): SteuerberaterDoc
   };
 }
 
-/** Eingangsposten, die bereits als Ausgabe im Modell stehen — nie doppelt zählen. */
-function bookedInboxIds(model: MonatsmappeModel, input: MonatsmappeInput): Set<string> {
-  const belegIds = new Set([...model.eingangsbelege, ...model.stornos].map((beleg) => beleg.id));
+/**
+ * Eingangsposten, die bereits als Ausgabe gebucht sind — nie doppelt zählen.
+ *
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N07) — über Monatsgrenzen: Eine Buchung im
+ * Belegmonat erledigt den Posten auch in jedem anderen Monat. Bisher zählten nur die
+ * Ausgaben des betrachteten Monats.
+ */
+function bookedInboxIds(input: MonatsmappeInput): Set<string> {
   const ids = new Set<string>();
   for (const expense of input.expenses) {
-    if (belegIds.has(expense.id) && expense.linkedInboxId) ids.add(expense.linkedInboxId);
+    if (expense.sync?.deleted) continue;
+    if (expense.linkedInboxId) ids.add(expense.linkedInboxId);
   }
   return ids;
 }
 
-function collectMissingForMonth(monthKey: string, model: MonatsmappeModel): { id: string; title: string }[] {
+/**
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N10) — der Monat einer Steueraufgabe: ihre Fälligkeit,
+ * sonst der Belegmonat ihres verknüpften Eingangspostens. Ohne beides hat sie keinen
+ * Monatsbezug (`null`) und erscheint als allgemeiner Hinweis.
+ */
+function resolveTaskMonth(task: Task, inboxById: ReadonlyMap<string, InboxItem>): string | null {
+  if (task.dueDate) return toBusinessDay(task.dueDate).slice(0, 7) || monthKeyFromDate(task.dueDate);
+  const linked = task.linkedInboxId ? inboxById.get(task.linkedInboxId) : undefined;
+  return linked ? resolveItemMonth(linked) : null;
+}
+
+function isOpenTaxTask(task: Task): boolean {
+  return isTaskOpen(task) && (task.type === 'steuerberater_export' || task.category === 'steuern');
+}
+
+/** FINANZ-CORE-01A (WEISS-Nacharbeit N10) — offene Steueraufgaben ohne Monatsbezug. */
+function collectGeneralTaxTasks(inboxItems: readonly InboxItem[]): { id: string; title: string }[] {
+  const inboxById = new Map(inboxItems.map((item) => [item.id, item]));
+  return getAllTasksFromStore()
+    .filter((task) => isOpenTaxTask(task) && resolveTaskMonth(task, inboxById) === null)
+    .map((task) => ({ id: task.id, title: task.title }));
+}
+
+function collectMissingForMonth(
+  monthKey: string,
+  model: MonatsmappeModel,
+  inboxItems: readonly InboxItem[],
+): { id: string; title: string }[] {
   /* Belege ohne verfügbares Dokument zählen als fehlend — wie im Export sichtbar. */
   const missing: { id: string; title: string }[] = model.fehlendeDokumente.map((entry) => ({
     id: entry.id,
     title: `Dokument fehlt: ${entry.belegnummer || entry.id}`,
   }));
+  const inboxById = new Map(inboxItems.map((item) => [item.id, item]));
   for (const task of getAllTasksFromStore()) {
-    if (!isTaskOpen(task)) continue;
-    if (task.type !== 'steuerberater_export' && task.category !== 'steuern') continue;
-    if (task.dueDate && monthKeyFromDate(task.dueDate) !== monthKey) continue;
+    if (!isOpenTaxTask(task)) continue;
+    // FINANZ-CORE-01A (WEISS N10) — nur mit Monatsbezug; ohne ihn ein allgemeiner Hinweis.
+    if (resolveTaskMonth(task, inboxById) !== monthKey) continue;
     missing.push({ id: task.id, title: task.title });
   }
   return missing;
@@ -229,10 +300,16 @@ function collectMissingForMonth(monthKey: string, model: MonatsmappeModel): { id
 export function collectSteuerberaterMonthFindings(monthKey: string): SteuerberaterMonthFindings {
   const input = collectMonatsmappeInput(monthKey);
   const model = buildMonatsmappeModel(input);
-  const unclearDocuments = collectUnclearInboxEntries(bookedInboxIds(model, input)).filter(
+  const unclearDocuments = collectUnclearInboxEntries(input.inboxItems, bookedInboxIds(input)).filter(
     (doc) => doc.monthKey === monthKey,
   );
-  return { input, model, unclearDocuments, missingItems: collectMissingForMonth(monthKey, model) };
+  return {
+    input,
+    model,
+    unclearDocuments,
+    missingItems: collectMissingForMonth(monthKey, model, input.inboxItems),
+    generalTaxTasks: collectGeneralTaxTasks(input.inboxItems),
+  };
 }
 
 /**
@@ -278,6 +355,7 @@ export function getSteuerberaterMonthOverview(
   const openCount = countHandoverOpenSteps(handover);
   const isComplete = documentCount > 0 && handover.packageComplete;
   const paymentCount = model.zahlungenAusgang.length + model.zahlungenEingang.length;
+  const employeePaymentCount = model.mitarbeiterZahlungen?.length ?? 0;
   /*
    * BLOCK 2 — `empty` heisst jetzt „wirklich nichts da".
    *
@@ -288,8 +366,20 @@ export function getSteuerberaterMonthOverview(
    * weiterhin Belege und ein offenes Gate), aber sie macht ihn auch nicht
    * leer.
    */
-  const state: SteuerberaterMonthState =
-    documentCount === 0 && paymentCount === 0 ? 'empty' : isComplete ? 'ready' : 'open';
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N11) — „leer" nur, wenn keine Übergabequelle etwas
+   * trägt: keine Belege, keine Zahlungen, keine Mitarbeiterzahlungen, keine ungeklärten
+   * Belege, keine Stornos ohne Datum, nichts Fehlendes. Bisher hiess ein Monat mit einer
+   * Mitarbeiterzahlung oder einem ungeklärten Beleg „Noch keine Belege".
+   */
+  const hasHandoverContent =
+    documentCount > 0 ||
+    paymentCount > 0 ||
+    employeePaymentCount > 0 ||
+    unclearDocuments.length > 0 ||
+    model.stornosOhneDatum.length > 0 ||
+    missingCount > 0;
+  const state: SteuerberaterMonthState = !hasHandoverContent ? 'empty' : isComplete ? 'ready' : 'open';
   const completenessPercent =
     documentCount === 0 ? 0 : Math.min(100, Math.round((documentCount / (documentCount + openCount)) * 100));
 
@@ -312,6 +402,8 @@ export function getSteuerberaterMonthOverview(
     expenseCount: model.eingangsbelege.length,
     stornoCount: model.stornos.length,
     paymentCount,
+    employeePaymentCount,
+    generalTaxTasks: findings.generalTaxTasks,
     openCount,
   };
 }

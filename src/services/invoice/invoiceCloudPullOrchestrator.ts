@@ -8,7 +8,7 @@ import {
 } from './invoiceCloudPullMergeService';
 import * as workspaceInvoiceCloud from './workspaceInvoiceCloudService';
 import { WorkspaceInvoiceCloudError } from './workspaceInvoiceCloudService';
-import { pullInvoicePaymentsFromCloud } from './workspaceInvoicePaymentCloudService';
+import { isInvoicePaymentCloudSilent, pullInvoicePaymentsFromCloud } from './workspaceInvoicePaymentCloudService';
 import { calculatePaymentSummary } from '../invoicePaymentService';
 import {
   mergeCloudPaymentsIntoInvoice,
@@ -51,8 +51,17 @@ async function applyCloudPaymentsToVorgaenge(
   workspaceId: string,
   client?: SupabaseClient | null,
   since?: string | null,
+  report?: SyncSimulationReport,
 ): Promise<{ vorgaenge: Vorgang[]; manualInvoices: VorgangInvoice[] }> {
   const pulled = await pullInvoicePaymentsFromCloud({ client, workspaceId, since });
+  /*
+   * FINANZ-CORE-01A (ZAH-17) — ein gescheiterter Zahlungsabzug steht im Bericht. Bisher meldete
+   * der Sync Erfolg, obwohl Zahlungen anderer Geräte fehlten; die Rechnungen blieben „offen".
+   */
+  if (pulled.outcome !== 'synced' && report && !isInvoicePaymentCloudSilent(pulled.outcome)) {
+    report.errorCount += 1;
+    report.errors.push({ outboxId: 'invoice-payment-pull', message: pulled.detail ?? pulled.outcome });
+  }
   if (pulled.outcome !== 'synced' || pulled.rows.length === 0) {
     return { vorgaenge, manualInvoices: [...manualInvoices] };
   }
@@ -154,6 +163,7 @@ export async function applyInvoicePullAfterVorgangMerge(input: {
       input.workspaceId,
       input.client,
       input.since,
+      input.report,
     );
 
     const aligned = input.alignForMember

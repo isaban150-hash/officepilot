@@ -80,7 +80,12 @@ const DOCUMENT_TYPE_CODES: Readonly<Record<CanonicalDocumentKind, string>> = {
   prepayment_invoice_quantity: '875',
   prepayment_invoice_fixed: '875',
   final_invoice: '877',
-  correction: '384',
+  /*
+   * FINANZ-CORE-01A (STO-09/AUS-08) — die Rechnungskorrektur ist eine Gutschrift (381)
+   * mit eigener Nummer und Bezug auf das Original (BT-25/BT-26). 384 („korrigierte
+   * Rechnung") hätte die Originalnummer erneut vergeben und den Betrag erneut gefordert.
+   */
+  correction: '381',
 };
 
 /** Steuerkategorie nach UNTDID 5305 — wie im CII üblich und profilunabhängig. */
@@ -99,6 +104,8 @@ const TAX_REGISTRATION_FISCAL = 'FC';
 
 /** Überweisung (SEPA credit transfer) nach UNTDID 4461. */
 const PAYMENT_MEANS_CREDIT_TRANSFER = '58';
+/** FINANZ-CORE-01A — Verrechnung einer Gutschrift (UNTDID 4461 `ZZZ`, gegenseitig vereinbart). */
+const PAYMENT_MEANS_SETTLEMENT = 'ZZZ';
 
 /* ------------------------------------------------------------------ */
 /* Ergebnis                                                            */
@@ -207,6 +214,8 @@ function renderDocument(c: CanonicalEInvoice): string {
             4,
           )
         : null,
+      // FINANZ-CORE-01A — Belegnotizen (BT-22): Bezug der Korrektur, abgezogene Abschläge.
+      ...c.notes.map((note) => xmlNode('ram:IncludedNote', [xmlLeaf('ram:Content', note, [], 6)], 4)),
     ],
     2,
   );
@@ -345,9 +354,9 @@ function renderLine(line: CanonicalLine): string {
 function renderAgreement(c: CanonicalEInvoice): string {
   /*
    * Die Käuferreferenz (BT-10) ist in EN16931 optional — anders als bei
-   * XRechnung, wo `BR-DE-15` sie erzwingt. 04C verlangt sie trotzdem für
-   * jeden Beleg, weil der Empfänger sonst nicht zuordnen kann; wäre sie
-   * einmal leer, entfällt das Element, statt leer dazustehen.
+   * XRechnung, wo `BR-DE-15` sie erzwingt. FINANZ-CORE-01A (AUS-18): Der
+   * Builder verlangt sie im Profil `en16931` nicht mehr (bisher erbte ZUGFeRD
+   * die XRechnung-Pflicht); fehlt sie, entfällt das Element, statt leer dazustehen.
    */
   return xmlNode(
     'ram:ApplicableHeaderTradeAgreement',
@@ -370,9 +379,11 @@ function renderSeller(c: CanonicalEInvoice): string {
    * Wahrheit. ZUGFeRD 2.5.2 prüft das an mehreren Stellen ausdrücklich.
    *
    * Der Verkäuferkontakt ist in EN16931 — anders als bei XRechnung
-   * (`BR-DE-2`) — **nicht** Pflicht. OfficeTakt liefert ihn trotzdem, weil
-   * das Feld seit 04D-FIX1 im Snapshot steht und ein Empfänger mit
-   * Ansprechpartner besser bedient ist.
+   * (`BR-DE-2`) — **nicht** Pflicht. OfficeTakt liefert ihn, soweit der
+   * Snapshot ihn trägt (seit 04D-FIX1), weil ein Empfänger mit
+   * Ansprechpartner besser bedient ist. FINANZ-CORE-01A (AUS-18): Fehlt er
+   * oder ein Teil davon, entfällt genau das — ebenso die elektronischen
+   * Adressen (BT-34/BT-49), die erst XRechnung 3.0 verlangt.
    */
   return xmlNode(
     'ram:SellerTradeParty',
@@ -385,36 +396,44 @@ function renderSeller(c: CanonicalEInvoice): string {
             8,
           )
         : null,
-      xmlNode(
-        'ram:DefinedTradeContact',
-        [
-          xmlLeaf('ram:PersonName', s.contact.name, [], 10),
-          xmlNode(
-            'ram:TelephoneUniversalCommunication',
-            [xmlLeaf('ram:CompleteNumber', s.contact.phone, [], 12)],
-            10,
-          ),
-          xmlNode(
-            'ram:EmailURIUniversalCommunication',
-            [xmlLeaf('ram:URIID', s.contact.email, [], 12)],
-            10,
-          ),
-        ],
-        8,
-      ),
+      s.contact
+        ? xmlNode(
+            'ram:DefinedTradeContact',
+            [
+              s.contact.name ? xmlLeaf('ram:PersonName', s.contact.name, [], 10) : null,
+              s.contact.phone
+                ? xmlNode(
+                    'ram:TelephoneUniversalCommunication',
+                    [xmlLeaf('ram:CompleteNumber', s.contact.phone, [], 12)],
+                    10,
+                  )
+                : null,
+              s.contact.email
+                ? xmlNode(
+                    'ram:EmailURIUniversalCommunication',
+                    [xmlLeaf('ram:URIID', s.contact.email, [], 12)],
+                    10,
+                  )
+                : null,
+            ],
+            8,
+          )
+        : null,
       renderPostalAddress(s.address, 8),
-      xmlNode(
-        'ram:URIUniversalCommunication',
-        [
-          xmlLeaf(
-            'ram:URIID',
-            s.electronicAddress.value,
-            [['schemeID', ELECTRONIC_ADDRESS_SCHEMES[s.electronicAddress.scheme]]],
-            10,
-          ),
-        ],
-        8,
-      ),
+      s.electronicAddress
+        ? xmlNode(
+            'ram:URIUniversalCommunication',
+            [
+              xmlLeaf(
+                'ram:URIID',
+                s.electronicAddress.value,
+                [['schemeID', ELECTRONIC_ADDRESS_SCHEMES[s.electronicAddress.scheme]]],
+                10,
+              ),
+            ],
+            8,
+          )
+        : null,
       s.vatId
         ? xmlNode(
             'ram:SpecifiedTaxRegistration',
@@ -444,18 +463,20 @@ function renderBuyer(c: CanonicalEInvoice): string {
         ? xmlNode('ram:DefinedTradeContact', [xmlLeaf('ram:PersonName', b.contactPerson, [], 10)], 8)
         : null,
       renderPostalAddress(b.address, 8),
-      xmlNode(
-        'ram:URIUniversalCommunication',
-        [
-          xmlLeaf(
-            'ram:URIID',
-            b.electronicAddress.value,
-            [['schemeID', ELECTRONIC_ADDRESS_SCHEMES[b.electronicAddress.scheme]]],
-            10,
-          ),
-        ],
-        8,
-      ),
+      b.electronicAddress
+        ? xmlNode(
+            'ram:URIUniversalCommunication',
+            [
+              xmlLeaf(
+                'ram:URIID',
+                b.electronicAddress.value,
+                [['schemeID', ELECTRONIC_ADDRESS_SCHEMES[b.electronicAddress.scheme]]],
+                10,
+              ),
+            ],
+            8,
+          )
+        : null,
       b.vatId
         ? xmlNode(
             'ram:SpecifiedTaxRegistration',
@@ -492,18 +513,28 @@ function renderSettlement(c: CanonicalEInvoice): string {
     'ram:ApplicableHeaderTradeSettlement',
     [
       xmlLeaf('ram:InvoiceCurrencyCode', c.currencyCode, [], 6),
-      xmlNode(
-        'ram:SpecifiedTradeSettlementPaymentMeans',
-        [
-          xmlLeaf('ram:TypeCode', PAYMENT_MEANS_CREDIT_TRANSFER, [], 8),
-          xmlNode(
-            'ram:PayeePartyCreditorFinancialAccount',
-            [xmlLeaf('ram:IBANID', transfer.iban, [], 10)],
-            8,
+      c.payment.means === 'settlement'
+        ? xmlNode(
+            'ram:SpecifiedTradeSettlementPaymentMeans',
+            /*
+             * FINANZ-CORE-01A (STO-09/AUS-08) — die Gutschrift einer Korrektur wird
+             * verrechnet: `ZZZ` (vereinbart) ohne Konto. KoSIT 1.6.3 nimmt das an.
+             */
+            [xmlLeaf('ram:TypeCode', PAYMENT_MEANS_SETTLEMENT, [], 8)],
+            6,
+          )
+        : xmlNode(
+            'ram:SpecifiedTradeSettlementPaymentMeans',
+            [
+              xmlLeaf('ram:TypeCode', PAYMENT_MEANS_CREDIT_TRANSFER, [], 8),
+              xmlNode(
+                'ram:PayeePartyCreditorFinancialAccount',
+                [xmlLeaf('ram:IBANID', transfer!.iban, [], 10)],
+                8,
+              ),
+            ],
+            6,
           ),
-        ],
-        6,
-      ),
       xmlNode(
         'ram:ApplicableTradeTax',
         [
@@ -548,11 +579,16 @@ function renderSettlement(c: CanonicalEInvoice): string {
             6,
           )
         : null,
+      renderAllowances(c),
       renderPaymentTerms(c),
       xmlNode(
         'ram:SpecifiedTradeSettlementHeaderMonetarySummation',
         [
           xmlLeaf('ram:LineTotalAmount', formatXmlAmount(c.totals.lineNetTotal), [], 8),
+          // WEISS-Recheck N02-R1 — BT-107: Summe der Nachlässe (nur mit Nachlass).
+          c.totals.allowanceTotal !== undefined
+            ? xmlLeaf('ram:AllowanceTotalAmount', formatXmlAmount(c.totals.allowanceTotal), [], 8)
+            : null,
           xmlLeaf('ram:TaxBasisTotalAmount', formatXmlAmount(c.totals.taxExclusiveAmount), [], 8),
           xmlLeaf(
             'ram:TaxTotalAmount',
@@ -560,7 +596,15 @@ function renderSettlement(c: CanonicalEInvoice): string {
             [['currencyID', c.currencyCode]],
             8,
           ),
+          // WEISS-Recheck N02-R1 — BT-114: Rundungsbetrag (nur, wenn nicht 0).
+          c.totals.roundingAmount !== undefined
+            ? xmlLeaf('ram:RoundingAmount', formatXmlAmount(c.totals.roundingAmount), [], 8)
+            : null,
           xmlLeaf('ram:GrandTotalAmount', formatXmlAmount(c.totals.taxInclusiveAmount), [], 8),
+          // FINANZ-CORE-01A (D1, WEISS-Recheck N02-R1) — BT-113: tatsächlich auf die abgezogenen Abschläge gezahlt.
+          c.totals.prepaidAmount > 0
+            ? xmlLeaf('ram:TotalPrepaidAmount', formatXmlAmount(c.totals.prepaidAmount), [], 8)
+            : null,
           xmlLeaf('ram:DuePayableAmount', formatXmlAmount(c.totals.payableAmount), [], 8),
         ],
         6,
@@ -568,13 +612,63 @@ function renderSettlement(c: CanonicalEInvoice): string {
       c.references.correction
         ? xmlNode(
             'ram:InvoiceReferencedDocument',
-            [xmlLeaf('ram:IssuerAssignedID', c.references.correction.originalInvoiceNumber, [], 8)],
+            [
+              xmlLeaf('ram:IssuerAssignedID', c.references.correction.originalInvoiceNumber, [], 8),
+              // FINANZ-CORE-01A (AUS-08) — BT-26, das Datum der berichtigten Rechnung.
+              c.references.correction.originalIssueDate
+                ? xmlNode(
+                    'ram:FormattedIssueDateTime',
+                    [
+                      xmlLeaf(
+                        'qdt:DateTimeString',
+                        formatXmlDate102(c.references.correction.originalIssueDate),
+                        [['format', '102']],
+                        10,
+                      ),
+                    ],
+                    8,
+                  )
+                : null,
+            ],
             6,
           )
         : null,
     ],
     4,
   );
+}
+
+/**
+ * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — Nachlässe auf Belegebene (BG-20): das Skonto,
+ * mit dem ein abgezogener Abschlag beglichen wurde. Netto, mit der Steuerkategorie des
+ * Belegs; ohne Nachlass entfällt der Block, und die Ausgabe bleibt bytegleich.
+ */
+function renderAllowances(c: CanonicalEInvoice): string | null {
+  const allowances = c.allowances ?? [];
+  if (allowances.length === 0) return null;
+  return allowances
+    .map((allowance) =>
+      xmlNode(
+        'ram:SpecifiedTradeAllowanceCharge',
+        [
+          xmlNode('ram:ChargeIndicator', [xmlLeaf('udt:Indicator', 'false', [], 10)], 8),
+          xmlLeaf('ram:ActualAmount', formatXmlAmount(allowance.amount), [], 8),
+          xmlLeaf('ram:ReasonCode', allowance.reasonCode, [], 8),
+          xmlLeaf('ram:Reason', allowance.reason, [], 8),
+          xmlNode(
+            'ram:CategoryTradeTax',
+            [
+              xmlLeaf('ram:TypeCode', 'VAT', [], 10),
+              xmlLeaf('ram:CategoryCode', TAX_CATEGORY_CODES[allowance.category], [], 10),
+              xmlLeaf('ram:RateApplicablePercent', formatXmlPercent(allowance.rate), [], 10),
+            ],
+            8,
+          ),
+        ],
+        6,
+      ),
+    )
+    .join('\n');
 }
 
 function renderPaymentTerms(c: CanonicalEInvoice): string | null {

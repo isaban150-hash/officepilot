@@ -223,6 +223,8 @@ begin
   -- 03B2: Nur der Pauschalabschlag wird monetaer abgezogen; der mengenbasierte
   -- Abschlag hat seine Leistung bereits ueber die Menge verbraucht.
   -- 8 x 100 = 800 netto, 952 brutto, abzueglich 357 -> 595 offen
+  -- WEISS-Nacharbeit N02: Eine Schlussrechnung zieht nur beglichene Abschlaege ab.
+  perform public.add_workspace_invoice_payment(ws, 'inv-abschlag-pauschal', 'pay-abschlag-pauschal', 357, '2026-10-04', null, null, 'bank');
   r := public.finalize_workspace_invoice(ws, 'v-abschlag', 'inv-schluss',
     pg_temp.rechnung('schluss', jsonb_build_array(pg_temp.zeile('a1', 8, 100)), 800, 595, 'standard_19',
       '{"previousAbschlagDeductions":[{"invoiceId":"inv-abschlag-pauschal","amount":357}]}'::jsonb));
@@ -342,6 +344,8 @@ begin
   if public.workspace_invoice_abschlag_deductions(ws, 'v-fallB', null) <> 20 then
     raise exception '30: Abzug %', public.workspace_invoice_abschlag_deductions(ws, 'v-fallB', null);
   end if;
+  -- WEISS-Nacharbeit N02: Eine Schlussrechnung zieht nur beglichene Abschlaege ab.
+  perform public.add_workspace_invoice_payment(ws, 'inv-fb-ab', 'pay-fb-ab', 20, '2026-10-04', null, null, 'bank');
   r := public.finalize_workspace_invoice(ws, 'v-fallB', 'inv-fb-schluss',
     pg_temp.rechnung('schluss', jsonb_build_array(pg_temp.zeile('fb1', 10, 10, 'Stück')), 100, 80, 'kleinunternehmer_19',
       '{"previousAbschlagDeductions":[{"invoiceId":"inv-fb-ab","amount":20}]}'::jsonb));
@@ -362,6 +366,8 @@ begin
   if public.workspace_invoice_abschlag_deductions(ws, 'v-fallC', null) <> 20 then
     raise exception '31: Abzug %', public.workspace_invoice_abschlag_deductions(ws, 'v-fallC', null);
   end if;
+  -- WEISS-Nacharbeit N02: Eine Schlussrechnung zieht nur beglichene Abschlaege ab.
+  perform public.add_workspace_invoice_payment(ws, 'inv-fc-pauschal', 'pay-fc-pauschal', 20, '2026-10-04', null, null, 'bank');
   r := public.finalize_workspace_invoice(ws, 'v-fallC', 'inv-fc-schluss',
     pg_temp.rechnung('schluss', jsonb_build_array(pg_temp.zeile('fc1', 21, 5, 'Stück')), 105, 85, 'kleinunternehmer_19',
       '{"previousAbschlagDeductions":[{"invoiceId":"inv-fc-pauschal","amount":20}]}'::jsonb));

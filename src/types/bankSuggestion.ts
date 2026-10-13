@@ -26,6 +26,8 @@ export type BankSuggestionGrade = 'sehr_passend' | 'passend' | 'moeglich';
 export type BankSuggestionReason =
   | 'invoice_number_in_purpose'
   | 'amount_matches_open'
+  /** FINANZ-CORE-01A (ZAH-04) — der Betrag gleicht die Rechnung fristgerecht mit Skonto aus. */
+  | 'amount_matches_skonto'
   | 'counterparty_matches'
   | 'amount_differs'
   | 'date_before_document';
@@ -55,4 +57,21 @@ export interface BankSuggestionResult {
   direction: 'incoming' | 'outgoing';
   candidates: BankSuggestionCandidate[];
   ambiguous: boolean;
+  /**
+   * FINANZ-CORE-01A (ZAH-03) — bereits erfasste, noch keiner Bewegung zugeordnete Zahlungen mit
+   * genau diesem Betrag und nahem Datum. Sie werden zum Verknüpfen angeboten, nicht zum Buchen.
+   */
+  alreadyRecorded?: BankRecordedPaymentMatch[];
+}
+
+/** FINANZ-CORE-01A (ZAH-03) — eine schon erfasste Zahlung, die diese Bewegung sein könnte. */
+export interface BankRecordedPaymentMatch {
+  targetType: 'invoice' | 'expense';
+  targetId: string;
+  documentNumber: string;
+  partyName: string;
+  paymentId: string;
+  /** Das Datum der erfassten Zahlung (`YYYY-MM-DD`). */
+  paymentDate: string;
+  amountCents: number;
 }

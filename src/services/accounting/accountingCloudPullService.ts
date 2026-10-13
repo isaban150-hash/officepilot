@@ -92,11 +92,28 @@ export function applyAccountingPullToState(
     scope,
   );
 
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N09) — die Sendeaufträge entfernter Doppelungen
+   * sind erledigt: Der Server nähme sie nie an (eine aktive Kontierung je Beleg). Im
+   * Kandidaten, nicht im Speicher — der Kandidat ist für bekannte Aufträge die Wahrheit
+   * (OUTBOX-PRESERVE-ON-PULL-01).
+   */
+  const superseded = new Set(assignmentMerge.superseded);
+  const syncOutbox =
+    superseded.size > 0 && state.syncOutbox
+      ? state.syncOutbox.map((entry) =>
+          entry.entityType === 'accounting_assignment' && superseded.has(entry.entityId) && entry.status !== 'completed'
+            ? { ...entry, status: 'completed' as const }
+            : entry,
+        )
+      : state.syncOutbox;
+
   return {
     state: {
       ...state,
       accountingAssignments: assignmentMerge.assignments,
       accountingPeriodClosures: closureMerge.closures,
+      ...(syncOutbox !== state.syncOutbox ? { syncOutbox } : {}),
     },
     counts: {
       assignments:

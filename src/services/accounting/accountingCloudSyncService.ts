@@ -10,6 +10,7 @@ import { isFinancialActionDenial } from '../auth/financialActionDenial';
 import { getSupabaseClient } from '../../lib/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AccountingAssignment, AccountingSourceType } from '../../types/accounting';
+import { accountingSourceKey, isResolvedAccountingTaxTreatment } from './accountingCanonical';
 import type { SyncEntityType, SyncMeta, SyncOutboxEntry } from '../../types/sync';
 
 /**
@@ -238,6 +239,12 @@ export interface AccountingMergeResult {
   assignments: AccountingAssignment[];
   conflicts: string[];
   counts: { added: number; updated: number; removed: number; keptLocal: number };
+  /**
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N09) — nie übertragene lokale Doppelungen eines
+   * Belegs, den die Cloud bereits mit einer anderen Kontierung führt. Sie sind entfernt;
+   * ihre Sendeaufträge schliesst der Aufrufer (der Server nähme sie nie an).
+   */
+  superseded: string[];
 }
 
 /**
@@ -282,7 +289,33 @@ export function mergeAccountingFromPull(
     else counts.added += 1;
   }
 
-  return { assignments: [...byId.values()], conflicts, counts };
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N09) — eine Kontierungswahrheit je Beleg.
+   *
+   * Führt die Cloud einen Beleg mit einer Kontierung, und lokal steht daneben eine
+   * zweite, die nie übertragen wurde (anderes Gerät, offline angelegt), kann diese nie
+   * in die Cloud: Der Server hält je Beleg genau eine aktive Kontierung. Bisher blieben
+   * beide stehen; Detail und Export wählten verschiedene. Jetzt gilt die Cloud-Zeile,
+   * die Doppelung fällt weg und wird als Konflikt gemeldet. War sie bestätigt, ist die
+   * Bestätigung an der Cloud-Zeile zu wiederholen — sichtbar „zu prüfen", nie still als
+   * bestätigt exportiert.
+   */
+  const remoteActive = new Set(
+    pull.assignments.filter((row) => !row.deleted).map((row) => row.client_assignment_id),
+  );
+  const cloudSources = new Set(
+    [...byId.values()].filter((item) => remoteActive.has(item.id)).map((item) => accountingSourceKey(item)),
+  );
+  const superseded: string[] = [];
+  for (const item of [...byId.values()]) {
+    if (remoteActive.has(item.id) || (item.sync?.version ?? 0) > 0) continue;
+    if (!cloudSources.has(accountingSourceKey(item))) continue;
+    byId.delete(item.id);
+    superseded.push(item.id);
+    if (!conflicts.includes(item.id)) conflicts.push(item.id);
+  }
+
+  return { assignments: [...byId.values()], conflicts, counts, superseded };
 }
 
 /** Übernimmt die Serverversion nach einem erfolgreichen Push. */
@@ -368,5 +401,7 @@ export function findAccountingServerRuleViolation(
   if (assignment.status !== 'confirmed') return null;
   if (!assignment.accountNumber.trim()) return 'confirmed_without_account';
   if (!(assignment.confirmedAt ?? '').trim()) return 'confirmed_without_timestamp';
+  // FINANZ-CORE-01A (WEISS-Nacharbeit N06) — dieselbe Regel wie `accounting_confirmed_without_tax`.
+  if (!isResolvedAccountingTaxTreatment(assignment.taxTreatment)) return 'confirmed_without_tax';
   return null;
 }

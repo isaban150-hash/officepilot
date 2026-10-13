@@ -229,6 +229,16 @@ export async function buildAccountingExportPackage(
     ...(input.findings?.missingItems ?? [])
       .filter((item) => !bookings.withoutDocument.some((entry) => entry.sourceId === item.id))
       .map((item) => ({ id: item.id, titel: item.title })),
+    /*
+     * FINANZ-CORE-01A (BUH-10) — eine Barauszahlung ohne unterschriebenen Nachweis ist eine Lücke
+     * der Übergabe. Bisher stand das Paket trotzdem auf „vollständig".
+     */
+    ...mitarbeiterZahlungen
+      .filter((z) => z.art === 'zahlung' && z.status === 'aktiv' && z.zahlungsart === 'cash' && z.nachweisStatus === 'kein')
+      .map((z) => ({
+        id: z.zahlungId,
+        titel: `Unterschriebener Nachweis fehlt: Barzahlung ${z.referenz}${z.mitarbeiter ? ` (${z.mitarbeiter})` : ''}`,
+      })),
   ];
   const unklareFaelle = [
     ...(input.findings?.unclearDocuments ?? []).map((doc) => ({ id: doc.id, titel: `Nicht gebuchter Eingangsbeleg: ${doc.title}` })),

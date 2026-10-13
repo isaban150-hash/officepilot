@@ -14,10 +14,45 @@
  * gibt. Eine Datei, die so heisst und es nicht ist, wäre schlimmer als keine.
  */
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { InlineNotice } from '../ui/States';
 import { ReadOnlyNotice } from '../ui/ReadOnlyNotice';
 import type { AccountingExportReadiness } from '../../services/accounting/accountingExportGateService';
+import {
+  describeAccountingExportFailure,
+  type AccountingExportPdfProblem,
+} from '../../services/accounting/accountingExportPdfCheck';
+import { buildInvoiceReachPath } from '../../services/invoiceNavigation';
+import type { AccountingExportOutcome } from '../../services/accounting/accountingExportRunner';
+
+/** FINANZ-CORE-01A (BUH-05) — warum der letzte Export scheiterte, für die Anzeige. */
+export interface AccountingExportFailureView {
+  outcome: 'document_load_failed' | 'blocked' | 'forbidden' | 'export_failed' | 'invalid_month';
+  failed?: ReadonlyArray<{ fileName: string; detail: string }>;
+}
+
+export interface AccountingExportFeedback {
+  monthKey: string;
+  fileName: string | null;
+  failure?: AccountingExportFailureView;
+}
+
+/** FINANZ-CORE-01A (BUH-05) — das Exportergebnis vollständig für das Panel (Datei oder Beleg und Grund). */
+export function buildAccountingExportFeedback(
+  monthKey: string,
+  result: AccountingExportOutcome,
+): AccountingExportFeedback {
+  if (result.outcome === 'exported') return { monthKey, fileName: result.fileName };
+  return {
+    monthKey,
+    fileName: null,
+    failure: {
+      outcome: result.outcome,
+      ...(result.outcome === 'document_load_failed' ? { failed: result.failed } : {}),
+    },
+  };
+}
 import type { TranslationKey } from '../../i18n';
 
 interface Props {
@@ -37,10 +72,22 @@ interface Props {
    * Export wird das Panel neu aufgebaut (neuer Stand); ohne diese Übergabe
    * gingen Dateiname und Fehlerhinweis dabei verloren.
    */
-  lastResult?: { fileName: string | null } | null;
+  lastResult?: { fileName: string | null; failure?: AccountingExportFailureView } | null;
+  /**
+   * FINANZ-CORE-01A (BUH-05) — Rechnungen des Monats, deren PDF sich nicht erzeugen lässt: Das
+   * Paket würde an ihnen scheitern. Vor dem Klick genannt, mit Weg zur Rechnung.
+   */
+  pdfProblems?: readonly AccountingExportPdfProblem[];
 }
 
-export function AccountingExportPanel({ readiness, onCreatePackage, translate, canExport = true, lastResult = null }: Props) {
+export function AccountingExportPanel({
+  readiness,
+  onCreatePackage,
+  translate,
+  canExport = true,
+  lastResult = null,
+  pdfProblems = [],
+}: Props) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(lastResult ? lastResult.fileName === null : false);
   const [createdName, setCreatedName] = useState<string | null>(lastResult?.fileName ?? null);
@@ -91,9 +138,40 @@ export function AccountingExportPanel({ readiness, onCreatePackage, translate, c
               {createdName}
             </p>
           ) : null}
+          {pdfProblems.length > 0 ? (
+            <InlineNotice tone="warning" testId="accounting-export-pdf-problems" title={translate('accountingExport.pdfProblems.title')}>
+              <ul>
+                {pdfProblems.map((problem) => (
+                  <li key={problem.invoiceId} data-testid={`accounting-export-pdf-problem-${problem.invoiceId}`}>
+                    <Link to={buildInvoiceReachPath(problem.vorgangId, problem.invoiceId)}>{problem.invoiceNumber}</Link>
+                    {': '}
+                    {translate(problem.messageKey)}
+                  </li>
+                ))}
+              </ul>
+            </InlineNotice>
+          ) : null}
           {failed ? (
             <InlineNotice tone="critical" testId="accounting-export-failed">
               {translate('accountingExport.failed')}
+              {/* FINANZ-CORE-01A (BUH-05) — an welchem Beleg und warum, statt nur „nicht erstellt". */}
+              {lastResult?.failure?.outcome === 'document_load_failed' && lastResult.failure.failed?.length ? (
+                <>
+                  <p>{translate('accountingExport.failure.documents')}</p>
+                  <ul data-testid="accounting-export-failed-documents">
+                    {lastResult.failure.failed.map((entry) => (
+                      <li key={`${entry.fileName}:${entry.detail}`}>
+                        {entry.fileName}: {translate(describeAccountingExportFailure(entry.detail))}
+                      </li>
+                    ))}
+                  </ul>
+                  <p>{translate('accountingExport.failure.remedy')}</p>
+                </>
+              ) : lastResult?.failure?.outcome === 'blocked' ? (
+                <p data-testid="accounting-export-failed-blocked">{translate('accountingExport.failure.blocked')}</p>
+              ) : lastResult?.failure?.outcome === 'forbidden' ? (
+                <p data-testid="accounting-export-failed-forbidden">{translate('steuerberater.export.forbidden')}</p>
+              ) : null}
             </InlineNotice>
           ) : null}
         </>

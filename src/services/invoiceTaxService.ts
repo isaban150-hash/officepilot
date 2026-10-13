@@ -16,6 +16,19 @@ export function getTaxRateForStatus(status: TaxStatus | string): number {
   }
 }
 
+/**
+ * FINANZ-CORE-01A (AUS-11/EIN-07) — § 14 Abs. 4 Satz 1 Nr. 9 UStG: Bei einer Leistung im
+ * Zusammenhang mit einem Grundstück an einen Nichtunternehmer muss die Rechnung auf dessen
+ * Aufbewahrungspflicht hinweisen (zwei Jahre, § 14b Abs. 1 Satz 5 UStG). Ein Kundentyp im
+ * Stamm fehlt; der Hinweis wird je Rechnung bewusst gesetzt.
+ */
+export const PRIVATE_RETENTION_NOTICE =
+  'Hinweis: Als privater Leistungsempfänger sind Sie verpflichtet, diese Rechnung zwei Jahre lang aufzubewahren (§ 14b Abs. 1 Satz 5 UStG).';
+
+export function hasPrivateRetentionNotice(notices: readonly string[] | undefined): boolean {
+  return (notices ?? []).some((text) => text.trim() === PRIVATE_RETENTION_NOTICE);
+}
+
 export function buildLegalNotices(
   taxStatus: TaxStatus,
   profile?: Pick<CompanyProfile, 'taxFreeNotice'>,
@@ -35,6 +48,38 @@ export function buildLegalNotices(
     default:
       return [];
   }
+}
+
+/**
+ * FINANZ-CORE-01A (SQL-09) — die Steuerhinweise eines Belegs passend zu seinem
+ * Steuerstatus.
+ *
+ * Der Entwurf trägt seine Hinweise seit dem Anlegen. Wechselte der Steuerstatus auf
+ * einem Weg, der sie nicht neu bildete (Altentwurf, anderes Gerät), stand auf einer
+ * 19-%-Rechnung noch „Gemäß § 19 UStG …" oder auf einer Kleinunternehmerrechnung
+ * gar kein Hinweis — der Server weist das jetzt ab (`invoice_legal_notice_missing`).
+ *
+ * Regel: Standardhinweise anderer Steuerstatus fallen weg, der Pflichthinweis des
+ * eigenen Status steht vorn, eigene Zusätze bleiben. Passt alles schon, bleibt die
+ * Liste unverändert (auch in der Reihenfolge).
+ */
+export function normalizeLegalNoticesForTaxStatus(
+  taxStatus: TaxStatus,
+  notices: readonly string[],
+  profile?: Pick<CompanyProfile, 'taxFreeNotice'>,
+): string[] {
+  const own = buildLegalNotices(taxStatus, profile);
+  const standard = new Set(
+    (['kleinunternehmer_19', 'reverse_charge_13b', 'tax_free', 'unclear'] as TaxStatus[])
+      .flatMap((status) => [...buildLegalNotices(status, profile), ...buildLegalNotices(status)])
+      .map((text) => text.trim()),
+  );
+  const ownSet = new Set(own.map((text) => text.trim()));
+  const foreign = notices.some((text) => standard.has(text.trim()) && !ownSet.has(text.trim()));
+  const missing = own.some((text) => !notices.some((entry) => entry.trim() === text.trim()));
+  if (!foreign && !missing) return [...notices];
+  const custom = notices.filter((text) => text.trim() && !standard.has(text.trim()));
+  return [...own, ...custom];
 }
 
 /**
@@ -90,13 +135,14 @@ export function buildSkontoText(profile: CompanyProfile): string {
  * `financeIntelligenceService`, das Schreiben hier. Getrennt konnte die
  * Zahlungsabstimmung nicht an das Lesen heran, ohne einen Zyklus zu bauen
  * (`financeIntelligenceService` importiert seinerseits den Zahlungsdienst).
- * Verschoben, nicht verändert: dieselben zwei Muster wie zuvor.
+ * Verschoben; seit FINANZ-CORE-01A (ZAH-15) erkennen beide Muster auch die
+ * Einzahl „1 Tag", die `buildSkontoText` für eine eintägige Frist schreibt.
  *
  * `null` heisst „kein belastbarer Skontosatz". Es wird nichts geraten und
  * nichts ergänzt — ohne Prozentsatz **und** Frist gibt es kein Skonto.
  */
 export function parseSkontoFromText(text: string): { percent: number; days: number } | null {
-  const percentFirst = text.match(/(\d+(?:[.,]\d+)?)\s*%.*?(\d+)\s*tage/i);
+  const percentFirst = text.match(/(\d+(?:[.,]\d+)?)\s*%.*?(\d+)\s*tag(?:e|en)?\b/i);
   if (percentFirst) {
     const percent = Number(percentFirst[1].replace(',', '.'));
     const days = Number(percentFirst[2]);
@@ -105,7 +151,7 @@ export function parseSkontoFromText(text: string): { percent: number; days: numb
     }
   }
 
-  const daysFirst = text.match(/(\d+)\s*tage.*?(\d+(?:[.,]\d+)?)\s*%/i);
+  const daysFirst = text.match(/(\d+)\s*tag(?:e|en)?\b.*?(\d+(?:[.,]\d+)?)\s*%/i);
   if (daysFirst) {
     const days = Number(daysFirst[1]);
     const percent = Number(daysFirst[2].replace(',', '.'));

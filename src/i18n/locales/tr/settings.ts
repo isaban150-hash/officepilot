@@ -27,6 +27,9 @@ export const trSettings = {
   'settings.invoices.historicalHint': 'Bu değerler yalnızca bundan sonra oluşturulan faturalar için geçerlidir.',
   'settings.invoices.readOnly': 'Fatura varsayılanlarını yalnızca yöneticiler değiştirebilir.',
   'settings.invoices.saved': 'Fatura ayarları kaydedildi.',
+  // FINANZ-CORE-01A (EIN-08)
+  'settings.invoices.companyDataIncomplete': 'Fatura ayarları ancak firma bilgileri eksiksiz ve geçerli olduğunda kaydedilebilir:',
+  'settings.invoices.openCompanySettings': 'Firma bilgilerini aç',
   'settings.invoices.number.title': 'Fatura numarası',
   'settings.invoices.number.hint': 'Numara kesinleştirmede sunucu tarafından verilir. Burada yalnızca biçimi belirlersiniz.',
   'settings.invoices.number.prefix': 'Ön ek (isteğe bağlı)',

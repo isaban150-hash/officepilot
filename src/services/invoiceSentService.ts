@@ -1,4 +1,5 @@
 import { getVorgangInvoice, restoreInvoiceSentState, updateInvoiceSentFields } from './vorgangService';
+import { getBusinessDay } from './businessDateService';
 import { runAutomaticSyncWrite } from './sync/syncOutboxService';
 import {
   readInvoiceSentSnapshot,
@@ -47,7 +48,13 @@ export type InvoiceSentMutationResult =
         /** INVOICE-SENT-PERSIST-01C — im Speicher geändert, aber nicht dauerhaft. */
         | 'persist_failed'
         /** GO-LIVE-SECURITY-01 — nur Inhaber und Verwaltung; nichts wurde geändert. */
-        | 'forbidden';
+        | 'forbidden'
+        /**
+         * FINANZ-CORE-01A (STO-04/AUS-09) — eine stornierte Rechnung wird nicht mehr als
+         * versendet vermerkt. Nach internem Storno entstünde sonst „versendet und storniert"
+         * ohne Korrekturbeleg (§ 14c UStG); der Server weist es ab (`invoice_cancelled`).
+         */
+        | 'cancelled';
     };
 
 /**
@@ -78,6 +85,10 @@ function parseSentInput(
 ): { ok: true; value: InvoiceSentInput } | { ok: false; reason: 'invalid_date' | 'invalid_via' } {
   const sentAt = input.sentAt?.trim() ?? '';
   if (!sentAt || !isIsoDate(sentAt)) {
+    return { ok: false, reason: 'invalid_date' };
+  }
+  // FINANZ-CORE-01A (SQL-15) — ein Versanddatum liegt nicht in der Zukunft (wie der Server).
+  if (sentAt > getBusinessDay()) {
     return { ok: false, reason: 'invalid_date' };
   }
   if (!isValidInvoiceSentVia(input.sentVia)) {
@@ -119,6 +130,9 @@ export function markInvoiceAsSent(
   }
   if (invoice.status !== 'vorbereitet') {
     return { ok: false, reason: 'not_prepared' };
+  }
+  if (invoice.cancelledAt) {
+    return { ok: false, reason: 'cancelled' };
   }
 
   const parsed = parseSentInput(input);

@@ -290,6 +290,9 @@ describe('KommunikationPage', () => {
           createAbschlagInvoice('op-test-1', 5, {
             id: 'inv-ui-reminder',
             number: '2026-0500',
+            // FINANZ-CORE-01A (ZAH-12) — erinnert wird nur an eine versendete Rechnung.
+            status: 'versendet',
+            sentAt: '2025-12-15',
             paymentDueDate: '2026-01-01',
             customerSnapshot: {
               name: 'Test Kunde',

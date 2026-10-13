@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
+import { NumericInput } from '../ui/NumericInput';
 import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
 import { useApp } from '../../context/AppContext';
 import {
@@ -77,6 +78,9 @@ export function OrderPositionForm({
     mode === 'edit' && position ? draftFromPosition(position) : createEmptyDraft(),
   );
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
+  /* FINANZ-CORE-01A (RE-10) — ein halber Zwischenstand („1,") wird nicht gespeichert. */
+  const [incomplete, setIncomplete] = useState<{ plannedQuantity?: boolean; unitPrice?: boolean }>({});
+  const hasIncomplete = Boolean(incomplete.plannedQuantity || incomplete.unitPrice);
 
   const positionId = position?.id;
   const billing =
@@ -214,15 +218,21 @@ export function OrderPositionForm({
 
         <label className="edit-field">
           <span className="edit-field__label">{translate('invoice.planned')}</span>
-          <input
-            type="number"
+          {/*
+            * FINANZ-CORE-01A (RE-10/A4) — deutsche Zahlen wie in den Editoren: `type="number"`
+            * mit `parseFloat` las „1.200" als 1,2 und ließ beliebig viele Nachkommastellen zu.
+            */}
+          <NumericInput
+            id="order-position-form-quantity"
             className="input"
+            mode="decimal"
+            strict
             min={billing?.billedQuantity ?? 0}
-            step="0.5"
             value={draft.plannedQuantity}
             disabled={!isFieldEditable('plannedQuantity')}
-            onChange={(e) =>
-              setDraft({ ...draft, plannedQuantity: parseFloat(e.target.value) || 0 })
+            onChange={(value) => setDraft((prev) => ({ ...prev, plannedQuantity: value }))}
+            onEditingValidityChange={(complete) =>
+              setIncomplete((prev) => ({ ...prev, plannedQuantity: !complete }))
             }
           />
         </label>
@@ -245,15 +255,18 @@ export function OrderPositionForm({
 
         <label className="edit-field">
           <span className="edit-field__label">{translate('invoice.unitPrice')}</span>
-          <input
-            type="number"
+          <NumericInput
+            id="order-position-form-unit-price"
             className="input"
-            min="0"
-            step="0.01"
+            mode="decimal"
+            strict
+            min={0}
+            maxFractionDigits={2}
             value={draft.unitPrice}
             disabled={!isFieldEditable('unitPrice')}
-            onChange={(e) =>
-              setDraft({ ...draft, unitPrice: parseFloat(e.target.value) || 0 })
+            onChange={(value) => setDraft((prev) => ({ ...prev, unitPrice: value }))}
+            onEditingValidityChange={(complete) =>
+              setIncomplete((prev) => ({ ...prev, unitPrice: !complete }))
             }
           />
         </label>
@@ -291,7 +304,7 @@ export function OrderPositionForm({
           <Button
             fullWidth
             onClick={handleSave}
-            disabled={planLocked || (schlussLocked && mode === 'edit')}
+            disabled={planLocked || (schlussLocked && mode === 'edit') || hasIncomplete}
           >
             {translate('common.save')}
           </Button>

@@ -40,9 +40,11 @@ import {
   type ResolveInvoiceDraftFinalizationToExistingInput,
   type SaveInvoiceDraftRecordInput,
   INVOICE_DRAFT_BINDING_REJECTIONS,
+  INVOICE_FINALIZE_SERVER_REJECTIONS,
   type InvoiceDraftWorkspaceListEntry,
   type InvoiceDraftWorkspaceListResult,
   type ReopenInvoiceDraftAfterBindingRejectionInput,
+  type ReopenInvoiceDraftAfterServerRejectionInput,
 } from '../../types/invoiceDraftDurability';
 import type { InvoiceDraft } from '../../types/models';
 
@@ -1666,12 +1668,47 @@ export async function loadInvoiceDraftFinalizationPreparation(
 export async function reopenInvoiceDraftAfterBindingRejection(
   input: ReopenInvoiceDraftAfterBindingRejectionInput,
 ): Promise<InvoiceDraftFinalizationResult> {
-  const { identity, expectedRevision, clientInvoiceId, serverRejection } = input;
+  return reopenFinalizingInvoiceDraft(
+    input,
+    INVOICE_DRAFT_BINDING_REJECTIONS.includes(input.serverRejection),
+  );
+}
+
+/**
+ * FINANZ-CORE-01A (RE-01) — derselbe Rueckweg fuer die inhaltlichen
+ * Ablehnungen (`InvoiceFinalizeServerRejection`): Menge ueberschritten,
+ * Pruefbefund des Servers, Schlussrechnung vorhanden, keine Berechtigung,
+ * veralteter Nachtragsstand. Bisher blieb der Entwurf danach dauerhaft
+ * `finalizing`; jede Wiederaufnahme sendete dieselbe Anfrage und bekam dieselbe
+ * Ablehnung.
+ *
+ * Dieselben engen Bedingungen wie oben. Ein Netzfehler, ein unbekannter
+ * Ausgang oder ein Idempotenzkonflikt gehoeren ausdruecklich **nicht** dazu.
+ */
+export async function reopenInvoiceDraftAfterServerRejection(
+  input: ReopenInvoiceDraftAfterServerRejectionInput,
+): Promise<InvoiceDraftFinalizationResult> {
+  return reopenFinalizingInvoiceDraft(
+    input,
+    INVOICE_FINALIZE_SERVER_REJECTIONS.includes(input.serverRejection),
+  );
+}
+
+async function reopenFinalizingInvoiceDraft(
+  input: {
+    identity: ReopenInvoiceDraftAfterBindingRejectionInput['identity'];
+    expectedRevision: number;
+    clientInvoiceId: string;
+    now?: string;
+  },
+  namedRejection: boolean,
+): Promise<InvoiceDraftFinalizationResult> {
+  const { identity, expectedRevision, clientInvoiceId } = input;
   if (!isCompleteIdentity(identity)) return { ok: false, reason: 'invalid_identity' };
   if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
     return { ok: false, reason: 'invalid_identity', detail: 'expectedRevision' };
   }
-  if (!isNonEmptyString(clientInvoiceId) || !INVOICE_DRAFT_BINDING_REJECTIONS.includes(serverRejection)) {
+  if (!isNonEmptyString(clientInvoiceId) || !namedRejection) {
     return { ok: false, reason: 'invalid_finalization' };
   }
   const now = input.now ?? new Date().toISOString();

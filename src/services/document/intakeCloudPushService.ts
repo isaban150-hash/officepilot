@@ -10,6 +10,7 @@ import type { SyncOutboxOperation } from '../../types/sync';
 import type { CloudSyncEntityPayload } from '../workspace/workspaceSyncPayloadService';
 import type { DocumentFileRef } from '../../types/documentFileRef';
 import { getOriginalDocumentFileBytes } from '../documentFileStoreService';
+import { isGeneratedInvoiceDocumentKind } from './generatedInvoiceDocumentKind';
 import { WorkspaceCloudError } from '../workspace/workspaceCloudService';
 import {
   buildArchivedDocumentPushPayload,
@@ -92,7 +93,8 @@ export async function pushIntakeEntity(
     case 'document': {
       const document = extracted.entity;
       // Rechnungsdokumente laufen ueber ihren eigenen Cloud-Pfad (05C1); hier nur Fremddokumente.
-      if (document.linkedInvoiceId && document.category === 'ausgangsrechnung') return { kind: 'skipped', reason: 'generated_invoice' };
+      // FINANZ-CORE-01A (STO-03) — erkannt an Bezug und Belegart; ein Kategoriewechsel macht daraus kein Fremddokument.
+      if (isGeneratedInvoiceDocumentKind(document)) return { kind: 'skipped', reason: 'generated_invoice' };
       if (isCloudSyncBlockedMockInboxId(document.sourceInboxItemId)) return { kind: 'skipped', reason: 'mock' };
       const result = await rpcUpsertWorkspaceIntakeEntity(workspaceId, 'archived_document', buildArchivedDocumentPushPayload(document, deleted), extracted.rowVersion, client);
       // Das primaere Original ist in der Cloud ein explizites Binding.

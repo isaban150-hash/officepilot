@@ -187,7 +187,8 @@ describe('DOCUMENT-INTELLIGENCE-01 invoice flow', () => {
 
     expect(draft.type).toBe('rechnung');
     expect(draft.skontoText).toBe('');
-    expect(CONTRACT_ORDER_INVOICE_TYPES).toEqual(['rechnung', 'abschlag', 'schluss']);
+    // FINANZ-CORE-01A (RE-14) — seit TEILRECHNUNG-03C gehört die Teilrechnung zu den Auftragsarten.
+    expect(CONTRACT_ORDER_INVOICE_TYPES).toEqual(['rechnung', 'teilrechnung', 'abschlag', 'schluss']);
   });
 
   /*

@@ -105,6 +105,49 @@ export function hasAbschlagsrechnung(vorgang: Vorgang): boolean {
   return vorgang.invoices.some((inv) => inv.type === 'abschlag' && isBillingEffective(inv));
 }
 
+/**
+ * RECHNUNGSINTEGRITAET-03B2 — ein Abschlag verbraucht **entweder** Menge
+ * **oder** Geld, nie beides.
+ *
+ * Realbefund aus der unabhängigen Abnahme: Ein mengenbasierter Abschlag über
+ * eine von zwei Einheiten reduzierte korrekt die offene Menge — und wurde in
+ * der Schlussrechnung **zusätzlich** monetär abgezogen. Die Schlussrechnung
+ * rechnete danach nur noch die verbleibende Einheit (5 €) ab und zog dieselben
+ * 5 € nochmals ab: Restbetrag 0 €, obwohl nur die Hälfte bezahlt war.
+ *
+ * Die Regel folgt dem bestehenden Hybrid des Modells:
+ *   • fixed_amount (und jeder Abschlag ohne Positionsmenge) nimmt keine
+ *     Auftragsmenge weg — sein Betrag muss abgezogen werden.
+ *   • ein mengenbasierter Abschlag hat seine Leistung bereits über
+ *     `billedQuantity` verbraucht; sie fehlt in den Positionen der
+ *     Schlussrechnung und darf nicht ein zweites Mal als Geld verschwinden.
+ *
+ * Geprüft wird die tatsächlich verbrauchte Menge, nicht allein der Modus:
+ * Altbestand ohne `calculationMode` ist dadurch richtig eingeordnet.
+ *
+ * FINANZ-CORE-01A (RE-04) — hierher verschoben, damit auch die Validierung die
+ * Regel lesen kann; `invoiceService` exportiert sie unverändert weiter.
+ */
+export function abschlagConsumesOrderQuantity(invoice: VorgangInvoice): boolean {
+  if (invoice.calculationMode === 'fixed_amount') return false;
+  return (invoice.positions ?? []).some(
+    (position) => Number.isFinite(position.quantity) && position.quantity > 0,
+  );
+}
+
+/**
+ * FINANZ-CORE-01A (RE-04) — steht ein wirksamer Abschlag offen, den erst die
+ * Schlussrechnung abzieht? Pauschal oder ohne Positionsmenge — dieselbe
+ * Abgrenzung wie `getPreviousAbschlagDeductions` und der Server
+ * (`workspace_invoice_abschlag_deductions`).
+ */
+export function hasDeductibleAbschlag(vorgang: Vorgang): boolean {
+  return (vorgang.invoices ?? []).some(
+    (invoice) =>
+      invoice.type === 'abschlag' && isBillingEffective(invoice) && !abschlagConsumesOrderQuantity(invoice),
+  );
+}
+
 export function hasFinalSchlussrechnung(vorgang: Vorgang): boolean {
   return hasSchlussrechnung(vorgang);
 }
@@ -212,6 +255,27 @@ export function getCurrentBillableOrderNetCents(vorgang: Vorgang): number {
   );
 }
 
+/**
+ * FINANZ-CORE-01A (RE-04) — Belegarten, die vor der Schlussrechnung Leistung
+ * abrechnen. Die Schlussrechnung selbst fehlt bewusst: Nach ihr entsteht kein
+ * weiterer Beleg mehr (SQL-04).
+ */
+const PRE_FINAL_BILLING_TYPES: VorgangInvoice['type'][] = ['abschlag', 'rechnung', 'teilrechnung'];
+
+/**
+ * FINANZ-CORE-01A (RE-04) — Netto-Summe aller wirksam abrechnenden Belege vor
+ * der Schlussrechnung, in Cent: Abschläge, Rechnungen und Teilrechnungen.
+ * Server: dieselbe Summe in `assert_workspace_invoice_integrity`.
+ */
+export function getPreFinalBilledNetCents(vorgang: Vorgang): number {
+  return sumCents(
+    (vorgang.invoices ?? [])
+      .filter((invoice) => PRE_FINAL_BILLING_TYPES.includes(invoice.type) && isBillingEffective(invoice))
+      .map((invoice) => toCents(invoice.subtotal))
+      .filter((cents) => Number.isFinite(cents)),
+  );
+}
+
 /** Netto-Summe der bereits gezählten Abschlagsrechnungen, in Cent. */
 export function getCountedAbschlagNetCents(vorgang: Vorgang): number {
   return sumCents(
@@ -234,7 +298,13 @@ export function getCountedAbschlagNetCents(vorgang: Vorgang): number {
  * selbst bei 0 abschneiden.
  */
 export function getRemainingFixedAmountBillableNetCents(vorgang: Vorgang): number {
-  return getCurrentBillableOrderNetCents(vorgang) - getCountedAbschlagNetCents(vorgang);
+  /*
+   * FINANZ-CORE-01A (RE-04) — gegen alles bereits Abgerechnete, nicht nur
+   * gegen Abschläge. Nach einer Teilrechnung über 8.000 € eines 10.000-€-
+   * Auftrags liess die alte Grenze noch einen Pauschalabschlag über 10.000 €
+   * zu; die Schlussrechnung scheiterte danach an `deductions_exceed_total`.
+   */
+  return getCurrentBillableOrderNetCents(vorgang) - getPreFinalBilledNetCents(vorgang);
 }
 
 export function canAddOrderPosition(vorgang: Vorgang): boolean {

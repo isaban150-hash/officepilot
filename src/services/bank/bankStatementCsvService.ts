@@ -174,6 +174,8 @@ const SPALTEN: Record<keyof BankStatementColumnMapping, string[]> = {
   amount: ['betrag', 'umsatz', 'betrageur', 'umsatzeur', 'betragineur'],
   debit: ['soll', 'belastung', 'auszahlung'],
   credit: ['haben', 'gutschrift', 'einzahlung'],
+  // FINANZ-CORE-01A (ZAH-07) — „Soll/Haben", „S/H": die Richtung eines vorzeichenlosen Umsatzes.
+  debitCreditFlag: ['sollhaben', 'sh', 'sollhabenkennzeichen', 'sollhabenkennung'],
   counterparty: [
     'beguenstigterzahlungspflichtiger',
     'zahlungspflichtiger',
@@ -227,6 +229,36 @@ function feld(zeile: string[], index: number): string {
   return (zeile[index] ?? '').trim();
 }
 
+/**
+ * FINANZ-CORE-01A (ZAH-07) — Buchungsdatum eines Kontoauszugs: wie bisher, dazu TT.MM.JJ
+ * (Sparkasse CSV-CAMT). Ein Kontoauszug liegt nie im 20. Jahrhundert; JJ ist 20JJ.
+ */
+function bankDay(wert: string): string | null {
+  const kurz = /^(\d{1,2})\.(\d{1,2})\.(\d{2})$/.exec(wert.trim());
+  if (kurz) return toCanonicalIsoDay(`${kurz[1]}.${kurz[2]}.20${kurz[3]}`);
+  return toCanonicalIsoDay(wert);
+}
+
+/** FINANZ-CORE-01A (ZAH-07) — Vorspannzeilen (ING, DKB): die Kopfzeile steht in den ersten Zeilen. */
+const KOPF_SUCHE_ZEILEN = 15;
+
+/** Das Trennzeichen der Zeile mit den meisten Trennern unter den ersten Zeilen — das ist die Kopfzeile. */
+function erkenneTrenner(text: string): ';' | ',' | null {
+  const zeilen = text.split(/\r?\n/).filter((zeile) => zeile.trim().length > 0).slice(0, KOPF_SUCHE_ZEILEN);
+  let bester: ';' | ',' | null = null;
+  let anzahl = 0;
+  for (const zeile of zeilen) {
+    const trenner = detectDelimiter(zeile);
+    if (!trenner) continue;
+    const n = zeile.split(trenner).length - 1;
+    if (n > anzahl) {
+      anzahl = n;
+      bester = trenner;
+    }
+  }
+  return bester;
+}
+
 /** Nur übernehmen, was wirklich dasteht — ein leeres Feld ist kein leerer Text. */
 function optional(wert: string): string | undefined {
   return wert ? wert : undefined;
@@ -237,8 +269,7 @@ export function parseBankStatementCsv(text: string, fileName: string): BankState
     return { ok: false, problem: 'no_rows' };
   }
 
-  const ersteZeile = text.split(/\r?\n/).find((zeile) => zeile.trim().length > 0) ?? '';
-  const delimiter = detectDelimiter(ersteZeile);
+  const delimiter = erkenneTrenner(text);
   if (!delimiter) {
     return { ok: false, problem: 'no_delimiter' };
   }
@@ -250,7 +281,23 @@ export function parseBankStatementCsv(text: string, fileName: string): BankState
     return { ok: false, problem: 'no_rows' };
   }
 
-  const kopf = (zeilen[0] ?? []).map((wert) => wert.trim());
+  /*
+   * FINANZ-CORE-01A (ZAH-07) — die Kopfzeile ist die erste Zeile mit Buchungstag und Betrag
+   * (oder Soll/Haben). Bisher galt stur die erste Zeile; ein Export mit Vorspann scheiterte mit
+   * „keine Kopfzeile". Ohne solche Zeile bleibt es bei der ersten — wie bisher.
+   */
+  const kopfIndex = Math.max(
+    0,
+    zeilen.slice(0, KOPF_SUCHE_ZEILEN).findIndex((zeile) => {
+      const k = zeile.map((wert) => wert.trim());
+      const datum = findeSpalte(k, SPALTEN.bookingDate) !== -1;
+      const betrag =
+        findeSpalte(k, SPALTEN.amount) !== -1 ||
+        (findeSpalte(k, SPALTEN.debit) !== -1 && findeSpalte(k, SPALTEN.credit) !== -1);
+      return datum && betrag;
+    }),
+  );
+  const kopf = (zeilen[kopfIndex] ?? []).map((wert) => wert.trim());
   const indizes = {
     bookingDate: findeSpalte(kopf, SPALTEN.bookingDate),
     ownAccount: findeSpalte(kopf, SPALTEN.ownAccount),
@@ -258,6 +305,7 @@ export function parseBankStatementCsv(text: string, fileName: string): BankState
     amount: findeSpalte(kopf, SPALTEN.amount),
     debit: findeSpalte(kopf, SPALTEN.debit),
     credit: findeSpalte(kopf, SPALTEN.credit),
+    debitCreditFlag: findeSpalte(kopf, SPALTEN.debitCreditFlag),
     counterparty: findeSpalte(kopf, SPALTEN.counterparty),
     counterpartyIban: findeSpalte(kopf, SPALTEN.counterpartyIban),
     purpose: findeSpalte(kopf, SPALTEN.purpose),
@@ -294,6 +342,7 @@ export function parseBankStatementCsv(text: string, fileName: string): BankState
     ...(indizes.valueDate !== -1 ? { valueDate: kopf[indizes.valueDate] } : {}),
     ...(indizes.amount !== -1 ? { amount: kopf[indizes.amount] } : {}),
     ...(hatSollHaben ? { debit: kopf[indizes.debit], credit: kopf[indizes.credit] } : {}),
+    ...(indizes.debitCreditFlag !== -1 ? { debitCreditFlag: kopf[indizes.debitCreditFlag] } : {}),
     ...(indizes.counterparty !== -1 ? { counterparty: kopf[indizes.counterparty] } : {}),
     ...(indizes.counterpartyIban !== -1 ? { counterpartyIban: kopf[indizes.counterpartyIban] } : {}),
     ...(indizes.purpose !== -1 ? { purpose: kopf[indizes.purpose] } : {}),
@@ -303,7 +352,7 @@ export function parseBankStatementCsv(text: string, fileName: string): BankState
   const rows: BankStatementRow[] = [];
   const issues: BankStatementRowIssue[] = [];
 
-  for (let i = 1; i < zeilen.length; i += 1) {
+  for (let i = kopfIndex + 1; i < zeilen.length; i += 1) {
     const zeile = zeilen[i] ?? [];
     /* 1-basiert und inklusive Kopfzeile — so zählt auch das Tabellenprogramm. */
     const rowNumber = i + 1;
@@ -314,7 +363,7 @@ export function parseBankStatementCsv(text: string, fileName: string): BankState
       continue;
     }
 
-    const bookingDate = toCanonicalIsoDay(feld(zeile, indizes.bookingDate));
+    const bookingDate = bankDay(feld(zeile, indizes.bookingDate));
     if (!bookingDate) {
       issues.push({ rowNumber, problem: 'date_unreadable', excerpt: auszug });
       continue;
@@ -323,6 +372,17 @@ export function parseBankStatementCsv(text: string, fileName: string): BankState
     let amountCents: number | null;
     if (indizes.amount !== -1) {
       amountCents = parseBankAmountToCents(feld(zeile, indizes.amount));
+      /*
+       * FINANZ-CORE-01A (ZAH-07) — mit S/H-Spalte entscheidet sie die Richtung. Ein vorzeichenloser
+       * Umsatz blieb bisher positiv: Abbuchungen wurden zu Eingängen und liessen sich einer offenen
+       * Ausgangsrechnung zuordnen.
+       */
+      if (amountCents !== null && indizes.debitCreditFlag !== -1) {
+        const kennung = feld(zeile, indizes.debitCreditFlag).toLowerCase();
+        if (kennung === 's' || kennung === 'soll') amountCents = -Math.abs(amountCents);
+        else if (kennung === 'h' || kennung === 'haben') amountCents = Math.abs(amountCents);
+        else amountCents = null;
+      }
     } else {
       /*
        * Getrennte Soll-/Haben-Spalten: Genau eine der beiden trägt einen Wert.
@@ -344,7 +404,7 @@ export function parseBankStatementCsv(text: string, fileName: string): BankState
       continue;
     }
 
-    const valueDate = indizes.valueDate !== -1 ? toCanonicalIsoDay(feld(zeile, indizes.valueDate)) : null;
+    const valueDate = indizes.valueDate !== -1 ? bankDay(feld(zeile, indizes.valueDate)) : null;
 
     rows.push({
       id: `row-${rowNumber}`,
@@ -389,7 +449,7 @@ export function parseBankStatementCsv(text: string, fileName: string): BankState
    */
   let accountKey = '';
   if (indizes.ownAccount !== -1) {
-    for (let i = 1; i < zeilen.length; i += 1) {
+    for (let i = kopfIndex + 1; i < zeilen.length; i += 1) {
       const wert = feld(zeilen[i] ?? [], indizes.ownAccount);
       if (wert) {
         accountKey = normalizeAccountIdentifier(wert);

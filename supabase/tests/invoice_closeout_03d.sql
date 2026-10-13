@@ -61,7 +61,8 @@ create function pg_temp.beleg(
     'type', p_type,
     'taxStatus', 'kleinunternehmer_19',
     'issueDate', '2026-10-04',
-    'customerSnapshot', jsonb_build_object('name', 'Muster GmbH'),
+    -- FINANZ-CORE-01A (RE-09): die Empfaengeranschrift gilt auch fuer Auftragsrechnungen.
+    'customerSnapshot', jsonb_build_object('name', 'Muster GmbH', 'street', 'Weg 1', 'zip', '33602', 'city', 'Bielefeld'),
     'positions', case when p_menge > 0 then jsonb_build_array(jsonb_build_object(
       'id', 'line-' || p_type || '-' || p_menge::text,
       'orderPositionId', 'cp1',

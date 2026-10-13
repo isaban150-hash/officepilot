@@ -16,11 +16,18 @@ import { OfferStatusBadge } from '../components/offer/OfferStatusBadge';
 import { useApp } from '../context/AppContext';
 import { formatInvoiceCurrency } from '../services/invoicePrintModel';
 import { getOfferTotals, listOffers } from '../services/offer/offerService';
+import { useDraftCloudTick } from '../services/order/useDraftCloudTick';
 
 export function AngebotePage() {
   const { translate, language } = useApp();
   const navigate = useNavigate();
-  const angebote = useMemo(() => listOffers(), []);
+  /*
+   * FINANZ-CORE-01A (ANG-18) — wie die Vorgangsliste: Ein Abgleich kann Angebote
+   * bringen oder ihren Zustand ändern; die Liste liest danach neu.
+   */
+  const tick = useDraftCloudTick();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const angebote = useMemo(() => listOffers(), [tick]);
   const datum = (wert: string) => (wert ? new Date(wert).toLocaleDateString(language === 'de' ? 'de-DE' : undefined) : '');
 
   return (

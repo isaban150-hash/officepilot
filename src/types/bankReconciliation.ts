@@ -39,6 +39,13 @@ export type BankReconciliationRefusal =
   | 'target_not_found'
   | 'transaction_not_found'
   | 'nothing_open'
+  /** FINANZ-CORE-01A (ZAH-18) — Rolle, Kontosperre oder Lizenz; kein Netzproblem. */
+  | 'not_allowed'
+  /** FINANZ-CORE-01A (ZAH-03) — Verknüpfung mit einer erfassten Zahlung. */
+  | 'payment_already_linked'
+  | 'payment_amount_mismatch'
+  | 'payment_reversed'
+  | 'payment_not_found'
   | 'offline';
 
 export type BankReconciliationOutcome =

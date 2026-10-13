@@ -128,6 +128,9 @@ const DEDUCTION_KEYS = new Set([
   'date',
   'subtotal',
   'amount',
+  // FINANZ-CORE-01A (WEISS-Recheck N02-R1) — eingefroren: gezahlt und Skonto je Abzug.
+  'paidAmount',
+  'skontoAmount',
 ]);
 
 /*
@@ -389,6 +392,12 @@ function checkDeduction(value: unknown, path: string): void {
   requiredText(deduction.date, `${path}.date`);
   requiredFinite(deduction.subtotal, `${path}.subtotal`);
   requiredFinite(deduction.amount, `${path}.amount`);
+  // FINANZ-CORE-01A (WEISS-Recheck N02-R1) — gezahlt und Skonto nur zusammen, beide endlich.
+  if ((deduction.paidAmount === undefined) !== (deduction.skontoAmount === undefined)) {
+    reject(`${path}.settlement:incomplete`);
+  }
+  optionalFinite(deduction.paidAmount, `${path}.paidAmount`);
+  optionalFinite(deduction.skontoAmount, `${path}.skontoAmount`);
 }
 
 export function validateWorkspaceInvoiceCloudPayload(

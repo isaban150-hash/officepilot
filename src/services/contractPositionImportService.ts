@@ -1,3 +1,4 @@
+import { lineTotalMoney, roundMoney } from './invoiceMoney';
 import type { EnhancedDetectedOrderPosition } from '../types/documentIntelligence';
 import type { DetectedOrderPosition } from '../types/models';
 import { importSuggestedPositionsToVorgang } from './intakeWorkflowService';
@@ -74,8 +75,8 @@ export function hasPositionMathConflict(position: DetectedOrderPosition): boolea
   const unitPrice = position.unitPrice;
   const lineTotal = position.lineTotal;
   if (!(quantity > 0 && unitPrice > 0 && lineTotal > 0)) return false;
-  const expected = Math.round(quantity * unitPrice * 100) / 100;
-  const roundedTotal = Math.round(lineTotal * 100) / 100;
+  const expected = lineTotalMoney(quantity, unitPrice);
+  const roundedTotal = roundMoney(lineTotal);
   const diff = Math.abs(expected - roundedTotal);
   if (diff <= ROUNDING_TOLERANCE) return false;
   if (diff / roundedTotal <= 0.02) return false;

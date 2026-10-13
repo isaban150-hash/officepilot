@@ -118,3 +118,20 @@ export function repairLegacyUtcBusinessDates(
     repaired: true,
   };
 }
+
+/**
+ * FINANZ-CORE-01A (ZAH-10) — § 193 BGB: Fällt das Ende einer Zahlungsfrist auf einen Samstag
+ * oder Sonntag, tritt der nächste Werktag an seine Stelle. Eine am Samstag fällige Rechnung
+ * galt bisher am Montag schon als überschritten. Feiertage bleiben unberücksichtigt — sie
+ * hängen vom Leistungsort ab; dort gilt weiter das kalendarische Ende.
+ */
+export function shiftToWorkingDay(day: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day.trim().slice(0, 10));
+  if (!match) return day;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  const weekday = date.getUTCDay();
+  const shift = weekday === 6 ? 2 : weekday === 0 ? 1 : 0;
+  if (shift === 0) return day.trim().slice(0, 10);
+  date.setUTCDate(date.getUTCDate() + shift);
+  return date.toISOString().slice(0, 10);
+}

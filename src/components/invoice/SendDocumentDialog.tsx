@@ -67,6 +67,8 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
   const [body, setBody] = useState(props.initialBody);
   const [fieldError, setFieldError] = useState<TranslationKey | null>(null);
   const [confirmStep, setConfirmStep] = useState<ConfirmStep | null>(null);
+  /* FINANZ-CORE-01A (AUS-14) — die PDF-Vorschau schwieg bei Fehlern. */
+  const [pdfPreviewFailed, setPdfPreviewFailed] = useState(false);
   const recipientRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -153,6 +155,7 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
     if (!props.invoice) return;
     // Historischer Beleg: Rechnung bzw. Korrekturbeleg über die bestehende Engine.
     const result = isCorrection ? await generateInvoiceCorrectionPdf(props.invoice) : await generateApprovedInvoicePdf(props.invoice);
+    setPdfPreviewFailed(!result.ok);
     if (result.ok) downloadInvoicePdfBytes(result.bytes, result.filename);
   };
 
@@ -257,6 +260,9 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
             {translate('delivery.action.pdf' as TranslationKey)}
           </Button>
           <p className="form-hint">{translate(attachmentHintKey)}</p>
+          {pdfPreviewFailed ? (
+            <p className="form-error" role="alert" data-testid="send-document-pdf-error">{translate('invoice.pdf.error')}</p>
+          ) : null}
         </div>
 
         {fieldError ? (

@@ -22,6 +22,12 @@ import { PaymentMethodField } from '../payment/PaymentMethodField';
 import type { TranslationKey } from '../../i18n';
 import { getBusinessDay } from '../../services/businessDateService';
 import { formatDisplayDatePadded } from '../../utils/displayFormat';
+import {
+  isFinalInvoicePaymentResyncOutcome,
+  markInvoicePaymentResyncNeeded,
+  recordInvoicePaymentResyncBlock,
+  releaseInvoicePaymentResyncConflict,
+} from '../../services/invoice/invoicePaymentCloudResyncService';
 
 interface Props {
   /** MANUAL-INVOICE-01B2c — `null` ist die Rechnung ohne Auftrag. */
@@ -36,6 +42,13 @@ interface Props {
    * Ohne diesen Rückruf fällt das Formular auf `onSaved` zurück.
    */
   onReverted?: (invoice: VorgangInvoice) => void;
+  /**
+   * FINANZ-CORE-01A (F-02) — die Cloud hat die Zahlung bestätigt. Die
+   * Detailseite gleicht danach ihre Cloud-Kennungen neu ab; ohne diesen
+   * Rückruf stand die gerade gesicherte Zahlung bis zum Neuladen als „noch
+   * nicht in der Cloud gesichert“ da.
+   */
+  onCloudSynced?: (paymentId: string) => void;
   translate: (key: TranslationKey) => string;
 }
 
@@ -52,6 +65,7 @@ export function InvoicePaymentForm({
   onClose,
   onSaved,
   onReverted,
+  onCloudSynced,
   translate,
 }: Props) {
   const cancelled = isInvoiceCancelled(invoice);
@@ -143,11 +157,14 @@ export function InvoicePaymentForm({
    */
   const syncRecordedPayment = (payment: InvoicePayment) => {
     setSyncing(true);
+    // FINANZ-CORE-01A (WEISS-Nacharbeit N01) — der Klick ist die bewusste neue Handlung.
+    releaseInvoicePaymentResyncConflict(invoice.id, payment.id);
     void syncInvoicePaymentToCloud(invoice.id, payment)
       .then((outcome) => {
         setSyncing(false);
         if (isInvoicePaymentCloudSynced(outcome)) {
           setPendingPayment(null);
+          onCloudSynced?.(payment.id);
           onClose();
           return;
         }
@@ -160,6 +177,8 @@ export function InvoicePaymentForm({
          */
         if (outcome === 'denied') {
           const zurueck = removePayment(vorgangId, invoice.id, payment.id);
+          // WEISS-N01 — liess sie sich nicht zurücknehmen, bleibt die Abweisung dauerhaft vermerkt.
+          if (!zurueck.success) recordInvoicePaymentResyncBlock(invoice.id, payment.id, 'denied');
           setPendingPayment(null);
           if (zurueck.success) (onReverted ?? onSaved)(zurueck.invoice);
           setErrorKey(zurueck.success ? 'payment.roleReverted' : 'payment.cloudDenied');
@@ -171,12 +190,29 @@ export function InvoicePaymentForm({
          * `supabase_not_configured` ist bei Geld kein stiller Normalfall.
          */
         setPendingPayment(payment);
-        setErrorKey(outcome === 'conflict' ? 'payment.cloudConflict' : 'payment.cloudOnlyLocal');
+        setErrorKey(
+          outcome === 'conflict'
+            ? 'payment.cloudConflict'
+            : outcome === 'overpayment_unconfirmed'
+              ? 'payment.cloudOverpaymentUnconfirmed'
+              : outcome === 'invoice_cancelled'
+                ? 'payment.cloudInvoiceCancelled'
+                : 'payment.cloudOnlyLocal',
+        );
+        // FINANZ-CORE-01A (ZAH-02) — der nächste erfolgreiche Abgleich sichert nach, ohne Wartezeit.
+        // Konflikt, unbestätigte Überzahlung und stornierte Rechnung warten auf eine Entscheidung, nicht
+        // auf das Netz — WEISS-N01: dauerhaft vermerkt, auch über einen Neustart.
+        if (isFinalInvoicePaymentResyncOutcome(outcome)) {
+          recordInvoicePaymentResyncBlock(invoice.id, payment.id, outcome);
+        } else {
+          markInvoicePaymentResyncNeeded();
+        }
       })
       .catch(() => {
         setSyncing(false);
         setPendingPayment(payment);
         setErrorKey('payment.cloudOnlyLocal');
+        markInvoicePaymentResyncNeeded();
       });
   };
 

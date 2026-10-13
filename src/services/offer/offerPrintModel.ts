@@ -15,7 +15,7 @@ import type { CompanyProfile, InvoicePrintModel, InvoicePrintPosition } from '..
 import { DEFAULT_DOCUMENT_TEMPLATE } from '../../types/branding';
 import type { Offer } from '../../types/offer';
 import { formatOrderUnitDisplay } from '../orderUnitMapper';
-import { lineTotalMoney } from '../invoiceMoney';
+import { billingLineTotalMoney } from '../invoiceMoney';
 import { selectHistoricalInvoiceLogo } from '../invoice/invoiceHistoricalLogo';
 import { buildLegalNotices, freezeBrandingForInvoice, toInvoiceCompanySnapshot } from '../invoiceService';
 import { getCompanyProfileStoreSnapshot } from '../companyProfileService';
@@ -33,7 +33,7 @@ function buildPositions(offer: Offer): InvoicePrintPosition[] {
       quantity: position.quantity,
       unit: formatOrderUnitDisplay(position.unit, position.unitLabel),
       unitPrice: position.unitPrice,
-      lineTotal: lineTotalMoney(position.quantity, position.unitPrice),
+      lineTotal: billingLineTotalMoney(position.quantity, position.unitPrice),
     }));
 }
 

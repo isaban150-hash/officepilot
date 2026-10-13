@@ -7,6 +7,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from './test/workspaceRoleTestUtils';
 import { Toast } from './components/ui/Card';
 import { AppProvider, useApp } from './context/AppContext';
 import { DEFAULT_SETUP } from './data/mockData';
@@ -201,6 +202,11 @@ function seedLegacyVorgang(): void {
 
 describe('CUSTOMER-FACHOBJEKT-06A', () => {
   beforeEach(() => {
+    /*
+     * FINANZ-CORE-01A (WEISS-Nacharbeit N05) — Kundenstammdaten schreiben nur Inhaber und
+     * Verwaltung; diese Suite bedient die Formulare als Inhaber (wie GLS01 für Finanzaktionen).
+     */
+    alsInhaber();
     localStorage.clear();
     hydrateCustomerStore([]);
     hydrateVorgangStore([]);

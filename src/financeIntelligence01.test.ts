@@ -235,7 +235,11 @@ describe('AI-FINANCE-01 intelligence service', () => {
       }),
     ]);
 
-    const analysis = analyzeInvoiceFinance('v-fin-remind', 'inv-remind', '2026-07-01');
+    /*
+     * FINANZ-CORE-01A (ZAH-10) — der 28.06.2026 ist ein Sonntag: Nach § 193 BGB endet die Frist am
+     * Montag, dem 29.06. Die Erinnerung kommt ab dem dritten Verzugstag, also am 02.07.
+     */
+    const analysis = analyzeInvoiceFinance('v-fin-remind', 'inv-remind', '2026-07-02');
     const reminder = analysis?.recommendations.find((r) => r.id === 'payment_reminder');
     expect(reminder).toBeTruthy();
     expect(reminder?.route).toBe('/vorgaenge/v-fin-remind/rechnungen/inv-remind');

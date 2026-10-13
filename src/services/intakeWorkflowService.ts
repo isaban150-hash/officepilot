@@ -1,3 +1,4 @@
+import { lineTotalMoney } from './invoiceMoney';
 import type { EnhancedDetectedOrderPosition } from '../types/documentIntelligence';
 import { checkCompanyRelevanceFromInbox, isDocumentAnalysisAllowed } from './companyRelevanceService';
 import {
@@ -213,7 +214,7 @@ function resolveSuggestedPositions(
     unit: position.unit,
     quantity: position.plannedQuantity,
     unitPrice: position.unitPrice,
-    lineTotal: position.plannedQuantity * position.unitPrice,
+    lineTotal: lineTotalMoney(position.plannedQuantity, position.unitPrice),
   }));
 }
 

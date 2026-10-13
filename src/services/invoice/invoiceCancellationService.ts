@@ -15,9 +15,15 @@ import { isEntitySyncActive } from '../sync/syncMetaService';
 import {
   WorkspaceInvoiceCloudError,
   rpcCancelWorkspaceInvoice,
+  readWorkspaceInvoiceCancelFacts,
+  type CancelledInvoiceFacts,
 } from './workspaceInvoiceCloudService';
 import { projectInvoiceCorrectionDocument } from './invoiceCorrectionArchive';
 import { reconcileInvoicePaymentTasks } from './invoicePaymentTaskSync';
+import { readInvoiceSentStateFromCloud, syncInvoiceSentToCloud } from '../invoiceSentService';
+import { findFinalInvoiceBlockingCancel } from './invoiceCancelEligibility';
+import { runQueuedSyncOperation } from '../sync/syncOperationQueue';
+import type { WorkspaceActor } from '../workspace/workspaceRoleService';
 import type { VorgangInvoice } from '../../types/models';
 
 /**
@@ -52,6 +58,27 @@ export type CancelInvoiceFailureReason =
   | 'has_active_payments'
   /** Ohne Begründung wird nicht storniert. */
   | 'reason_required'
+  /**
+   * FINANZ-CORE-01A (SQL-01) — der Beleg ist in einer wirksamen
+   * Schlussrechnung abgerechnet. Zuerst die Schlussrechnung stornieren.
+   */
+  | 'final_invoice_exists'
+  /**
+   * FINANZ-CORE-01A (STO-02) — lokal „versendet", der Vermerk liegt aber nicht
+   * nachweislich in der Cloud. Der Server entschiede sonst ein internes Storno
+   * ohne Korrekturbeleg, obwohl der Kunde die Rechnung hat.
+   */
+  | 'sent_not_synced'
+  /**
+   * FINANZ-CORE-01A (SQL-07) — für die Rechnung läuft gerade ein E-Mail-Versand;
+   * erst nach seinem Ausgang stornieren. Nichts storniert.
+   */
+  | 'delivery_in_progress'
+  /**
+   * FINANZ-CORE-01A (SQL-07) — der Ausgang eines E-Mail-Versands ist unklar. Ein
+   * internes Storno ohne Korrekturbeleg wäre falsch, wenn sie angekommen ist.
+   */
+  | 'delivery_uncertain'
   | 'not_found'
   | 'forbidden'
   | 'offline'
@@ -76,6 +103,11 @@ export type CancelInvoiceResult =
       reasonDiffers: boolean;
       /** Lokale Archivkennung des Korrekturbelegs, wenn einer gehört. */
       correctionArchiveDocumentId?: string;
+      /**
+       * FINANZ-CORE-01A (STO-06) — storniert (Cloud und lokal), nur die lokale Ablage des
+       * Korrekturbelegs fehlt noch; der nächste Abgleich holt sie nach.
+       */
+      correctionArchivePending?: boolean;
     }
   | { ok: false; reason: CancelInvoiceFailureReason; detail?: string };
 
@@ -89,6 +121,12 @@ function mapCloudError(error: WorkspaceInvoiceCloudError): CancelInvoiceFailureR
       return 'has_active_payments';
     case 'cancel_reason_required':
       return 'reason_required';
+    case 'cancel_final_invoice_exists':
+      return 'final_invoice_exists';
+    case 'cancel_delivery_in_progress':
+      return 'delivery_in_progress';
+    case 'cancel_delivery_uncertain':
+      return 'delivery_uncertain';
     case 'not_found':
       return 'not_found';
     case 'auth':
@@ -138,18 +176,71 @@ export function archiveInvoiceCorrectionLocally(
   return { ok: true, documentId };
 }
 
-export async function cancelFinalizedInvoice(input: {
+// FINANZ-CORE-01A (SQL-01) — die Regel steht in einem eigenen, seiteneffektfreien Modul.
+export { findFinalInvoiceBlockingCancel } from './invoiceCancelEligibility';
+
+export interface CancelFinalizedInvoiceInput {
   /** NORMAL-INVOICE-CANCELLATION-01B — `null` ist die freie Rechnung ohne Auftrag. */
   vorgangId: string | null;
   invoiceId: string;
   /** Der vom Menschen formulierte Grund. Wird nicht erfunden und nicht ergänzt. */
   reason: string;
-}): Promise<CancelInvoiceResult> {
+  /** FINANZ-CORE-01A (STO-02) — wer storniert; nötig, um einen offenen Versandvermerk zu sichern. */
+  actor?: WorkspaceActor;
+}
+
+/**
+ * FINANZ-CORE-01A — der ganze Storno läuft in der Sync-Warteschlange, wie die
+ * Freigabe (`invoiceFinalizationCoordinator`).
+ *
+ * Befund aus der App-Prüfung: Ein Sync-Lauf beginnt mit dem Stand von seinem
+ * Start und schreibt seinen Endstand zurück. Lief er während eines Stornos,
+ * überschrieb er die gerade projizierten Stornofakten samt Korrekturbeleg mit
+ * dem älteren Stand; der Korrekturbeleg fehlte bis zum nächsten vollständigen
+ * Abruf. In der Warteschlange wartet der Storno auf einen laufenden Lauf, und
+ * ein späterer Lauf beginnt erst mit dem Stand danach.
+ */
+export async function cancelFinalizedInvoice(input: CancelFinalizedInvoiceInput): Promise<CancelInvoiceResult> {
+  return runQueuedSyncOperation(() => cancelFinalizedInvoiceSerialized(input));
+}
+
+async function cancelFinalizedInvoiceSerialized(input: CancelFinalizedInvoiceInput): Promise<CancelInvoiceResult> {
   const reason = input.reason.trim();
   if (!reason) return { ok: false, reason: 'reason_required' };
 
   const local = getVorgangInvoice(input.vorgangId, input.invoiceId);
   if (!local) return { ok: false, reason: 'not_found' };
+  // Ein bereits stornierter Beleg ist ein Replay — er darf seinen Erfolg weiter abholen.
+  if (!local.cancelledAt && findFinalInvoiceBlockingCancel(input.vorgangId, local)) {
+    return { ok: false, reason: 'final_invoice_exists' };
+  }
+  /*
+   * FINANZ-CORE-01A (ZAH-19) — wie der Dialog: keine Stornierung mit erfassten Zahlungen. Eine nur
+   * lokal gesicherte Zahlung kennt der Server nicht und hielte den Storno nicht auf; danach
+   * liesse sie sich nie mehr sichern.
+   */
+  if (!local.cancelledAt && (local.payments ?? []).length > 0) {
+    return { ok: false, reason: 'has_active_payments' };
+  }
+
+  /*
+   * FINANZ-CORE-01A (STO-02) — der Server entscheidet die Art des Stornos nach
+   * SEINEM Versandstand (versendet ⇒ Korrekturbeleg). Ein nur lokal gesetzter
+   * Versandvermerk ergäbe ein internes Storno ohne Korrekturbeleg, obwohl der
+   * Kunde die Rechnung hat (§ 14c UStG: ausgewiesene Steuer ohne Berichtigung).
+   * Deshalb zuerst den Stand prüfen und einen offenen Vermerk sichern; ohne
+   * nachgewiesenen Vermerk kein Storno.
+   */
+  if (!local.cancelledAt && local.status === 'versendet') {
+    const sentState = await readInvoiceSentStateFromCloud(input.vorgangId, input.invoiceId);
+    if (sentState.kind === 'pending') {
+      const pushed = await syncInvoiceSentToCloud(input.vorgangId, input.invoiceId, input.actor);
+      if (pushed === 'forbidden') return { ok: false, reason: 'forbidden' };
+      if (pushed !== 'synced') return { ok: false, reason: 'sent_not_synced' };
+    } else if (sentState.kind !== 'synced' && sentState.kind !== 'not_configured') {
+      return { ok: false, reason: 'sent_not_synced' };
+    }
+  }
 
   let workspaceId = '';
   try {
@@ -159,7 +250,9 @@ export async function cancelFinalizedInvoice(input: {
   }
   if (!workspaceId) return { ok: false, reason: 'workspace_missing' };
 
-  let cancelled;
+  let cancelled: { invoice: CancelledInvoiceFacts };
+  // Fünf Minuten Vorlauf: Uhrzeiten von Gerät und Server müssen nicht übereinstimmen.
+  const versuchtAb = new Date(Date.now() - 5 * 60_000).toISOString();
   try {
     cancelled = await rpcCancelWorkspaceInvoice({
       workspaceId,
@@ -167,10 +260,24 @@ export async function cancelFinalizedInvoice(input: {
       reason,
     });
   } catch (error) {
-    if (error instanceof WorkspaceInvoiceCloudError) {
-      return { ok: false, reason: mapCloudError(error), detail: error.message };
+    const grund = error instanceof WorkspaceInvoiceCloudError ? mapCloudError(error) : 'unknown';
+    /*
+     * FINANZ-CORE-01A (STO-06) — bei unklarem Ausgang einmal nachlesen, statt „unklar" stehen zu
+     * lassen: Ist die Rechnung in der Cloud storniert, gilt das auch hier. Gelingt das Nachlesen
+     * nicht, bleibt der Ausgang unklar (ein erneuter Versuch ist ein sicheres Replay).
+     */
+    if (grund !== 'offline' && grund !== 'unknown') {
+      return { ok: false, reason: grund, detail: error instanceof Error ? error.message : undefined };
     }
-    return { ok: false, reason: 'unknown' };
+    const nachgelesen = await readWorkspaceInvoiceCancelFacts({
+      workspaceId,
+      clientInvoiceId: input.invoiceId,
+      since: versuchtAb,
+    });
+    if (!nachgelesen?.cancelledAt) {
+      return { ok: false, reason: grund, detail: error instanceof Error ? error.message : undefined };
+    }
+    cancelled = { invoice: nachgelesen };
   }
 
   const remote = cancelled.invoice;
@@ -207,15 +314,21 @@ export async function cancelFinalizedInvoice(input: {
   }
 
   let correctionArchiveDocumentId: string | undefined;
+  let correctionArchivePending = false;
   let invoice = applied.invoice;
   if (invoice.cancellationKind === 'correction') {
     const archived = archiveInvoiceCorrectionLocally(input.vorgangId, invoice);
-    if (!archived.ok) {
-      // Cloud vollständig, lokale Projektion offen — der Pull heilt sie.
-      return { ok: false, reason: 'local_persist_failed', detail: 'correction_archive' };
+    if (archived.ok) {
+      correctionArchiveDocumentId = archived.documentId;
+      invoice = getVorgangInvoice(input.vorgangId, input.invoiceId) ?? invoice;
+    } else {
+      /*
+       * FINANZ-CORE-01A (STO-06) — die Rechnung ist in der Cloud UND lokal storniert; nur die
+       * lokale Ablage des Korrekturbelegs fehlt (der Pull heilt sie). Bisher hiess das
+       * „local_persist_failed", und die Seite zeigte den alten, nicht stornierten Stand.
+       */
+      correctionArchivePending = true;
     }
-    correctionArchiveDocumentId = archived.documentId;
-    invoice = getVorgangInvoice(input.vorgangId, input.invoiceId) ?? invoice;
   }
 
   // P0/P1-INTEGRITAET 01B / P1 — eine stornierte Rechnung ist keine offene Forderung mehr.
@@ -232,5 +345,6 @@ export async function cancelFinalizedInvoice(input: {
     cancelReason: authoritativeReason,
     reasonDiffers: authoritativeReason !== reason,
     ...(correctionArchiveDocumentId ? { correctionArchiveDocumentId } : {}),
+    ...(correctionArchivePending ? { correctionArchivePending: true } : {}),
   };
 }

@@ -35,8 +35,11 @@ insert into public.workspaces (id, name, owner_user_id)
 values ('00000000-0000-0000-0000-0000000000ff', 'Replay-Test', '00000000-0000-0000-0000-00000000aaaa');
 insert into public.workspace_members (workspace_id, user_id, role, status)
 values ('00000000-0000-0000-0000-0000000000ff', '00000000-0000-0000-0000-00000000aaaa', 'owner', 'active');
+-- FINANZ-CORE-01A (SQL-14): Eine Auftragsrechnung braucht mindestens eine Zeile mit
+-- Menge; 'v-1' traegt deshalb eine Auftragsposition.
 insert into public.workspace_vorgaenge (workspace_id, vorgang_id, payload)
-values ('00000000-0000-0000-0000-0000000000ff', 'v-1', '{}'::jsonb);
+values ('00000000-0000-0000-0000-0000000000ff', 'v-1',
+        '{"orderPositions":[{"id":"op1","description":"Leistung","plannedQuantity":10,"unit":"Pauschal","unitPrice":100}]}'::jsonb);
 -- 03F2: Der Empfaenger der freien Rechnungen. Seit 03F verlangt der Server eine
 -- Kundenkennung und eine vollstaendige Rechnungsanschrift.
 insert into public.workspace_customers (workspace_id, customer_id, payload)
@@ -82,15 +85,20 @@ returns jsonb language sql as $p$
   }'::jsonb || p_overrides;
 $p$;
 
-/* Der Auftragspfad: 'v-1' hat keine Auftragspositionen, also bleibt der Beleg leer. */
+/*
+ * Der Auftragspfad: eine Zeile gegen die eine Auftragsposition von 'v-1'.
+ * FINANZ-CORE-01A (SQL-14): Bis hierher war der Beleg leer -- ein Nullbeleg, den
+ * der Server jetzt abweist. Fuer die Wiederholung zaehlt nur, dass es derselbe
+ * Beleg ist.
+ */
 create function pg_temp.mit_auftrag(p_overrides jsonb default '{}'::jsonb)
 returns jsonb language sql as $p$
   select '{
     "type": "rechnung",
     "taxStatus": "kleinunternehmer_19",
-    "positions": [],
-    "subtotal": 0,
-    "amount": 0
+    "positions": [{"id":"l1","orderPositionId":"op1","description":"Leistung","quantity":1,"unit":"Pauschal","unitPrice":100,"lineTotal":100}],
+    "subtotal": 100,
+    "amount": 100
   }'::jsonb || p_overrides;
 $p$;
 

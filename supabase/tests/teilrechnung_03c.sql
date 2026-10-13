@@ -66,7 +66,8 @@ create function pg_temp.beleg(
     'type', p_type,
     'taxStatus', 'kleinunternehmer_19',
     'issueDate', '2026-10-03',
-    'customerSnapshot', jsonb_build_object('name', 'Muster GmbH'),
+    -- FINANZ-CORE-01A (RE-09): die Empfaengeranschrift gilt auch fuer Auftragsrechnungen.
+    'customerSnapshot', jsonb_build_object('name', 'Muster GmbH', 'street', 'Weg 1', 'zip', '33602', 'city', 'Bielefeld'),
     'positions', case when p_menge > 0 then jsonb_build_array(jsonb_build_object(
       'id', 'line-' || p_type || '-' || p_menge::text,
       'orderPositionId', 'tp1',
@@ -183,6 +184,8 @@ begin
   if public.workspace_invoice_abschlag_deductions(ws, 'v-mix', null) <> 200 then
     raise exception '11: Abzug % statt 200', public.workspace_invoice_abschlag_deductions(ws, 'v-mix', null);
   end if;
+  -- WEISS-Nacharbeit N02: Eine Schlussrechnung zieht nur beglichene Abschlaege ab.
+  perform public.add_workspace_invoice_payment(ws, 'inv-mix-pauschal', 'pay-mix-pauschal', 200, '2026-10-04', null, null, 'bank');
   r := public.finalize_workspace_invoice(ws, 'v-mix', 'inv-mix-schluss',
     pg_temp.beleg('schluss', 6, 600, 400, '{"previousAbschlagDeductions":[{"invoiceId":"inv-mix-pauschal","amount":200}]}'::jsonb));
   if (r->'invoice'->>'amount')::numeric <> 400 then raise exception '11: Schlussbetrag %', r->'invoice'->>'amount'; end if;

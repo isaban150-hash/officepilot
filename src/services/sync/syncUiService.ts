@@ -32,6 +32,20 @@ import {
   type EmployeeConflictDecision,
   type EmployeeConflictResult,
 } from '../employee/employeeConflictService';
+import {
+  listCustomerConflicts,
+  resolveCustomerConflict,
+  type CustomerConflict,
+  type CustomerConflictDecision,
+  type CustomerConflictResult,
+} from '../customer/customerConflictService';
+import {
+  listOfferConflicts,
+  resolveOfferConflict,
+  type OfferConflict,
+  type OfferConflictDecision,
+  type OfferConflictResult,
+} from '../offer/offerConflictService';
 
 export interface SyncOutboxCounts {
   pending: number;
@@ -66,6 +80,10 @@ export interface SyncUiSnapshot {
   documentConflicts: ArchivedDocumentConflict[];
   /** P1 MITARBEITERZAHLUNGEN — offene Mitarbeiterkonflikte mit Entscheidung; wie Dokumentkonflikte genau eine Zeile. */
   employeeConflicts: EmployeeConflict[];
+  /** FINANZ-CORE-01A (ANG-03) — offene Angebotskonflikte mit Entscheidung; genau eine Zeile je Auftrag. */
+  offerConflicts: OfferConflict[];
+  /** FINANZ-CORE-01A (WEISS-Nacharbeit N04) — offene Kundenkonflikte mit Entscheidung; genau eine Zeile je Auftrag. */
+  customerConflicts: CustomerConflict[];
   isOffline: boolean;
   hasRetryableErrors: boolean;
 }
@@ -96,7 +114,13 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
   const isOffline = syncClient.syncPolicy === 'disabled' || status.syncState === 'offline';
   const documentConflicts = listArchivedDocumentConflicts(outbox);
   const employeeConflicts = listEmployeeConflicts(outbox);
-  const decidable = new Set([...documentConflicts, ...employeeConflicts].map((conflict) => conflict.outboxId));
+  const offerConflicts = listOfferConflicts(outbox);
+  const customerConflicts = listCustomerConflicts(outbox);
+  const decidable = new Set(
+    [...documentConflicts, ...employeeConflicts, ...offerConflicts, ...customerConflicts].map(
+      (conflict) => conflict.outboxId,
+    ),
+  );
   const pendingOutboxEntries = outbox.filter(
     (entry) => (entry.status === 'pending' || entry.status === 'blocked') && !decidable.has(entry.id),
   );
@@ -121,6 +145,8 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
     settingsConflict: getPendingWorkspaceSettingsConflict()?.undecided ?? null,
     documentConflicts,
     employeeConflicts,
+    offerConflicts,
+    customerConflicts,
     isOffline,
     /*
      * KONTOSPERRE — ein endgültig abgewiesener Auftrag ist nichts, was ein neuer Versuch
@@ -290,7 +316,9 @@ const SYNCING: SyncState[] = ['checking', 'uploading', 'downloading', 'merging']
  */
 export function summarizeSyncStatus(
   snapshot: Pick<SyncUiSnapshot, 'status' | 'outbox' | 'lastReport' | 'isOffline'> &
-    Partial<Pick<SyncUiSnapshot, 'settingsConflict' | 'documentConflicts' | 'employeeConflicts'>>,
+    Partial<
+      Pick<SyncUiSnapshot, 'settingsConflict' | 'documentConflicts' | 'employeeConflicts' | 'offerConflicts' | 'customerConflicts'>
+    >,
 ): SyncStatusSummary {
   /*
    * 07B-FIX3B — ein entscheidbarer Dokumentkonflikt wartet nicht, er braucht
@@ -299,7 +327,13 @@ export function summarizeSyncStatus(
    */
   const documentConflicts = snapshot.documentConflicts ?? [];
   const employeeConflicts = snapshot.employeeConflicts ?? [];
-  const decidable = new Set([...documentConflicts, ...employeeConflicts].map((conflict) => conflict.outboxId));
+  const offerConflicts = snapshot.offerConflicts ?? [];
+  const customerConflicts = snapshot.customerConflicts ?? [];
+  const decidable = new Set(
+    [...documentConflicts, ...employeeConflicts, ...offerConflicts, ...customerConflicts].map(
+      (conflict) => conflict.outboxId,
+    ),
+  );
   /* Nur-lokale Entitäten (z. B. Papierregister, Gedächtnis) warten auf nichts — sie werden nie gesendet. */
   const waitingCount = snapshot.outbox.filter(
     (entry) =>
@@ -328,7 +362,11 @@ export function summarizeSyncStatus(
       ? snapshot.outbox.filter(
           (entry) => entry.status === 'blocked' && entry.entityType === 'workspace_settings',
         ).length
-      : 0) + documentConflicts.length + employeeConflicts.length;
+      : 0) +
+    documentConflicts.length +
+    employeeConflicts.length +
+    offerConflicts.length +
+    customerConflicts.length;
   /*
    * 07B-FIX3B — „automatisch zusammengeführt" nur für tatsächlich aufgelöste
    * Konflikte. Ein am Versionskonflikt gescheiterter Push steht im Bericht als
@@ -376,6 +414,22 @@ export async function resolveEmployeeConflictFromUi(
   decision: EmployeeConflictDecision,
 ): Promise<EmployeeConflictResult> {
   return resolveEmployeeConflict(employeeId, decision);
+}
+
+/** FINANZ-CORE-01A (ANG-03) — dieselbe Entscheidung für einen Angebotskonflikt. */
+export async function resolveOfferConflictFromUi(
+  offerId: string,
+  decision: OfferConflictDecision,
+): Promise<OfferConflictResult> {
+  return resolveOfferConflict(offerId, decision);
+}
+
+/** FINANZ-CORE-01A (WEISS-Nacharbeit N04) — dieselbe Entscheidung für einen Kundenkonflikt. */
+export async function resolveCustomerConflictFromUi(
+  customerId: string,
+  decision: CustomerConflictDecision,
+): Promise<CustomerConflictResult> {
+  return resolveCustomerConflict(customerId, decision);
 }
 
 export function resolveSettingsConflictFromUi(decision: WorkspaceSettingsDecision): boolean {

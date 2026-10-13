@@ -178,8 +178,8 @@ describe('SKONTO-TERMS-01B — nichts anderes verändert sich', () => {
      * sichtbar bleiben soll: Solange Prozent und Frist nicht strukturiert auf
      * der Rechnung stehen, hängt eine Auswertung am Wortlaut.
      */
-    const percentFirst = sentence.match(/(\d+(?:[.,]\d+)?)\s*%.*?(\d+)\s*tage/i);
-    const daysFirst = sentence.match(/(\d+)\s*tage.*?(\d+(?:[.,]\d+)?)\s*%/i);
+    const percentFirst = sentence.match(/(\d+(?:[.,]\d+)?)\s*%.*?(\d+)\s*tag(?:e|en)?\b/i);
+    const daysFirst = sentence.match(/(\d+)\s*tag(?:e|en)?\b.*?(\d+(?:[.,]\d+)?)\s*%/i);
     const parsed = percentFirst
       ? { percent: Number(percentFirst[1].replace(',', '.')), days: Number(percentFirst[2]) }
       : daysFirst

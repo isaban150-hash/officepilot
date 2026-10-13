@@ -11,6 +11,7 @@
  * „neu erzeugen mit heutigen Daten".
  */
 import type { CompanyProfile } from '../../types/models';
+import { formatCompanyLegalName } from '../company/companyLegalName';
 import type { EmployeePayment, EmployeePaymentKind } from '../../types/employee';
 import { isEmployeePaymentReversed } from '../../types/employee';
 import { formatRegisterLine } from '../invoice/companyDocumentLines';
@@ -106,7 +107,8 @@ function text(value: string | null | undefined): string {
 /** Firmenzeilen wie im Geschäftsbrief: Name mit Rechtsform, Strasse, Ort, Land. */
 export function buildReceiptCompanyLines(company: Partial<CompanyProfile>): string[] {
   const zeilen: string[] = [];
-  const name = [text(company.companyName), text(company.legalForm)].filter(Boolean).join(' ');
+  // FINANZ-CORE-01A (WEISS-Nacharbeit N14) — Firmierung ohne doppelte Rechtsform.
+  const name = formatCompanyLegalName(text(company.companyName), text(company.legalForm));
   if (name) zeilen.push(name);
   if (text(company.street)) zeilen.push(text(company.street));
   const ort = [text(company.zip), text(company.city)].filter(Boolean).join(' ');

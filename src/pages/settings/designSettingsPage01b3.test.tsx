@@ -52,6 +52,8 @@ const SAVED: CompanyProfile = {
   street: 'Werkstraße 2',
   zip: '54321',
   city: 'Betriebsstadt',
+  // FINANZ-CORE-01A (RE-09): Steuernummer oder USt-IdNr. ist Pflichtangabe jeder Rechnung.
+  taxNumber: '133/8150/8159',
   iban: 'DE89370400440532013000',
 };
 

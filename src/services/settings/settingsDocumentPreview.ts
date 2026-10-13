@@ -1,9 +1,12 @@
 import type {
   CompanyProfile,
+  CompanySetup,
   InvoicePrintModel,
   TaxStatus,
   VorgangInvoice,
 } from '../../types/models';
+import { getBusinessDay } from '../businessDateService';
+import { resolveInvoiceDefaults } from '../invoice/invoiceDefaults';
 import type { HistoricalInvoiceLogoSource } from '../../types/branding';
 import { buildInvoicePrintModelFromInvoice } from '../invoicePrintModel';
 import { buildLegalNotices } from '../invoiceTaxService';
@@ -33,10 +36,17 @@ export interface SettingsDocumentPreviewInput {
   profile: CompanyProfile;
   /** Das Logo des Entwurfs — ausstehend, gespeichert oder entfernt. */
   logo: HistoricalInvoiceLogoSource;
-  /** Beispielsteuerstatus für die Vorschau; Standard 19 %. */
+  /** Beispielsteuerstatus für die Vorschau; Standard 19 % bzw. der Standard des Betriebs (`setup`). */
   taxStatus?: TaxStatus;
-  /** Fixes Datum für deterministische Tests; Standard: heute (UTC). */
+  /** Fixes Datum für deterministische Tests; Standard: heute (Geschäftstag). */
   issueDate?: string;
+  /**
+   * FINANZ-CORE-01A (EIN-09) — mit dem Betrieb nutzt die Vorschau dieselben Standardwerte wie eine
+   * neue Rechnung (`resolveInvoiceDefaults`): Steuerstatus, Zahlungsziel, Zahlungstext, Skonto,
+   * Einleitung und Schluss. Bisher zeigte sie immer 19 % und kein Skonto — ein Kleinunternehmer
+   * sah eine Umsatzsteuer, die auf keiner seiner Rechnungen steht.
+   */
+  setup?: Pick<CompanySetup, 'taxStatus'>;
 }
 
 const SAMPLE_CUSTOMER = {
@@ -59,8 +69,9 @@ export function buildSettingsDocumentPreviewModel(
   input: SettingsDocumentPreviewInput,
 ): InvoicePrintModel {
   const profile = input.profile;
-  const taxStatus = input.taxStatus ?? 'standard_19';
-  const issueDate = input.issueDate ?? new Date().toISOString().slice(0, 10);
+  const issueDate = input.issueDate ?? getBusinessDay();
+  const defaults = input.setup ? resolveInvoiceDefaults(profile, input.setup, issueDate) : null;
+  const taxStatus = input.taxStatus ?? defaults?.taxStatus ?? 'standard_19';
   const paymentDays = Number.isFinite(profile.defaultPaymentDays) ? profile.defaultPaymentDays : 14;
 
   /*
@@ -86,11 +97,13 @@ export function buildSettingsDocumentPreviewModel(
     servicePeriodFrom: addDays(issueDate, -7),
     servicePeriodTo: issueDate,
     servicePeriodConfirmed: true,
-    paymentDueDate: addDays(issueDate, paymentDays),
-    paymentTermsText: profile.defaultPaymentTerms || '',
-    skontoText: '',
-    introText: (profile.defaultIntroText ?? '').trim() || 'Vielen Dank für Ihren Auftrag. Wir berechnen wie folgt:',
-    closingText: (profile.defaultClosingText ?? '').trim(),
+    paymentDueDate: defaults?.paymentDueDate ?? addDays(issueDate, paymentDays),
+    paymentTermsText: defaults?.paymentTermsText ?? (profile.defaultPaymentTerms || ''),
+    skontoText: defaults?.skontoText ?? '',
+    introText:
+      defaults?.introText ??
+      ((profile.defaultIntroText ?? '').trim() || 'Vielen Dank für Ihren Auftrag. Wir berechnen wie folgt:'),
+    closingText: defaults?.closingText ?? (profile.defaultClosingText ?? '').trim(),
     legalNotices: buildLegalNotices(taxStatus, profile),
     previousAbschlagDeductions: [],
     customerSnapshot: { ...SAMPLE_CUSTOMER },

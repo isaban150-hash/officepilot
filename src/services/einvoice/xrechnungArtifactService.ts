@@ -38,7 +38,7 @@ import type { CompanyDocument, VorgangInvoice } from '../../types/models';
 import type { DocumentFileRef } from '../../types/documentFileRef';
 import type { DocumentFileRepresentationBinding } from '../../types/documentFileRepresentationBinding';
 import { computeBufferContentHash } from '../documentFileHashService';
-import { getGeneratedInvoiceDocument } from '../documentService';
+import { getDocumentById, getDocumentByLinkedInvoiceId, getGeneratedInvoiceDocument } from '../documentService';
 import {
   getDocumentFileBlob,
   getDocumentFileRefById,
@@ -52,6 +52,7 @@ import {
 import { persistAll } from '../persistenceService';
 import { XRECHNUNG_BINDING_PART, looksLikeLegacyXRechnungFile } from './einvoiceBindingParts';
 import { buildCanonicalEInvoice } from './canonicalEInvoiceBuilder';
+import { prepaymentSettlementsFor } from './einvoicePrepaymentSettlements';
 import type { ServicePeriodOutputCode } from './einvoiceOutputRule';
 import { checkInvoiceOutput } from '../invoice/invoiceOutputGuard';
 import {
@@ -137,12 +138,46 @@ export function buildXRechnungFileName(invoiceNumber: string): string {
   return `XRechnung-${safe || 'Rechnung'}.xml`;
 }
 
+/**
+ * FINANZ-CORE-01A (STO-09/AUS-08) — welche Darstellung: die Rechnung selbst oder ihre
+ * Rechnungskorrektur (Gutschrift 381 mit eigener Nummer). Beide sind eigene Belege
+ * mit eigener Datei — die Korrektur hängt am Korrekturbeleg, nie am Original.
+ */
+export type XRechnungVariant = 'original' | 'correction';
+
+export interface XRechnungArtifactOptions {
+  variant?: XRechnungVariant;
+}
+
+function variantOf(options: XRechnungArtifactOptions | undefined): XRechnungVariant {
+  return options?.variant ?? 'original';
+}
+
+/** Die Belegnummer der Darstellung: bei der Korrektur ihre eigene. */
+function documentNumber(invoice: VorgangInvoice, variant: XRechnungVariant): string {
+  return variant === 'correction' ? (invoice.correctionNumber ?? '') : invoice.number;
+}
+
+function fileNameFor(invoice: VorgangInvoice, variant: XRechnungVariant): string {
+  return variant === 'correction'
+    ? buildXRechnungFileName(`Korrektur-${documentNumber(invoice, variant)}`)
+    : buildXRechnungFileName(invoice.number);
+}
+
 /* ------------------------------------------------------------------ */
 /* Lesen                                                               */
 /* ------------------------------------------------------------------ */
 
 /** GO-LIVE-SECURITY-01 / ABSCHLUSS — nur der erzeugte Rechnungsbeleg, wie serverseitig (generated_invoice). */
-function archiveDocumentFor(invoice: VorgangInvoice): CompanyDocument | undefined {
+function archiveDocumentFor(invoice: VorgangInvoice, variant: XRechnungVariant = 'original'): CompanyDocument | undefined {
+  if (variant === 'correction') {
+    /*
+     * FINANZ-CORE-01A (STO-09/AUS-08) — der Korrekturbeleg (`corr-<id>`), dieselbe
+     * Kennung wie serverseitig. Ohne ihn gibt es nichts, woran die Datei hängen könnte.
+     */
+    const id = invoice.correctionArchiveDocumentId ?? invoice.correctionDocumentId ?? `corr-${invoice.id}`;
+    return getDocumentById(id) ?? getDocumentByLinkedInvoiceId(invoice.id, 'correction');
+  }
   return getGeneratedInvoiceDocument(invoice.id);
 }
 
@@ -191,8 +226,13 @@ type XRechnungRendering =
   | { ok: false; reason: 'render_failed'; issues: XRechnungRenderIssue[] };
 
 /** Die XRechnung aus der festgeschriebenen Rechnung — deterministisch, ohne Ablage. */
-function renderXRechnungBytes(invoice: VorgangInvoice): XRechnungRendering {
-  const canonical = buildCanonicalEInvoice(invoice);
+function renderXRechnungBytes(invoice: VorgangInvoice, variant: XRechnungVariant = 'original'): XRechnungRendering {
+  // FINANZ-CORE-01A (N02) — abgezogene Abschläge nur mit ihrem tatsächlichen Zahlungsstand.
+  const canonical = buildCanonicalEInvoice(invoice, {
+    variant,
+    profile: 'xrechnung',
+    prepaymentSettlements: prepaymentSettlementsFor(invoice),
+  });
   if (!canonical.ok) return { ok: false, reason: 'canonical_incomplete', issues: canonical.issues };
 
   const rendered = renderXRechnungCii(canonical.value);
@@ -205,16 +245,17 @@ function describe(
   invoice: VorgangInvoice,
   ref: DocumentFileRef,
   bytes: Uint8Array,
+  variant: XRechnungVariant = 'original',
 ): XRechnungArtifact {
   return {
     sourceInvoiceId: invoice.id,
-    sourceInvoiceNumber: invoice.number,
+    sourceInvoiceNumber: documentNumber(invoice, variant),
     format: 'xrechnung',
     syntax: 'cii',
     standardVersion: EINVOICE_STANDARDS.xrechnung.specification,
     bundleVersion: EINVOICE_STANDARDS.xrechnung.bundle,
     generatorVersion: XRECHNUNG_GENERATOR_VERSION,
-    fileName: ref.originalFileName || buildXRechnungFileName(invoice.number),
+    fileName: ref.originalFileName || fileNameFor(invoice, variant),
     contentSha256: ref.contentHash,
     byteSize: ref.fileSize,
     createdAt: ref.createdAt,
@@ -231,16 +272,21 @@ function describe(
 }
 
 /** GO-LIVE-SECURITY-01 / FINALISIERUNG — frisch erzeugt und nicht abgelegt (Mitglied). */
-function describeUngespeichert(invoice: VorgangInvoice, bytes: Uint8Array, contentSha256: string): XRechnungArtifact {
+function describeUngespeichert(
+  invoice: VorgangInvoice,
+  bytes: Uint8Array,
+  contentSha256: string,
+  variant: XRechnungVariant = 'original',
+): XRechnungArtifact {
   return {
     sourceInvoiceId: invoice.id,
-    sourceInvoiceNumber: invoice.number,
+    sourceInvoiceNumber: documentNumber(invoice, variant),
     format: 'xrechnung',
     syntax: 'cii',
     standardVersion: EINVOICE_STANDARDS.xrechnung.specification,
     bundleVersion: EINVOICE_STANDARDS.xrechnung.bundle,
     generatorVersion: XRECHNUNG_GENERATOR_VERSION,
-    fileName: buildXRechnungFileName(invoice.number),
+    fileName: fileNameFor(invoice, variant),
     contentSha256,
     byteSize: bytes.byteLength,
     createdAt: new Date().toISOString(),
@@ -269,15 +315,19 @@ function describeUngespeichert(invoice: VorgangInvoice, bytes: Uint8Array, conte
  */
 export async function readXRechnungArtifact(
   invoice: VorgangInvoice,
+  options?: XRechnungArtifactOptions,
 ): Promise<XRechnungArtifact | null> {
   if (await checkInvoiceOutput(invoice)) return null;
-  return leseAbgelegteXRechnung(invoice);
+  return leseAbgelegteXRechnung(invoice, variantOf(options));
 }
 
 /** Der Lesepfad ohne Grenze — nur nach einer bestandenen Prüfung aufrufen. */
-async function leseAbgelegteXRechnung(invoice: VorgangInvoice): Promise<XRechnungArtifact | null> {
+async function leseAbgelegteXRechnung(
+  invoice: VorgangInvoice,
+  variant: XRechnungVariant = 'original',
+): Promise<XRechnungArtifact | null> {
   try {
-    const document = archiveDocumentFor(invoice);
+    const document = archiveDocumentFor(invoice, variant);
     if (!document) return null;
     const gebunden = boundXRechnung(document);
     if (!gebunden) return null;
@@ -302,12 +352,12 @@ async function leseAbgelegteXRechnung(invoice: VorgangInvoice): Promise<XRechnun
      * aus der festgeschriebenen Rechnung genau dieselben Bytes ergibt; sonst gar nicht.
      */
     if (isUntrustedEInvoiceBinding(binding)) {
-      const frisch = renderXRechnungBytes(invoice);
+      const frisch = renderXRechnungBytes(invoice, variant);
       if (!frisch.ok) return null;
       if ((await computeBufferContentHash(frisch.bytes)) !== hash) return null;
     }
 
-    return describe(invoice, ref, bytes);
+    return describe(invoice, ref, bytes, variant);
   } catch {
     // Eine unlesbare Ablage ist kein Grund, ein zweites Artefakt zu erfinden.
     return null;
@@ -327,7 +377,9 @@ async function leseAbgelegteXRechnung(invoice: VorgangInvoice): Promise<XRechnun
  */
 export async function ensureXRechnungArtifact(
   invoice: VorgangInvoice,
+  options?: XRechnungArtifactOptions,
 ): Promise<XRechnungArtifactResult> {
+  const variant = variantOf(options);
   /*
    * GO-LIVE-SECURITY-01 — die gemeinsame Ausgabegrenze, und zwar **vor** der
    * Wiederverwendung: Ohne bestätigten Leistungszeitraum (jede Rolle) oder ohne
@@ -340,10 +392,10 @@ export async function ensureXRechnungArtifact(
   }
   if (ausgabe) return { ok: false, reason: 'service_period_unverified' };
 
-  const vorhanden = await leseAbgelegteXRechnung(invoice);
+  const vorhanden = await leseAbgelegteXRechnung(invoice, variant);
   if (vorhanden) return { ok: true, artifact: vorhanden, reused: true };
 
-  const document = archiveDocumentFor(invoice);
+  const document = archiveDocumentFor(invoice, variant);
   if (!document) {
     /*
      * Ohne Archivdokument gibt es nichts, woran die Datei hängen könnte. Das
@@ -354,7 +406,7 @@ export async function ensureXRechnungArtifact(
     return { ok: false, reason: 'no_archive_document' };
   }
 
-  const gerendert = renderXRechnungBytes(invoice);
+  const gerendert = renderXRechnungBytes(invoice, variant);
   if (!gerendert.ok) return gerendert;
   const bytes = gerendert.bytes;
 
@@ -367,7 +419,7 @@ export async function ensureXRechnungArtifact(
   if (!(await mayStoreEInvoiceArtifact())) {
     return {
       ok: true,
-      artifact: describeUngespeichert(invoice, bytes, await computeBufferContentHash(bytes)),
+      artifact: describeUngespeichert(invoice, bytes, await computeBufferContentHash(bytes), variant),
       reused: false,
     };
   }
@@ -380,7 +432,7 @@ export async function ensureXRechnungArtifact(
      */
     const { fileRef } = await storeDocumentFileFromCachedPayload(
       {
-        fileName: buildXRechnungFileName(invoice.number),
+        fileName: fileNameFor(invoice, variant),
         mimeType: XRECHNUNG_MIME_TYPE,
         fileSize: bytes.byteLength,
         bytes,
@@ -420,7 +472,7 @@ export async function ensureXRechnungArtifact(
 
     return {
       ok: true,
-      artifact: describe(invoice, getDocumentFileRefById(fileRef.id) ?? fileRef, bytes),
+      artifact: describe(invoice, getDocumentFileRefById(fileRef.id) ?? fileRef, bytes, variant),
       reused: false,
     };
   } catch {

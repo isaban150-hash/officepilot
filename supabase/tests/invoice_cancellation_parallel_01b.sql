@@ -42,8 +42,15 @@ insert into public.workspaces (id, name, owner_user_id)
 values ('00000000-0000-0000-0000-0000000000dd', 'Cancel-Parallel', '00000000-0000-0000-0000-00000000dddd');
 insert into public.workspace_members (workspace_id, user_id, role, status)
 values ('00000000-0000-0000-0000-0000000000dd', '00000000-0000-0000-0000-00000000dddd', 'owner', 'active');
+-- FINANZ-CORE-01A (SQL-T1) — seit 03F/03F2 prueft der Server auch die freie
+-- Rechnung (Steuerstatus, Positionen, Anschrift, Kundenkennung). Derselbe
+-- vollstaendige Aufbau wie base_free in invoice_cancellation_correction_01b.sql.
 select public.finalize_workspace_invoice('00000000-0000-0000-0000-0000000000dd', null, 'inv-par',
-  '{"type":"rechnung","issueDate":"2026-09-01","positions":[],"companySnapshot":{"companyName":"M"},"customerSnapshot":{"name":"K"}}') is not null;
+  '{"type":"rechnung","issueDate":"2026-09-01","taxStatus":"standard_19","subtotal":100,"amount":119,
+    "positions":[{"id":"p1","description":"Anfahrt","quantity":2,"unit":"Stunden","unitPrice":50,"lineTotal":100}],
+    "companySnapshot":{"companyName":"Muster GmbH"},
+    "customerSnapshot":{"name":"Beispiel Projektbau GmbH","street":"Beispielweg 3","zip":"33602","city":"Bielefeld"},
+    "customerId":"cust-par","servicePeriodFrom":"2026-08-20","servicePeriodTo":"2026-08-28"}') is not null;
 select public.update_workspace_invoice_sent('00000000-0000-0000-0000-0000000000dd', 'inv-par', '2026-09-02', 'email', null) is not null;
 \echo 'SETUP OK'
 \endif

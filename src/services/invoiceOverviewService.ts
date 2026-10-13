@@ -167,6 +167,18 @@ export function getOpenInvoices(today?: Date | string): InvoiceOverviewItem[] {
   );
 }
 
+/**
+ * FINANZ-CORE-01A (ZAH-08) — alle Rechnungen mit offenem Betrag: offen,
+ * teilbezahlt und überfällig, ohne Storno. Dieselbe Abgrenzung wie
+ * `summarizeInvoiceOverview` auf der Heute-Seite; `getOpenInvoices` bleibt der
+ * Statusfilter „offen" der Übersicht.
+ */
+export function getOutstandingInvoices(today?: Date | string): InvoiceOverviewItem[] {
+  return getAllInvoiceOverview(today).filter(
+    (item) => !isInvoiceCancelled(item.invoice) && item.paymentSummary.openAmount > 0,
+  );
+}
+
 export function getOverdueInvoices(today?: Date | string): InvoiceOverviewItem[] {
   return getAllInvoiceOverview(today).filter(
     (item) => item.paymentSummary.status === 'ueberfaellig',

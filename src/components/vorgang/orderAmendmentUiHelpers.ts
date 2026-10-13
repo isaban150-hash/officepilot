@@ -1,4 +1,6 @@
 import type { TranslationKey } from '../../i18n';
+import { lineTotalMoney, roundMoney } from '../../services/invoiceMoney';
+import { parseNumericInput } from '../ui/NumericInput';
 import type {
   ContractConfirmationSnapshot,
   OrderAmendmentChangeType,
@@ -12,7 +14,8 @@ export function formatAmendmentMoney(value: number): string {
 }
 
 export function positionLineTotal(quantity: number, unitPrice: number): number {
-  return Math.round(quantity * unitPrice * 100) / 100;
+  // FINANZ-CORE-01A — exakt wie der Server (`round(menge * preis * 100)`), nicht in Gleitkomma.
+  return lineTotalMoney(quantity, unitPrice);
 }
 
 export function formatAmendmentDate(iso: string): string {
@@ -60,15 +63,29 @@ export function formatAmendmentChangeTypeLabel(
 /**
  * Parse user decimal input (de-DE). Empty → null (never coerce to 0).
  * Accepts `1,5` and `1.5`. Invalid → null.
+ *
+ * FINANZ-CORE-01A (RE-10) — Tausenderpunkte wie in `NumericInput`: „1.200" ist 1200,
+ * „1.200,50" ist 1200,50. Bisher wurde „1.200" zu 1,2 — bei einem Nachtragspreis eine
+ * stille Umdeutung um den Faktor 1000.
  */
 export function parseAmendmentDecimalInput(raw: string): number | null {
-  const trimmed = raw.trim();
+  const trimmed = raw.trim().replace(/\s/g, '');
   if (!trimmed) return null;
-  const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
-  if (!/^-?\d+(\.\d+)?$/.test(normalized)) return null;
-  const value = Number(normalized);
-  if (!Number.isFinite(value)) return null;
-  return value;
+  const negative = trimmed.startsWith('-');
+  const body = negative ? trimmed.slice(1) : trimmed;
+  if (!/^[\d.,]+$/.test(body)) return null;
+  const value = parseNumericInput(body);
+  if (value === null) return null;
+  return negative ? -value : value;
+}
+
+/**
+ * FINANZ-CORE-01A (A4/SQL-02) — ein Geldbetrag mit mehr als zwei Nachkommastellen.
+ * Ein Nachtragspreis von 0,045 € war nie fakturierbar: Client und Server rechneten
+ * die Zeile verschieden, jede Rechnung darüber scheiterte.
+ */
+export function hasSubCentPrecision(value: number): boolean {
+  return Number.isFinite(value) && roundMoney(value) !== value;
 }
 
 export function formatAmendmentDecimalInput(value: number | null | undefined): string {

@@ -9,7 +9,7 @@
  *
  * „Angebot annehmen → Auftrag" gibt es hier bewusst noch nicht (Block B).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/Card';
@@ -30,11 +30,14 @@ import {
   listOfferStatusActions,
   markOfferSent,
   rejectOffer,
+  reviseOffer,
 } from '../services/offer/offerService';
-import { ensureOfferArchived } from '../services/offer/offerArchiveService';
+import { ensureOfferArchived, type OfferArchiveFailureReason } from '../services/offer/offerArchiveService';
+import { offerServerRejectionKey } from '../services/offer/offerServerRejection';
+import { useDraftCloudTick } from '../services/order/useDraftCloudTick';
 import { buildOfferPrintModel } from '../services/offer/offerPrintModel';
 import { downloadOfferPdf, generateOfferPdf } from '../services/offer/offerPdfService';
-import { canAcceptOffer } from '../services/offer/offerService';
+import { canAcceptOffer, canSendOffer } from '../services/offer/offerService';
 import { acceptOfferWithCloud } from '../services/offer/offerAcceptCloudService';
 import { useOptionalAuth } from '../context/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -71,11 +74,24 @@ export function AngebotDetailPage() {
   const offer = offerId ? getOfferById(offerId) : null;
   const frozen = Boolean(offer && offer.status !== 'entwurf');
 
+  /*
+   * FINANZ-CORE-01A (ANG-13) — ein Abgleich kann Angebot und Ablage ändern (Ablage
+   * eines anderen Geräts, Statuswechsel). Die Seite liest danach neu.
+   */
+  useDraftCloudTick();
   const [archiveDoc, setArchiveDoc] = useState<CompanyDocument | null>(null);
-  const [archiveFailed, setArchiveFailed] = useState(false);
-  const abgelegtFuer = useRef('');
+  const [archiveFailure, setArchiveFailure] = useState<OfferArchiveFailureReason | null>(null);
+  const [archiveAttempt, setArchiveAttempt] = useState(0);
+  const offerKey = offer?.id ?? '';
+  /*
+   * FINANZ-CORE-01A (ANG-12) — der Effekt hängt an der Kennung, nicht am Objekt.
+   * `getOfferById` liefert bei jedem Rendern einen neuen Klon. Jedes Neurendern setzte
+   * deshalb `alive = false`, ein Wächter verhinderte den Neustart, und das Ergebnis
+   * der Ablage ging verloren: „wird vorbereitet …" blieb stehen, ohne Ablage kein
+   * Versand. Einen zweiten gleichzeitigen Lauf fängt `ensureOfferArchived` ab.
+   */
   useEffect(() => {
-    if (!offer || !frozen) return;
+    if (!offerKey || !frozen) return;
     /*
      * GO-LIVE-SECURITY-01 — die Ablage ordnet nur ein Inhaber- oder Admin-Gerät
      * zu: Sie ändert den Beleg (archiveDocumentId), und das dürfen Mitglieder
@@ -83,18 +99,25 @@ export function AngebotDetailPage() {
      * erzeugte sonst eine doppelte.
      */
     if (!writeAccess.canWrite) return;
-    if (abgelegtFuer.current === `${offer.id}:${version}`) return;
-    abgelegtFuer.current = `${offer.id}:${version}`;
     let alive = true;
-    void ensureOfferArchived(offer.id).then((r) => {
+    void ensureOfferArchived(offerKey).then((r) => {
       if (!alive) return;
-      if (r.ok) setArchiveDoc(r.document);
-      else setArchiveFailed(true);
+      if (r.ok) {
+        setArchiveDoc(r.document);
+        setArchiveFailure(null);
+      } else {
+        setArchiveFailure(r.reason);
+      }
     });
     return () => {
       alive = false;
     };
-  }, [offer, frozen, version, writeAccess.canWrite]);
+  }, [offerKey, frozen, version, writeAccess.canWrite, archiveAttempt]);
+  // FINANZ-CORE-01A (ANG-12) — „Erneut ablegen" bzw. „Erneut prüfen".
+  const legeErneutAb = () => {
+    setArchiveFailure(null);
+    setArchiveAttempt((n) => n + 1);
+  };
 
   const [vorschauUrl, setVorschauUrl] = useState('');
   const [pdfFehler, setPdfFehler] = useState('');
@@ -169,6 +192,21 @@ export function AngebotDetailPage() {
     return true;
   };
 
+  /*
+   * FINANZ-CORE-01A (ANG-11) — ein offenes Angebot wird überarbeitet (der Entwurf ersetzt
+   * es mit seiner Freigabe), ein abgeschlossenes dient als Vorlage.
+   */
+  const offen = offer.status === 'freigegeben' || offer.status === 'versendet';
+  const ueberarbeite = () => {
+    const r = reviseOffer(offer.id);
+    if (!r.success) {
+      setAktionFehler(translate(r.errorKey as TranslationKey));
+      return;
+    }
+    navigate(`/angebote/${r.offer.id}/bearbeiten`);
+  };
+  const vorgaenger = offer.supersedesOfferId ? getOfferById(offer.supersedesOfferId) : null;
+
   const titel = offer.offerNumber ? `${translate('offer.detail.title')} ${offer.offerNumber}` : translate('offer.detail.title');
 
   const annehmbar = canAcceptOffer(offer);
@@ -188,12 +226,17 @@ export function AngebotDetailPage() {
               ? 'offer.accept.cloudRequired'
               : r.reason === 'sync_pending'
                 ? 'offer.accept.syncPending'
+                : r.reason === 'sync_conflict'
+                  ? 'offer.accept.syncConflict'
+                : r.reason === 'stale_version'
+                  ? 'offer.accept.staleVersion'
                 : r.reason === 'network'
                   ? 'offer.accept.network'
                   : r.reason === 'server_rejected'
-                    ? 'offer.accept.serverRejected'
+                    ? (offerServerRejectionKey(r.message, 'accept') ?? 'offer.accept.serverRejected')
                     : 'offer.error.notFound';
-        setAnnahmeFehler(`${translate(key)}${'message' in r ? ` (${r.message})` : ''}`);
+        // FINANZ-CORE-01A (ANG-14) — nur übersetzte Texte; der rohe Servertext bleibt draußen.
+        setAnnahmeFehler(translate(key));
         return true;
       }
       showToast(translate('offer.accept.success').replace('{number}', r.vorgang.orderNumber ?? ''));
@@ -254,6 +297,11 @@ export function AngebotDetailPage() {
       </div>
 
       {frozen ? <p className="form-hint" data-testid="offer-detail-frozen">{translate('offer.detail.frozenHint')}</p> : null}
+      {vorgaenger ? (
+        <p className="form-hint" data-testid="offer-detail-supersedes">
+          {translate('offer.detail.supersedes').replace('{number}', vorgaenger.offerNumber ?? '')}
+        </p>
+      ) : null}
       {angenommen ? <p className="form-hint" data-testid="offer-detail-accepted">{translate('offer.detail.acceptedHint')}</p> : null}
       {annehmbar && !writeAccess.canWrite ? <p className="form-hint" data-testid="offer-accept-role-hint">{translate('offer.accept.roleHint')}</p> : null}
       {annahmeFehler ? <p className="form-error" data-testid="offer-accept-error">{annahmeFehler}</p> : null}
@@ -272,6 +320,11 @@ export function AngebotDetailPage() {
               {translate('offer.detail.archiveOpen')}
             </Link>
           ) : null}
+          {writeAccess.canWrite ? (
+            <Button type="button" variant="secondary" onClick={ueberarbeite} data-testid="offer-revise">
+              {translate(offen ? 'offer.detail.revise' : 'offer.detail.copyAsTemplate')}
+            </Button>
+          ) : null}
           {writeAccess.canWrite
             ? listOfferStatusActions(offer).map((a) => (
                 <Button key={a} type="button" variant="ghost" onClick={() => setAktion(a as Aktion)} data-testid={`offer-action-${a}`}>
@@ -287,9 +340,18 @@ export function AngebotDetailPage() {
       {pdfFehler ? <p className="form-error" data-testid="offer-pdf-error">{pdfFehler}</p> : null}
       {aktionFehler ? <p className="form-error" data-testid="offer-action-error">{aktionFehler}</p> : null}
       {frozen && !archiveDocument && writeAccess.canWrite ? (
-        <p className="form-hint" data-testid={archiveFailed ? 'offer-archive-failed' : 'offer-archive-pending'}>
-          {translate(archiveFailed ? 'offer.detail.archiveFailed' : 'offer.detail.archivePending')}
-        </p>
+        archiveFailure ? (
+          <div className="form-hint" data-testid="offer-archive-failed">
+            <p>{translate(archiveFailure === 'archive_missing' ? 'offer.detail.archiveMissing' : 'offer.detail.archiveFailed')}</p>
+            <Button type="button" size="sm" variant="secondary" onClick={legeErneutAb} data-testid="offer-archive-retry">
+              {translate(archiveFailure === 'archive_missing' ? 'offer.detail.archiveRecheck' : 'offer.detail.archiveRetry')}
+            </Button>
+          </div>
+        ) : (
+          <p className="form-hint" data-testid="offer-archive-pending">
+            {translate('offer.detail.archivePending')}
+          </p>
+        )
       ) : null}
 
       {vorschauUrl ? (
@@ -298,7 +360,13 @@ export function AngebotDetailPage() {
         </DetailSection>
       ) : null}
 
-      {frozen && archiveDocument ? (
+      {frozen && archiveDocument && !canSendOffer(offer) ? (
+        <p className="form-hint" data-testid="offer-send-closed">
+          {translate('offer.detail.sendClosed')}
+        </p>
+      ) : null}
+
+      {frozen && archiveDocument && canSendOffer(offer) ? (
         <DetailSection title={translate('offer.detail.send')} description={translate('offer.detail.sendHint')} testId="offer-send-section">
           <DocumentDeliveryPanel
             document={archiveDocument}

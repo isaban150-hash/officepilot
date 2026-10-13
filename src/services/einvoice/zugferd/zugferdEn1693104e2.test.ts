@@ -29,6 +29,7 @@ import {
 } from 'pdf-lib';
 
 import { buildCanonicalEInvoice } from '../canonicalEInvoiceBuilder';
+import type { CanonicalPrepaymentSettlement } from '../canonicalEInvoice';
 import { renderXRechnungCii } from '../xrechnungCiiRenderer';
 import { renderZugferdEn16931Cii } from './zugferdEn16931Renderer';
 import { buildZugferdInvoice, buildZugferdFileName } from './zugferdArtifactService';
@@ -64,8 +65,9 @@ const sha256 = (value: string | Uint8Array) =>
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
+// FINANZ-CORE-01A (AUS-06) — BT-27 und PDF zeigen Name plus Rechtsform („Cirmak Haustechnik GmbH").
 const SELLER: CompanyProfile = {
-  companyName: 'Cirmak Haustechnik GmbH',
+  companyName: 'Cirmak Haustechnik',
   legalForm: 'GmbH',
   street: 'Ruhrallee 5',
   zip: '45138',
@@ -101,7 +103,7 @@ const BUYER: CustomerBilling = {
   countryCode: 'DE',
   vatId: 'DE987654321',
   buyerReference: 'TEST-BUYER-REF-A',
-  leitwegId: 'TEST-LEITWEG-A',
+  // FINANZ-CORE-01A (KUN-07) — ohne Leitweg-ID (sie wäre BT-10); Routing prüft xrechnungCii04d Fall 13.
 };
 
 function line(o: Partial<VorgangInvoiceLine> = {}): VorgangInvoiceLine {
@@ -150,8 +152,12 @@ function invoice(o: Partial<VorgangInvoice> = {}): VorgangInvoice {
 }
 
 /** Rendert und verlangt Erfolg. */
-function xml(value: VorgangInvoice): string {
-  const canonical = buildCanonicalEInvoice(value);
+function xml(
+  value: VorgangInvoice,
+  variant: 'original' | 'correction' = 'original',
+  prepaymentSettlements: CanonicalPrepaymentSettlement[] = [],
+): string {
+  const canonical = buildCanonicalEInvoice(value, { variant, prepaymentSettlements });
   expect(canonical.ok, canonical.ok ? '' : JSON.stringify(canonical.issues)).toBe(true);
   if (!canonical.ok) throw new Error('canonical');
   const rendered = renderZugferdEn16931Cii(canonical.value);
@@ -306,40 +312,60 @@ describe('E-RECHNUNG-04E2 — Rechnungstypen und Belegtypcodes', () => {
       '875',
     ],
     ['T9: Schlussrechnung ohne Abzüge', invoice({ type: 'schluss', number: '2026-0047' }), '877'],
-    [
-      'T10: Korrekturrechnung',
-      invoice({
-        number: '2026-0048',
-        cancelledAt: '2026-09-25T10:00:00.000Z',
-        cancellationKind: 'correction',
-        cancelReason: 'Falscher Leistungszeitraum',
-      }),
-      '384',
-    ],
   ])('%s trägt TypeCode %s', (_label, value, code) => {
     expect(xml(value as VorgangInvoice)).toContain(`<ram:TypeCode>${code}</ram:TypeCode>`);
   });
 
   /*
-   * Die Sperren bleiben. Eine Schlussrechnung mit Abzügen behauptet im XML
-   * sonst einen Zahlbetrag, den die Struktur nicht begründen kann, und ein
-   * interner Storno ist kein Beleg für den Empfänger.
+   * FINANZ-CORE-01A (AUS-08/STO-09) — T10: Die Korrektur ist eine Gutschrift 381 mit eigener
+   * Nummer. Der Renderer kann sie darstellen; als ZUGFeRD-PDF wird sie im Produkt nicht
+   * erzeugt (das Korrektur-PDF zeigt Gegenbuchungen), nur als XRechnung.
    */
-  it('eine Schlussrechnung mit Abzügen bleibt gesperrt', () => {
-    const canonical = buildCanonicalEInvoice(
+  it('T10: Korrekturrechnung trägt TypeCode 381 und ihre eigene Nummer', () => {
+    const out = xml(
+      invoice({
+        number: '2026-0048',
+        status: 'versendet',
+        cancelledAt: '2026-09-25T10:00:00.000Z',
+        cancellationKind: 'correction',
+        cancelReason: 'Falscher Leistungszeitraum',
+        correctionNumber: '2026-0050',
+      }),
+      'correction',
+    );
+    expect(out).toContain('<ram:TypeCode>381</ram:TypeCode>');
+    expect(out).toContain('<ram:ID>2026-0050</ram:ID>');
+    expect(out).toContain('<ram:IssuerAssignedID>2026-0048</ram:IssuerAssignedID>');
+  });
+
+  /*
+   * FINANZ-CORE-01A (D1) — eine Schlussrechnung mit Abzügen ist darstellbar: BT-113 trägt
+   * die abgezogenen Abschläge, der Zahlbetrag ist Brutto minus Abzüge. Ein Zahlbetrag,
+   * der dazu nicht passt, bleibt gesperrt. Ein interner Storno ist kein Beleg.
+   */
+  it('eine Schlussrechnung mit Abzügen trägt BT-113 und nur einen stimmigen Zahlbetrag', () => {
+    const schluss = (amount: number) =>
       invoice({
         type: 'schluss',
         number: '2026-0052',
+        amount,
         previousAbschlagDeductions: [
-          { invoiceNumber: '2026-0045', abschlagNumber: 1, amount: 100 },
+          { invoiceId: 'a1', invoiceNumber: '2026-0045', abschlagNumber: 1, date: '2026-08-01', subtotal: 84.03, amount: 100 },
         ],
-      } as Partial<VorgangInvoice>),
-    );
-    expect(canonical.ok).toBe(false);
-    if (canonical.ok) return;
-    expect(canonical.issues.map((issue) => issue.code)).toContain(
-      'final_invoice_deduction_semantics_unsupported',
-    );
+      } as Partial<VorgangInvoice>);
+    // FINANZ-CORE-01A (WEISS N02/D1) — BT-113 nur mit belegter Zahlung des Abschlags.
+    const bezahlt = [{ invoiceId: 'a1', paid: 100, skonto: 0, settled: true }];
+    // 160 netto + 19 % = 190,40 brutto, abzüglich 100 -> 90,40.
+    const out = xml(schluss(90.4), 'original', bezahlt);
+    expect(out).toContain('<ram:TotalPrepaidAmount>100.00</ram:TotalPrepaidAmount>');
+    expect(out).toContain('<ram:DuePayableAmount>90.40</ram:DuePayableAmount>');
+    const unbelegt = buildCanonicalEInvoice(schluss(90.4), { profile: 'en16931' });
+    expect(unbelegt.ok).toBe(false);
+    if (!unbelegt.ok) expect(unbelegt.issues.map((issue) => issue.code)).toContain('prepayment_not_settled');
+    const falsch = buildCanonicalEInvoice(schluss(190.4), { prepaymentSettlements: bezahlt });
+    expect(falsch.ok).toBe(false);
+    if (falsch.ok) return;
+    expect(falsch.issues.map((issue) => issue.code)).toContain('money_inconsistent');
   });
 
   it('ein interner Storno bleibt nicht exportierbar', () => {
@@ -581,7 +607,7 @@ describe('E-RECHNUNG-04E2 — das fertige Hybriddokument', () => {
       'T11: Unicode und Sonderzeichen',
       invoice({
         number: '2026-0049',
-        companySnapshot: { ...SELLER, companyName: 'Çırmak & Söhne <Test>' } as CompanyProfile,
+        companySnapshot: { ...SELLER, companyName: 'Çırmak & Söhne <Test>', legalForm: '' } as CompanyProfile,
         positions: [
           line({ description: 'Prüfung & Abdichtung "Flachdach" <Nord> — Ø 12 mm, 100 % dicht' }),
         ],

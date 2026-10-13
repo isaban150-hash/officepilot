@@ -256,6 +256,9 @@ const DEDUCTION_KEYS = [
   'date',
   'subtotal',
   'amount',
+  // FINANZ-CORE-01A (WEISS-Recheck N02-R1) — eingefroren: gezahlt und Skonto je Abzug.
+  'paidAmount',
+  'skontoAmount',
 ] as const;
 
 const INVOICE_TYPES = new Set([
@@ -478,7 +481,25 @@ function checkDeduction(value: unknown, path: string): void {
   optionalFiniteNumber(deduction.abschlagNumber, `${path}.abschlagNumber`);
   requiredString(deduction.date, `${path}.date`);
   finiteNumber(deduction.subtotal, `${path}.subtotal`);
-  finiteNumber(deduction.amount, `${path}.amount`);
+  const amount = finiteNumber(deduction.amount, `${path}.amount`);
+  checkDeductionSettlement(deduction, amount, path);
+}
+
+/**
+ * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — gezahlt und Skonto stehen nur zusammen, sind
+ * nicht negativ und ergeben zusammen den abgezogenen Betrag.
+ */
+function checkDeductionSettlement(deduction: Record<string, unknown>, amount: number, path: string): void {
+  const hasPaid = deduction.paidAmount !== undefined;
+  const hasSkonto = deduction.skontoAmount !== undefined;
+  if (!hasPaid && !hasSkonto) return;
+  if (hasPaid !== hasSkonto) reject(`${path}.settlement:incomplete`);
+  const paid = finiteNumber(deduction.paidAmount, `${path}.paidAmount`);
+  const skonto = finiteNumber(deduction.skontoAmount, `${path}.skontoAmount`);
+  if (paid < 0 || skonto < 0) reject(`${path}.settlement:negative`);
+  if (Math.round(paid * 100) + Math.round(skonto * 100) !== Math.round(amount * 100)) {
+    reject(`${path}.settlement:sum_mismatch`);
+  }
 }
 
 /** Gemeinsamer Rumpf für `invoice` und `invoicePayload`. */

@@ -18,6 +18,8 @@ import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/Card';
 import { Page } from '../components/ui/Page';
 import { DetailSection } from '../components/ui/Section';
+import { NumericInput } from '../components/ui/NumericInput';
+import { copyCustomerBilling } from '../services/customer/customerBillingCopy';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
 import { InlineNotice } from '../components/ui/States';
 import { DraftCloudConflictNotice, type DraftCloudConflictAction } from '../components/order/DraftCloudConflictNotice';
@@ -120,16 +122,9 @@ function werteAusEntwurf(entwurf: OrderDraft, ersatzPosition: () => OrderDraftPo
   };
 }
 
+// FINANZ-CORE-01A (KUN-01) — mit Land, USt-IdNr., Käuferreferenz und Leitweg-ID.
 function billingOf(customer: Partial<CustomerBilling>): CustomerBilling {
-  return {
-    name: customer.name ?? '',
-    contactPerson: customer.contactPerson ?? '',
-    street: customer.street ?? '',
-    zip: customer.zip ?? '',
-    city: customer.city ?? '',
-    email: customer.email ?? '',
-    phone: customer.phone ?? '',
-  };
+  return copyCustomerBilling(customer);
 }
 
 export function AuftragEditorPage() {
@@ -216,7 +211,8 @@ export function AuftragEditorPage() {
   );
 
   const eingaben = () => ({
-    customerId: kundeId || undefined,
+    // FINANZ-CORE-01A (ANG-05) — leere Auswahl entfernt den Kundenbezug ausdrücklich (wie im Angebotseditor).
+    customerId: kundeId,
     customerBilling: kunde,
     title: titel,
     baustelle,
@@ -238,6 +234,8 @@ export function AuftragEditorPage() {
 
   /** Lädt einen gespeicherten Stand in den Editor und macht ihn zur neuen Basis. */
   const ladeGespeichert = (entwurf: OrderDraft) => {
+    // FINANZ-CORE-01A — die Entscheidung ist gefallen; der Hinweis „erst entscheiden" verschwindet mit ihr.
+    setFehler(null);
     const werte = werteAusEntwurf(entwurf, neuePosition);
     setKundeId(werte.customerId ?? '');
     setKunde(werte.customerBilling);
@@ -513,7 +511,10 @@ export function AuftragEditorPage() {
                 type="button"
                 size="sm"
                 variant="secondary"
-                onClick={() => setBasis((prev) => (prev ? { ...prev, stored: gespeichertSchluessel } : prev))}
+                onClick={() => {
+                  setFehler(null);
+                  setBasis((prev) => (prev ? { ...prev, stored: gespeichertSchluessel } : prev));
+                }}
                 data-testid="order-draft-remote-keep"
               >
                 {translate('orderDraftCloud.remoteChanged.keep')}
@@ -651,7 +652,8 @@ export function AuftragEditorPage() {
                 <input className="input" value={p.description} onChange={(e) => setPos(i, { description: e.target.value })} data-testid={`order-position-${i}-description`} />
               </Field>
               <Field label={translate('order.editor.positionQuantity')}>
-                <input className="input" type="number" inputMode="decimal" min={0} step="0.01" value={p.plannedQuantity} onChange={(e) => setPos(i, { plannedQuantity: Number(e.target.value) })} data-testid={`order-position-${i}-quantity`} />
+                {/* FINANZ-CORE-01A (RE-10) — deutsche Zahlen („1.200,50"), kein stilles Umdeuten, die 0 lässt sich löschen. */}
+                <NumericInput id={`order-position-${i}-quantity`} className="input" mode="decimal" strict min={0} value={p.plannedQuantity} onChange={(value) => setPos(i, { plannedQuantity: value })} data-testid={`order-position-${i}-quantity`} />
               </Field>
               <Field label={translate('order.editor.positionUnit')}>
                 <select className="input" value={p.unit} onChange={(e) => setPos(i, { unit: e.target.value as OrderUnit })} data-testid={`order-position-${i}-unit`}>
@@ -663,7 +665,7 @@ export function AuftragEditorPage() {
                 </select>
               </Field>
               <Field label={translate('order.editor.positionPrice')}>
-                <input className="input" type="number" inputMode="decimal" min={0} step="0.01" value={p.unitPrice} onChange={(e) => setPos(i, { unitPrice: Number(e.target.value) })} data-testid={`order-position-${i}-unit-price`} />
+                <NumericInput id={`order-position-${i}-unit-price`} className="input" mode="decimal" strict min={0} maxFractionDigits={2} value={p.unitPrice} onChange={(value) => setPos(i, { unitPrice: value })} data-testid={`order-position-${i}-unit-price`} />
               </Field>
               <button type="button" className="btn btn--ghost offer-editor__position-remove" onClick={() => setPositionen((prev) => prev.filter((_, j) => j !== i))} data-testid={`order-position-${i}-remove`}>
                 {translate('order.editor.positionRemove')}

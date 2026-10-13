@@ -60,6 +60,9 @@ export const deSettings = {
   'settings.invoices.historicalHint': 'Diese Werte gelten nur für Rechnungen, die ab jetzt neu angelegt werden.',
   'settings.invoices.readOnly': 'Nur Administratoren können die Vorbelegungen für Rechnungen ändern.',
   'settings.invoices.saved': 'Rechnungseinstellungen gespeichert.',
+  // FINANZ-CORE-01A (EIN-08)
+  'settings.invoices.companyDataIncomplete': 'Die Rechnungseinstellungen lassen sich erst speichern, wenn die Firmendaten vollständig und gültig sind:',
+  'settings.invoices.openCompanySettings': 'Firmendaten öffnen',
   'settings.invoices.number.title': 'Rechnungsnummer',
   'settings.invoices.number.hint': 'Die Nummer wird beim Finalisieren vom Server vergeben. Hier legen Sie nur das Format fest.',
   'settings.invoices.number.prefix': 'Präfix (optional)',

@@ -26,6 +26,12 @@ const TEXTE: Readonly<Record<CanonicalEInvoiceIssueCode, string>> = {
   source_not_finalized: 'Die Rechnung ist noch nicht freigegeben.',
   internal_cancellation_not_exportable:
     'Diese Rechnung wurde vor dem Versand zurückgezogen. Dafür gibt es keine E-Rechnung.',
+  // FINANZ-CORE-01A (AUS-08/STO-09) — Original und Korrektur sind zwei Belege.
+  cancelled_original_not_exportable:
+    'Diese Rechnung ist storniert. Eine neue E-Rechnung entsteht nur noch für die Rechnungskorrektur (Gutschrift); eine früher erzeugte Datei bleibt abrufbar.',
+  correction_number_missing:
+    'Diese Rechnungskorrektur stammt aus der Zeit vor der eigenen Korrekturnummer. Ohne eigene Belegnummer lässt sich keine E-Rechnung dazu erzeugen.',
+  correction_not_available: 'Zu dieser Rechnung gibt es keine Rechnungskorrektur.',
 
   invoice_number_missing: 'Der Rechnung fehlt die Rechnungsnummer.',
   issue_date_missing: 'Der Rechnung fehlt das Rechnungsdatum.',
@@ -39,12 +45,19 @@ const TEXTE: Readonly<Record<CanonicalEInvoiceIssueCode, string>> = {
   seller_address_incomplete:
     'In den Firmendaten der Rechnung fehlt ein Teil der Anschrift (Straße, PLZ oder Ort).',
   seller_country_missing: 'In den Firmendaten der Rechnung fehlt der Ländercode.',
+  /*
+   * FINANZ-CORE-01A (AUS-18) — diese vier Angaben verlangt nur die XRechnung; der
+   * ZUGFeRD-Weg (EN 16931) meldet sie nicht mehr. Die Texte sagen deshalb wieder
+   * ausdrücklich „XRechnung".
+   */
   seller_electronic_address_missing:
-    'In den Firmendaten der Rechnung fehlt eine E-Mail-Adresse für die elektronische Adresse.',
+    'Für die XRechnung fehlt in den Firmendaten der Rechnung eine E-Mail-Adresse (elektronische Adresse).',
   seller_contact_missing:
     'Für die XRechnung braucht der Absender einen Ansprechpartner mit Telefonnummer und E-Mail-Adresse.',
   seller_tax_identity_missing:
     'In den Firmendaten der Rechnung fehlt die Steuernummer oder die USt-IdNr.',
+  seller_identifier_missing:
+    'Für die E-Rechnung braucht der Absender eine USt-IdNr. oder eine Handelsregisternummer (EN 16931, BR-CO-26). Die Steuernummer allein genügt dafür nicht.',
   payment_iban_missing: 'In den Firmendaten der Rechnung fehlt die IBAN.',
 
   buyer_snapshot_missing: 'Der Rechnung fehlen die eingefrorenen Kundendaten.',
@@ -53,8 +66,9 @@ const TEXTE: Readonly<Record<CanonicalEInvoiceIssueCode, string>> = {
     'Beim Rechnungsempfänger fehlt ein Teil der Anschrift (Straße, PLZ oder Ort).',
   buyer_country_missing: 'Beim Rechnungsempfänger fehlt der Ländercode.',
   buyer_electronic_address_missing:
-    'Beim Rechnungsempfänger fehlt eine E-Mail-Adresse für die elektronische Adresse.',
-  buyer_reference_missing: 'Für die XRechnung fehlt die Käuferreferenz.',
+    'Für die XRechnung fehlt beim Rechnungsempfänger eine E-Mail-Adresse (elektronische Adresse).',
+  buyer_reference_missing:
+    'Für die XRechnung fehlt die Käuferreferenz (bei öffentlichen Auftraggebern die Leitweg-ID).',
   buyer_vat_id_missing_for_reverse_charge:
     'Bei Steuerschuldnerschaft des Leistungsempfängers (§ 13b) braucht der Empfänger eine USt-IdNr.',
 
@@ -70,8 +84,15 @@ const TEXTE: Readonly<Record<CanonicalEInvoiceIssueCode, string>> = {
   line_description_missing: 'Einer Position fehlt die Beschreibung.',
   fixed_amount_net_invalid: 'Dem Pauschalabschlag fehlt ein gültiger Nettobetrag.',
 
+  // FINANZ-CORE-01A (D1) — wird nicht mehr erzeugt; der Text bleibt für ältere Protokolle.
+  // FINANZ-CORE-01A (WEISS-Nacharbeit N02/D1) — BT-113 ist der bereits gezahlte Betrag.
+  prepayment_not_settled:
+    'Die Schlussrechnung zieht einen Abschlag ab, der noch nicht vollständig bezahlt ist. In der E-Rechnung stehen abgezogene Abschläge als bereits gezahlter Betrag — bitte zuerst die Zahlung zum Abschlag erfassen.',
+  // FINANZ-CORE-01A (WEISS-Recheck N02-R1) — gezahlt und Skonto müssen getrennt eingefroren sein.
+  prepayment_skonto_unfrozen:
+    'Die Schlussrechnung zieht einen mit Skonto beglichenen Abschlag ab, wurde aber freigegeben, bevor Zahlung und Skonto getrennt festgehalten wurden. Eine E-Rechnung würde das Skonto als Zahlung ausweisen — bitte die Schlussrechnung korrigieren (stornieren und neu freigeben).',
   final_invoice_deduction_semantics_unsupported:
-    'Schlussrechnungen mit Abzug bereits abgerechneter Abschläge können noch nicht als E-Rechnung ausgegeben werden.',
+    'Schlussrechnungen mit Abzug bereits abgerechneter Abschläge konnten früher nicht als E-Rechnung ausgegeben werden.',
 };
 
 /**
@@ -79,12 +100,12 @@ const TEXTE: Readonly<Record<CanonicalEInvoiceIssueCode, string>> = {
  * Daten liegt — also fast immer bei älteren Rechnungen.
  */
 export const LEGACY_INVOICE_HINT =
-  'Diese ältere Rechnung enthält nicht alle eingefrorenen Daten, die für eine XRechnung benötigt werden. '
+  'Diese ältere Rechnung enthält nicht alle eingefrorenen Daten, die für eine E-Rechnung benötigt werden. '
   + 'Die Angaben lassen sich nachträglich nicht ergänzen, ohne den Beleg zu verändern; '
   + 'für neue Rechnungen genügt es, die Stammdaten zu vervollständigen.';
 
 export function describeCanonicalIssue(issue: CanonicalEInvoiceIssue): string {
-  return TEXTE[issue.code] ?? 'Für diese Rechnung lässt sich keine XRechnung erzeugen.';
+  return TEXTE[issue.code] ?? 'Für diese Rechnung lässt sich keine E-Rechnung erzeugen.';
 }
 
 /**
@@ -109,22 +130,22 @@ export const SERVICE_PERIOD_UNVERIFIED_TEXT =
 
 export function describeRenderIssue(issue: XRechnungRenderIssue): string {
   return issue.code === 'xml_control_character'
-    ? 'Ein Text dieser Rechnung enthält ein Zeichen, das in einer XRechnung nicht zulässig ist.'
-    : 'Die XRechnung liess sich technisch nicht erzeugen.';
+    ? 'Ein Text dieser Rechnung enthält ein Zeichen, das in einer E-Rechnung nicht zulässig ist.'
+    : 'Die E-Rechnung liess sich technisch nicht erzeugen.';
 }
 
 /**
  * Deuten die Befunde auf einen Altbeleg hin?
  *
- * Kennzeichen sind genau die Angaben, die es vor 04B noch nicht gab. Fehlt
- * dagegen etwa die IBAN, ist das kein Altbestandsproblem, sondern eine
- * unvollständige Firmenangabe — und der Hinweis wäre irreführend.
+ * FINANZ-CORE-01A (KUN-02) — allein die fehlende Währung. Seit 04B trägt jede
+ * freigegebene Rechnung ihre Währung; fehlt sie, stammt der Beleg sicher von
+ * davor. Käuferreferenz und Ländercode fehlen dagegen auch neuen Rechnungen
+ * (ein Kunde ohne diese Angaben) — dort war der Satz „Diese ältere Rechnung
+ * …" schlicht falsch, und sein Rat, die Stammdaten zu ergänzen, half einer
+ * Auftragsrechnung mit eingefrorener Auftragsanschrift nicht. Die
+ * Einzelbefunde sagen, was fehlt.
  */
 export function looksLikeLegacyInvoice(issues: readonly CanonicalEInvoiceIssue[]): boolean {
-  const legacy: CanonicalEInvoiceIssueCode[] = [
-    'currency_missing',
-    'buyer_country_missing',
-    'buyer_reference_missing',
-  ];
+  const legacy: CanonicalEInvoiceIssueCode[] = ['currency_missing'];
   return issues.some((issue) => legacy.includes(issue.code));
 }

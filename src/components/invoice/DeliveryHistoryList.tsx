@@ -37,9 +37,16 @@ export function DeliveryHistoryList({ deliveries, emptyKey, translate }: Props) 
   }
   return (
     <ul className="invoice-delivery-panel__list" data-testid="invoice-delivery-list">
-      {deliveries.map((d) => {
+      {deliveries.map((d, index) => {
+        /*
+         * FINANZ-CORE-01A (AUS-19) — ein vorbereiteter oder wartender Versuch, auf den ein neuerer
+         * folgt (Fortsetzen mit geänderten Feldern legt einen neuen an), wird nie mehr gesendet:
+         * Der Versand läuft nur auf ausdrücklichen Aufruf. Er stand bisher dauerhaft auf
+         * „In Bearbeitung". Die Liste ist neueste zuerst.
+         */
+        const abgeloest = (d.status === 'queued' || d.status === 'prepared') && index > 0;
         // E-MAIL 07F-01B — nach der Übergabe zählt die Rückmeldung des E-Mail-Dienstes (nie „gelesen").
-        const shown = displayDeliveryStatus(d.status, d.deliveryState);
+        const shown = abgeloest ? 'superseded' : displayDeliveryStatus(d.status, d.deliveryState);
         const hint = shown !== d.status ? deliveryDisplayHintKey(shown) : null;
         return (
         <li key={d.id} className="invoice-delivery-panel__item" data-testid="invoice-delivery-item" data-status={d.status} data-client-delivery-id={d.clientDeliveryId}>

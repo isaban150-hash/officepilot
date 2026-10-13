@@ -10,20 +10,27 @@
  * danach vergibt der Server die Nummer, und das Angebot ist eingefroren.
  * Freigegebene Angebote öffnen nicht diesen Editor, sondern die Detailseite.
  */
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { buildCustomerOptionLabels } from '../services/customer/customerOptionLabels';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
+import { InlineNotice } from '../components/ui/States';
+import { useDraftCloudTick } from '../services/order/useDraftCloudTick';
 import { PageHeader } from '../components/ui/Card';
 import { Page } from '../components/ui/Page';
 import { DetailSection } from '../components/ui/Section';
+import { NumericInput } from '../components/ui/NumericInput';
+import { copyCustomerBilling } from '../services/customer/customerBillingCopy';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
 import { OfferDocumentView } from '../components/offer/OfferDocumentView';
 import { useApp } from '../context/AppContext';
 import { getCustomerById, getCustomerStoreSnapshot } from '../services/customerStoreService';
+import { createCustomer } from '../services/customerService';
 import { getCompanyProfileStoreSnapshot } from '../services/companyProfileService';
 import { buildDefaultPaymentTerms, resolveDefaultTaxStatus } from '../services/invoice/invoiceDefaults';
 import { getTaxStatusLabel } from '../services/invoiceTaxService';
+import { getBusinessDay } from '../services/businessDateService';
+import { billingLineTotalMoney } from '../services/invoiceMoney';
 import { formatInvoiceCurrency } from '../services/invoicePrintModel';
 import { buildPersistedStateSnapshot } from '../services/persistenceService';
 import { resolveCloudWorkspaceId } from '../services/workspace/workspaceSyncPayloadService';
@@ -41,6 +48,7 @@ import { useOptionalAuth } from '../context/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { resolveWorkspaceWriteAccess } from '../services/workspace/workspaceRoleService';
 import { ensureOfferArchived } from '../services/offer/offerArchiveService';
+import { offerServerRejectionKey } from '../services/offer/offerServerRejection';
 import { buildOfferPrintModel } from '../services/offer/offerPrintModel';
 import type { CustomerBilling, OrderUnit, TaxStatus } from '../types/models';
 import type { Offer, OfferDraftInput, OfferPosition } from '../types/offer';
@@ -61,7 +69,49 @@ function Field({ label, children, wide = false }: { label: string; children: Rea
 function inDays(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  // FINANZ-CORE-01A (ZAH-16) — Angebotsdatum und Gültigkeit als Geschäftstag, nicht als UTC-Tag.
+  return getBusinessDay(d);
+}
+
+/**
+ * FINANZ-CORE-01A (ANG-02) — Vergleichsschlüssel der bearbeitbaren Inhalte, wie
+ * im Auftragseditor (`werteSchluessel`). Er erkennt ungespeicherte Eingaben
+ * und eine Änderung des gespeicherten Entwurfs darunter, etwa durch den Abzug
+ * einer Korrektur von einem anderen Gerät. Ohne ihn schrieben „Speichern" und
+ * „Freigeben" den alten Editorstand still über die neuere Fassung — und die
+ * Freigabe fror ihn ein.
+ */
+function angebotSchluessel(werte: OfferDraftInput): string {
+  const billing = werte.customer as unknown as Record<string, unknown>;
+  return JSON.stringify([
+    werte.customerId || null,
+    Object.keys(billing).sort().map((key) => [key, billing[key] ?? null]),
+    werte.title,
+    werte.baustelle ?? '',
+    werte.positions.map((p) => [p.id, p.description, p.quantity, p.unit, p.unitLabel ?? null, p.unitPrice, p.category ?? null]),
+    werte.taxStatus,
+    werte.offerDate ?? '',
+    werte.validUntil,
+    werte.introText ?? '',
+    werte.closingText ?? '',
+    werte.paymentTermsText ?? '',
+  ]);
+}
+
+function werteAusAngebot(angebot: Offer): OfferDraftInput {
+  return {
+    customerId: angebot.customerId,
+    customer: { ...angebot.customer },
+    title: angebot.title,
+    baustelle: angebot.baustelle,
+    positions: angebot.positions.map((p) => ({ ...p })),
+    taxStatus: angebot.taxStatus,
+    offerDate: angebot.offerDate,
+    validUntil: angebot.validUntil,
+    introText: angebot.introText,
+    closingText: angebot.closingText,
+    paymentTermsText: angebot.paymentTermsText,
+  };
 }
 
 function neuePosition(): OfferPosition {
@@ -82,7 +132,10 @@ export function AngebotEditorPage() {
   const [params] = useSearchParams();
 
   const vorhandenes: Offer | null = offerId ? getOfferById(offerId) : null;
-  const kunden = useMemo(() => getCustomerStoreSnapshot(), []);
+  // FINANZ-CORE-01A (ANG-10) — nach dem Anlegen aus dem Editor neu gelesen.
+  const [kundenStand, setKundenStand] = useState(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const kunden = useMemo(() => getCustomerStoreSnapshot(), [kundenStand]);
   // E-MAIL-HALBZEIT-FIX B5 — gleichnamige Kunden unterscheidbar (nur Anzeige).
   const kundenLabels = useMemo(
     () => buildCustomerOptionLabels(kunden, { created: translate('customer.option.created'), id: translate('customer.option.id') }),
@@ -119,6 +172,84 @@ export function AngebotEditorPage() {
   const [vorschau, setVorschau] = useState(false);
   const [laeuft, setLaeuft] = useState(false);
 
+  /*
+   * FINANZ-CORE-01A (ANG-02) — der Editor und sein gespeicherter Entwurf, wie im
+   * Auftragseditor (CLOUD-SYNC S6): Ein Abzug kann den gespeicherten Entwurf
+   * darunter ändern. Ohne ungespeicherte Eingaben wird die neuere Fassung
+   * geladen; mit ungespeicherten Eingaben erscheint ein Hinweis, und
+   * gespeichert oder freigegeben wird erst nach einer Entscheidung.
+   */
+  useDraftCloudTick();
+  const gespeichert = gespeicherteId ? getOfferById(gespeicherteId) : null;
+  const [basis, setBasis] = useState<{ stored: string | null; editor: string } | null>(null);
+
+  const eingaben = (): OfferDraftInput => ({
+    /*
+     * FINANZ-CORE-01A (ANG-05) — eine leere Auswahl entfernt den Kundenbezug
+     * ausdrücklich. „undefined" hiess „unverändert", und das Angebot blieb am alten
+     * Kunden — die Annahme trug die falsche Kennung in Auftrag und Rechnungen.
+     */
+    customerId: kundeId,
+    customer: kunde,
+    title: titel,
+    baustelle,
+    positions: positionen.map(normalizeOfferPosition),
+    taxStatus,
+    offerDate: angebotsdatum,
+    validUntil: gueltigBis,
+    introText: einleitung,
+    closingText: schluss,
+    paymentTermsText: konditionen,
+  });
+
+  const editorSchluessel = angebotSchluessel(eingaben());
+  const gespeichertSchluessel =
+    gespeichert && gespeichert.status === 'entwurf' ? angebotSchluessel(werteAusAngebot(gespeichert)) : null;
+  const ungespeichert = basis !== null && editorSchluessel !== basis.editor;
+  const fremdGeaendert = Boolean(basis && gespeichertSchluessel !== null && gespeichertSchluessel !== basis.stored);
+
+  /** Lädt einen gespeicherten Stand in den Editor und macht ihn zur neuen Basis. */
+  const ladeGespeichert = (angebot: Offer) => {
+    // Die Entscheidung ist gefallen — ein Hinweis „erst entscheiden" wäre jetzt falsch.
+    setFehler(null);
+    const werte = werteAusAngebot(angebot);
+    const editorWerte: OfferDraftInput = {
+      ...werte,
+      baustelle: werte.baustelle ?? '',
+      offerDate: werte.offerDate || inDays(0),
+      positions: werte.positions.length ? werte.positions : [neuePosition()],
+      introText: werte.introText ?? '',
+      closingText: werte.closingText ?? '',
+      paymentTermsText: werte.paymentTermsText ?? '',
+    };
+    setKundeId(editorWerte.customerId ?? '');
+    setKunde(editorWerte.customer);
+    setTitel(editorWerte.title);
+    setBaustelle(editorWerte.baustelle ?? '');
+    setAngebotsdatum(editorWerte.offerDate ?? inDays(0));
+    setGueltigBis(editorWerte.validUntil);
+    setTaxStatus(editorWerte.taxStatus);
+    setPositionen(editorWerte.positions);
+    setEinleitung(editorWerte.introText ?? '');
+    setSchluss(editorWerte.closingText ?? '');
+    setKonditionen(editorWerte.paymentTermsText ?? '');
+    setBasis({
+      stored: angebotSchluessel(werte),
+      editor: angebotSchluessel({ ...editorWerte, positions: editorWerte.positions.map(normalizeOfferPosition) }),
+    });
+  };
+
+  // Die Basis entsteht mit dem ersten Stand des Editors.
+  useEffect(() => {
+    if (basis === null) setBasis({ stored: gespeichertSchluessel, editor: editorSchluessel });
+  }, [basis, gespeichertSchluessel, editorSchluessel]);
+
+  // Neuere Fassung aus der Cloud, hier nichts Ungespeichertes: übernehmen.
+  useEffect(() => {
+    if (fremdGeaendert && !ungespeichert && gespeichert) ladeGespeichert(gespeichert);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fremdGeaendert, ungespeichert, gespeichertSchluessel]);
+
   // Ein freigegebenes Angebot hat hier nichts zu suchen.
   if (vorhandenes && vorhandenes.status !== 'entwurf') {
     return <Navigate to={`/angebote/${vorhandenes.id}`} replace />;
@@ -135,35 +266,66 @@ export function AngebotEditorPage() {
     if (c) setKunde(billingOf(c));
   };
 
+  /*
+   * FINANZ-CORE-01A (ANG-10) — der neue Kunde entsteht aus genau den hier eingegebenen
+   * Daten, ohne die Seite zu verlassen. Bisher führte ein Link auf die Kundenliste: voller
+   * Seitenwechsel, Eingaben weg, und ein Freitext-Kunde blieb ohne Kundenstamm (Auftrag
+   * und Rechnungen ohne Kundenakte). Ein wahrscheinlich doppelter Kunde wird nicht
+   * angelegt, sondern zur Auswahl genannt.
+   */
+  const legeKundenAn = () => {
+    setFehler(null);
+    const r = createCustomer({
+      name: kunde.name,
+      contactPerson: kunde.contactPerson,
+      street: kunde.street,
+      zip: kunde.zip,
+      city: kunde.city,
+      email: kunde.email,
+      phone: kunde.phone,
+      ...(kunde.countryCode ? { countryCode: kunde.countryCode } : {}),
+      ...(kunde.vatId ? { vatId: kunde.vatId } : {}),
+      ...(kunde.leitwegId ? { leitwegId: kunde.leitwegId } : {}),
+      ...(kunde.buyerReference ? { buyerReferenceDefault: kunde.buyerReference } : {}),
+    });
+    if (!r.success) {
+      if (r.duplicates?.length) {
+        setFehler(
+          translate('offer.editor.customerDuplicate').replace(
+            '{name}',
+            r.duplicates.map((d) => d.customer?.name ?? '').filter(Boolean).join(', '),
+          ),
+        );
+      } else {
+        melde(r.errorKey);
+      }
+      return;
+    }
+    setKundenStand((n) => n + 1);
+    setKundeId(r.customer.id);
+  };
+
   const setPos = (index: number, changes: Partial<OfferPosition>) => {
     setPositionen((prev) => prev.map((p, i) => (i === index ? { ...p, ...changes } : p)));
   };
-
-  const eingaben = (): OfferDraftInput => ({
-    customerId: kundeId || undefined,
-    customer: kunde,
-    title: titel,
-    baustelle,
-    positions: positionen.map(normalizeOfferPosition),
-    taxStatus,
-    offerDate: angebotsdatum,
-    validUntil: gueltigBis,
-    introText: einleitung,
-    closingText: schluss,
-    paymentTermsText: konditionen,
-  });
 
   const melde = (errorKey: string) => setFehler(translate(errorKey as TranslationKey));
 
   /** Legt beim ersten Speichern an und aktualisiert danach. */
   const sichere = (): string | null => {
     setFehler(null);
+    // FINANZ-CORE-01A (ANG-02) — nie still über eine neuere Fassung schreiben.
+    if (fremdGeaendert && ungespeichert) {
+      setFehler(translate('orderDraftCloud.remoteChanged.saveBlocked'));
+      return null;
+    }
     if (gespeicherteId) {
       const r = updateOfferDraft(gespeicherteId, eingaben());
       if (!r.success) {
         melde(r.errorKey);
         return null;
       }
+      setBasis({ stored: angebotSchluessel(werteAusAngebot(r.offer)), editor: editorSchluessel });
       return r.offer.id;
     }
     const workspaceId = resolveCloudWorkspaceId(buildPersistedStateSnapshot()).trim();
@@ -173,6 +335,7 @@ export function AngebotEditorPage() {
       return null;
     }
     setGespeicherteId(r.offer.id);
+    setBasis({ stored: angebotSchluessel(werteAusAngebot(r.offer)), editor: editorSchluessel });
     return r.offer.id;
   };
 
@@ -196,8 +359,9 @@ export function AngebotEditorPage() {
       if (!r.ok) {
         if (r.reason === 'blocked') {
           setFehler(r.blockers.map((b) => translate(`offer.finalize.blocked.${b}` as TranslationKey)).join(' '));
-        } else if (r.reason === 'server_rejected' || r.reason === 'network') {
-          setFehler(`${translate(`offer.finalize.${r.reason}` as TranslationKey)} (${r.message})`);
+        } else if (r.reason === 'server_rejected') {
+          // FINANZ-CORE-01A (ANG-14) — nur übersetzte Texte; der rohe Servertext bleibt draußen.
+          setFehler(translate(offerServerRejectionKey(r.message, 'finalize') ?? 'offer.finalize.server_rejected'));
         } else {
           setFehler(translate(`offer.finalize.${r.reason}` as TranslationKey));
         }
@@ -258,6 +422,43 @@ export function AngebotEditorPage() {
         </p>
       ) : null}
 
+      {fremdGeaendert && ungespeichert ? (
+        <InlineNotice
+          tone="warning"
+          testId="offer-editor-remote-changed"
+          title={translate('orderDraftCloud.remoteChanged.title')}
+          action={
+            <div className="form-actions">
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                onClick={() => {
+                  if (gespeichert) ladeGespeichert(gespeichert);
+                }}
+                data-testid="offer-editor-remote-load"
+              >
+                {translate('orderDraftCloud.remoteChanged.load')}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setFehler(null);
+                  setBasis((prev) => (prev ? { ...prev, stored: gespeichertSchluessel } : prev));
+                }}
+                data-testid="offer-editor-remote-keep"
+              >
+                {translate('orderDraftCloud.remoteChanged.keep')}
+              </Button>
+            </div>
+          }
+        >
+          {translate('orderDraftCloud.remoteChanged.body')}
+        </InlineNotice>
+      ) : null}
+
       <DetailSection title={translate('offer.editor.customerSection')}>
         <Field label={translate('offer.editor.customer')}>
           <select className="input" value={kundeId} onChange={(e) => wechsleKunde(e.target.value)} data-testid="offer-customer">
@@ -269,12 +470,19 @@ export function AngebotEditorPage() {
             ))}
           </select>
         </Field>
-        <p className="form-hint">
-          {translate('offer.editor.customerHint')}{' '}
-          <a href="/kunden" data-testid="offer-customer-new">
+        <p className="form-hint">{translate('offer.editor.customerHint')}</p>
+        {!kundeId && darfFreigeben ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!kunde.name.trim()}
+            onClick={legeKundenAn}
+            data-testid="offer-customer-new"
+          >
             {translate('offer.editor.customerNew')}
-          </a>
-        </p>
+          </Button>
+        ) : null}
         <div className="offer-editor__grid">
           <Field label={translate('offer.editor.customerName')} wide>
             <input className="input" value={kunde.name} onChange={(e) => setKunde({ ...kunde, name: e.target.value })} data-testid="offer-customer-name" />
@@ -316,6 +524,15 @@ export function AngebotEditorPage() {
           </Field>
           <Field label={translate('offer.editor.taxStatus')} wide>
             <select className="input" value={taxStatus} onChange={(e) => setTaxStatus(e.target.value as TaxStatus)} data-testid="offer-tax-status">
+              {/*
+                * FINANZ-CORE-01A (EIN-05) — „noch unklar" stand nicht in der Liste; der Browser
+                * zeigte deshalb 19 %, gerechnet wurde mit 0 %. Jetzt steht dort ehrlich „Bitte wählen".
+                */}
+              {taxStatus === 'unclear' && (
+                <option value="unclear" disabled>
+                  {translate('offer.editor.taxStatusChoose')}
+                </option>
+              )}
               {TAX_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {getTaxStatusLabel(s)}
@@ -338,7 +555,8 @@ export function AngebotEditorPage() {
                 <input className="input" value={p.description} onChange={(e) => setPos(i, { description: e.target.value })} data-testid={`offer-position-${i}-description`} />
               </Field>
               <Field label={translate('offer.editor.positionQuantity')}>
-                <input className="input" type="number" inputMode="decimal" min={0} step="0.01" value={p.quantity} onChange={(e) => setPos(i, { quantity: Number(e.target.value) })} data-testid={`offer-position-${i}-quantity`} />
+                {/* FINANZ-CORE-01A (RE-10) — deutsche Zahlen („1.200,50"), kein stilles Umdeuten, die 0 lässt sich löschen. */}
+                <NumericInput id={`offer-position-${i}-quantity`} className="input" mode="decimal" strict min={0} value={p.quantity} onChange={(value) => setPos(i, { quantity: value })} data-testid={`offer-position-${i}-quantity`} />
               </Field>
               <Field label={translate('offer.editor.positionUnit')}>
                 <select className="input" value={p.unit} onChange={(e) => setPos(i, { unit: e.target.value as OrderUnit })} data-testid={`offer-position-${i}-unit`}>
@@ -350,12 +568,19 @@ export function AngebotEditorPage() {
                 </select>
               </Field>
               <Field label={translate('offer.editor.positionUnitPrice')}>
-                <input className="input" type="number" inputMode="decimal" min={0} step="0.01" value={p.unitPrice} onChange={(e) => setPos(i, { unitPrice: Number(e.target.value) })} data-testid={`offer-position-${i}-unit-price`} />
+                {/* FINANZ-CORE-01A (ANG-16) — Preise auf Cent: gedruckt und gerechnet wird mit zwei Nachkommastellen. */}
+                <NumericInput id={`offer-position-${i}-unit-price`} className="input" mode="decimal" strict min={0} maxFractionDigits={2} value={p.unitPrice} onChange={(value) => setPos(i, { unitPrice: value })} data-testid={`offer-position-${i}-unit-price`} />
               </Field>
               <div className="offer-editor__position-total">
                 <span className="invoice-edit__label">{translate('offer.editor.positionTotal')}</span>
-                <strong data-testid={`offer-position-${i}-total`}>{formatInvoiceCurrency(Math.round(p.quantity * p.unitPrice * 100) / 100)}</strong>
+                <strong data-testid={`offer-position-${i}-total`}>{formatInvoiceCurrency(billingLineTotalMoney(p.quantity, p.unitPrice))}</strong>
               </div>
+              {/* FINANZ-CORE-01A (ANG-17) — Menge 0 fällt aus PDF, Summe und Auftrag; das sagt der Editor jetzt. */}
+              {p.quantity === 0 ? (
+                <p className="form-hint offer-editor__position-hint" data-testid={`offer-position-${i}-zero-hint`}>
+                  {translate('offer.editor.positionZeroHint')}
+                </p>
+              ) : null}
               <button type="button" className="btn btn--ghost offer-editor__position-remove" onClick={() => setPositionen((prev) => prev.filter((_, j) => j !== i))} data-testid={`offer-position-${i}-remove`}>
                 {translate('offer.editor.positionRemove')}
               </button>
@@ -464,14 +689,7 @@ export function AngebotEditorPage() {
   );
 }
 
+// FINANZ-CORE-01A (KUN-01) — mit Land, USt-IdNr., Käuferreferenz und Leitweg-ID.
 function billingOf(customer: CustomerBilling): CustomerBilling {
-  return {
-    name: customer.name ?? '',
-    contactPerson: customer.contactPerson ?? '',
-    street: customer.street ?? '',
-    zip: customer.zip ?? '',
-    city: customer.city ?? '',
-    email: customer.email ?? '',
-    phone: customer.phone ?? '',
-  };
+  return copyCustomerBilling(customer);
 }

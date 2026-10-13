@@ -99,6 +99,8 @@ function prepareFixedAbschlag(amount: number, periodFrom: string, periodTo: stri
       street: 'Werkstraße 1',
       zip: '80331',
       city: 'München',
+      // FINANZ-CORE-01A (RE-09): Steuernummer oder USt-IdNr. ist Pflichtangabe jeder Rechnung.
+      taxNumber: '133/8150/8159',
     },
   };
   return draft;

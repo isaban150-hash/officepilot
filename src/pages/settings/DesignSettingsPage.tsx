@@ -7,6 +7,7 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCompanyLogoObjectUrl } from '../../hooks/useCompanyLogoObjectUrl';
 import { useFormResume } from '../../hooks/useFormResume';
+import { getCompanyProfile } from '../../services/companyProfileService';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { uploadBrandingAsset } from '../../services/branding/brandingAssetCloudService';
 import {
@@ -90,7 +91,7 @@ function useScaledPreview(): { hostRef: React.RefObject<HTMLDivElement | null>; 
 }
 
 export function DesignSettingsPage() {
-  const { companyProfile, updateCompanyProfile, translate, showToast } = useApp();
+  const { companyProfile, setup, updateCompanyProfile, translate, showToast } = useApp();
   const { user } = useAuth();
   const workspaceId = getSyncClient().serverWorkspaceId;
 
@@ -167,8 +168,9 @@ export function DesignSettingsPage() {
   }, [prepared, preparedUrl, pendingLogoRef, pendingRemoval, companyProfile]);
 
   const previewModel = useMemo(
-    () => buildSettingsDocumentPreviewModel({ profile: companyProfile, logo: previewLogo }),
-    [companyProfile, previewLogo],
+    // FINANZ-CORE-01A (EIN-09) — dieselben Standardwerte wie eine neue Rechnung.
+    () => buildSettingsDocumentPreviewModel({ profile: companyProfile, logo: previewLogo, setup }),
+    [companyProfile, previewLogo, setup],
   );
 
   const { hostRef, scale, height } = useScaledPreview();
@@ -215,7 +217,8 @@ export function DesignSettingsPage() {
     setSaving(true);
     setErrorKey(null);
     try {
-      let branding = companyProfile.branding;
+      // FINANZ-CORE-01A (EIN-03) — das Branding im Augenblick des Speicherns, nicht vom Seitenstart.
+      let branding = getCompanyProfile().branding;
       // Entfernen nimmt auch das Alt-Bild mit — sonst erschiene es überraschend wieder (D-023).
       const removal = pendingRemoval && !prepared && !pendingLogoRef;
       let newAssetSaved = false;

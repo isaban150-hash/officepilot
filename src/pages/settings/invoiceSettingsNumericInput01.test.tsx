@@ -568,9 +568,16 @@ describe('SKONTO-DUE-DATE-CONSISTENCY-01B — im Formular', () => {
     await submit();
 
     expect(saveSpy).toHaveBeenCalledTimes(1);
-    const payload = saveSpy.mock.calls[0]![0] as CompanyProfile;
-    expect(payload.defaultPaymentDays).toBe(14);
+    const payload = saveSpy.mock.calls[0]![0] as Partial<CompanyProfile>;
     expect(payload.skontoDays).toBe(10);
     expect(payload.skontoPercent).toBe(7);
+    /*
+     * FINANZ-CORE-01A (EIN-03) — gespeichert werden nur geänderte Felder; das Zahlungsziel stand
+     * schon auf 14 und geht deshalb nicht mit. Die Kombination ist gespeichert:
+     */
+    const saved = companyProfileService.getCompanyProfile();
+    expect(saved.defaultPaymentDays).toBe(14);
+    expect(saved.skontoDays).toBe(10);
+    expect(saved.skontoPercent).toBe(7);
   });
 });

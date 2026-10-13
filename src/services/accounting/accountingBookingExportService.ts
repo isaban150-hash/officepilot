@@ -17,6 +17,7 @@
  * ein Storno.
  */
 import { fromCents, sumCents, toCents } from '../invoiceMoney';
+import { canonicalAccountingAssignmentsBySource, effectiveAccountingStatus } from './accountingCanonical';
 import {
   belegBuchungsId,
   belegExportKey,
@@ -98,6 +99,10 @@ export interface BookingExportRow {
    */
   readonly zahlungsdatum: string;
   readonly zahlungsart: string;
+  /** FINANZ-CORE-01A (BUH-10) — Leistungszeitraum der Ausgangsrechnung; sonst leer. */
+  readonly leistungszeitraum: string;
+  /** FINANZ-CORE-01A (BUH-10) — Skontoabzug zum Monatsende (Minderung nach § 17 UStG); sonst leer. */
+  readonly skonto: number | '';
 }
 
 export interface BookingExportTotals {
@@ -172,10 +177,8 @@ export function buildBookingExport(
   assignments: readonly AccountingAssignment[],
   chartOfAccounts: string,
 ): BookingExport {
-  const bySource = new Map<string, AccountingAssignment>();
-  for (const assignment of assignments) {
-    bySource.set(`${assignment.sourceType}:${assignment.sourceId}`, assignment);
-  }
+  // FINANZ-CORE-01A (WEISS-Nacharbeit N09) — dieselbe Kontierung je Beleg wie Detail und Übersicht.
+  const bySource = canonicalAccountingAssignmentsBySource(assignments);
 
   const rows: BookingExportRow[] = [];
   const withoutDocument: { sourceId: string; belegnummer: string }[] = [];
@@ -194,7 +197,8 @@ export function buildBookingExport(
     gesehen.add(exportKey);
 
     const assignment = bySource.get(`${sourceType}:${beleg.id}`);
-    if (!assignment || assignment.status !== 'confirmed') continue;
+    // FINANZ-CORE-01A (WEISS N06) — keine Buchung aus einer Bestätigung mit ungeklärter oder anderer Steuer als der Beleg.
+    if (!assignment || effectiveAccountingStatus(assignment, beleg.steuerstatus) !== 'confirmed') continue;
 
     /*
      * `missing` heisst: Der Beleg sollte ein Dokument haben, es ist aber keins
@@ -232,6 +236,8 @@ export function buildBookingExport(
       ...(beleg.status === 'storno'
         ? { zahlungsdatum: '', zahlungsart: '' }
         : zahlungenDesBelegs(model, beleg.id)),
+      leistungszeitraum: beleg.belegart === 'ausgangsrechnung' ? (beleg.leistungszeitraum ?? '') : '',
+      skonto: beleg.belegart === 'ausgangsrechnung' && beleg.skontoAbzug ? beleg.skontoAbzug : '',
     });
   }
 
@@ -288,8 +294,7 @@ function csvLine(cells: Array<string | number>): string {
  * Dezimalkomma, weil sie in derselben Umgebung gelesen werden.
  */
 export function buildBookingCsv(bookings: BookingExport): string {
-  const lines = [
-    csvLine([
+  const kopf = [
       'Belegart',
       'Beleg-ID',
       'Belegnummer',
@@ -311,8 +316,11 @@ export function buildBookingCsv(bookings: BookingExport): string {
       'Offen zum Monatsende',
       'Zahlungsdatum',
       'Zahlungsart',
-    ]),
+      // FINANZ-CORE-01A (BUH-10) — am Ende angefügt, damit bestehende Spalten ihren Platz behalten.
+      'Leistungszeitraum',
+      'Skonto (Abzug)',
   ];
+  const lines = [csvLine(kopf)];
 
   for (const row of bookings.rows) {
     lines.push(
@@ -338,34 +346,26 @@ export function buildBookingCsv(bookings: BookingExport): string {
         row.offenMonatsende,
         row.zahlungsdatum,
         row.zahlungsart,
+        row.leistungszeitraum,
+        row.skonto,
       ]),
     );
   }
 
-  /* Die Kontrollsummen stehen in der Datei selbst — nachrechenbar ohne Manifest. */
-  lines.push(
-    csvLine([
-      'Summe',
-      '',
-      '',
-      '',
-      `${bookings.totals.belegCount} Belege`,
-      bookings.totals.netto,
-      bookings.totals.steuer,
-      bookings.totals.brutto,
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-    ]),
-  );
+  /*
+   * Die Kontrollsummen stehen in der Datei selbst — nachrechenbar ohne Manifest.
+   * FINANZ-CORE-01A (BUH-14) — so viele Zellen wie der Kopf (bisher 19 statt 21); dazu die Summe
+   * der Skontoabzüge (BUH-10).
+   */
+  const summe: Array<string | number> = kopf.map(() => '');
+  summe[0] = 'Summe';
+  summe[kopf.indexOf('Gegenpartei')] = `${bookings.totals.belegCount} Belege`;
+  summe[kopf.indexOf('Netto')] = bookings.totals.netto;
+  summe[kopf.indexOf('Steuer')] = bookings.totals.steuer;
+  summe[kopf.indexOf('Brutto')] = bookings.totals.brutto;
+  const skontoCents = sumCents(bookings.rows.map((row) => (typeof row.skonto === 'number' ? toCents(row.skonto) : 0)));
+  if (skontoCents !== 0) summe[kopf.indexOf('Skonto (Abzug)')] = fromCents(skontoCents);
+  lines.push(csvLine(summe));
 
   return `﻿${lines.join('\r\n')}\r\n`;
 }

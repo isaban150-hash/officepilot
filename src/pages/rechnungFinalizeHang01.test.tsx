@@ -30,6 +30,7 @@ import * as coordinator from '../services/invoice/invoiceFinalizationCoordinator
 import * as scopeService from '../services/storage/storageScopeService';
 import * as workspacePayload from '../services/workspace/workspaceSyncPayloadService';
 import { INVOICE_DRAFT_FLUSH_TIMEOUT_MS } from '../services/invoice/useInvoiceDraftDurabilitySession';
+import { alsMitglied } from '../test/workspaceRoleTestUtils';
 
 const WORKSPACE = 'ws-hang-a';
 const VORGANG = 'vg-hang-1';
@@ -218,6 +219,24 @@ describe('INVOICE-FINALIZE-HANG-01B — Freigabe bleibt nicht stehen', () => {
     expect(INVOICE_DRAFT_FLUSH_TIMEOUT_MS).toBeGreaterThanOrEqual(3_000);
     expect(INVOICE_DRAFT_FLUSH_TIMEOUT_MS).toBeLessThanOrEqual(30_000);
   });
+
+  /*
+   * FINANZ-CORE-01A (RE-08) — ein sicher erkanntes Mitglied bekommt keinen
+   * Freigabeknopf, sondern den Hinweis; der Koordinator wird nie gerufen.
+   */
+  it('R8: als Mitglied steht statt der Freigabe ein Hinweis', async () => {
+    alsMitglied();
+    const start = vi.spyOn(coordinator, 'startInvoiceDraftFinalization');
+
+    const mount = await renderPage();
+    await gotoPreview(mount);
+    await settle();
+
+    expect(mount.container.querySelector('[data-testid="invoice-approve"]')).toBeNull();
+    expect(mount.container.querySelector('[data-testid="invoice-approve-role-hint"]')?.textContent).toContain('Inhaber und Verwaltung');
+    expect(start).not.toHaveBeenCalled();
+    unmount(mount);
+  }, 30_000);
 
   /* TEST 2 — der gesunde Weg bleibt unverändert. */
   it('H2: ohne Störung läuft die Finalisierung wie bisher an', async () => {

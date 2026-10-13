@@ -107,6 +107,7 @@ import {
   repairContractPlanFromSnapshot,
 } from './orderPlanIntegrityService';
 import { resolvePrimaryTargetObjectForDocumentType } from './documentPrimaryTargetService';
+import { sameCustomerBilling } from './customer/customerBillingCopy';
 
 export type OrderPositionMutationResult =
   | { success: true; vorgang: Vorgang }
@@ -850,11 +851,8 @@ export function getVorgangCustomerMasterPreview(
   const current = vorgang.customerBilling
     ? { ...vorgang.customerBilling }
     : emptyCustomerBilling(vorgang.customer);
-  const differs =
-    vorgang.customer !== customer.name ||
-    (Object.keys(master) as Array<keyof CustomerBilling>).some(
-      (field) => master[field] !== current[field],
-    );
+  // FINANZ-CORE-01A (KUN-04) — vollständig verglichen, auch im Stamm gelöschte optionale Felder.
+  const differs = vorgang.customer !== customer.name || !sameCustomerBilling(master, current);
 
   return { master, current, currentName: vorgang.customer, differs };
 }
@@ -2769,6 +2767,25 @@ export function addPaymentToInvoice(
     [...(invoice.payments ?? []), cloneInvoicePayment(payment)],
     paymentStatus,
   );
+}
+
+/**
+ * FINANZ-CORE-01A (SQL-05) — dieselben Zahlungen mit geändertem Merkmal (etwa einer
+ * nachträglich bestätigten Überzahlung). Kennungen, Beträge und Reihenfolge bleiben;
+ * eine Zahlung kommt hier weder hinzu noch fällt sie weg.
+ */
+export function replaceInvoicePayments(
+  vorgangId: string | null,
+  invoiceId: string,
+  payments: InvoicePayment[],
+  paymentStatus: InvoicePaymentStatus,
+): UpdateInvoicePaymentResult {
+  const invoice = getVorgangInvoice(vorgangId, invoiceId);
+  if (!invoice) return { ok: false, reason: 'not_found' };
+  const before = (invoice.payments ?? []).map((payment) => payment.id).join('|');
+  const after = payments.map((payment) => payment.id).join('|');
+  if (before !== after) return { ok: false, reason: 'not_found' };
+  return updateInvoicePaymentFields(vorgangId, invoiceId, payments.map(cloneInvoicePayment), paymentStatus);
 }
 
 export function removePaymentFromInvoice(

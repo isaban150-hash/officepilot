@@ -1,4 +1,5 @@
 import type { InvoicePrintModel } from '../../types/models';
+import { buildCustomerLegalLines } from '../../services/invoice/customerLegalLines';
 
 interface Props {
   model: InvoicePrintModel;
@@ -21,6 +22,10 @@ export function InvoiceCustomerBlock({ model }: Props) {
         <p>Ansprechpartner: {model.customer.contactPerson}</p>
       )}
       {address && <p>{address}</p>}
+      {/* FINANZ-CORE-01A (AUS-11) — Land außerhalb Deutschlands und USt-IdNr. des Empfängers, nur wenn im Beleg vorhanden. */}
+      {buildCustomerLegalLines(model.customer).map((line) => (
+        <p key={line}>{line}</p>
+      ))}
       {model.customer.email && <p>{model.customer.email}</p>}
       {model.customer.phone && <p>{model.customer.phone}</p>}
     </section>

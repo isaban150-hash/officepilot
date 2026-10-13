@@ -1,4 +1,5 @@
 import { t, type TranslationKey } from '../../i18n';
+import { formatCompanyLegalName } from '../company/companyLegalName';
 import type { AppLanguage, CompanyProfile, VorgangInvoice } from '../../types/models';
 import type { DeliveryDocumentKind, DeliveryStatus, DocumentDelivery } from '../../types/documentDelivery';
 import { getCustomerById } from '../customerStoreService';
@@ -66,7 +67,8 @@ function profileOverride(
 /** Firmenname aus dem historischen Snapshot der Rechnung — nie aus dem heutigen Profil. */
 export function companyDisplayName(invoice: Pick<VorgangInvoice, 'companySnapshot'>): string {
   const snapshot = invoice.companySnapshot;
-  return [snapshot?.companyName?.trim(), snapshot?.legalForm?.trim()].filter(Boolean).join(' ');
+  // FINANZ-CORE-01A (WEISS-Nacharbeit N14) — Firmierung ohne doppelte Rechtsform.
+  return formatCompanyLegalName(snapshot?.companyName, snapshot?.legalForm);
 }
 
 function placeholderValues(invoice: Pick<VorgangInvoice, 'number' | 'companySnapshot'>): Record<string, string> {
@@ -169,7 +171,7 @@ export function resolveDocumentDeliveryDraftDefaults(
   input: { title: string; vorgangCustomerEmail?: string | null; profile: Pick<CompanyProfile, 'companyName' | 'legalForm'> },
   language: AppLanguage,
 ): DeliveryDraftDefaults {
-  const companyName = [input.profile.companyName?.trim(), input.profile.legalForm?.trim()].filter(Boolean).join(' ');
+  const companyName = formatCompanyLegalName(input.profile.companyName, input.profile.legalForm);
   const values = { documentTitle: input.title.trim() || t('delivery.kind.other' as TranslationKey, language), companyName };
   return {
     recipient: resolveDocumentDeliveryRecipient(input.vorgangCustomerEmail),
@@ -215,7 +217,7 @@ export function composeDocumentDeliveryDraft(
   },
   language: AppLanguage,
 ): DeliveryDraftDefaults {
-  const companyName = [input.profile.companyName?.trim(), input.profile.legalForm?.trim()].filter(Boolean).join(' ');
+  const companyName = formatCompanyLegalName(input.profile.companyName, input.profile.legalForm);
   const mail = composeDeliveryMail({
     kind: input.kind,
     values: { companyName, customerName: input.customerName, documentTitle: input.title, documentNumber: input.documentNumber },

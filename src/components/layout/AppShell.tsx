@@ -16,6 +16,13 @@ import { useApp } from '../../context/AppContext';
 import { Icon } from '../ui/Icon';
 import { ASSISTENT_ROUTE } from './navConfig';
 import { runDailyInvoicePaymentTaskReconcile } from '../../services/invoice/invoicePaymentTaskSync';
+import {
+  resyncLocalOnlyInvoicePayments,
+  shouldResyncAfterSyncStatus,
+} from '../../services/invoice/invoicePaymentCloudResyncService';
+import { resyncGeneratedInvoiceDocuments } from '../../services/document/generatedInvoiceDocumentCloudResyncService';
+import { subscribeAutomaticSyncStatus } from '../../services/sync/syncSchedulerRuntime';
+import { isSupabaseConfigured } from '../../lib/supabase';
 
 export function AppShell() {
   const location = useLocation();
@@ -42,6 +49,23 @@ export function AppShell() {
     } catch (error) {
       console.warn('[tasks] täglicher Abgleich der Überfälligkeitsaufgaben fehlgeschlagen', error);
     }
+  }, []);
+
+  /*
+   * FINANZ-CORE-01A (ZAH-02, STO-07) — nie gesicherte Rechnungszahlungen und
+   * Archivdokumente freigegebener Rechnungen nachsichern: nach dem Start des
+   * Planers (der Bootstrap hat soeben abgeglichen) und nach jedem erfolgreichen
+   * automatischen Abgleich, höchstens alle zehn Minuten (siehe Dienste). Ohne
+   * Cloud gibt es nichts zu sichern.
+   */
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return undefined;
+    return subscribeAutomaticSyncStatus((status) => {
+      if (shouldResyncAfterSyncStatus(status)) {
+        void resyncLocalOnlyInvoicePayments().catch(() => undefined);
+        void resyncGeneratedInvoiceDocuments().catch(() => undefined);
+      }
+    });
   }, []);
 
   return (

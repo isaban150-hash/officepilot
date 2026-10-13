@@ -174,6 +174,13 @@ async function canvasEncodeJpeg(
   }
 
   try {
+    /*
+     * FINANZ-CORE-01A (EIN-09) — JPEG kennt keine Transparenz. Ohne Füllung wurden transparente
+     * Pixel (etwa eines WebP- oder PNG-Logos) schwarz, und das Logo stand im Rechnungs-PDF auf
+     * einem schwarzen Kasten. Weiß ist der Grund eines Belegs.
+     */
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, targetWidth, targetHeight);
     context.drawImage(source, 0, 0, targetWidth, targetHeight);
   } catch {
     throw rasterEncodeError('encode_failed', 'Raster JPEG encode failed while drawing to canvas.');

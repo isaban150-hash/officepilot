@@ -39,6 +39,29 @@ const localState = {
   archiveCalls: [] as { invoice: VorgangInvoice; companyName: string }[],
 };
 
+/*
+ * FINANZ-CORE-01A (WEISS-Nacharbeit N02/D1) — eine Schlussrechnung zieht nur beglichene
+ * Abschläge ab. B7 und M5 prüfen Request und Fingerprint; der abgezogene Abschlag liegt
+ * deshalb bezahlt im Vorgang (die Begleichungsregel prüft `schlussAbschlagBeglichenFc01a`).
+ */
+const BEZAHLTER_ALTABSCHLAG = {
+  id: 'inv-alt-1',
+  number: '2026-0001',
+  type: 'abschlag',
+  abschlagNumber: 1,
+  calculationMode: 'fixed_amount',
+  fixedAmountNet: 50,
+  positions: [],
+  subtotal: 50,
+  taxStatus: 'standard_19',
+  amount: 59.5,
+  status: 'versendet',
+  date: '2026-07-01',
+  issueDate: '2026-07-01',
+  createdAt: '2026-07-01T10:00:00.000Z',
+  payments: [{ id: 'pay-alt-1', date: '2026-07-10', amount: 59.5, createdAt: '2026-07-10T10:00:00.000Z' }],
+} as unknown as VorgangInvoice;
+
 function installEnvironment(): void {
   vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockImplementation(() => cloudState.configured);
   vi.spyOn(supabaseLib, 'getSupabaseClient').mockImplementation(
@@ -637,6 +660,7 @@ describe('01P4B — vorbereiteter Cloud-Request', () => {
   });
 
   it('B7: vollständige Inhalte überstehen die Prüfung unverändert', async () => {
+    localState.vorgang = { id: VORGANG, invoices: [BEZAHLTER_ALTABSCHLAG] };
     const prepared = await prepareInvoiceDraftFinalization(
       prepareInput({
         draft: buildDraft({
@@ -1890,6 +1914,7 @@ describe('01P4B2 — Kandidaten-Fingerprint vor begin', () => {
   });
 
   it('M5: eine gültige Schlussrechnung ist fingerprintgleich und vollständig', async () => {
+    localState.vorgang = { id: VORGANG, invoices: [BEZAHLTER_ALTABSCHLAG] };
     /*
      * Wie bei B7: Die Abschläge bleiben unter dem endgültigen Leistungswert
      * (96,39 € brutto), damit dieser Test die Fingerprinttreue prüft und nicht
@@ -1921,8 +1946,31 @@ describe('01P4B2 — Kandidaten-Fingerprint vor begin', () => {
       result.contentFingerprint,
     );
     expect(result.request.invoice.expectedAmendmentSequence).toBe(4);
-    expect(result.request.invoice.previousAbschlagDeductions).toEqual(deductions);
+    // FINANZ-CORE-01A (WEISS-Recheck N02-R1) — die Freigabe friert ein, wie der Abschlag beglichen ist.
+    expect(result.request.invoice.previousAbschlagDeductions).toEqual([
+      { ...deductions[0], paidAmount: 59.5, skontoAmount: 0 },
+    ]);
     expect(result.request.invoicePayload.expectedAmendmentSequence).toBe(4);
+    expect(validatePreparedWorkspaceInvoiceFinalizeRequest(result.request).ok).toBe(true);
+
+    /*
+     * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — die eingefrorene Aufteilung steht nur vollständig,
+     * nicht negativ und mit der richtigen Summe im Antrag.
+     */
+    const mitAbzug = (abzug: Record<string, unknown>) => {
+      const invoice = { ...result.request.invoice, previousAbschlagDeductions: [abzug] } as unknown as VorgangInvoice;
+      return { ...result.request, invoice, invoicePayload: buildInvoicePayloadV1(invoice) };
+    };
+    const basis = { ...deductions[0] };
+    const fall = (abzug: Record<string, unknown>) => {
+      const geprueft = validatePreparedWorkspaceInvoiceFinalizeRequest(mitAbzug(abzug));
+      return geprueft.ok ? 'ok' : JSON.stringify(geprueft);
+    };
+    expect(fall({ ...basis, paidAmount: 58.31, skontoAmount: 1.19 })).toBe('ok');
+    expect(fall({ ...basis, paidAmount: 59.5 })).toContain('settlement:incomplete');
+    expect(fall({ ...basis, paidAmount: 60.5, skontoAmount: -1 })).toContain('settlement:negative');
+    expect(fall({ ...basis, paidAmount: 58, skontoAmount: 1 })).toContain('settlement:sum_mismatch');
+    expect(fall({ ...basis, paidAmount: '59.5', skontoAmount: 0 })).toContain('paidAmount:not_finite');
   });
 });
 

@@ -33,7 +33,9 @@ import {
   calculateExpensePaymentSummary,
   getExpensePayments,
 } from '../expensePaymentCalculations';
-import { addPaymentToInvoice, getAllVorgaenge } from '../vorgangService';
+import { addPaymentToInvoice } from '../vorgangService';
+import { findInvoiceLocatorById } from '../invoice/invoiceRegistryService';
+import { reconcileInvoicePaymentTasks } from '../invoice/invoicePaymentTaskSync';
 /*
  * Nur die **rechnenden** Helfer, nie `recordPayment`: Hier wird eine
  * Serverantwort gespiegelt, nicht gebucht.
@@ -72,12 +74,14 @@ function projiziereAusgabe(reconciliation: BankReconciliation): BankPaymentProje
   return { applied: Boolean(addPaymentToExpense(expense.id, payment, summary.status)) };
 }
 
-function findeRechnung(invoiceId: string): { vorgangId: string; invoice: VorgangInvoice } | null {
-  for (const vorgang of getAllVorgaenge()) {
-    const invoice = (vorgang.invoices ?? []).find((entry) => entry.id === invoiceId);
-    if (invoice) return { vorgangId: vorgang.id, invoice };
-  }
-  return null;
+/*
+ * FINANZ-CORE-01A (ZAH-14) — auch Rechnungen ohne Auftrag (`vorgangId` null). Bisher wurde nur
+ * in den Vorgängen gesucht: Offener Betrag und „Zahlung erfassen" blieben bis zum nächsten
+ * Abgleich veraltet, eine doppelte Erfassung war möglich.
+ */
+function findeRechnung(invoiceId: string): { vorgangId: string | null; invoice: VorgangInvoice } | null {
+  const eintrag = findInvoiceLocatorById(invoiceId);
+  return eintrag ? { vorgangId: eintrag.vorgangId, invoice: eintrag.invoice } : null;
 }
 
 function projiziereRechnung(reconciliation: BankReconciliation): BankPaymentProjectionResult {
@@ -99,9 +103,17 @@ function projiziereRechnung(reconciliation: BankReconciliation): BankPaymentProj
     ...treffer.invoice,
     payments: [...getInvoicePayments(treffer.invoice), payment],
   });
-  return {
-    applied: Boolean(addPaymentToInvoice(treffer.vorgangId, treffer.invoice.id, payment, summary.status)),
-  };
+  // FINANZ-CORE-01A (ZAH-14) — das Ergebnis zählt; ein Objekt war bisher immer „wahr".
+  const applied = addPaymentToInvoice(treffer.vorgangId, treffer.invoice.id, payment, summary.status).ok;
+  if (applied) {
+    try {
+      // Ist die Forderung jetzt erledigt, schliesst sich ihre Überfälligkeitsaufgabe — wie bei jeder Zahlung.
+      reconcileInvoicePaymentTasks({ invoiceId: treffer.invoice.id });
+    } catch {
+      /* Die Zahlung ist gespiegelt; der nächste Abgleich holt die Aufgabe nach. */
+    }
+  }
+  return { applied };
 }
 
 /**

@@ -192,6 +192,8 @@ function withProfile(): void {
     street: 'Ruhrallee 5',
     zip: '45138',
     city: 'Essen',
+    // FINANZ-CORE-01A (RE-09): Steuernummer oder USt-IdNr. ist Pflichtangabe jeder Rechnung.
+    taxNumber: '133/8150/8159',
   });
   if (!result.success) throw new Error('Profil nicht gesetzt');
 }

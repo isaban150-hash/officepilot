@@ -19,6 +19,7 @@ import { ReadOnlyNotice } from '../../components/ui/ReadOnlyNotice';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useFormResume } from '../../hooks/useFormResume';
+import { changedProfileFields, useProfileFormBase } from '../../hooks/useProfileFormBase';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import {
   COMPANY_PROFILE_TEXT_LIMITS,
@@ -119,6 +120,8 @@ export function CommunicationSettingsPage() {
   const [error, setError] = useState<TranslationKey | null>(null);
   const [saving, setSaving] = useState(false);
   resume.observe(draft);
+  // FINANZ-CORE-01A (EIN-03) — Ausgangsstand des Entwurfs; unberührte Felder folgen dem Profil.
+  const baseRef = useProfileFormBase(companyProfile, pickCommunicationSettings, setDraft);
 
   const dirty = isCommunicationSettingsDirty(draft, companyProfile);
   const candidate: CompanyProfile = useMemo(() => ({ ...companyProfile, ...buildCommunicationSettingsPayload(draft) }), [companyProfile, draft]);
@@ -140,7 +143,12 @@ export function CommunicationSettingsPage() {
     if (!editable || saving || !dirty) return;
     setSaving(true);
     try {
-      const payload = buildCommunicationSettingsPayload(draft);
+      // FINANZ-CORE-01A (EIN-03) — nur die geänderten Felder.
+      const payload = changedProfileFields(
+        buildCommunicationSettingsPayload(draft),
+        buildCommunicationSettingsPayload(baseRef.current),
+      );
+      if (Object.keys(payload).length === 0) return;
       const validation = validateCompanyProfileOptionalFields(payload);
       if (validation) {
         setError(validation);
@@ -152,6 +160,7 @@ export function CommunicationSettingsPage() {
         return;
       }
       setDraft(pickCommunicationSettings(result.profile));
+      baseRef.current = pickCommunicationSettings(result.profile);
       resume.clearResume();
       if (!getLastPersistSuccess()) {
         showToast(translate('persist.failed.userAction'));

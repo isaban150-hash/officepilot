@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { InvoiceDraft } from '../../types/models';
 import type { InvoiceDraftMetadataChanges } from '../../types/models';
+import { hasPrivateRetentionNotice } from '../../services/invoiceTaxService';
 
 interface Props {
   draft: InvoiceDraft;
@@ -16,6 +17,11 @@ interface Props {
    * annimmt (z. B. offener Cloud-Konflikt bis zur Entscheidung).
    */
   disabled?: boolean;
+  /**
+   * FINANZ-CORE-01A (RE-16) — die Rechnung hängt an einem Auftrag. Ohne Auftrag (freie
+   * Rechnung) sprach der Hinweis zum Fälligkeitsdatum trotzdem von „diesem Auftrag".
+   */
+  withOrder?: boolean;
 }
 
 function Field({
@@ -33,7 +39,7 @@ function Field({
   );
 }
 
-export function InvoiceDraftEditForm({ draft, onChange, customerMaster, disabled = false }: Props) {
+export function InvoiceDraftEditForm({ draft, onChange, customerMaster, disabled = false, withOrder = true }: Props) {
   const billing = draft.customerBilling;
 
   /*
@@ -98,7 +104,9 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster, disabled
           */}
           {!draft.paymentDueDate?.trim() && draft.paymentTermsText?.trim() ? (
             <p className="form-hint" data-testid="invoice-edit-payment-due-hint">
-              Dieser Auftrag hat eigene Zahlungsbedingungen. Bitte das Fälligkeitsdatum passend dazu eintragen.
+              {withOrder
+                ? 'Dieser Auftrag hat eigene Zahlungsbedingungen. Bitte das Fälligkeitsdatum passend dazu eintragen.'
+                : 'Es gilt der Zahlungstext. Bitte das Fälligkeitsdatum passend dazu eintragen.'}
             </p>
           ) : null}
         </Field>
@@ -120,6 +128,19 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster, disabled
             onChange={(event) => onChange({ skontoText: event.target.value })}
           />
         </Field>
+        {/*
+          FINANZ-CORE-01A (AUS-11/EIN-07) — § 14 Abs. 4 Satz 1 Nr. 9 UStG: Leistung an einem
+          Grundstück für eine Privatperson → Hinweis auf deren Aufbewahrungspflicht.
+        */}
+        <label className="edit-field edit-field--checkbox" data-testid="invoice-edit-private-retention-field">
+          <input
+            type="checkbox"
+            checked={hasPrivateRetentionNotice(draft.legalNotices)}
+            onChange={(event) => onChange({ privateRetentionNotice: event.target.checked })}
+            data-testid="invoice-edit-private-retention"
+          />
+          <span>Privatkunde, Leistung an einem Grundstück: Hinweis auf die zweijährige Aufbewahrungspflicht drucken</span>
+        </label>
       </fieldset>
 
       <fieldset className="invoice-edit__section" disabled={disabled}>

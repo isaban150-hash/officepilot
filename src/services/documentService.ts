@@ -3,6 +3,7 @@ import { PAPER_FOLDERS } from '../data/mockData';
 import { persistAll } from './persistenceService';
 import { resolvePaperFilingFromInbox } from './paperFolderService';
 import { getDocumentFileRefById } from './documentFileStoreService';
+import { isGeneratedInvoiceDocumentKind } from './document/generatedInvoiceDocumentKind';
 import {
   getDocumentFileRepresentationBindingStoreSnapshot,
   removeDocumentFileRepresentationBindingsForDocument,
@@ -533,8 +534,16 @@ export function updateDocument(
  *
  * Dient den Lesern, die sonst Fremddokument-Heuristik anwenden würden.
  */
-export function isGeneratedOutgoingInvoiceDocument(document: CompanyDocument): boolean {
-  return document.category === 'ausgangsrechnung' && Boolean(document.linkedInvoiceId?.trim());
+export function isGeneratedOutgoingInvoiceDocument(
+  document: Pick<CompanyDocument, 'category' | 'classifiedKind' | 'linkedInvoiceId'>,
+): boolean {
+  /*
+   * FINANZ-CORE-01A (STO-03) — die Kategorie allein trägt nicht: Sie ist im
+   * Bearbeitungsformular frei wählbar. Ein Wechsel hob bisher Lösch- und
+   * Hochladeschutz auf. Die Belegart (`classifiedKind`) setzt nur die
+   * Erzeugung, das Formular ändert sie nie.
+   */
+  return isGeneratedInvoiceDocumentKind(document);
 }
 
 /**
@@ -549,8 +558,11 @@ export function isGeneratedOutgoingInvoiceDocument(document: CompanyDocument): b
  */
 export function isFinalizedInvoiceArchiveDocument(document: CompanyDocument): boolean {
   const invoiceId = document.linkedInvoiceId?.trim();
+  // FINANZ-CORE-01A (STO-03) — auch nach einem Kategoriewechsel bleibt der Beleg geschützt.
   const isInvoiceDocument =
-    document.category === 'ausgangsrechnung' || isInvoiceCorrectionDocument(document);
+    document.category === 'ausgangsrechnung' ||
+    document.classifiedKind === 'ausgangsrechnung' ||
+    isInvoiceCorrectionDocument(document);
   if (!isInvoiceDocument) return false;
   return listInvoices().some(
     (invoice) =>

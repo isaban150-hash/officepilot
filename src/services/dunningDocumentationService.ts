@@ -6,6 +6,7 @@ import {
 } from './invoicePaymentService';
 import { isValidInvoiceSentVia, INVOICE_SENT_VIA_OPTIONS } from './invoiceSentService';
 import { getVorgangInvoice } from './vorgangService';
+import { shiftToWorkingDay } from './businessDateService';
 import type { VorgangInvoice } from '../types/models';
 import type {
   DocumentDunningInput,
@@ -39,10 +40,13 @@ export type DocumentDunningResult =
         | 'invoice_missing'
         | 'not_sent'
         | 'not_open'
+        | 'not_overdue'
         | 'invalid_kind'
         | 'invalid_date'
         | 'invalid_delivery'
-        | 'draft_or_prepared';
+        | 'draft_or_prepared'
+        /** FINANZ-CORE-01A (ZAH-20) — nicht dauerhaft gespeichert; es zählt nichts. */
+        | 'persist_failed';
     };
 
 function cloneDoc(doc: InvoiceDunningDocumentation): InvoiceDunningDocumentation {
@@ -193,6 +197,17 @@ export function documentDunningDelivery(
     return { ok: false, reason: 'invalid_date' };
   }
 
+  /*
+   * FINANZ-CORE-01A (ZAH-12) — eine Mahnung wirkt erst nach dem Zahlungsziel
+   * (§ 286 BGB). Vor oder am Fälligkeitstag würde sie Mahnstufe 2 setzen, ohne
+   * dass ein Verzug eintreten konnte; das bleibt eine Zahlungserinnerung.
+   */
+  // FINANZ-CORE-01A (ZAH-10) — Verzug erst nach dem wirksamen Fristende (§ 193 BGB).
+  const dueDate = invoice.paymentDueDate?.trim() ? shiftToWorkingDay(invoice.paymentDueDate.trim().slice(0, 10)) : '';
+  if (input.kind === 'dunning_notice' && dueDate && documentedAt <= dueDate) {
+    return { ok: false, reason: 'not_overdue' };
+  }
+
   if (!isValidInvoiceSentVia(input.deliveryMethod)) {
     return { ok: false, reason: 'invalid_delivery' };
   }
@@ -240,8 +255,16 @@ export function documentDunningDelivery(
     createdAt: new Date().toISOString(),
   };
 
+  /*
+   * FINANZ-CORE-01A (ZAH-20) — erst gespeichert, dann gezählt. Bisher blieb ein Nachweis bei
+   * einem Speicherfehler im Arbeitsspeicher und setzte trotzdem die Mahnstufe.
+   */
+  const previous = documentations;
   documentations = [documentation, ...documentations];
-  persistAll();
+  if (!persistAll().success) {
+    documentations = previous;
+    return { ok: false, reason: 'persist_failed' };
+  }
   return { ok: true, documentation: cloneDoc(documentation) };
 }
 

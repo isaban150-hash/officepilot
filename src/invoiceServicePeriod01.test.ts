@@ -56,6 +56,8 @@ function withCompany(draft: InvoiceDraft): InvoiceDraft {
       street: 'Musterallee 5',
       zip: '30000',
       city: 'Musterstadt',
+      // FINANZ-CORE-01A (RE-09): Steuernummer oder USt-IdNr. ist Pflichtangabe jeder Rechnung.
+      taxNumber: '133/8150/8159',
     },
   };
 }

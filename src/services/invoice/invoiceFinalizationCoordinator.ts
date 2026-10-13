@@ -37,10 +37,14 @@ import {
 } from './workspaceInvoiceFinalizeRequestValidator';
 import { buildActualPreparedResponseProjection } from './invoicePreparedResponseProjection';
 import type { InvoiceApprovalOptions } from '../invoiceValidationService';
-import type {
-  InvoiceDraftIdentity,
-  InvoiceDraftLoadFailure,
-  InvoiceDraftPreparationLoadFailure,
+import { isInvoiceCancelled } from '../invoicePaymentService';
+import { ensureInvoiceNumberStartOnServer } from './invoiceNumberStartService';
+import {
+  INVOICE_FINALIZE_SERVER_REJECTIONS,
+  type InvoiceDraftIdentity,
+  type InvoiceDraftLoadFailure,
+  type InvoiceDraftPreparationLoadFailure,
+  type InvoiceFinalizeServerRejection,
 } from '../../types/invoiceDraftDurability';
 import {
   executePreparedInvoiceFinalization,
@@ -62,6 +66,7 @@ import {
   loadInvoiceDraftRecord,
   loadInvoiceDraftRecordByLocator,
   reopenInvoiceDraftAfterBindingRejection,
+  reopenInvoiceDraftAfterServerRejection,
   resolveInvoiceDraftFinalizationToExisting,
 } from './invoiceDraftDurabilityService';
 import {
@@ -128,6 +133,12 @@ export type StartInvoiceDraftFinalizationResult =
       existingInvoiceId?: string;
       /** Nur nach nachweislich dauerhaftem `begin`. */
       clientInvoiceId?: string;
+      /**
+       * FINANZ-CORE-01A (RE-01) — der begonnene Abschluss wurde nachweislich
+       * zurückgegeben (`finalizing → active`): keine Rechnung, keine Nummer,
+       * der Entwurf ist wieder bearbeitbar. Die Seite lädt ihn neu.
+       */
+      draftReopened?: true;
     };
 
 export type InvoiceFinalizationResumeDecision =
@@ -160,6 +171,8 @@ export type ResumeInvoiceDraftFinalizationResult =
       currentRevision?: number;
       existingInvoiceId?: string;
       clientInvoiceId?: string;
+      /** FINANZ-CORE-01A (RE-01) — wie beim Start. */
+      draftReopened?: true;
     };
 
 /**
@@ -193,6 +206,7 @@ function resumeFail(
     currentRevision?: number;
     existingInvoiceId?: string;
     clientInvoiceId?: string;
+    draftReopened?: true;
   } = {},
 ): ResumeInvoiceDraftFinalizationResult {
   return {
@@ -205,6 +219,7 @@ function resumeFail(
     currentRevision: extra.currentRevision,
     existingInvoiceId: extra.existingInvoiceId,
     clientInvoiceId: extra.clientInvoiceId,
+    ...(extra.draftReopened ? { draftReopened: true as const } : {}),
   };
 }
 
@@ -363,8 +378,9 @@ export function proveLocalInvoice(input: {
     }
 
     if (invoice.id !== clientInvoiceId) {
-      // Derselbe Geschäftsinhalt unter fremder Kennung bleibt ein Verdacht.
-      if (fingerprint === contentFingerprint) {
+      // Derselbe Geschäftsinhalt unter fremder Kennung bleibt ein Verdacht —
+      // FINANZ-CORE-01A (F-01): außer die fremde Rechnung ist storniert.
+      if (fingerprint === contentFingerprint && !isInvoiceCancelled(invoice)) {
         return {
           kind: 'blocked',
           reason: 'possible_existing_invoice',
@@ -440,7 +456,37 @@ export function findLocalFinalInvoiceConflict(
           .filter((entry) => entry.vorgangId === null)
           .map((entry) => entry.invoice)
       : listInvoicesForVorgang(vorgangId);
-  return findConflictingFinalInvoice(invoices, invoiceType, clientInvoiceId);
+  return (
+    findConflictingFinalInvoice(invoices, invoiceType, clientInvoiceId) ??
+    findFinalInvoiceBlockingNewInvoice(invoices, invoiceType, clientInvoiceId)
+  );
+}
+
+/**
+ * FINANZ-CORE-01A (SQL-04) — nach einer wirksamen Schlussrechnung entsteht für
+ * diesen Vorgang keine weitere Rechnung: Ein weiterer Abschlag würde von
+ * keiner Schlussrechnung mehr abgezogen, eine weitere Teilrechnung berechnete
+ * Leistung neben der Schlussabrechnung. Der Server weist dasselbe ab
+ * (`invoice_after_final_invoice`); dieser Wächter erspart den Netzgang und
+ * nennt den Grund vor `begin`.
+ *
+ * Bewusst getrennt von `findConflictingFinalInvoice`: Jener Wächter ist die
+ * 01D-Regel „keine zweite Schlussrechnung" und bleibt unverändert.
+ */
+export function findFinalInvoiceBlockingNewInvoice(
+  invoices: readonly VorgangInvoice[],
+  invoiceType: VorgangInvoice['type'],
+  clientInvoiceId: string,
+): VorgangInvoice | null {
+  if (invoiceType === 'schluss') return null;
+  return (
+    invoices.find(
+      (invoice) =>
+        invoice.type === 'schluss' &&
+        isBillingEffective(invoice) &&
+        invoice.id !== clientInvoiceId,
+    ) ?? null
+  );
 }
 
 export function findConflictingFinalInvoice(
@@ -689,6 +735,7 @@ async function runResume(
       clientInvoiceId,
       contentFingerprint,
       reason: executed.reason,
+      cloudState: executed.cloudState,
       message: executed.message,
       lease,
     });
@@ -701,6 +748,7 @@ async function runResume(
         currentRevision: settled.kind === 'unresolved' ? executed.currentRevision : settled.revision,
         existingInvoiceId: settled.canonicalInvoiceId,
         clientInvoiceId,
+        draftReopened: settled.kind === 'reopened' ? true : undefined,
       });
     }
     return resumeFail(executed.reason, {
@@ -844,6 +892,11 @@ async function finishFromProvenInvoice(input: {
  *    den vorhandenen Kernweg `resolveInvoiceDraftFinalizationToExisting`
  *    aufgelöst — keine zweite Recovery-Logik.
  *
+ *  - FINANZ-CORE-01A (RE-01) — eine inhaltliche Ablehnung
+ *    (`InvoiceFinalizeServerRejection`) mit belegtem `not_committed`:
+ *    derselbe enge Rückweg. Die gespeicherte Anfrage scheitert bei jeder
+ *    Wiederholung gleich; nur ein korrigierter Entwurf kann gelingen.
+ *
  * Gelingt ein Schritt nicht, bleibt der Datensatz `finalizing`; die nächste
  * Wiederaufnahme sendet dieselbe Anfrage, der Server antwortet gleich, und der
  * Ablauf wiederholt sich ohne Schaden.
@@ -854,6 +907,7 @@ async function settleDraftBindingOutcome(input: {
   clientInvoiceId: string;
   contentFingerprint: string;
   reason: ExecutePreparedFinalizationFailure;
+  cloudState: PreparedFinalizeCloudState;
   message?: string;
   lease: SyncOperationLease;
 }): Promise<
@@ -920,7 +974,24 @@ async function settleDraftBindingOutcome(input: {
     return { kind: 'resolved', revision: resolved.record.revision, canonicalInvoiceId };
   }
 
+  if (input.cloudState === 'not_committed' && isInvoiceFinalizeServerRejection(input.reason)) {
+    const reopened = await reopenInvoiceDraftAfterServerRejection({
+      identity,
+      expectedRevision: finalizingRevision,
+      clientInvoiceId,
+      serverRejection: input.reason,
+    });
+    if (!reopened.ok) return { kind: 'unresolved', detail: `reopen:${reopened.reason}` };
+    return { kind: 'reopened', revision: reopened.record.revision };
+  }
+
   return null;
+}
+
+function isInvoiceFinalizeServerRejection(
+  reason: ExecutePreparedFinalizationFailure,
+): reason is ExecutePreparedFinalizationFailure & InvoiceFinalizeServerRejection {
+  return (INVOICE_FINALIZE_SERVER_REJECTIONS as readonly string[]).includes(reason);
 }
 
 /** Fehler **vor** einem nachweislich dauerhaften `begin`: nie eine Kennung. */
@@ -1069,7 +1140,8 @@ async function runStart(
   });
   if (!prepared.ok) {
     return failBeforeBegin(prepared.reason, {
-      detail: prepared.detail,
+      // FINANZ-CORE-01A (RE-16) — bei `validation_failed` der erste Prüfgrund, damit die Seite ihn nennt.
+      detail: prepared.detail ?? prepared.validation?.blockingErrors[0]?.messageKey,
       message: prepared.message,
     });
   }
@@ -1120,6 +1192,16 @@ async function runStart(
     if (conflict) {
       return failBeforeBegin('final_invoice_exists', { existingInvoiceId: conflict.id });
     }
+  }
+
+  /*
+   * 4c. FINANZ-CORE-01A (RE-02) — die Startnummer aus der Einrichtung, einmal
+   * je Betrieb, Jahr und Wert, bevor der Server die erste Nummer vergibt. Nur
+   * ein Netzfehler hält die Freigabe an; dann wäre auch sie nicht erreichbar.
+   * Vor `begin`: Es ist noch nichts gesperrt, ein späterer Versuch bleibt frei.
+   */
+  if ((await ensureInvoiceNumberStartOnServer()) === 'failed') {
+    return failBeforeBegin('offline_or_unconfigured', { recovery: 'retry_allowed', detail: 'number_start' });
   }
 
   /* 5. Begin — erst hier wird die Kennung dauerhaft. */
@@ -1173,6 +1255,7 @@ async function runStart(
       clientInvoiceId,
       contentFingerprint: prepared.contentFingerprint,
       reason: executed.reason,
+      cloudState: executed.cloudState,
       message: executed.message,
       lease,
     });
@@ -1187,6 +1270,7 @@ async function runStart(
         currentRevision: settled.kind === 'unresolved' ? executed.currentRevision : settled.revision,
         existingInvoiceId: settled.canonicalInvoiceId,
         clientInvoiceId,
+        ...(settled.kind === 'reopened' ? { draftReopened: true as const } : {}),
       };
     }
     // Kein zweiter RPC im selben Startlauf.

@@ -13,7 +13,12 @@ import { t, type TranslationKey } from '../i18n';
 import { formatMessage } from '../i18n/formatMessage';
 import { getCachedSetup } from './persistenceService';
 import type { ExplanationTextBlock } from '../i18n/types';
-import { calculatePaymentSummary } from './invoicePaymentService';
+import {
+  calculatePaymentSummary,
+  isExpectingPayment,
+  isInvoiceCancelled,
+  isInvoiceOverdue,
+} from './invoicePaymentService';
 import { getVorgangById, getVorgangInvoice } from './vorgangService';
 import { getNotesForVorgang } from './vorgangNoteService';
 import { getKnowledgeFactsForCommunicationContext } from './knowledgeService';
@@ -26,9 +31,10 @@ import type {
   CommunicationContext,
   CommunicationContextRef,
   CommunicationFact,
+  CommunicationInvoicePaymentState,
   CommunicationLetterSummary,
 } from '../types/communication';
-import type { CompanyDocument, InboxItem } from '../types/models';
+import type { CompanyDocument, InboxItem, VorgangInvoice } from '../types/models';
 
 function truncateText(text: string, max = MAX_RECOGNIZED_TEXT_LENGTH): string {
   if (text.length <= max) return text;
@@ -117,6 +123,22 @@ function resolveVorgangId(ref: CommunicationContextRef): string | undefined {
     return doc?.linkedVorgang?.vorgangId;
   }
   return undefined;
+}
+
+/**
+ * FINANZ-CORE-01A (ZAH-12) — Erinnerung und Mahnung nur, wo sie stimmen: nicht
+ * zu stornierten, nicht versendeten oder beglichenen Rechnungen; eine Mahnung
+ * erst nach dem Zahlungsziel. Dieselben Regeln wie die Mahndokumentation.
+ */
+function resolveInvoicePaymentState(
+  invoice: VorgangInvoice,
+  summary: ReturnType<typeof calculatePaymentSummary>,
+): CommunicationInvoicePaymentState {
+  if (isInvoiceCancelled(invoice)) return 'cancelled';
+  if (!isExpectingPayment(invoice)) return 'not_sent';
+  if (summary.openAmount <= 0 || summary.status === 'bezahlt') return 'settled';
+  if (invoice.paymentDueDate?.trim() && !isInvoiceOverdue(invoice)) return 'not_due';
+  return 'due';
 }
 
 export function buildCommunicationContext(
@@ -290,6 +312,7 @@ export function buildCommunicationContext(
       currency: profile.currency?.trim() || undefined,
       customerName: customerName || undefined,
       vorgangTitle: vorgang?.title,
+      paymentState: resolveInvoicePaymentState(invoice, summary),
     };
     if (vorgang) {
       vorgangSummary = {

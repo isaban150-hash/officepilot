@@ -1,3 +1,5 @@
+import { fromCents, sumCents, toCents } from './invoiceMoney';
+import { getBusinessDay, toBusinessDay } from './businessDateService';
 import {
   calculateOverpaidAmount,
   resolveSettlementStatus,
@@ -9,11 +11,16 @@ import type {
   ExpensePaymentSummary,
 } from '../types/expense';
 
+/*
+ * FINANZ-CORE-01A (ZAH-16) — Fälligkeit und Fristen zählen nach dem
+ * Geschäftstag, nicht nach dem UTC-Tag. `toISOString` lag zwischen lokaler
+ * Mitternacht und UTC-Mitternacht einen Tag zurück: Eine am 10. fällige
+ * Rechnung galt am 11. um 0:30 Uhr noch nicht als überfällig. Ein reines
+ * Datum bleibt unverändert; nur ein Zeitstempel wird in den Ortstag gelesen.
+ */
 function toDateOnly(value: Date | string): string {
-  if (typeof value === 'string') {
-    return value.slice(0, 10);
-  }
-  return value.toISOString().slice(0, 10);
+  if (typeof value !== 'string') return getBusinessDay(value);
+  return /^\d{4}-\d{2}-\d{2}T/.test(value.trim()) ? toBusinessDay(value) : value.slice(0, 10);
 }
 
 export function getExpensePayments(expense: Expense): ExpensePayment[] {
@@ -21,7 +28,8 @@ export function getExpensePayments(expense: Expense): ExpensePayment[] {
 }
 
 export function getExpensePaidAmount(expense: Expense): number {
-  return getExpensePayments(expense).reduce((sum, payment) => sum + payment.amount, 0);
+  // FINANZ-CORE-01A — in Cent summiert wie bei Rechnungszahlungen.
+  return fromCents(sumCents(getExpensePayments(expense).map((payment) => toCents(payment.amount))));
 }
 
 /**
@@ -54,7 +62,7 @@ export function isCreditNoteExpense(expense: Expense): boolean {
 export function getExpenseOpenAmount(expense: Expense): number {
   if (isCreditNoteExpense(expense)) return 0;
   const totalDue = expense.grossAmount;
-  return Math.max(0, totalDue - getExpensePaidAmount(expense));
+  return fromCents(Math.max(0, toCents(totalDue) - toCents(getExpensePaidAmount(expense))));
 }
 
 export function isExpenseCancelled(expense: Expense): boolean {

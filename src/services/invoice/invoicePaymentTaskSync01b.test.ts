@@ -21,6 +21,7 @@ import { completeSettledInvoicePaymentTasks } from './invoicePaymentTaskSync';
 import { isTaskDone, isTaskOpen, normalizeTask } from '../taskNormalize';
 import { cancelFinalizedInvoice } from './invoiceCancellationService';
 import * as invoiceCloud from './workspaceInvoiceCloudService';
+import * as invoiceSent from '../invoiceSentService';
 import * as workspacePayload from '../workspace/workspaceSyncPayloadService';
 import { buildPersistedStateSnapshot, persistAll } from '../persistenceService';
 import { applySyncPullCandidateSafely } from '../sync/syncPullPersistService';
@@ -179,12 +180,19 @@ describe('P1 — Storno', () => {
   it('Storno → erledigt', async () => {
     setup();
     vi.spyOn(workspacePayload, 'resolveCloudWorkspaceId').mockReturnValue('00000000-0000-0000-0000-0000000e0001');
+    /*
+     * FINANZ-CORE-01A (STO-02) — die Rechnung ist versendet; vor dem Storno liest
+     * der Dienst den Versandstand der Cloud. Der simulierte Server kennt den
+     * Vermerk und storniert deshalb mit Korrekturbeleg, wie der echte.
+     */
+    vi.spyOn(invoiceSent, 'readInvoiceSentStateFromCloud').mockResolvedValue({ kind: 'synced' });
     vi.spyOn(invoiceCloud, 'rpcCancelWorkspaceInvoice').mockImplementation(async () => ({
       invoice: {
         ...rechnung(),
         cancelledAt: '2026-09-02T10:00:00.000Z',
         cancelReason: 'Doppelt erstellt',
-        cancellationKind: 'internal',
+        cancellationKind: 'correction',
+        correctionDocumentId: `corr-${INVOICE}`,
       },
     }) as never);
 

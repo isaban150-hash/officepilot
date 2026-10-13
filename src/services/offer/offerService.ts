@@ -28,6 +28,8 @@ import {
 } from '../invoiceService';
 import type { CustomerBilling, TaxStatus } from '../../types/models';
 import { getBusinessDay } from '../businessDateService';
+import { addCalendarDays } from '../invoiceTaxService';
+import { copyCustomerBilling } from '../customer/customerBillingCopy';
 import {
   OFFER_STATUSES,
   type Offer,
@@ -79,17 +81,9 @@ export function emptyCustomerBilling(): CustomerBilling {
   return { name: '', contactPerson: '', street: '', zip: '', city: '', email: '', phone: '' };
 }
 
+// FINANZ-CORE-01A (KUN-01) — die E-Rechnungsfelder gehen beim Speichern nicht mehr verloren.
 function normalizeCustomer(customer: Partial<CustomerBilling> | undefined): CustomerBilling {
-  const c = customer ?? {};
-  return {
-    name: (c.name ?? '').trim(),
-    contactPerson: (c.contactPerson ?? '').trim(),
-    street: (c.street ?? '').trim(),
-    zip: (c.zip ?? '').trim(),
-    city: (c.city ?? '').trim(),
-    email: (c.email ?? '').trim(),
-    phone: (c.phone ?? '').trim(),
-  };
+  return copyCustomerBilling(customer, { trim: true });
 }
 
 function cleanNumber(value: unknown): number {
@@ -338,7 +332,11 @@ export type OfferFinalizeBlocker =
   | 'title_missing'
   | 'valid_until_missing'
   | 'valid_until_before_date'
-  | 'company_profile_missing';
+  | 'company_profile_missing'
+  /** FINANZ-CORE-01A (ANG-01) — „noch unklar" ist keine Steuerangabe für ein verbindliches Angebot. */
+  | 'tax_status_unclear'
+  /** FINANZ-CORE-01A (ANG-14) — das Nummernjahr kommt aus dem Angebotsdatum (2000 bis 2100). */
+  | 'offer_date_invalid';
 
 export type OfferFinalizationCandidate =
   | { ok: true; offer: Offer; content: OfferFrozenContent; fingerprint: string }
@@ -352,6 +350,16 @@ export type OfferFinalizationCandidate =
  * stehen sie, damit die Oberfläche vor dem Aufruf ehrlich sagen kann, was
  * fehlt.
  */
+/** Ein echtes Kalenderdatum JJJJ-MM-TT im Bereich des Nummernkreises (2000 bis 2100). */
+function isPlausibleOfferDate(value: string): boolean {
+  const match = /^(\d{4})-\d{2}-\d{2}$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  if (year < 2000 || year > 2100) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 export function buildOfferFinalizationCandidate(offerId: string): OfferFinalizationCandidate {
   const offer = getOfferById(offerId);
   if (!offer) return { ok: false, blockers: ['positions_missing'] };
@@ -365,8 +373,29 @@ export function buildOfferFinalizationCandidate(offerId: string): OfferFinalizat
   }
   if (!offer.validUntil) blockers.push('valid_until_missing');
   else if (offer.validUntil < offer.offerDate) blockers.push('valid_until_before_date');
+  /*
+   * FINANZ-CORE-01A (ANG-14) — der Server leitet das Jahr der Angebotsnummer aus dem
+   * Angebotsdatum ab und kennt nur 2000 bis 2100. Ein Datum außerhalb endete in einer
+   * rohen Check-Constraint-Meldung; jetzt sagt es die Seite vorher.
+   */
+  if (offer.offerDate && !isPlausibleOfferDate(offer.offerDate)) blockers.push('offer_date_invalid');
+  /*
+   * FINANZ-CORE-01A (ANG-01) — ohne Steuerentscheidung rechnet das Angebot mit
+   * 0 %, und die Annahme trug den ungeklärten Status in den Auftrag. Der
+   * Server weist dasselbe ab; hier steht es, damit die Seite es vorher sagt.
+   */
+  if (!offer.taxStatus || offer.taxStatus === 'unclear') blockers.push('tax_status_unclear');
+  /*
+   * FINANZ-CORE-01A (ANG-06) — der Store liefert immer ein Profil, notfalls mit
+   * Leerwerten; die bisherige Prüfung „kein Profil" griff deshalb nie, und ein
+   * Angebot ohne Absender wurde mit Nummer eingefroren. Geprüft wird jetzt, was das
+   * Angebot als Absender druckt: Name und Anschrift.
+   */
   const profile = getCompanyProfileStoreSnapshot();
-  if (!profile) blockers.push('company_profile_missing');
+  const absenderVollstaendig = Boolean(
+    profile?.companyName?.trim() && profile.street?.trim() && profile.zip?.trim() && profile.city?.trim(),
+  );
+  if (!absenderVollstaendig) blockers.push('company_profile_missing');
   if (blockers.length > 0 || !profile) return { ok: false, blockers };
 
   const content: OfferFrozenContent = {
@@ -418,6 +447,8 @@ export function applyConfirmedOfferFinalization(
     ...confirmed.serverOffer,
     id: offerId,
     workspaceId: confirmed.serverOffer.workspaceId || offers[index].workspaceId,
+    // FINANZ-CORE-01A (ANG-11) — eine ältere Serverzeile ohne Bezug verliert den lokalen nicht.
+    supersedesOfferId: confirmed.serverOffer.supersedesOfferId || offers[index].supersedesOfferId,
     sync: {
       ...offers[index].sync,
       updatedAt: confirmed.updatedAt,
@@ -434,7 +465,72 @@ export function applyConfirmedOfferFinalization(
    */
   seedSyncChangeTrackerFromCurrentStores();
   persistAll();
+  /*
+   * FINANZ-CORE-01A (ANG-11) — erst jetzt, mit der freigegebenen Überarbeitung, ist das
+   * frühere Angebot ersetzt. Bricht man die Überarbeitung ab, bleibt das alte gültig.
+   * Nach der Grundlinie oben, damit der Statuswechsel als eigene Änderung in die Cloud geht.
+   */
+  supersedePredecessor(finalized);
   return { success: true, offer: cloneOffer(finalized) };
+}
+
+function supersedePredecessor(successor: Offer): void {
+  const predecessorId = successor.supersedesOfferId?.trim();
+  if (!predecessorId || predecessorId === successor.id) return;
+  const predecessor = getOfferById(predecessorId);
+  if (!predecessor || !canTransitionOfferStatus(predecessor.status, 'ersetzt')) return;
+  transition(predecessorId, 'ersetzt', 'decidedAt');
+}
+
+/** Tage zwischen zwei ISO-Daten; ungültig -> null. */
+function daysBetween(from: string, to: string): number | null {
+  const a = Date.parse(`${from}T00:00:00.000Z`);
+  const b = Date.parse(`${to}T00:00:00.000Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return Math.round((b - a) / 86_400_000);
+}
+
+/**
+ * FINANZ-CORE-01A (ANG-11) — Überarbeiten bzw. als Vorlage kopieren.
+ *
+ * Der Freigabedialog sagt: „Änderungen sind danach nur über ein neues Angebot möglich."
+ * Einen Weg dorthin gab es nicht; jede Korrektur verlangte vollständige Neuerfassung.
+ *
+ * Aus einem freigegebenen Angebot entsteht ein neuer Entwurf mit demselben Inhalt, dem
+ * heutigen Angebotsdatum und derselben Gültigkeitsdauer. Ist das Ausgangsangebot noch
+ * offen (freigegeben oder versendet), trägt der Entwurf den Nachfolgebezug: Mit seiner
+ * Freigabe wird das alte Angebot „ersetzt". Ein abgeschlossenes Angebot (angenommen,
+ * abgelehnt, storniert, ersetzt) dient nur als Vorlage, ohne Bezug.
+ */
+export function reviseOffer(offerId: string): OfferMutationResult {
+  const source = getOfferById(offerId);
+  if (!source) return { success: false, errorKey: 'offer.error.notFound' };
+  if (!isOfferFrozen(source)) return { success: false, errorKey: 'offer.error.reviseDraft' };
+  const replaces = source.status === 'freigegeben' || source.status === 'versendet';
+  const offerDate = today();
+  const span = daysBetween(source.offerDate, source.validUntil);
+  const validUntil = addCalendarDays(offerDate, span !== null && span > 0 ? span : 30);
+  const offer = normalizeOffer({
+    id: generateEntityId('offer'),
+    workspaceId: source.workspaceId,
+    status: 'entwurf',
+    customerId: source.customerId,
+    customer: { ...source.customer },
+    title: source.title,
+    baustelle: source.baustelle,
+    // Neue Positionskennungen: der Entwurf ist ein eigener Beleg.
+    positions: source.positions.map((position) => ({ ...position, id: '' })),
+    taxStatus: source.taxStatus,
+    offerDate,
+    validUntil,
+    introText: source.introText,
+    closingText: source.closingText,
+    paymentTermsText: source.paymentTermsText,
+    ...(replaces ? { supersedesOfferId: source.id } : {}),
+  });
+  offers = [offer, ...offers];
+  persistAll();
+  return { success: true, offer: cloneOffer(offer) };
 }
 
 /**
@@ -471,6 +567,16 @@ export function adoptAcceptedOfferFromServer(
 
 /** Annahme ist nur aus freigegeben/versendet moeglich — auch abgelaufen, mit ausdruecklicher Bestaetigung. */
 export function canAcceptOffer(offer: Pick<Offer, 'status'>): boolean {
+  return offer.status === 'freigegeben' || offer.status === 'versendet';
+}
+
+/**
+ * FINANZ-CORE-01A (ANG-09) — versendet wird nur ein gültiges, noch offenes
+ * Angebot: freigegeben oder bereits versendet (Zweitversand). Ein
+ * abgelehntes, storniertes, ersetztes oder angenommenes Angebot ging bisher
+ * genauso an den Kunden — der Statuswechsel scheiterte danach still.
+ */
+export function canSendOffer(offer: Pick<Offer, 'status'>): boolean {
   return offer.status === 'freigegeben' || offer.status === 'versendet';
 }
 

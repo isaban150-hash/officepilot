@@ -1,3 +1,4 @@
+import { lineTotalMoney } from '../../../services/invoiceMoney';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button } from '../../ui/Button';
 import { Card, DataRow } from '../../ui/Card';
@@ -298,7 +299,7 @@ export function ContractOrderProposalPanel({
         const quantity = patch.quantity ?? next.quantity;
         const unitPrice = patch.unitPrice ?? next.unitPrice;
         if (quantity > 0 && unitPrice > 0) {
-          next.lineTotal = Math.round(quantity * unitPrice * 100) / 100;
+          next.lineTotal = lineTotalMoney(quantity, unitPrice);
         }
       }
       return { ...current, [key]: next };

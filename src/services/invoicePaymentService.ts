@@ -1,10 +1,13 @@
+import { fromCents, sumCents, toCents } from './invoiceMoney';
 import {
   addPaymentToInvoice,
   getVorgangInvoice,
   removePaymentFromInvoice,
+  replaceInvoicePayments,
 } from './vorgangService';
 import { isFinalizedInvoice } from './invoiceArchiveService';
 import { buildSkontoDeadline, parseSkontoFromText } from './invoiceTaxService';
+import { getBusinessDay, shiftToWorkingDay, toBusinessDay } from './businessDateService';
 import { generateUuid } from './sync/syncMetaService';
 import { reconcileInvoicePaymentTasks } from './invoice/invoicePaymentTaskSync';
 import { resolveWorkspaceWriteAccess, type WorkspaceActor } from './workspace/workspaceRoleService';
@@ -33,11 +36,16 @@ export type RemovePaymentResult =
   | { success: true; invoice: VorgangInvoice }
   | { success: false; errorKey: string };
 
+/*
+ * FINANZ-CORE-01A (ZAH-16) — Fälligkeit und Fristen zählen nach dem
+ * Geschäftstag, nicht nach dem UTC-Tag. `toISOString` lag zwischen lokaler
+ * Mitternacht und UTC-Mitternacht einen Tag zurück: Eine am 10. fällige
+ * Rechnung galt am 11. um 0:30 Uhr noch nicht als überfällig. Ein reines
+ * Datum bleibt unverändert; nur ein Zeitstempel wird in den Ortstag gelesen.
+ */
 function toDateOnly(value: Date | string): string {
-  if (typeof value === 'string') {
-    return value.slice(0, 10);
-  }
-  return value.toISOString().slice(0, 10);
+  if (typeof value !== 'string') return getBusinessDay(value);
+  return /^\d{4}-\d{2}-\d{2}T/.test(value.trim()) ? toBusinessDay(value) : value.slice(0, 10);
 }
 
 export function getInvoicePayments(invoice: VorgangInvoice): InvoicePayment[] {
@@ -45,7 +53,8 @@ export function getInvoicePayments(invoice: VorgangInvoice): InvoicePayment[] {
 }
 
 export function getPaidAmount(invoice: VorgangInvoice): number {
-  return getInvoicePayments(invoice).reduce((sum, payment) => sum + payment.amount, 0);
+  // FINANZ-CORE-01A — in Cent summiert: 10,10 + 20,20 ergibt genau 30,30.
+  return fromCents(sumCents(getInvoicePayments(invoice).map((payment) => toCents(payment.amount))));
 }
 
 /**
@@ -82,12 +91,15 @@ function resolveSkontoSettledAmount(invoice: VorgangInvoice): number | null {
   if (!baseDate?.trim()) return null;
 
   const deadline = buildSkontoDeadline(baseDate, parsed.days);
-  const timelyPaid = getInvoicePayments(invoice)
-    .filter((payment) => payment.date && toDateOnly(payment.date) <= deadline)
-    .reduce((sum, payment) => sum + payment.amount, 0);
+  const timelyPaidCents = sumCents(
+    getInvoicePayments(invoice)
+      .filter((payment) => payment.date && toDateOnly(payment.date) <= deadline)
+      .map((payment) => toCents(payment.amount)),
+  );
 
-  const payable = Math.round(invoice.amount * (1 - parsed.percent / 100) * 100) / 100;
-  return timelyPaid + 0.01 >= payable ? payable : null;
+  // FINANZ-CORE-01A — Zahlbetrag nach Skonto in Cent, eine Rundung; ein Cent Toleranz wie bisher.
+  const payableCents = Math.round((toCents(invoice.amount) * (100 - parsed.percent)) / 100);
+  return timelyPaidCents + 1 >= payableCents ? fromCents(payableCents) : null;
 }
 
 export function getOpenAmount(invoice: VorgangInvoice): number {
@@ -111,11 +123,12 @@ export function getOpenAmount(invoice: VorgangInvoice): number {
    */
   if (isInvoiceCancelled(invoice)) return 0;
 
-  const paidAmount = getPaidAmount(invoice);
-  if (paidAmount < invoice.amount && resolveSkontoSettledAmount(invoice) !== null) {
+  const paidCents = toCents(getPaidAmount(invoice));
+  const dueCents = toCents(invoice.amount);
+  if (paidCents < dueCents && resolveSkontoSettledAmount(invoice) !== null) {
     return 0;
   }
-  return Math.max(0, invoice.amount - paidAmount);
+  return fromCents(Math.max(0, dueCents - paidCents));
 }
 
 export function isInvoiceCancelled(invoice: VorgangInvoice): boolean {
@@ -144,7 +157,8 @@ export function isInvoiceOverdue(invoice: VorgangInvoice, today: Date | string =
     return false;
   }
 
-  return toDateOnly(today) > toDateOnly(invoice.paymentDueDate);
+  // FINANZ-CORE-01A (ZAH-10) — § 193 BGB: ein Fristende am Wochenende rückt auf den Werktag.
+  return toDateOnly(today) > shiftToWorkingDay(toDateOnly(invoice.paymentDueDate));
 }
 
 /** True when sent date is after payment due date — due date is not auto-adjusted. */
@@ -346,6 +360,8 @@ export function recordPayment(
     // 02B — optional; ohne Angabe bleibt sie nicht erfasst (nie „Bank“ angenommen).
     ...(method ? { method } : {}),
     createdAt: new Date().toISOString(),
+    // FINANZ-CORE-01A (SQL-05) — die Bestätigung reist mit; der Server verlangt sie.
+    ...(overpayAmount > 0 ? { overpaymentAcknowledged: true } : {}),
   };
 
   const summary = calculatePaymentSummary({
@@ -411,7 +427,8 @@ export function removePayment(
    * frühere, erledigte Episode bleibt Historie.
    */
   try {
-    reconcileInvoicePaymentTasks({ invoiceId });
+    // FINANZ-CORE-01A (ZAH-06) — die Rücknahme beginnt eine neue Episode, auch nach einer erledigten Aufgabe.
+    reconcileInvoicePaymentTasks({ invoiceId, newEpisode: true });
   } catch (error) {
     console.warn('[payment] Überfälligkeitsaufgabe konnte nicht abgeglichen werden', error);
   }
@@ -462,11 +479,48 @@ export async function syncInvoicePaymentToCloud(
       reference: payment.reference,
       note: payment.note,
       method: payment.method,
+      overpaymentAcknowledged: payment.overpaymentAcknowledged === true,
     });
     return result.outcome;
   } catch {
     return 'failed';
   }
+}
+
+/**
+ * FINANZ-CORE-01A (SQL-05/ZAH-02) — eine bereits gebuchte Zahlung nachträglich als
+ * Überzahlung bestätigen.
+ *
+ * Der Server weist eine Überzahlung ohne Bestätigung ab. Das trifft vor allem den Fall,
+ * dass ein anderes Gerät inzwischen eine Zahlung gesichert hat: Dann ist diese hier
+ * entweder doppelt erfasst (der Nutzer entfernt sie) oder eine echte Überzahlung (er
+ * bestätigt sie hier). Geändert wird nur das Merkmal — Kennung, Betrag und Datum
+ * bleiben, damit der nächste Sicherungsversuch dieselbe Zahlung überträgt.
+ */
+export function acknowledgeInvoicePaymentOverpayment(
+  vorgangId: string | null,
+  invoiceId: string,
+  paymentId: string,
+): PaymentMutationResult {
+  const invoice = getVorgangInvoice(vorgangId, invoiceId);
+  if (!invoice) return { success: false, errorKey: 'payment.invoiceNotFound' };
+  if (isInvoiceCancelled(invoice)) return { success: false, errorKey: 'payment.invoiceCancelled' };
+  const payments = getInvoicePayments(invoice);
+  const payment = payments.find((entry) => entry.id === paymentId);
+  if (!payment) return { success: false, errorKey: 'payment.notFound' };
+  if (payment.overpaymentAcknowledged) return { success: true, invoice, payment };
+
+  const acknowledged: InvoicePayment = { ...payment, overpaymentAcknowledged: true };
+  const next = payments.map((entry) => (entry.id === paymentId ? acknowledged : entry));
+  const summary = calculatePaymentSummary({ ...invoice, payments: next });
+  const updated = replaceInvoicePayments(vorgangId, invoiceId, next, summary.status);
+  if (!updated.ok) {
+    return {
+      success: false,
+      errorKey: updated.reason === 'persist_failed' ? 'payment.persistFailed' : 'payment.invoiceNotFound',
+    };
+  }
+  return { success: true, invoice: updated.invoice, payment: acknowledged };
 }
 
 /**
@@ -515,7 +569,8 @@ export function getOverdueDays(
     return 0;
   }
 
-  const due = new Date(toDateOnly(invoice.paymentDueDate));
+  // FINANZ-CORE-01A (ZAH-10) — gezählt ab dem wirksamen Fristende (§ 193 BGB).
+  const due = new Date(shiftToWorkingDay(toDateOnly(invoice.paymentDueDate)));
   const now = new Date(toDateOnly(today));
   const diffMs = now.getTime() - due.getTime();
   return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));

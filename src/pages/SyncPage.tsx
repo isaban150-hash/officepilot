@@ -16,7 +16,9 @@ import {
   type SyncStatusSummary,
   isLocalOnlySyncMode,
   resolveArchivedDocumentConflictFromUi,
+  resolveCustomerConflictFromUi,
   resolveEmployeeConflictFromUi,
+  resolveOfferConflictFromUi,
   resolveSettingsConflictFromUi,
   retrySyncFromUi,
   runSyncFromUi,
@@ -276,6 +278,40 @@ export function SyncPage() {
     return true;
   };
 
+  /* FINANZ-CORE-01A (ANG-03) — Angebotskonflikt: derselbe Weg wie beim Mitarbeiter. */
+  const [offerDecision, setOfferDecision] = useState<{ offerId: string; decision: 'keep_local' | 'take_cloud' } | null>(null);
+  const confirmOfferDecision = async (): Promise<boolean> => {
+    if (!offerDecision) return false;
+    const result = await resolveOfferConflictFromUi(offerDecision.offerId, offerDecision.decision);
+    refresh();
+    if (!result.ok) return false;
+    showToast(
+      translate(
+        offerDecision.decision === 'take_cloud' ? 'sync.offerConflict.resolvedCloud' : 'sync.offerConflict.resolvedLocal',
+      ),
+    );
+    setOfferDecision(null);
+    return true;
+  };
+
+  /* FINANZ-CORE-01A (WEISS-Nacharbeit N04) — Kundenkonflikt: derselbe Weg wie beim Angebot. */
+  const [customerDecision, setCustomerDecision] = useState<{ customerId: string; decision: 'keep_local' | 'take_cloud' } | null>(null);
+  const confirmCustomerDecision = async (): Promise<boolean> => {
+    if (!customerDecision) return false;
+    const result = await resolveCustomerConflictFromUi(customerDecision.customerId, customerDecision.decision);
+    refresh();
+    if (!result.ok) return false;
+    showToast(
+      translate(
+        customerDecision.decision === 'take_cloud'
+          ? 'sync.customerConflict.resolvedCloud'
+          : 'sync.customerConflict.resolvedLocal',
+      ),
+    );
+    setCustomerDecision(null);
+    return true;
+  };
+
   const summary = summarizeSyncStatus(snapshot);
   const statusLabel = statusLabelFor(summary, snapshot.status.syncState, translate);
   const tone = statusTone(summary.kind);
@@ -531,6 +567,86 @@ export function SyncPage() {
         </DetailSection>
       )}
 
+      {(snapshot.offerConflicts ?? []).length > 0 && (
+        <DetailSection title={translate('sync.offerConflict.title')} testId="sync-offer-conflicts">
+          <InlineNotice tone="warning" testId="sync-offer-conflict-hint">
+            {translate('sync.offerConflict.hint')}
+          </InlineNotice>
+          {(snapshot.offerConflicts ?? []).map((conflict) => (
+            <div key={conflict.outboxId} data-testid={`sync-offer-conflict-${conflict.offerId}`}>
+              <RowList>
+                <RowListItem
+                  testId={`sync-offer-conflict-title-${conflict.offerId}`}
+                  title={`${translate('sync.entity.offer')} · ${conflict.title ?? translate('sync.documentConflict.untitled')}`}
+                  trailing={<Badge tone="warning">{translate('sync.failure.kind.conflict')}</Badge>}
+                />
+              </RowList>
+              <div className="sync-page__actions">
+                <Button
+                  type="button"
+                  fullWidth
+                  disabled={isSyncing}
+                  data-testid={`sync-offer-take-cloud-${conflict.offerId}`}
+                  onClick={() => setOfferDecision({ offerId: conflict.offerId, decision: 'take_cloud' })}
+                >
+                  {translate('sync.offerConflict.takeCloud')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  fullWidth
+                  disabled={isSyncing}
+                  data-testid={`sync-offer-keep-local-${conflict.offerId}`}
+                  onClick={() => setOfferDecision({ offerId: conflict.offerId, decision: 'keep_local' })}
+                >
+                  {translate('sync.offerConflict.keepLocal')}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </DetailSection>
+      )}
+
+{(snapshot.customerConflicts ?? []).length > 0 && (
+        <DetailSection title={translate('sync.customerConflict.title')} testId="sync-customer-conflicts">
+          <InlineNotice tone="warning" testId="sync-customer-conflict-hint">
+            {translate('sync.customerConflict.hint')}
+          </InlineNotice>
+          {(snapshot.customerConflicts ?? []).map((conflict) => (
+            <div key={conflict.outboxId} data-testid={`sync-customer-conflict-${conflict.customerId}`}>
+              <RowList>
+                <RowListItem
+                  testId={`sync-customer-conflict-title-${conflict.customerId}`}
+                  title={`${translate('sync.customerConflict.entity')} · ${conflict.name ?? translate('sync.documentConflict.untitled')}`}
+                  trailing={<Badge tone="warning">{translate('sync.failure.kind.conflict')}</Badge>}
+                />
+              </RowList>
+              <div className="sync-page__actions">
+                <Button
+                  type="button"
+                  fullWidth
+                  disabled={isSyncing}
+                  data-testid={`sync-customer-take-cloud-${conflict.customerId}`}
+                  onClick={() => setCustomerDecision({ customerId: conflict.customerId, decision: 'take_cloud' })}
+                >
+                  {translate('sync.customerConflict.takeCloud')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  fullWidth
+                  disabled={isSyncing}
+                  data-testid={`sync-customer-keep-local-${conflict.customerId}`}
+                  onClick={() => setCustomerDecision({ customerId: conflict.customerId, decision: 'keep_local' })}
+                >
+                  {translate('sync.customerConflict.keepLocal')}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </DetailSection>
+      )}
+
       <SimpleConfirmDialog
         open={documentDecision !== null}
         title={translate(
@@ -583,6 +699,54 @@ export function SyncPage() {
         failureMessage={translate('sync.employeeConflict.failed')}
         onConfirm={confirmEmployeeDecision}
         onCancel={() => setEmployeeDecision(null)}
+      />
+
+      <SimpleConfirmDialog
+        open={offerDecision !== null}
+        title={translate(
+          offerDecision?.decision === 'keep_local' ? 'sync.offerConflict.keepLocalTitle' : 'sync.offerConflict.takeCloudTitle',
+        )}
+        message={translate(
+          offerDecision?.decision === 'keep_local'
+            ? 'sync.offerConflict.keepLocalMessage'
+            : 'sync.offerConflict.takeCloudMessage',
+        )}
+        confirmLabel={translate(
+          offerDecision?.decision === 'keep_local' ? 'sync.offerConflict.keepLocal' : 'sync.offerConflict.takeCloud',
+        )}
+        cancelLabel={translate('common.cancel')}
+        confirmVariant="primary"
+        confirmTestId="sync-offer-decision-confirm"
+        cancelTestId="sync-offer-decision-cancel"
+        dialogTestId="sync-offer-decision-dialog"
+        failureMessage={translate('sync.offerConflict.failed')}
+        onConfirm={confirmOfferDecision}
+        onCancel={() => setOfferDecision(null)}
+      />
+
+      <SimpleConfirmDialog
+        open={customerDecision !== null}
+        title={translate(
+          customerDecision?.decision === 'keep_local'
+            ? 'sync.customerConflict.keepLocalTitle'
+            : 'sync.customerConflict.takeCloudTitle',
+        )}
+        message={translate(
+          customerDecision?.decision === 'keep_local'
+            ? 'sync.customerConflict.keepLocalMessage'
+            : 'sync.customerConflict.takeCloudMessage',
+        )}
+        confirmLabel={translate(
+          customerDecision?.decision === 'keep_local' ? 'sync.customerConflict.keepLocal' : 'sync.customerConflict.takeCloud',
+        )}
+        cancelLabel={translate('common.cancel')}
+        confirmVariant="primary"
+        confirmTestId="sync-customer-decision-confirm"
+        cancelTestId="sync-customer-decision-cancel"
+        dialogTestId="sync-customer-decision-dialog"
+        failureMessage={translate('sync.customerConflict.failed')}
+        onConfirm={confirmCustomerDecision}
+        onCancel={() => setCustomerDecision(null)}
       />
 
       {/*

@@ -12,7 +12,7 @@
  */
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Expense } from '../types/expense';
 import type { Task, VorgangInvoice } from '../types/models';
 import { DEFAULT_SETUP } from '../data/mockData';
@@ -21,7 +21,7 @@ import { TestProviders } from '../test/testProviders';
 import { hydrateInvoiceStore } from './invoice/invoiceStore';
 import { hydrateExpenseStore } from './expenseStore';
 import { hydrateTaskStore } from './taskService';
-import { processUpload } from './inboxService';
+import { hydrateInboxStore, processUpload } from './inboxService';
 import { getSteuerberaterMonthOverview } from './steuerberaterOverviewService';
 import { buildMonatsmappeModel } from './steuerberater/monatsmappeModelService';
 import { collectMonatsmappeInput } from './steuerberater/monatsmappeInputService';
@@ -176,6 +176,10 @@ function renderSteuerberater(): string {
   );
 }
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('REAL-PRODUCT-TEST-01B — Monatsübersicht aus dem Monatsmappenmodell', () => {
   it('A: Monat ohne Belege ist leer — nicht vollständig, nicht „bereit"', () => {
     const result = overview();
@@ -214,7 +218,14 @@ describe('REAL-PRODUCT-TEST-01B — Monatsübersicht aus dem Monatsmappenmodell'
   it('D: unklarer Eingangsposten oder fehlende Unterlage → offen, nicht vollständig', () => {
     hydrateInvoiceStore([{ invoice: invoice(), vorgangId: null }]);
     abschliessen(['inv-1']);
+    /*
+     * FINANZ-CORE-01A — kalenderunabhängig wie U4 in steuerberaterUebergabe02b:
+     * `processUpload` setzt den Eingang auf heute. Seit dem 01.10. lag er damit
+     * im Oktober, und der geprüfte September blieb „bereit". Der Posten gehört
+     * fest in den geprüften Monat.
+     */
     const uploaded = processUpload({ kind: 'eingangsrechnung' });
+    hydrateInboxStore([{ ...uploaded, receivedAt: '2026-09-14T09:00:00.000Z' }]);
     const withUnclear = overview();
     // 02B — unklare Fälle blockieren den Abschluss nicht, verhindern aber „vollständig“.
     expect(withUnclear.handover).toMatchObject({ state: 'unclear_cases', packageAllowed: true, packageComplete: false });
@@ -249,6 +260,13 @@ describe('REAL-PRODUCT-TEST-01B — Monatsübersicht aus dem Monatsmappenmodell'
   });
 
   it('F: Heute und Steuerberater-Seite zeigen dieselbe Semantik', () => {
+    /*
+     * FINANZ-CORE-01A — „Heute" und die Seite wählen den Monat aus dem heutigen
+     * Datum. Der Test prüft den September; ohne festes Datum zeigte er ab dem
+     * 01.10. den leeren Oktober. Nur das Datum steht still, Zeitgeber laufen.
+     */
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 8, 16, 12, 0, 0));
     /* leer: neutral, weder Prozent noch „bereit" */
     const emptyHome = renderHome();
     expect(emptyHome).toContain('Noch keine Belege');

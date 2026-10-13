@@ -62,6 +62,8 @@ const companyOk = {
   street: 'Werk 1',
   zip: '80331',
   city: 'München',
+  // FINANZ-CORE-01A (RE-09): Steuernummer oder USt-IdNr. ist Pflichtangabe jeder Rechnung.
+  taxNumber: '133/8150/8159',
   iban: 'DE89370400440532013000',
   bankName: 'Sparkasse',
   phone: '089 111',

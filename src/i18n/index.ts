@@ -376,10 +376,15 @@ const deLegacy = {
   'bankMatch.reasons': 'Gründe',
   'bankMatch.reason.invoice_number_in_purpose': 'Rechnungsnummer im Verwendungszweck erkannt',
   'bankMatch.reason.amount_matches_open': 'Betrag stimmt mit dem offenen Betrag überein',
+  // FINANZ-CORE-01A (ZAH-04)
+  'bankMatch.reason.amount_matches_skonto': 'Betrag entspricht dem Zahlbetrag mit Skonto (fristgerecht)',
   'bankMatch.reason.counterparty_matches': 'Gegenpartei passt',
   'bankMatch.reason.amount_differs': 'Betrag weicht ab',
   'bankMatch.reason.date_before_document': 'Buchung liegt vor dem Belegdatum',
   'bankMatch.more': 'Weitere Möglichkeiten',
+  // FINANZ-CORE-01A (ZAH-03)
+  'bankMatch.moreShow': 'Anzeigen',
+  'bankMatch.moreHide': 'Ausblenden',
   'bankMatch.notAssigned': 'Das ist ein Vorschlag. Es wird nichts zugeordnet und nichts bezahlt.',
   /*
    * BANKABGLEICH-V1 BLOCK 4 — bestätigte Zuordnung mit Geldwirkung.
@@ -397,6 +402,11 @@ const deLegacy = {
   'bankConfirm.paidOn': 'Zahlungsdatum',
   'bankConfirm.open': 'Offener Betrag',
   'bankConfirm.partial': 'Teilzahlung — danach bleibt ein Rest offen.',
+  // FINANZ-CORE-01A (ZAH-04/ZAH-03)
+  'bankConfirm.skonto': 'Fristgerechte Zahlung mit Skonto — danach ist nichts mehr offen.',
+  'bankConfirm.possiblyRecorded':
+    'Auf diesen Beleg wurde am {date} schon eine Zahlung über diesen Betrag erfasst. Ist es dieselbe, bitte oben verknüpfen statt neu buchen.',
+  'bankConfirm.confirmAnyway': 'Trotzdem als neue Zahlung erfassen',
   'bankConfirm.confirm': 'Zahlung jetzt erfassen',
   'bankConfirm.cancel': 'Abbrechen',
   'bankConfirm.running': 'Wird erfasst …',
@@ -410,6 +420,18 @@ const deLegacy = {
   'bankConfirm.refusal.nothing_open': 'Für diesen Beleg ist nichts mehr offen.',
   'bankConfirm.refusal.offline':
     'Die Zuordnung konnte nicht gespeichert werden. Bitte später erneut versuchen.',
+  // FINANZ-CORE-01A (ZAH-18/ZAH-03)
+  'bankConfirm.refusal.not_allowed':
+    'Bankbewegungen zuordnen dürfen nur Inhaber und Verwaltung – oder das Konto ist gesperrt bzw. die Lizenz abgelaufen.',
+  'bankConfirm.refusal.payment_already_linked': 'Diese Zahlung belegt bereits eine andere Bankbewegung.',
+  'bankConfirm.refusal.payment_amount_mismatch': 'Der Betrag der erfassten Zahlung passt nicht zur Bankbewegung.',
+  'bankConfirm.refusal.payment_reversed': 'Diese Zahlung wurde inzwischen storniert.',
+  'bankConfirm.refusal.payment_not_found': 'Die erfasste Zahlung ist in der Cloud nicht bekannt. Bitte zuerst sichern.',
+  'bankLink.title': 'Möglicherweise bereits erfasst',
+  'bankLink.intro': 'Es gibt schon eine Zahlung über diesen Betrag. Verknüpfen erfasst keine zweite Zahlung.',
+  'bankLink.item': 'Zahlung vom {date} · {target}',
+  'bankLink.action': 'Mit dieser Zahlung verknüpfen',
+  'bankLink.running': 'Wird verknüpft …',
   /* UIUX-FOUNDATION-01E — Listen, Filter, Heute-Abschnitte. */
   'list.search': 'Suchen…',
   'list.filter.label': 'Filter',
@@ -740,6 +762,11 @@ const deLegacy = {
   'steuerberater.exportButton': 'Export vorbereiten',
   'steuerberater.documentsIncluded': 'Enthaltene Belege',
   'steuerberater.missingTitle': 'Fehlende Belege',
+  /* FINANZ-CORE-01A (WEISS-Nacharbeit N10/N11) */
+  'steuerberater.generalTasksTitle': 'Allgemeine Steueraufgaben',
+  'steuerberater.generalTasksHint':
+    'Diese offenen Aufgaben haben keine Fälligkeit und keinen Beleg, der sie einem Monat zuordnet. Sie gelten für die Übergabe insgesamt und sperren keinen einzelnen Monat.',
+  'steuerberater.employeePaymentsInMonth': 'Dazu {count} Zahlung(en) an Mitarbeiter — sie gehören zur Übergabe.',
   'steuerberater.unclearTitle': 'Unklare Belege',
   'steuerberater.noDocuments': 'Noch keine Belege für diesen Monat.',
   // BLOCK 2 — ein Monat ohne Beleg, aber mit Zahlungen, ist nicht leer.
@@ -896,6 +923,40 @@ const deLegacy = {
   'sync.entity.task': 'Aufgabe',
   'sync.entity.vorgang': 'Auftrag',
   'sync.entity.invoice': 'Rechnung',
+  /* FINANZ-CORE-01A (ANG-03) */
+  'sync.entity.offer': 'Angebot',
+  'sync.offerConflict.title': 'Angebote: Entscheidung nötig',
+  'sync.offerConflict.hint':
+    'Online und auf diesem Gerät liegen unterschiedliche Stände dieses Angebots. Bitte entscheiden, welcher gelten soll; bis dahin sind Freigabe und Annahme gesperrt.',
+  'sync.offerConflict.takeCloud': 'Online-Version verwenden',
+  'sync.offerConflict.keepLocal': 'Änderungen dieses Geräts behalten',
+  'sync.offerConflict.takeCloudTitle': 'Online-Version verwenden?',
+  'sync.offerConflict.takeCloudMessage':
+    'Die Online-Version dieses Angebots wird übernommen. Die noch nicht übertragene Änderung dieses Geräts an diesem Angebot wird verworfen.',
+  'sync.offerConflict.keepLocalTitle': 'Änderungen dieses Geräts behalten?',
+  'sync.offerConflict.keepLocalMessage':
+    'Die Online-Version ist neuer. Wenn Sie die Änderung dieses Geräts behalten, wird daraus beim nächsten Synchronisieren eine neue Version in der Cloud.',
+  'sync.offerConflict.failed':
+    'Die Entscheidung konnte nicht angewendet werden. Ist das Angebot online bereits freigegeben, gilt die Online-Version. Sonst bitte die Verbindung prüfen und erneut versuchen. Es wurde nichts geändert.',
+  'sync.offerConflict.resolvedCloud': 'Online-Version übernommen.',
+  'sync.offerConflict.resolvedLocal': 'Änderung behalten. Sie wird beim nächsten Synchronisieren übertragen.',
+  /* FINANZ-CORE-01A (WEISS-Nacharbeit N04) */
+  'sync.customerConflict.entity': 'Kunde',
+  'sync.customerConflict.title': 'Kunden: Entscheidung nötig',
+  'sync.customerConflict.hint':
+    'Online und auf diesem Gerät liegen unterschiedliche Stände dieses Kunden. Die Änderung dieses Geräts ist noch nicht übertragen und wurde deshalb nicht überschrieben. Bitte entscheiden, welcher Stand gelten soll.',
+  'sync.customerConflict.takeCloud': 'Online-Version verwenden',
+  'sync.customerConflict.keepLocal': 'Änderungen dieses Geräts behalten',
+  'sync.customerConflict.takeCloudTitle': 'Online-Version verwenden?',
+  'sync.customerConflict.takeCloudMessage':
+    'Die Online-Version dieses Kunden wird übernommen. Die noch nicht übertragene Änderung dieses Geräts an diesem Kunden wird verworfen.',
+  'sync.customerConflict.keepLocalTitle': 'Änderungen dieses Geräts behalten?',
+  'sync.customerConflict.keepLocalMessage':
+    'Die Online-Version ist neuer. Wenn Sie die Änderung dieses Geräts behalten, wird daraus beim nächsten Synchronisieren eine neue Version in der Cloud.',
+  'sync.customerConflict.failed':
+    'Die Entscheidung konnte nicht angewendet werden. Bitte die Verbindung prüfen und erneut versuchen. Es wurde nichts geändert.',
+  'sync.customerConflict.resolvedCloud': 'Online-Version übernommen.',
+  'sync.customerConflict.resolvedLocal': 'Änderung behalten. Sie wird beim nächsten Synchronisieren übertragen.',
   'sync.entity.other': 'Eintrag',
   'sync.operation.create': 'Neu',
   'sync.operation.update': 'Aktualisieren',
@@ -1649,6 +1710,17 @@ const deLegacy = {
     'Enthält Buchungsdaten, Originalbelege, das Abschlussmanifest und einen Prüfbericht.',
   'accountingExport.running': 'Paket wird erstellt …',
   'accountingExport.failed': 'Das Paket konnte nicht erstellt werden.',
+  /* FINANZ-CORE-01A (BUH-05) */
+  'accountingExport.failure.documents': 'Diese Belege ließen sich nicht in das Paket aufnehmen:',
+  'accountingExport.failure.pdf': 'Die Rechnung lässt sich nicht als PDF erzeugen.',
+  'accountingExport.failure.file':
+    'Die Datei liegt auf diesem Gerät nicht vor. Bitte den Beleg einmal öffnen (lädt ihn aus der Cloud) und das Paket erneut erstellen.',
+  'accountingExport.failure.unknown': 'Der Beleg ließ sich nicht laden.',
+  'accountingExport.failure.remedy': 'Bitte die genannten Belege öffnen und prüfen; danach das Paket erneut erstellen.',
+  'accountingExport.failure.blocked':
+    'Der Monat ist nicht mehr bereit für die Übergabe (etwa wieder geöffnet oder nach dem Abschluss geändert).',
+  'accountingExport.pdfProblems.title':
+    'Diese Rechnungen lassen sich nicht als PDF erzeugen – das Paket würde an ihnen scheitern:',
   'accountingExport.blockedTitle': 'Übergabe noch nicht möglich',
   'accountingExport.blocker.not_closed':
     'Der Monat ist nicht abgeschlossen. Bitte zuerst oben abschließen.',
@@ -1763,6 +1835,21 @@ const deLegacy = {
   'accounting.notFound': 'Kontierung nicht gefunden.',
   'accounting.confirmNeedsAccount':
     'Zum Bestätigen fehlt das Sachkonto. Lieber kein Konto als ein falsches — bitte eintragen.',
+  /* FINANZ-CORE-01A (WEISS-Nacharbeit N06) */
+  'accounting.confirmNeedsTax':
+    'Zum Bestätigen fehlt eine geklärte Steuerbehandlung. Sie folgt dem Steuerstatus des Belegs — bitte dort festlegen.',
+  'accounting.confirmTaxMismatch':
+    'Die Steuerbehandlung der Kontierung entspricht nicht dem Steuerstatus des Belegs. Bitte zuerst die Steuer vom Beleg übernehmen.',
+  'accounting.taxUnclearHint':
+    'Die Steuerbehandlung folgt dem Steuerstatus des Belegs, und der ist noch ungeklärt. Erst wenn er am Beleg festgelegt ist (samt Beträgen), lässt sich die Kontierung bestätigen.',
+  'accounting.taxMismatchHint':
+    'Die Steuerbehandlung der Kontierung weicht vom Steuerstatus des Belegs ab. Die Kontierung folgt dem Beleg — bitte die Steuer übernehmen und die Kontierung danach prüfen.',
+  'accounting.action.adoptSourceTax': 'Steuer vom Beleg übernehmen',
+  'accounting.action.clarifyTaxOnSource': 'Steuerstatus am Beleg festlegen',
+  'accounting.reason.sourceChanged':
+    'Der Beleg wurde nach der Bestätigung geändert. Bitte die Kontierung prüfen und erneut bestätigen.',
+  'accounting.reason.sourceTaxChanged':
+    'Die Steuerbehandlung wurde an den Steuerstatus des Belegs angeglichen. Bitte die Kontierung prüfen und bestätigen.',
   'accounting.action.start': 'Kontierung anlegen',
   'accounting.action.edit': 'Bearbeiten',
   'accounting.action.save': 'Übernehmen',
@@ -1952,6 +2039,8 @@ const deLegacy = {
   'orderAmendment.validation.unitRequired': 'Bitte eine Einheit angeben.',
   'orderAmendment.validation.unitPriceRequired': 'Bitte einen gültigen Einzelpreis angeben.',
   'orderAmendment.validation.unitPriceNonNegative': 'Der Einzelpreis darf nicht negativ sein.',
+  // FINANZ-CORE-01A (A4) — gedruckt und abgerechnet wird auf Cent.
+  'orderAmendment.validation.unitPriceCents': 'Bitte den Einzelpreis in vollen Cent angeben (höchstens zwei Nachkommastellen).',
   'orderAmendment.editDraft': 'Entwurf bearbeiten',
   'orderAmendment.doneEditDraft': 'Bearbeitung schließen',
   'orderAmendment.editPosition': 'Bearbeiten',
@@ -2044,7 +2133,8 @@ const deLegacy = {
     'Bestätigter Auftrag, Verhandlung und Hauptpositionen inklusive Ausführung.',
   'vorgang.orderSummary.title': 'Auftragsstand',
   'vorgang.orderSummary.notConfirmed': 'Der Auftrag ist noch nicht bestätigt.',
-  'vorgang.orderSummary.orderValue': 'Bestätigter Auftragswert',
+  // FINANZ-CORE-01A (F-04) — Maßstab und Bezug ausdrücklich: netto, Stand der Auftragsbestätigung.
+  'vorgang.orderSummary.orderValue': 'Bestätigter Auftragswert (netto, ohne Nachträge)',
   'vorgang.orderSummary.mainPositions': 'Hauptpositionen',
   'vorgang.orderSummary.confirmedAmendments': 'Bestätigte Nachträge',
   'vorgang.orderSummary.openDraft': 'Offener Nachtragsentwurf',
@@ -2203,6 +2293,13 @@ const deLegacy = {
   'customer.nameRequired': 'Kundenname erforderlich.',
   'customer.ownCompanyNotAllowed': 'Eigene Firma kann nicht als Kunde angelegt werden.',
   'customer.persistFailed': 'Speichern fehlgeschlagen. Es wurde nichts geändert.',
+  /* FINANZ-CORE-01A (KUN-09) */
+  'customer.validation.email': 'Die E-Mail-Adresse ist nicht gültig (Beispiel: name@firma.de).',
+  'customer.validation.vatId':
+    'Die USt-IdNr. ist nicht gültig. Sie beginnt mit dem Ländercode, in Deutschland „DE" und neun Ziffern (Beispiel: DE123456789).',
+  'customer.validation.countryCode': 'Der Ländercode ist nicht gültig. Bitte zwei Buchstaben angeben (Beispiel: DE, AT, CH).',
+  'customer.validation.leitwegId':
+    'Die Leitweg-ID ist nicht gültig. Aufbau: Grobadressierung, optional Feinadressierung, zweistellige Prüfziffer (Beispiel: 04011000-1234512345-06).',
   'kunden.orphanBadge': 'Kundenstamm fehlt',
   'kunden.link.ambiguousTitle': 'Mehrere Kunden mit diesem Namen',
   'kunden.link.ambiguousDesc': 'Bitte den gewünschten Kunden auswählen.',
@@ -2476,6 +2573,8 @@ const deLegacy = {
   'document.addSubtitle': 'Metadaten erfassen – kein Datei-Upload',
   'document.editTitle': 'Dokument bearbeiten',
   'document.edit': 'Bearbeiten',
+  'document.edit.generatedInvoiceLocked':
+    'Diesen Beleg hat OfficeTakt aus einer Rechnung erzeugt. Er wird nicht bearbeitet; Korrekturen laufen über Storno und eine neue Rechnung.',
   'document.delete': 'Löschen',
   'document.deleteConfirm': 'Endgültig löschen',
   'document.deleted': 'Dokument gelöscht.',
@@ -3105,12 +3204,38 @@ const deLegacy = {
   'invoice.typeHint.storno': 'Storno zu einer bestehenden Rechnung.',
   'invoice.approve.syncIncomplete': 'Der Abgleich mit der Cloud ist noch nicht vollständig. OfficeTakt gibt keine Rechnung frei, solange der aktuelle Abrechnungsstand unklar ist. Bitte die Verbindung prüfen und in einem Moment erneut freigeben.',
   'invoice.approve.quantityExceeded': 'Für mindestens eine Leistung ist weniger offen, als abgerechnet werden soll. Bitte die Mengen prüfen – vielleicht wurde inzwischen auf einem anderen Gerät abgerechnet. Es wurde keine Rechnung gespeichert.',
-  'invoice.approve.serverRejected': 'Die Rechnung passt nicht mehr zum Auftrag (Leistungen, Preise, Steuer oder Kunde). Bitte die Rechnung neu aufbauen. Es wurde keine Rechnung gespeichert.',
+  // FINANZ-CORE-01A (RE-16) — neutral für Rechnungen mit und ohne Auftrag; benannte Gründe folgen darunter.
+  'invoice.approve.serverRejected': 'Der Server hat die Rechnung abgelehnt, weil sie nicht zum aktuellen Stand passt (Leistungen, Preise, Steuer oder Kunde). Bitte die Angaben prüfen und die Rechnung neu aufbauen. Es wurde keine Rechnung gespeichert.',
+  /* FINANZ-CORE-01A (RE-07/RE-12) */
+  'invoice.approve.orderNotSynced':
+    'Der Auftrag hat Änderungen, die noch nicht in der Cloud sind (etwa Aufmaß oder Positionen). Bitte warten, bis sie übertragen sind – bei einem Konflikt unter „Synchronisierung" entscheiden – und dann erneut freigeben. Es wurde nichts freigegeben.',
+  'invoice.approve.prepTimeout':
+    'Die Verbindung zur Cloud antwortet nicht. Die Freigabe wurde nicht begonnen; bitte später erneut versuchen.',
+  'invoice.approve.slow':
+    'Die Freigabe dauert ungewöhnlich lange. Bitte nicht erneut freigeben: Sie können die Seite verlassen – beim nächsten Öffnen prüft OfficeTakt, ob die Rechnung entstanden ist.',
+  'invoice.approve.companyTaxIdMissing': 'Im Firmenprofil fehlt die Steuernummer oder USt-IdNr. Sie ist eine Pflichtangabe jeder Rechnung (§ 14 Abs. 4 Nr. 2 UStG). Bitte in den Firmendaten ergänzen. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.companyIncomplete': 'Im Firmenprofil fehlen Name oder Anschrift des Betriebs. Bitte in den Firmendaten ergänzen. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.customerAddressIncomplete': 'Die Anschrift des Rechnungsempfängers ist unvollständig (Straße, PLZ und Ort). Bitte ergänzen. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.issueDateFuture': 'Das Rechnungsdatum liegt in der Zukunft. Eine Rechnung trägt das Datum ihrer Ausstellung. Bitte das Datum korrigieren. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.dateInvalid': 'Rechnungsdatum oder Leistungszeitraum sind ungültig (der Zeitraum darf nicht rückwärts laufen). Bitte korrigieren. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.abschlagNumberTaken': 'Diese Abschlagsnummer ist im Auftrag bereits vergeben – vermutlich hat ein anderes Gerät inzwischen einen Abschlag erstellt. Bitte die Seite neu laden und den Abschlag neu aufbauen. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.legalNoticeMissing': 'Zum gewählten Steuerstatus fehlt der Pflichthinweis (etwa § 19 oder § 13b UStG). Bitte den Steuerstatus erneut wählen, damit der Hinweis übernommen wird. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.deductionsExceedTotal': 'Die Abzüge früherer Abschläge übersteigen den Rechnungsbetrag. Bitte die Schlussrechnung prüfen. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.abschlagUnpaid': 'Der Server hat die Schlussrechnung abgewiesen: Ein abgezogener Abschlag ist dort noch nicht vollständig bezahlt — oder ein Skonto wurde erst nach Ablauf der Skontofrist gezahlt. Ist die Zahlung auf diesem Gerät erfasst, aber noch nicht gesichert, bitte zuerst sichern. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.abschlagSettlementMismatch': 'Der Server hat die Schlussrechnung abgewiesen: Wie ein abgezogener Abschlag beglichen ist (gezahlt und Skonto), stimmt nicht mit den dort gesicherten Zahlungen überein. Bitte zuerst synchronisieren und dann erneut freigeben. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.deductionsMismatch': 'Die abgezogenen Abschläge stimmen nicht mehr mit dem Stand in der Cloud überein – vermutlich wurde inzwischen ein Abschlag erstellt oder storniert. Bitte die Seite neu laden und die Schlussrechnung neu aufbauen. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.taxStatusOrderMismatch': 'Der Steuerstatus weicht vom bestätigten Auftrag ab. Bitte den Steuerstatus des Auftrags verwenden – sonst lehnt der Server die Rechnung ab. Es wurde nichts freigegeben.',
+  'invoice.approve.customerOrderMismatch': 'Der Rechnungsempfänger passt weder zum Auftrag noch zum Kundenstamm. Bitte den Namen prüfen – sonst lehnt der Server die Rechnung ab. Es wurde nichts freigegeben.',
+  'invoice.taxStatusFromOrder': 'Die Steuer kommt aus dem bestätigten Auftrag und gilt auch für diese Rechnung.',
+  'invoice.finalInvoiceExistsHint': 'Für diesen Auftrag gibt es bereits eine wirksame Schlussrechnung. Danach entsteht keine weitere Rechnung; für eine Korrektur bitte zuerst die Schlussrechnung stornieren.',
+  'invoice.approve.finalInvoiceExists': 'Für diesen Auftrag gibt es bereits eine wirksame Schlussrechnung. Danach entsteht keine weitere Rechnung; für eine Korrektur bitte zuerst die Schlussrechnung stornieren. Es wurde keine Rechnung gespeichert.',
   'invoice.approve.offline':
     'Rechnungsfreigabe benötigt eine Internetverbindung. Bitte Verbindung und Anmeldung prüfen.',
   'invoice.approve.auth': 'Bitte erneut anmelden, um die Rechnung freizugeben.',
   'invoice.approve.workspace': 'Kein aktiver Workspace – Freigabe nicht möglich.',
   'invoice.approve.conflict': 'Konflikt bei der Rechnungsfreigabe. Bitte Entwurf prüfen.',
+  'invoice.approve.possibleDuplicate':
+    'Eine Rechnung mit genau diesem Inhalt gibt es bereits (gleicher Kunde, gleiche Positionen, gleiches Rechnungsdatum und gleicher Leistungszeitraum). Es wurde keine zweite Rechnung erstellt. Ist es eine eigene Leistung, bitte Leistungszeitraum oder Beschreibung anpassen.',
   'invoice.approve.localPersistPending':
     'Cloud-Freigabe erfolgreich, lokale Speicherung fehlgeschlagen. Bitte erneut freigeben – keine zweite Rechnung.',
   'invoice.approve.archiveWarning': 'Rechnung freigegeben, Archiv/PDF konnte nicht erzeugt werden.',
@@ -3153,8 +3278,11 @@ const deLegacy = {
   'invoice.validation.customerAddress': 'Rechnungsempfänger: Anschrift unvollständig.',
   'invoice.validation.companyName': 'Aussteller: Firmenname fehlt.',
   'invoice.validation.companyAddress': 'Aussteller: Firmenanschrift unvollständig.',
+  // FINANZ-CORE-01A (RE-09/EIN-04) — Pflichtangabe nach § 14 Abs. 4 Nr. 2 UStG.
+  'invoice.validation.companyTaxId': 'Aussteller: Steuernummer oder USt-IdNr. fehlt (Pflichtangabe jeder Rechnung). Bitte in den Firmendaten ergänzen.',
   'invoice.validation.issueDate': 'Rechnungsdatum fehlt oder ist ungültig.',
-  'invoice.validation.servicePeriod': 'Leistungszeitraum fehlt oder ist ungültig.',
+  // FINANZ-CORE-01A (RE-17/SQL-15) — das Ausstellungsdatum liegt nie in der Zukunft.
+  'invoice.validation.issueDateFuture': 'Das Rechnungsdatum liegt in der Zukunft. Eine Rechnung trägt das Datum ihrer Ausstellung.',  'invoice.validation.servicePeriod': 'Leistungszeitraum fehlt oder ist ungültig.',
   'invoice.validation.servicePeriodUnconfirmed':
     'Bitte den tatsächlichen Leistungszeitraum bestätigen.',
   'invoice.validation.servicePeriodOrder':
@@ -3180,8 +3308,21 @@ const deLegacy = {
   'invoice.validation.fixedAmountNet': 'Der pauschale Nettobetrag muss größer als 0 sein.',
   'invoice.validation.fixedAmountType': 'Pauschalbetrag ist nur für Abschlagsrechnungen zulässig.',
   'invoice.validation.abschlagExceedsOrderValue':
-    'Der Abschlag ist zu hoch. Zusammen mit den bisherigen Abschlagsrechnungen würde er den aktuell abrechenbaren Auftragswert überschreiten. Bitte den Abschlagsbetrag reduzieren oder den Auftrag zuerst korrekt anpassen.',
+    'Der Abschlag ist zu hoch. Zusammen mit dem bereits Abgerechneten (Abschläge, Rechnungen und Teilrechnungen) würde er den aktuell abrechenbaren Auftragswert überschreiten. Bitte den Abschlagsbetrag reduzieren oder den Auftrag zuerst korrekt anpassen.',
   'invoice.remainingFixedAmountBillable': 'Noch pauschal abrechenbar',
+  /* FINANZ-CORE-01A (KUN-02) */
+  'invoice.einvoicePrecheck.titleExpected': 'E-Rechnung: Für diesen Empfänger fehlen noch Angaben',
+  'invoice.einvoicePrecheck.title': 'Hinweis zur E-Rechnung',
+  'invoice.einvoicePrecheck.hint':
+    'Als E-Rechnung (XRechnung oder ZUGFeRD) ließe sich diese Rechnung so nicht ausgeben. Nach der Freigabe sind die Angaben auf dem Beleg nicht mehr ergänzbar – bitte vorher in den Firmen- oder Kundendaten nachtragen. Als PDF-Rechnung kann sie unverändert freigegeben werden.',
+  /* FINANZ-CORE-01A (AUS-18) */
+  'invoice.einvoicePrecheck.hintXRechnungOnly':
+    'Als XRechnung (etwa für öffentliche Auftraggeber) ließe sich diese Rechnung so nicht ausgeben, als ZUGFeRD-Rechnung schon. Nach der Freigabe sind die Angaben auf dem Beleg nicht mehr ergänzbar – wer eine XRechnung braucht, trägt sie vorher in den Firmen- oder Kundendaten nach. Als PDF-Rechnung kann sie unverändert freigegeben werden.',
+  /* FINANZ-CORE-01A (RE-04) */
+  'invoice.validation.fixedAbschlagRequiresSchluss':
+    'Für diesen Auftrag gibt es einen Pauschalabschlag, den erst die Schlussrechnung abzieht. Eine Rechnung über die Leistung würde ihn doppelt berechnen – bitte als Schlussrechnung abrechnen.',
+  'invoice.validation.warn.fixedAbschlagDeductedInSchluss':
+    'Der Pauschalabschlag dieses Auftrags wird erst in der Schlussrechnung abgezogen. Diese Teilrechnung berechnet ihren Teil vollständig.',
   'invoice.validation.fixedAmountWithPositions':
     'Pauschaler Abschlag darf keine Positionsmengen enthalten.',
   'invoice.validation.quantityWithFixedAmount':
@@ -3200,14 +3341,39 @@ const deLegacy = {
     '§ 13b erfordert eine ausdrückliche Bestätigung vor der Freigabe.',
   'invoice.validation.totalsInvalid': 'Netto, Steuer oder Brutto sind ungültig.',
   'invoice.validation.totalsNegative': 'Der Gesamtbetrag darf nicht negativ sein.',
+  'invoice.validation.abschlagUnpaid':
+    'Ein abgezogener Abschlag ist noch nicht vollständig bezahlt. Eine Schlussrechnung zieht nur bezahlte Abschläge ab (§ 14 Abs. 5 UStG); ein Skonto zählt nur bei Zahlung innerhalb der Skontofrist. Bitte zuerst die Zahlung zum Abschlag erfassen – oder einen unbezahlten Abschlag stornieren; dann berechnet die Schlussrechnung seinen Betrag mit.',
+  'invoice.abschlagUnsettled.title': 'Noch nicht bezahlte Abschläge',
+  'invoice.abschlagUnsettled.label': 'Abschlag {number}',
+  'invoice.abschlagUnsettled.labelPlain': 'Abschlag',
+  'invoice.abschlagUnsettled.open': 'offen {amount}',
+  'invoice.abschlagUnsettled.hint':
+    'Die Schlussrechnung zieht nur bezahlte Abschläge ab; ein Skonto zählt nur bei Zahlung innerhalb der Skontofrist. Bitte die Zahlung zum Abschlag erfassen, sobald sie eingegangen ist. Zahlt der Kunde den Abschlag nicht, lässt er sich stornieren – dann berechnet die Schlussrechnung seinen Betrag mit.',
   'invoice.validation.deductionsExceedTotal':
     'Die bisherigen Abschlagsrechnungen übersteigen den endgültigen Leistungswert. Die Schlussrechnung kann so nicht abgeschlossen werden. Bitte Abschläge und Leistungswert prüfen. Falls die Angaben stimmen, ist eine Korrektur der Abrechnung erforderlich.',
   'invoice.validation.warn.iban': 'Bankverbindung (IBAN) fehlt – Rechnung kann freigegeben werden.',
   'invoice.validation.warn.ibanInvalid':
     'Die IBAN in den Firmendaten ist nicht gültig (Länge oder Prüfziffer). Bitte in den Firmendaten korrigieren, bevor Sie die Rechnung freigeben.',
   'invoice.validation.warn.contact': 'Telefon und E-Mail der Firma fehlen.',
+  /* FINANZ-CORE-01A (KUN-09) */
+  'invoice.validation.warn.customerEmail':
+    'Die E-Mail-Adresse des Rechnungsempfängers ist nicht gültig. Sie wird mit der Freigabe auf den Beleg übernommen.',
+  'invoice.validation.warn.customerVatId':
+    'Die USt-IdNr. des Rechnungsempfängers ist nicht gültig. Bitte vor der Freigabe im Kundenstamm korrigieren und übernehmen.',
+  'invoice.validation.warn.customerCountry':
+    'Der Ländercode des Rechnungsempfängers ist nicht gültig. Bitte vor der Freigabe im Kundenstamm korrigieren und übernehmen.',
+  'invoice.validation.warn.customerLeitweg':
+    'Die Leitweg-ID des Rechnungsempfängers ist nicht gültig – die E-Rechnung würde nicht zugestellt. Bitte vor der Freigabe korrigieren.',
   'invoice.validation.warn.logo': 'Kein Firmenlogo hinterlegt.',
   'invoice.validation.warn.skonto': 'Skonto ist nicht eingerichtet.',
+  // FINANZ-CORE-01A (ZAH-10)
+  'invoice.validation.warn.paymentDuePast':
+    'Das Fälligkeitsdatum liegt in der Vergangenheit – die Rechnung wäre mit der Freigabe sofort überfällig. Bitte das Datum prüfen.',
+  /* FINANZ-CORE-01A (RE-17) */
+  'invoice.validation.warn.taxFreeBasis':
+    'Der Hinweis zur Steuerbefreiung nennt keine Rechtsgrundlage (z. B. „Steuerfreie Leistung nach § 4 Nr. 11 UStG"). Bitte unter Einstellungen › Rechnungen ergänzen.',
+  'invoice.validation.warn.taxStatusProfile':
+    'Der Steuerstatus dieser Rechnung passt nicht zur Kleinunternehmerregelung im Firmenprofil. Bitte vor der Freigabe prüfen.',
   'invoice.validation.warn.project': 'Auftragsbezeichnung könnte präziser sein.',
   'invoice.editSubtitle': 'Rechnungsdaten vor der Freigabe anpassen',
   'invoice.backToPreview': 'Zurück zur Vorschau',
@@ -3217,6 +3383,24 @@ const deLegacy = {
   'invoice.overbillingConfirm':
     'Mindestens eine Position liegt über dem derzeit dokumentierten Rest. Trotzdem speichern?',
   /* COMPANY-PROFILE-DRAFT-DRIFT-01E — die Rückfrage gehört zur Rechnungsfreigabe. */
+  /* FINANZ-CORE-01A (KUN-08) */
+  'invoice.customerDrift.title': 'Kundendaten haben sich geändert',
+  'invoice.customerDrift.message':
+    'Der Kundenstamm weicht von den Empfängerangaben dieser Rechnung ab. Mit der Freigabe wird der Empfänger dauerhaft auf dem Beleg festgehalten. Bitte entscheiden Sie, welcher Stand gilt.',
+  'invoice.customerDrift.apply': 'Aktuelle Kundendaten übernehmen',
+  'invoice.customerDrift.keep': 'Angaben dieser Rechnung behalten',
+  'invoice.customerDrift.applied': 'Aktuelle Kundendaten übernommen.',
+  'invoice.customerDrift.field.name': 'Name',
+  'invoice.customerDrift.field.contactPerson': 'Ansprechpartner',
+  'invoice.customerDrift.field.street': 'Straße',
+  'invoice.customerDrift.field.zip': 'PLZ',
+  'invoice.customerDrift.field.city': 'Ort',
+  'invoice.customerDrift.field.email': 'E-Mail',
+  'invoice.customerDrift.field.phone': 'Telefon',
+  'invoice.customerDrift.field.countryCode': 'Ländercode',
+  'invoice.customerDrift.field.vatId': 'USt-IdNr.',
+  'invoice.customerDrift.field.buyerReference': 'Käuferreferenz',
+  'invoice.customerDrift.field.leitwegId': 'Leitweg-ID',
   'invoice.companyDrift.title': 'Firmendaten haben sich geändert',
   'invoice.companyDrift.message':
     'Deine Firmendaten haben sich seit Erstellung dieses Rechnungsentwurfs geändert. Prüfe bitte, welche Daten für diese Rechnung verwendet werden sollen.',
@@ -3252,6 +3436,12 @@ const deLegacy = {
   'invoice.downloadPdf': 'PDF herunterladen',
   'invoice.pdf.loading': 'PDF wird erzeugt…',
   'invoice.pdf.error': 'PDF konnte nicht erzeugt werden. Bitte Freigabe und Angaben prüfen.',
+  // FINANZ-CORE-01A (AUS-14)
+  'invoice.pdf.errorPrefix': 'PDF nicht erzeugt:',
+  // FINANZ-CORE-01A (AUS-19)
+  'invoice.sent.officepilotCorrectHint':
+    'Diese Rechnung wurde per E-Mail über OfficeTakt versendet. Ein abweichender Vermerk (etwa per Post nach einem Rücklauf) wird als manueller Versand geführt; die E-Mail bleibt in der Versandhistorie belegt.',
+  'invoice.print.error': 'Drucken nicht möglich:',
   'invoice.pdf.notFinalized': 'Nur freigegebene Rechnungen können als PDF erzeugt werden.',
   'invoice.pdf.draftNumber': 'Entwürfe ohne Rechnungsnummer können nicht als finale PDF ausgegeben werden.',
   'invoice.pdf.snapshotsMissing': 'Rechnungsdaten sind unvollständig – PDF nicht möglich.',
@@ -3309,6 +3499,9 @@ const deLegacy = {
   'invoice.sent.error.date': 'Bitte ein gültiges Versanddatum angeben.',
   'invoice.sent.error.via': 'Bitte einen Versandweg wählen.',
   'invoice.sent.error.notPrepared': 'Nur vorbereitete Rechnungen können als versendet markiert werden.',
+  // FINANZ-CORE-01A (STO-04/AUS-09) — nach einem Storno kein Versandvermerk mehr.
+  'invoice.sent.error.cancelled': 'Diese Rechnung ist storniert und wird nicht mehr als versendet vermerkt.',
+  'invoice.sent.cancelledHint': 'Die Rechnung ist storniert. Ein Versand wird nicht mehr vermerkt.',
   'invoice.sent.error.failed': 'Versandstatus konnte nicht gespeichert werden.',
 
   'dunning.doc.hint':
@@ -3330,6 +3523,9 @@ const deLegacy = {
   'dunning.doc.error.delivery': 'Bitte einen Übergabeweg wählen.',
   'dunning.doc.error.kind': 'Bitte Art der Übergabe wählen.',
   'dunning.doc.error.notOpen': 'Vollständig bezahlte Rechnungen können nicht dokumentiert werden.',
+  /* FINANZ-CORE-01A (ZAH-12) */
+  'dunning.doc.error.notOverdue':
+    'Eine Mahnung ist erst nach dem Zahlungsziel möglich. Vorher bitte als Zahlungserinnerung dokumentieren oder das Übergabedatum prüfen.',
   'dunning.doc.error.notSent':
     'Nur versendete Rechnungen mit offenem Betrag können dokumentiert werden.',
   'dunning.doc.error.failed': 'Übergabe konnte nicht gespeichert werden.',
@@ -3441,7 +3637,9 @@ const deLegacy = {
     + 'Anschliessend können Sie bei Bedarf eine neue Rechnung vorbereiten.',
   'invoice.cancel.notice.internal':
     'Diese Rechnung wurde noch nicht als versendet markiert. Sie wird intern storniert; '
-    + 'ein gesonderter Korrekturbeleg wird nicht erzeugt.',
+    + 'ein gesonderter Korrekturbeleg wird nicht erzeugt. '
+    // FINANZ-CORE-01A (STO-16) — eine schon übergebene Rechnung braucht den Korrekturbeleg.
+    + 'Hat der Kunde die Rechnung bereits erhalten (Post, persönlich, E-Mail), markieren Sie sie bitte zuerst als versendet – dann entsteht ein Korrekturbeleg.',
   'invoice.cancel.notice.correction':
     'Diese Rechnung wurde bereits versendet. Zur Stornierung wird ein Korrekturbeleg mit Bezug auf '
     + 'die Originalrechnung erzeugt und archiviert; die Originalrechnung bleibt unverändert.',
@@ -3460,28 +3658,48 @@ const deLegacy = {
   'invoice.correction.reference': 'Bezug: Rechnung {number} vom {date}',
   'invoice.correction.reasonLabel': 'Grund der Stornierung',
   'invoice.correction.issueDate': 'Korrekturdatum',
+  /* FINANZ-CORE-01A (WEISS-Nacharbeit N12) */
+  'invoice.correction.amountDueLabel': 'Korrigierter Zahlbetrag',
+  'invoice.correction.grossTotalLabel': 'Gesamtbetrag vor Abzug der Abschläge',
   'invoice.correction.notFound': 'Zu dieser Rechnung gibt es keinen Korrekturbeleg.',
   'invoice.cancel.reasonLabel': 'Grund der Stornierung (Pflichtangabe)',
+  'invoice.cancel.reasonPublicHint': 'Der Grund steht auf dem Korrekturbeleg, den der Kunde erhält.',
   'invoice.cancel.error.reasonRequired': 'Bitte geben Sie einen Grund für die Stornierung an.',
   'invoice.cancel.error.activePayments':
     'Zu dieser Rechnung ist bereits ein Zahlungseingang erfasst. '
     + 'Nehmen Sie die Zahlung zuerst zurück; danach ist die Stornierung möglich.',
+  'invoice.cancel.error.finalInvoiceBlocks':
+    'Diese Rechnung ist in der Schlussrechnung {number} bereits abgerechnet. '
+    + 'Stornieren Sie zuerst die Schlussrechnung; danach ist diese Stornierung möglich.',
+  'invoice.cancel.error.finalInvoiceExists':
+    'Diese Rechnung ist in einer Schlussrechnung bereits abgerechnet. '
+    + 'Stornieren Sie zuerst die Schlussrechnung; danach ist diese Stornierung möglich.',
+  'invoice.cancel.error.sentNotSynced':
+    'Der Versandvermerk dieser Rechnung ist noch nicht in der Cloud gesichert. '
+    + 'Sichern Sie ihn zuerst im Bereich „Versendet“; erst dann entsteht beim Storno der nötige Korrekturbeleg. Es wurde nichts storniert.',
+  // FINANZ-CORE-01A (STO-14) — seit 03C/03D sind auch Abschlags- und Teilrechnungen stornierbar.
   'invoice.cancel.error.typeNotSupported':
-    'Nur Rechnungen und Schlussrechnungen können hier storniert werden.',
+    'Dieser Beleg lässt sich nicht stornieren. Stornierbar sind Rechnungen, Abschlags-, Teil- und Schlussrechnungen.',
+  // FINANZ-CORE-01A (SQL-07) — Versand und Storno schliessen sich aus.
+  'invoice.cancel.error.deliveryInProgress':
+    'Diese Rechnung wird gerade per E-Mail versendet. Bitte warten Sie den Ausgang des Versands ab und stornieren Sie danach erneut. Es wurde nichts storniert.',
+  'invoice.cancel.error.deliveryUncertain':
+    'Ob die E-Mail mit dieser Rechnung beim Kunden angekommen ist, ist unklar. Ein Storno ohne Korrekturbeleg wäre dann falsch. Vermerken Sie die Rechnung als versendet – danach entsteht beim Storno der Korrekturbeleg. Es wurde nichts storniert.',
   'invoice.cancel.error.notFinalized':
     'Nur freigegebene Rechnungen können storniert werden. Ein Entwurf lässt sich stattdessen verwerfen.',
   'invoice.cancel.error.notFound':
     'Diese Rechnung wurde in der Cloud nicht gefunden. Bitte laden Sie die Ansicht neu.',
   'invoice.cancel.error.forbidden': 'Sie haben keine Berechtigung, diese Rechnung zu stornieren.',
+  // FINANZ-CORE-01A (STO-06) — nach einem Netzabbruch steht nicht fest, ob der Server storniert hat.
   'invoice.cancel.error.offline':
-    'Keine Verbindung zur Cloud. Es wurde nichts storniert – bitte später erneut versuchen.',
+    'Keine Verbindung zur Cloud. Ob die Stornierung angekommen ist, steht noch nicht fest. Ein erneuter Versuch ist sicher – er storniert nicht doppelt, sondern übernimmt ein bereits erfolgtes Storno.',
   'invoice.cancel.error.workspaceMissing':
     'Kein aktiver Arbeitsbereich. Es wurde nichts storniert.',
   'invoice.cancel.error.localPersistFailed':
     'Die Rechnung wurde in der Cloud storniert, konnte auf diesem Gerät aber nicht gespeichert werden. '
     + 'Bitte laden Sie die Ansicht neu – stornieren Sie nicht erneut.',
   'invoice.cancel.error.unknown':
-    'Die Stornierung konnte nicht abgeschlossen werden. Es wurde nichts storniert.',
+    'Die Antwort der Cloud war unklar. Ob storniert wurde, steht noch nicht fest. Ein erneuter Versuch ist sicher – er storniert nicht doppelt.',
   'invoice.cancel.cancelledAt': 'Storniert am',
   'invoice.cancel.cancelledReason': 'Grund der Stornierung',
   'invoice.cancel.cancelledNotice':
@@ -3496,6 +3714,18 @@ const deLegacy = {
   'payment.cloudSecureAction': 'In der Cloud sichern',
   'payment.cloudSecured': 'Die Zahlung ist jetzt in der Cloud gesichert.',
   /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N01) — der Grund eines dauerhaften Vermerks. Eine
+   * endgültig abgewiesene Zahlung geht nicht automatisch erneut hinaus — nur über „Sichern".
+   */
+  'payment.cloudBlocked.denied':
+    'Der Server hat diese Zahlung abgewiesen (keine Berechtigung oder Konto gesperrt). Sie wird nicht automatisch erneut gesendet; „In der Cloud sichern" sendet sie bewusst noch einmal.',
+  'payment.cloudBlocked.conflict':
+    'In der Cloud liegt unter derselben Kennung eine abweichende Zahlung. Sie wird nicht automatisch erneut gesendet.',
+  'payment.cloudBlocked.overpayment_unconfirmed':
+    'Der Server hält diese Zahlung für eine Überzahlung. Sie wird erst nach Ihrer Bestätigung gesendet.',
+  'payment.cloudBlocked.invoice_cancelled':
+    'Die Rechnung ist inzwischen storniert. Diese Zahlung lässt sich nicht mehr sichern.',
+  /*
    * R1-SEC-01 — eine abgewiesene Zahlung ist kein Verbindungsproblem. „Nur
    * lokal gesichert" waere hier eine falsche Beruhigung: Die Zahlung gehoert
    * nicht in dieses Konto, und ein spaeterer Versuch aendert daran nichts.
@@ -3508,6 +3738,16 @@ const deLegacy = {
     'Die Zahlung ist auf diesem Gerät gespeichert, konnte aber nicht in die Cloud übertragen werden. Auf anderen Geräten fehlt sie vorerst.',
   'payment.cloudConflict':
     'Für diese Zahlung ist in der Cloud bereits ein abweichender Betrag gespeichert. Bitte prüfen Sie den Zahlungseingang.',
+  // FINANZ-CORE-01A (SQL-05/ZAH-02) — der Server weist eine unbestätigte Überzahlung ab.
+  'payment.cloudOverpaymentUnconfirmed':
+    'In der Cloud sind zu dieser Rechnung inzwischen weitere Zahlungen gespeichert – mit dieser wäre sie überzahlt. Die Zahlung bleibt auf diesem Gerät. Bitte prüfen Sie auf der Rechnungsseite, ob sie doppelt erfasst wurde.',
+  // FINANZ-CORE-01A (ZAH-19) — die Rechnung ist inzwischen storniert; kein Versuch sichert die Zahlung noch.
+  'payment.cloudInvoiceCancelled':
+    'Die Rechnung ist inzwischen storniert. Diese Zahlung kann nicht mehr in der Cloud gesichert werden – bitte prüfen und die Zahlung zurücknehmen.',
+  'payment.overpaymentQuestionTitle': 'Überzahlung bestätigen?',
+  'payment.overpaymentQuestionMessage':
+    'Mit dieser Zahlung wäre die Rechnung überzahlt – vermutlich hat ein anderes Gerät denselben Eingang schon gesichert. Wurde sie doppelt erfasst, entfernen Sie sie bitte. Nur wenn der Kunde tatsächlich mehr gezahlt hat, bestätigen Sie die Überzahlung:',
+  'payment.overpaymentQuestionConfirm': 'Überzahlung bestätigen',
   'payment.cloudReversalUnavailable':
     'Ohne Verbindung zur Cloud lässt sich nicht klären, ob diese Zahlung dort gesichert ist. Sie bleibt deshalb bestehen.',
   'payment.cloudReversalFailed':
@@ -3520,6 +3760,9 @@ const deLegacy = {
     'Nachrichten zu dieser Rechnung sind erst mit einem Vorgang möglich.',
   // MANUAL-INVOICE-UI-01B1B — die Rechnung ohne Auftrag in vier Schritten.
   'manualInvoice.title': 'Neue Rechnung',
+  // FINANZ-CORE-01A (RE-13)
+  'manualInvoice.resumed':
+    'Ein begonnener Entwurf wird fortgesetzt (zuletzt gespeichert am {date}). Für eine andere Rechnung bitte „Entwurf verwerfen" wählen.',
   'manualInvoice.entry': 'Neue Rechnung',
   'manualInvoice.progress': 'Fortschritt',
   'manualInvoice.step.customer': 'Kunde',
@@ -3578,6 +3821,8 @@ const deLegacy = {
   'vorgaenge.openInvoices': 'Offene Rechnungen anzeigen',
   'vorgaenge.newFromDocument': 'Auftrag aus Dokument anlegen',
   'document.list.invoiceTitle': 'Rechnung',
+  /* FINANZ-CORE-01A (STO-11) */
+  'document.list.invoiceCancelled': 'storniert',
 
   'assistant.title': 'OfficeTakt',
   'assistant.subtitle': 'Ihr digitaler Assistent – fragt nicht, sondern hilft.',
@@ -3980,6 +4225,16 @@ const deLegacy = {
   'communication.block.notRelevant': 'Dieses Dokument scheint keinen Firmenbezug zu haben. OfficeTakt formuliert keine Antworten für private Schreiben.',
   'communication.block.inboxNotFound': 'Der Eingangseintrag wurde nicht gefunden.',
   'communication.block.documentNotFound': 'Das Dokument wurde nicht gefunden.',
+  /* FINANZ-CORE-01A (ZAH-12) — Erinnerung und Mahnung nur zu versendeten Rechnungen mit offenem Betrag. */
+  'communication.block.invoiceNotFound': 'Die Rechnung wurde nicht gefunden.',
+  'communication.block.invoiceCancelled':
+    'Diese Rechnung ist storniert. Zu einer stornierten Rechnung wird weder erinnert noch gemahnt.',
+  'communication.block.invoiceNotSent':
+    'Diese Rechnung ist noch nicht versendet. Erinnern und mahnen lässt sich erst nach dem Versand.',
+  'communication.block.invoiceSettled':
+    'Diese Rechnung ist vollständig bezahlt. Es gibt nichts zu erinnern oder anzumahnen.',
+  'communication.block.invoiceNotDue':
+    'Das Zahlungsziel dieser Rechnung ist noch nicht überschritten. Eine Mahnung ist erst danach möglich; eine freundliche Zahlungserinnerung geht schon jetzt.',
   'communication.unknown.title': 'Noch kein Entwurf möglich',
   'communication.unknown.summary':
     'Aus dieser Anfrage kann OfficeTakt noch keinen fertigen Entwurf erstellen. Sagen Sie, worum es geht – zum Beispiel einen Termin verschieben, eine Verzögerung melden oder an eine Zahlung erinnern – und ergänzen Sie Empfänger und Angaben wie Datum oder Betrag.',
@@ -6016,10 +6271,32 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
     '§ 13b için onaydan önce açık teyit gerekir.',
   'invoice.validation.totalsInvalid': 'Net, vergi veya brüt geçersiz.',
   'invoice.validation.totalsNegative': 'Toplam tutar negatif olamaz.',
+  'payment.cloudBlocked.denied':
+    'Sunucu bu ödemeyi reddetti (yetki yok veya hesap engelli). Otomatik olarak tekrar gönderilmez; „Bulutta yedekle" ile bilinçli olarak tekrar gönderebilirsiniz.',
+  'payment.cloudBlocked.conflict':
+    'Bulutta aynı kimlikle farklı bir ödeme var. Otomatik olarak tekrar gönderilmez.',
+  'payment.cloudBlocked.overpayment_unconfirmed':
+    'Sunucu bu ödemeyi fazla ödeme olarak görüyor. Ancak onayınızdan sonra gönderilir.',
+  'payment.cloudBlocked.invoice_cancelled':
+    'Fatura bu arada iptal edildi. Bu ödeme artık yedeklenemez.',
+  'invoice.validation.abschlagUnpaid':
+    'Düşülen bir hakediş henüz tamamen ödenmedi. Kapanış faturası yalnızca ödenmiş hakedişleri düşer (UStG § 14 Abs. 5). Önce hakedişin ödemesini kaydedin – ya da ödenmemiş hakedişi iptal edin; o zaman tutarı kapanış faturasında hesaplanır.',
+  'invoice.approve.abschlagUnpaid': 'Sunucu kapanış faturasını reddetti: Düşülen bir hakediş orada henüz tamamen ödenmiş görünmüyor ya da iskonto, iskonto süresi dolduktan sonra ödendi. Ödeme bu cihazda kaydedildi ama henüz yedeklenmediyse önce onu yedekleyin. Fatura kaydedilmedi.',
+  'invoice.approve.abschlagSettlementMismatch': 'Sunucu kapanış faturasını reddetti: Düşülen bir hakedişin nasıl kapandığı (ödeme ve iskonto) orada yedeklenmiş ödemelerle uyuşmuyor. Lütfen önce senkronize edip yeniden onaylayın. Fatura kaydedilmedi.',
+  'invoice.abschlagUnsettled.title': 'Henüz ödenmemiş hakedişler',
+  'invoice.abschlagUnsettled.label': 'Hakediş {number}',
+  'invoice.abschlagUnsettled.labelPlain': 'Hakediş',
+  'invoice.abschlagUnsettled.open': 'açık {amount}',
+  'invoice.abschlagUnsettled.hint':
+    'Kapanış faturası yalnızca ödenmiş hakedişleri düşer. Ödeme gelir gelmez hakedişin ödemesini kaydedin. Müşteri hakedişi ödemezse onu iptal edin – o zaman tutarı kapanış faturasında hesaplanır.',
   'invoice.validation.deductionsExceedTotal':
     'Şimdiye kadarki hakediş faturaları nihai hizmet değerini aşıyor. Kapanış faturası bu haliyle tamamlanamaz. Lütfen hakedişleri ve hizmet değerini kontrol edin. Bilgiler doğruysa faturalandırmanın düzeltilmesi gerekir.',
   'invoice.validation.warn.iban': 'Banka bilgisi (IBAN) eksik – yine de onaylanabilir.',
   'invoice.validation.warn.contact': 'Firma telefonu ve e-postası eksik.',
+  'invoice.validation.warn.customerEmail': 'Fatura alıcısının e-posta adresi geçerli değil.',
+  'invoice.validation.warn.customerVatId': 'Fatura alıcısının KDV kimlik numarası geçerli değil.',
+  'invoice.validation.warn.customerCountry': 'Fatura alıcısının ülke kodu geçerli değil.',
+  'invoice.validation.warn.customerLeitweg': 'Fatura alıcısının Leitweg kimliği geçerli değil.',
   'invoice.validation.warn.logo': 'Firma logosu yok.',
   'invoice.validation.warn.skonto': 'Erken ödeme indirimi ayarlı değil.',
   'invoice.validation.warn.project': 'İş tanımı daha net olabilir.',
@@ -6352,6 +6629,10 @@ const trCustomerDecision: Partial<Record<keyof typeof de, string>> = {
   'customer.nameRequired': 'Müşteri adı gerekli.',
   'customer.ownCompanyNotAllowed': 'Kendi firmanız müşteri olarak eklenemez.',
   'customer.persistFailed': 'Kaydetme başarısız. Hiçbir şey değiştirilmedi.',
+  'customer.validation.email': 'E-posta adresi geçerli değil (örnek: isim@firma.de).',
+  'customer.validation.vatId': 'KDV kimlik numarası geçerli değil. Ülke koduyla başlar; Almanya için „DE" ve dokuz rakam (örnek: DE123456789).',
+  'customer.validation.countryCode': 'Ülke kodu geçerli değil. Lütfen iki harf girin (örnek: DE, AT, CH).',
+  'customer.validation.leitwegId': 'Leitweg kimliği geçerli değil (örnek: 04011000-1234512345-06).',
   'kunden.orphanBadge': 'Müşteri kaydı eksik',
   'kunden.link.ambiguousTitle': 'Bu adda birden fazla müşteri',
   'kunden.link.ambiguousDesc': 'Lütfen istediğiniz müşteriyi seçin.',
@@ -7109,10 +7390,32 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
     '§ 13b изисква изрично потвърждение преди одобрение.',
   'invoice.validation.totalsInvalid': 'Нето, данък или бруто са невалидни.',
   'invoice.validation.totalsNegative': 'Общата сума не може да бъде отрицателна.',
+  'payment.cloudBlocked.denied':
+    'Сървърът отхвърли това плащане (няма права или профилът е блокиран). То не се изпраща автоматично отново; „Съхрани в облака" го изпраща съзнателно още веднъж.',
+  'payment.cloudBlocked.conflict':
+    'В облака под същия идентификатор има различно плащане. То не се изпраща автоматично отново.',
+  'payment.cloudBlocked.overpayment_unconfirmed':
+    'Сървърът счита това плащане за надплащане. То се изпраща едва след вашето потвърждение.',
+  'payment.cloudBlocked.invoice_cancelled':
+    'Фактурата междувременно е анулирана. Това плащане вече не може да бъде съхранено.',
+  'invoice.validation.abschlagUnpaid':
+    'Приспадната междинна фактура все още не е напълно платена. Окончателната фактура приспада само платени междинни фактури (§ 14, ал. 5 UStG). Първо въведете плащането по междинната фактура – или анулирайте неплатената междинна фактура; тогава сумата ѝ се начислява в окончателната фактура.',
+  'invoice.approve.abschlagUnpaid': 'Сървърът отхвърли окончателната фактура: приспадната междинна фактура там все още не е напълно платена или отстъпката е платена след изтичане на срока за отстъпка. Ако плащането е въведено на това устройство, но още не е съхранено, първо го съхранете. Не е запазена фактура.',
+  'invoice.approve.abschlagSettlementMismatch': 'Сървърът отхвърли окончателната фактура: начинът, по който е погасена приспадната междинна фактура (плащане и отстъпка), не съвпада със съхранените там плащания. Моля, първо синхронизирайте и одобрете отново. Не е запазена фактура.',
+  'invoice.abschlagUnsettled.title': 'Все още неплатени междинни фактури',
+  'invoice.abschlagUnsettled.label': 'Междинна фактура {number}',
+  'invoice.abschlagUnsettled.labelPlain': 'Междинна фактура',
+  'invoice.abschlagUnsettled.open': 'дължимо {amount}',
+  'invoice.abschlagUnsettled.hint':
+    'Окончателната фактура приспада само платени междинни фактури. Въведете плащането веднага щом постъпи. Ако клиентът не плати междинната фактура, анулирайте я – тогава сумата ѝ се начислява в окончателната фактура.',
   'invoice.validation.deductionsExceedTotal':
     'Досегашните междинни фактури надвишават окончателната стойност на изпълнението. Окончателната фактура не може да бъде приключена в този вид. Моля, проверете междинните фактури и стойността на изпълнението. Ако данните са верни, е необходима корекция на фактурирането.',
   'invoice.validation.warn.iban': 'Липсва банкова връзка (IBAN) – одобрението е възможно.',
   'invoice.validation.warn.contact': 'Липсват телефон и имейл на фирмата.',
+  'invoice.validation.warn.customerEmail': 'Имейл адресът на получателя не е валиден.',
+  'invoice.validation.warn.customerVatId': 'ДДС номерът на получателя не е валиден.',
+  'invoice.validation.warn.customerCountry': 'Кодът на държавата на получателя не е валиден.',
+  'invoice.validation.warn.customerLeitweg': 'Leitweg-ID на получателя не е валиден.',
   'invoice.validation.warn.logo': 'Няма фирмено лого.',
   'invoice.validation.warn.skonto': 'Сконто не е настроено.',
   'invoice.validation.warn.project': 'Описанието на поръчката може да е по-ясно.',
@@ -7325,6 +7628,10 @@ const bgCustomerDecision: Partial<Record<keyof typeof de, string>> = {
   'customer.nameRequired': 'Необходимо е име на клиента.',
   'customer.ownCompanyNotAllowed': 'Собствената фирма не може да бъде клиент.',
   'customer.persistFailed': 'Запазването е неуспешно. Нищо не е променено.',
+  'customer.validation.email': 'Имейл адресът не е валиден (пример: ime@firma.de).',
+  'customer.validation.vatId': 'ДДС номерът не е валиден. Започва с кода на държавата; за Германия „DE" и девет цифри (пример: DE123456789).',
+  'customer.validation.countryCode': 'Кодът на държавата не е валиден. Моля, въведете две букви (пример: DE, AT, CH).',
+  'customer.validation.leitwegId': 'Leitweg-ID не е валиден (пример: 04011000-1234512345-06).',
   'kunden.orphanBadge': 'Липсва клиентски запис',
   'kunden.link.ambiguousTitle': 'Няколко клиента с това име',
   'kunden.link.ambiguousDesc': 'Моля, изберете желания клиент.',

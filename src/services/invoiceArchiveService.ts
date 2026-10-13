@@ -67,6 +67,11 @@ export function buildOutgoingInvoiceDocumentInput(
   companyName: string,
 ): CompanyDocumentInput {
   const customerName = resolveArchiveCustomerName(invoice, vorgang);
+  /*
+   * FINANZ-CORE-01A (KUN-12) — der Aussteller, wie er auf dem Beleg steht (eingefrorener
+   * Firmenstand), nicht der heutige Name aus der Einrichtung.
+   */
+  const issuer = invoice.companySnapshot?.companyName?.trim() || companyName;
 
   return {
     title: `${invoice.number} – ${invoiceTypeLabel(invoice)}`,
@@ -78,8 +83,8 @@ export function buildOutgoingInvoiceDocumentInput(
      * „Sonstiges“. Hier wird nicht klassifiziert, sondern festgehalten.
      */
     classifiedKind: 'ausgangsrechnung',
-    issuer: companyName,
-    recognizedText: buildRecognizedText(invoice, vorgang, companyName),
+    issuer,
+    recognizedText: buildRecognizedText(invoice, vorgang, issuer),
     issueDate: invoice.issueDate ?? invoice.date,
     /*
      * Kein `validUntil`: Das Zahlungsziel ist keine Dokumentgültigkeit. Es
@@ -105,7 +110,7 @@ export function buildOutgoingInvoiceDocumentInput(
       ...(vorgang ? [vorgang.title] : []),
       invoiceTypeLabel(invoice),
     ],
-    linkedCompany: companyName,
+    linkedCompany: issuer,
     // NULL ist die Wahrheit der freien Rechnung — auch cloudseitig (01B2b).
     linkedVorgang: vorgang ? { vorgangId: vorgang.id, vorgangTitle: vorgang.title } : null,
     linkedInvoiceId: invoice.id,

@@ -31,8 +31,9 @@ import type {
 /* Bausteine                                                           */
 /* ------------------------------------------------------------------ */
 
+// FINANZ-CORE-01A (AUS-06) — BT-27 = Firmenname plus Rechtsform („Cirmak Haustechnik GmbH").
 const SELLER: CompanyProfile = {
-  companyName: 'Cirmak Haustechnik GmbH',
+  companyName: 'Cirmak Haustechnik',
   legalForm: 'GmbH',
   street: 'Ruhrallee 5',
   zip: '45138',
@@ -67,7 +68,7 @@ const BUYER: CustomerBilling = {
   countryCode: 'DE',
   vatId: 'DE-KUNDE-A',
   buyerReference: 'TEST-BUYER-REF-A',
-  leitwegId: 'TEST-LEITWEG-A',
+  // FINANZ-CORE-01A (KUN-07) — kein öffentlicher Auftraggeber; die Leitweg-ID hat eigene Fälle (K1/K2).
 };
 
 function line(overrides: Partial<VorgangInvoiceLine> = {}): VorgangInvoiceLine {
@@ -152,7 +153,9 @@ describe('A — der vollständige Happy Path', () => {
     expect(c.buyer.address.countryCode).toBe('DE');
     expect(c.buyer.electronicAddress.value).toBe('buero@az-testbau.invalid');
     expect(c.buyer.buyerReference).toBe('TEST-BUYER-REF-A');
-    expect(c.buyer.leitwegId).toBe('TEST-LEITWEG-A');
+    expect(c.buyer.leitwegId).toBeUndefined();
+    expect(c.notes).toEqual([]);
+    expect(c.totals.prepaidAmount).toBe(0);
 
     expect(c.payment.means).toBe('credit_transfer');
     expect(c.payment.transfer.iban).toBe('DE89370400440532013000');
@@ -303,6 +306,30 @@ describe('C — Einheitencodes', () => {
 });
 
 describe('D — Käufer und Verkäufer', () => {
+  /*
+   * FINANZ-CORE-01A (KUN-07) — bei einem öffentlichen Auftraggeber ist die Leitweg-ID BT-10.
+   */
+  it('K1: die Leitweg-ID ist die Käuferreferenz; eine abweichende Referenz wird Belegnotiz', () => {
+    const result = buildCanonicalEInvoice(
+      invoice({ customerSnapshot: { ...BUYER, leitwegId: '04011000-12345-67', buyerReference: 'Bestellung 4711' } }),
+    );
+    expect(result.ok, JSON.stringify(codes(result))).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.buyer.buyerReference).toBe('04011000-12345-67');
+    expect(result.value.notes).toEqual(['Käuferreferenz: Bestellung 4711']);
+  });
+
+  it('K2: eine Leitweg-ID allein genügt; gleiche Werte ergeben keine Notiz', () => {
+    const nurLeitweg = buildCanonicalEInvoice(
+      invoice({ customerSnapshot: { ...BUYER, leitwegId: '04011000-12345-67', buyerReference: '' } }),
+    );
+    expect(nurLeitweg.ok, JSON.stringify(codes(nurLeitweg))).toBe(true);
+    const gleich = buildCanonicalEInvoice(
+      invoice({ customerSnapshot: { ...BUYER, leitwegId: '04011000-12345-67', buyerReference: '04011000-12345-67' } }),
+    );
+    expect(gleich.ok && gleich.value.notes).toEqual([]);
+  });
+
   it('T14: fehlende Käuferreferenz wird abgewiesen', () => {
     erwarteFehler(
       buildCanonicalEInvoice(invoice({ customerSnapshot: { ...BUYER, buyerReference: '' } })),
@@ -475,27 +502,170 @@ describe('F — Belegarten', () => {
     );
   });
 
-  it('T23: eine Schlussrechnung mit Abzügen wird ausdrücklich noch nicht abgebildet', () => {
+  it('T23: eine Schlussrechnung mit Abzügen trägt sie als BT-113 und nennt sie in der Belegnotiz', () => {
     /*
-     * Die Abzüge belegen, dass abgerechnet wurde — nicht, dass bezahlt wurde.
-     * Der Zahlungsstand liegt in `payments`/`paymentStatus` und verlässt den
-     * Client nicht einmal. Sie als gezahlten Betrag auszuweisen wäre eine
-     * Behauptung über Geldflüsse, die OfficeTakt nicht kennt.
+     * FINANZ-CORE-01A (D1) — die Abzüge belegen, dass abgerechnet wurde, nicht dass
+     * bezahlt wurde. Die Schlussrechnung zieht genau diese Beträge ab (PDF „Bereits
+     * berechnet"); BT-113 ist das einzige Element, das den Zahlbetrag senkt, ohne die
+     * Steuer der Gesamtleistung zu ändern. Die Notiz sagt ausdrücklich „bereits berechnet".
      */
-    erwarteFehler(
-      buildCanonicalEInvoice(
-        invoice({
-          type: 'schluss',
-          subtotal: 1000,
-          amount: 690,
-          positions: [line({ quantity: 10, unitPrice: 100, lineTotal: 1000 })],
-          previousAbschlagDeductions: [
-            { invoiceId: 'inv-a1', invoiceNumber: '2026-0031', date: '2026-08-01', subtotal: 400, amount: 476 },
-          ],
+    const schluss = (amount: number) =>
+      invoice({
+        type: 'schluss',
+        subtotal: 1000,
+        amount,
+        positions: [line({ quantity: 10, unitPrice: 100, lineTotal: 1000 })],
+        previousAbschlagDeductions: [
+          { invoiceId: 'inv-a1', invoiceNumber: '2026-0031', abschlagNumber: 1, date: '2026-08-01', subtotal: 400, amount: 476 },
+        ],
+      });
+    // FINANZ-CORE-01A (WEISS N02/D1) — BT-113 nur mit belegter Zahlung des Abschlags.
+    const bezahlt = { prepaymentSettlements: [{ invoiceId: 'inv-a1', paid: 476, skonto: 0, settled: true }] };
+    const result = buildCanonicalEInvoice(schluss(714), bezahlt);
+    expect(result.ok, JSON.stringify(codes(result))).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.totals.prepaidAmount).toBe(476);
+    expect(result.value.totals.payableAmount).toBe(714);
+    expect(result.value.totals.billedPrepayments[0]).toMatchObject({ paidAmount: 476, skontoAmount: 0 });
+    expect(result.value.notes).toEqual([
+      'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 476,00 EUR brutto',
+    ]);
+    // Brutto 1.190 minus 476 ist 714 — ein anderer Zahlbetrag ist widersprüchlich.
+    erwarteFehler(buildCanonicalEInvoice(schluss(690), bezahlt), 'money_inconsistent');
+  });
+
+  /*
+   * FINANZ-CORE-01A (WEISS-Nacharbeit N02/D1) — BT-113 ist der bereits gezahlte Betrag.
+   * Ein unbezahlter, teilbezahlter oder unbelegter Abschlag steht dort nie.
+   */
+  describe('N02 — abgezogene Abschläge nur beglichen', () => {
+    const schluss = () =>
+      invoice({
+        type: 'schluss',
+        subtotal: 1000,
+        amount: 714,
+        positions: [line({ quantity: 10, unitPrice: 100, lineTotal: 1000 })],
+        previousAbschlagDeductions: [
+          { invoiceId: 'inv-a1', invoiceNumber: '2026-0031', abschlagNumber: 1, date: '2026-08-01', subtotal: 400, amount: 476 },
+        ],
+      });
+
+    it('N02a: ohne Zahlungsnachweis keine E-Rechnung (der Befund nennt den Abschlag)', () => {
+      const result = buildCanonicalEInvoice(schluss());
+      erwarteFehler(result, 'prepayment_not_settled');
+      if (result.ok) return;
+      expect(result.issues.find((issue) => issue.code === 'prepayment_not_settled')?.path).toBe(
+        'previousAbschlagDeductions[0]',
+      );
+    });
+
+    it('N02b: ein unbezahlter und ein teilbezahlter Abschlag sind nicht beglichen', () => {
+      erwarteFehler(
+        buildCanonicalEInvoice(schluss(), { prepaymentSettlements: [{ invoiceId: 'inv-a1', paid: 0, skonto: 0, settled: false }] }),
+        'prepayment_not_settled',
+      );
+      erwarteFehler(
+        buildCanonicalEInvoice(schluss(), { prepaymentSettlements: [{ invoiceId: 'inv-a1', paid: 200, skonto: 0, settled: false }] }),
+        'prepayment_not_settled',
+      );
+    });
+
+    it('N02c: der Nachweis eines anderen Abschlags zählt nicht', () => {
+      erwarteFehler(
+        buildCanonicalEInvoice(schluss(), { prepaymentSettlements: [{ invoiceId: 'inv-anders', paid: 476, skonto: 0, settled: true }] }),
+        'prepayment_not_settled',
+      );
+    });
+
+    /*
+     * WEISS-Recheck N02-R1 — BT-113 ist nur das tatsächlich Gezahlte. Das gewährte Skonto ist
+     * eine Entgeltminderung und steht als Nachlass auf Belegebene (BG-20); es mindert
+     * Bemessungsgrundlage und Steuer. Der Zahlbetrag bleibt der Restbetrag des Belegs.
+     * (Ersetzt den früheren Vertrag „voller Abzug in BT-113, Skonto nur in der Notiz".)
+     */
+    const mitAufteilung = (paidAmount: number, skontoAmount: number) =>
+      invoice({
+        ...schluss(),
+        previousAbschlagDeductions: [
+          { invoiceId: 'inv-a1', invoiceNumber: '2026-0031', abschlagNumber: 1, date: '2026-08-01', subtotal: 400, amount: 476, paidAmount, skontoAmount },
+        ],
+      });
+
+    it('N02d: Altbeleg mit Skonto ohne eingefrorene Aufteilung — keine E-Rechnung', () => {
+      erwarteFehler(
+        buildCanonicalEInvoice(schluss(), {
+          prepaymentSettlements: [{ invoiceId: 'inv-a1', paid: 466.48, skonto: 9.52, settled: true }],
         }),
-      ),
-      'final_invoice_deduction_semantics_unsupported',
-    );
+        'prepayment_skonto_unfrozen',
+      );
+    });
+
+    it('N02e: mit Skonto beglichen — BT-113 nur gezahlt, Skonto als Nachlass, Steuer gemindert', () => {
+      const result = buildCanonicalEInvoice(mitAufteilung(466.48, 9.52), {
+        prepaymentSettlements: [{ invoiceId: 'inv-a1', paid: 466.48, skonto: 9.52, settled: true }],
+      });
+      expect(result.ok, JSON.stringify(codes(result))).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.totals).toMatchObject({
+        lineNetTotal: 1000,
+        allowanceTotal: 8,
+        taxExclusiveAmount: 992,
+        taxAmount: 188.48,
+        taxInclusiveAmount: 1180.48,
+        prepaidAmount: 466.48,
+        payableAmount: 714,
+      });
+      expect(result.value.totals.roundingAmount).toBeUndefined();
+      expect(result.value.tax).toEqual([{ category: 'standard', rate: 19, taxableAmount: 992, taxAmount: 188.48 }]);
+      expect(result.value.allowances).toEqual([
+        { amount: 8, reason: 'Skonto auf Abschlag 1 (Rechnung 2026-0031)', reasonCode: '95', category: 'standard', rate: 19 },
+      ]);
+      expect(result.value.totals.billedPrepayments[0]).toMatchObject({ paidAmount: 466.48, skontoAmount: 9.52 });
+      expect(result.value.notes).toEqual([
+        'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 466,48 EUR gezahlt von 476,00 EUR brutto',
+        'Skonto auf Abschlag 1 (Rechnung 2026-0031): 9,52 EUR brutto (netto 8,00 EUR, USt 1,52 EUR), als Nachlass auf Belegebene ausgewiesen (Entgeltminderung).',
+      ]);
+    });
+
+    it('N02f: voll bezahlt (Aufteilung 476/0 oder keine) — alles wie bisher, kein Nachlass', () => {
+      for (const beleg of [mitAufteilung(476, 0), schluss()]) {
+        const result = buildCanonicalEInvoice(beleg, {
+          prepaymentSettlements: [{ invoiceId: 'inv-a1', paid: 476, skonto: 0, settled: true }],
+        });
+        expect(result.ok, JSON.stringify(codes(result))).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.totals).toMatchObject({ taxExclusiveAmount: 1000, taxAmount: 190, taxInclusiveAmount: 1190, prepaidAmount: 476, payableAmount: 714 });
+        expect(result.value.allowances).toBeUndefined();
+        expect(result.value.totals.allowanceTotal).toBeUndefined();
+        expect(result.value.notes).toEqual([
+          'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 476,00 EUR brutto',
+        ]);
+      }
+    });
+
+    it('N02g: zahlt der Kunde das Skonto später nach, bleibt der Beleg, wie er freigegeben wurde', () => {
+      const result = buildCanonicalEInvoice(mitAufteilung(466.48, 9.52), {
+        prepaymentSettlements: [{ invoiceId: 'inv-a1', paid: 476, skonto: 0, settled: true }],
+      });
+      expect(result.ok, JSON.stringify(codes(result))).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.totals.prepaidAmount).toBe(466.48);
+      expect(result.value.totals.allowanceTotal).toBe(8);
+    });
+
+    it('N02h: geht der Nachlass wegen der Rundung nicht auf, gleicht BT-114 den Cent aus (BR-CO-16)', () => {
+      // 7,17 € Skonto: Netto 6,03 € → Steuer 188,85 € (Minderung 1,15 €); 6,03 + 1,15 = 7,18 → Rundung +0,01.
+      const result = buildCanonicalEInvoice(mitAufteilung(468.83, 7.17), {
+        prepaymentSettlements: [{ invoiceId: 'inv-a1', paid: 468.83, skonto: 7.17, settled: true }],
+      });
+      expect(result.ok, JSON.stringify(codes(result))).toBe(true);
+      if (!result.ok) return;
+      const t = result.value.totals;
+      expect(t).toMatchObject({ allowanceTotal: 6.03, taxExclusiveAmount: 993.97, taxAmount: 188.85, taxInclusiveAmount: 1182.82, prepaidAmount: 468.83, roundingAmount: 0.01, payableAmount: 714 });
+      // BR-S-09: Steuer = Bemessungsgrundlage × Satz; BR-CO-16: BT-115 = BT-112 − BT-113 + BT-114.
+      expect(Math.round(993.97 * 19)).toBe(18885);
+      expect(Math.round((t.taxInclusiveAmount - t.prepaidAmount + (t.roundingAmount ?? 0)) * 100)).toBe(71400);
+    });
   });
 
   it('eine Schlussrechnung ohne Abzüge ist eine gewöhnliche Rechnung', () => {
@@ -509,23 +679,37 @@ describe('F — Belegarten', () => {
 });
 
 describe('G — Korrektur und Storno', () => {
-  it('T24: der Korrekturbeleg trägt die Referenz auf sein Original', () => {
-    const result = buildCanonicalEInvoice(
-      invoice({
-        cancelledAt: '2026-09-25T10:00:00.000Z',
-        cancellationKind: 'correction',
-        cancelReason: 'Falscher Leistungszeitraum',
-      }),
-    );
+  it('T24: die Korrektur ist ein eigener Beleg mit eigener Nummer und Bezug auf ihr Original', () => {
+    const storniert = invoice({
+      status: 'versendet',
+      cancelledAt: '2026-09-25T10:00:00.000Z',
+      cancellationKind: 'correction',
+      cancelReason: 'Falscher Leistungszeitraum',
+      correctionNumber: '2026-0050',
+    });
+    const result = buildCanonicalEInvoice(storniert, { variant: 'correction' });
     expect(result.ok, JSON.stringify(codes(result))).toBe(true);
     if (!result.ok) return;
     expect(result.value.documentKind).toBe('correction');
+    // FINANZ-CORE-01A (SQL-11/AUS-08) — BT-1 ist die eigene Nummer, BT-2 das Korrekturdatum.
+    expect(result.value.sourceInvoiceNumber).toBe('2026-0050');
+    expect(result.value.issueDate).toBe('2026-09-25');
+    expect(result.value.payment.means).toBe('settlement');
+    expect(result.value.payment.transfer).toBeUndefined();
+    expect(result.value.payment.dueDate).toBeUndefined();
     expect(result.value.references.correction).toEqual({
       originalInvoiceId: 'inv-04c',
       originalInvoiceNumber: '2026-0042',
       originalIssueDate: '2026-09-23',
       reason: 'Falscher Leistungszeitraum',
     });
+    // Das stornierte Original bekommt keine neue E-Rechnung; eine Korrektur ohne Nummer keine.
+    erwarteFehler(buildCanonicalEInvoice(storniert), 'cancelled_original_not_exportable');
+    erwarteFehler(
+      buildCanonicalEInvoice({ ...storniert, correctionNumber: undefined }, { variant: 'correction' }),
+      'correction_number_missing',
+    );
+    erwarteFehler(buildCanonicalEInvoice(invoice(), { variant: 'correction' }), 'correction_not_available');
   });
 
   it('T25: ein interner Storno ist kein exportierbarer Beleg', () => {

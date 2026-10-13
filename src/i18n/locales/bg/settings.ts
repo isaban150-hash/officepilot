@@ -27,6 +27,9 @@ export const bgSettings = {
   'settings.invoices.historicalHint': 'Тези стойности важат само за фактури, създадени отсега нататък.',
   'settings.invoices.readOnly': 'Само администратори могат да променят настройките по подразбиране за фактури.',
   'settings.invoices.saved': 'Настройките за фактури са запазени.',
+  // FINANZ-CORE-01A (EIN-08)
+  'settings.invoices.companyDataIncomplete': 'Настройките за фактури могат да бъдат запазени едва когато фирмените данни са пълни и валидни:',
+  'settings.invoices.openCompanySettings': 'Отвори фирмените данни',
   'settings.invoices.number.title': 'Номер на фактура',
   'settings.invoices.number.hint': 'Номерът се издава от сървъра при финализиране. Тук задавате само формата.',
   'settings.invoices.number.prefix': 'Префикс (по избор)',

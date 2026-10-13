@@ -9,7 +9,12 @@ import { AccountingChecklistPanel } from '../components/accounting/AccountingChe
 import { getAccountingChecklist } from '../services/accounting/accountingOverviewService';
 import { AccountingPeriodPanel } from '../components/accounting/AccountingPeriodPanel';
 import { getAccountingPeriodState } from '../services/accounting/accountingPeriodService';
-import { AccountingExportPanel } from '../components/accounting/AccountingExportPanel';
+import {
+  AccountingExportPanel,
+  buildAccountingExportFeedback,
+  type AccountingExportFeedback,
+} from '../components/accounting/AccountingExportPanel';
+import { findAccountingExportPdfProblems } from '../services/accounting/accountingExportPdfCheck';
 import { SteuerberaterHandoverPanel } from '../components/accounting/SteuerberaterHandoverPanel';
 import { evaluateAccountingExportReadiness } from '../services/accounting/accountingExportGateService';
 import { exportAccountingPackage } from '../services/accounting/accountingExportRunner';
@@ -55,7 +60,7 @@ export function SteuerberaterPage() {
   /* STEUERBERATER-06B — laesst den Monatsstand neu ableiten; kein zweiter Bestand. */
   const [periodToken, setPeriodToken] = useState(0);
   /* 02B-FINAL — das letzte Exportergebnis überlebt den Neuaufbau des Panels. */
-  const [exportFeedback, setExportFeedback] = useState<{ monthKey: string; fileName: string | null } | null>(null);
+  const [exportFeedback, setExportFeedback] = useState<AccountingExportFeedback | null>(null);
   const [step, setStep] = useState<FlowStep>('overview');
 
   const overview = useMemo(
@@ -224,14 +229,16 @@ export function SteuerberaterPage() {
               monthKey: selectedMonthKey,
               userId: user?.id,
             });
-            const fileName = result.outcome === 'exported' ? result.fileName : null;
-            setExportFeedback({ monthKey: selectedMonthKey, fileName });
+            // FINANZ-CORE-01A (BUH-05) — das Ergebnis vollständig, damit das Panel Beleg und Grund nennt.
+            const feedback = buildAccountingExportFeedback(selectedMonthKey, result);
+            setExportFeedback(feedback);
             setPeriodToken((value) => value + 1);
-            return fileName;
+            return feedback.fileName;
           }}
           translate={translate}
           canExport={financeAccess.canWrite}
           lastResult={exportFeedback?.monthKey === selectedMonthKey ? exportFeedback : null}
+          pdfProblems={findAccountingExportPdfProblems(selectedMonthKey)}
         />
       </DetailSection>
 
@@ -248,6 +255,18 @@ export function SteuerberaterPage() {
                         '{count}',
                         String(overview.paymentCount),
                       )}
+                {/* FINANZ-CORE-01A (WEISS-Nacharbeit N11) — auch Mitarbeiterzahlungen gehören zur Übergabe. */}
+                {overview.employeePaymentCount > 0 ? (
+                  <>
+                    {' '}
+                    <span data-testid="steuerberater-employee-payments-hint">
+                      {translate('steuerberater.employeePaymentsInMonth').replace(
+                        '{count}',
+                        String(overview.employeePaymentCount),
+                      )}
+                    </span>
+                  </>
+                ) : null}
               </p>
             ) : (
               <RowList>
@@ -263,6 +282,21 @@ export function SteuerberaterPage() {
               <RowList>
                 {overview.missingItems.map((item) => (
                   <RowListItem key={item.id} icon="warning" title={item.title} trailing={<StatusBadge tone="warning" label={translate('steuerberater.missingTitle')} icon={false} />} />
+                ))}
+              </RowList>
+            </DetailSection>
+          ) : null}
+
+          {/*
+            * FINANZ-CORE-01A (WEISS-Nacharbeit N10) — Steueraufgaben ohne Monatsbezug: ein
+            * allgemeiner Hinweis, kein „fehlt" in jedem Monat.
+            */}
+          {overview.generalTaxTasks.length > 0 ? (
+            <DetailSection title={translate('steuerberater.generalTasksTitle')} testId="steuerberater-general-tasks">
+              <p className="detail-hint">{translate('steuerberater.generalTasksHint')}</p>
+              <RowList>
+                {overview.generalTaxTasks.map((task) => (
+                  <RowListItem key={task.id} icon="info" title={task.title} />
                 ))}
               </RowList>
             </DetailSection>

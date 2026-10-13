@@ -49,6 +49,8 @@ const companySnapshot = {
   street: 'Werkstraße 2',
   zip: '54321',
   city: 'Beispielstadt',
+  // FINANZ-CORE-01A (RE-09): Steuernummer oder USt-IdNr. ist Pflichtangabe jeder Rechnung.
+  taxNumber: '133/8150/8159',
   iban: 'DE00 0000 0000 0000 0000 00',
 };
 

@@ -17,6 +17,7 @@
 import { buildMonatsmappeModel } from '../steuerberater/monatsmappeModelService';
 import { collectMonatsmappeInput } from '../steuerberater/monatsmappeInputService';
 import { getAllAccountingAssignments } from './accountingStore';
+import { canonicalAccountingAssignmentsBySource, effectiveAccountingStatus } from './accountingCanonical';
 import { getChartOfAccounts } from './accountingSettingsService';
 import type {
   MonatsmappeBeleg,
@@ -52,7 +53,8 @@ function toEntry(
     datum: beleg.datum,
     gegenpartei: beleg.gegenpartei,
     brutto: beleg.brutto,
-    status: assignment?.status ?? null,
+    // FINANZ-CORE-01A (WEISS N06) — „bestätigt" mit ungeklärter oder anderer Steuer als der Beleg zählt als „zu prüfen".
+    status: assignment ? effectiveAccountingStatus(assignment, beleg.steuerstatus) : null,
     accountNumber: assignment?.accountNumber ?? '',
     bookingText: assignment?.bookingText ?? '',
     /*
@@ -80,10 +82,8 @@ export function buildAccountingChecklist(
   assignments: readonly AccountingAssignment[] = getAllAccountingAssignments(),
   chartOfAccounts = getChartOfAccounts(),
 ): AccountingChecklist {
-  const bySource = new Map<string, AccountingAssignment>();
-  for (const assignment of assignments) {
-    bySource.set(`${assignment.sourceType}:${assignment.sourceId}`, assignment);
-  }
+  // FINANZ-CORE-01A (WEISS-Nacharbeit N09) — dieselbe Kontierung je Beleg wie Detail und Übersicht.
+  const bySource = canonicalAccountingAssignmentsBySource(assignments);
 
   const entries: AccountingChecklistEntry[] = [];
   /*
