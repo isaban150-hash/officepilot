@@ -20,6 +20,11 @@ import {
   uploadDeliveryAttachment,
 } from './documentDeliveryCloudService';
 import { sha256Hex } from './documentDeliveryContract';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 const WS = '00000000-0000-4000-8000-00000000e1b1';
 const setup: CompanySetup = { ...DEFAULT_SETUP, setupComplete: true, taxStatus: 'standard_19' };
@@ -59,7 +64,7 @@ describe('EMAIL-01B1 — Cloud-Service', () => {
     hydrateCompanyProfileStore({ ...DEFAULT_COMPANY_PROFILE, companyName: 'Betrieb GmbH', street: 'Werkstraße 2', zip: '54321', city: 'Betriebsstadt', email: 'info@example.invalid', iban: 'DE89370400440532013000', taxNumber: '143/123/45678' });
   });
   afterEach(() => {
-    vi.restoreAllMocks();
+    (vi.restoreAllMocks(), alsInhaber());
     resetTestStores();
   });
 

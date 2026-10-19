@@ -83,6 +83,18 @@ export type InvoicePaymentCloudOutcome =
    * Gerät). Endgültig: Kein neuer Versuch kann diese Zahlung noch sichern.
    */
   | 'invoice_cancelled'
+  /**
+   * FC01A-P1-Nacharbeit (ZAH-04) — die Zahlung überstiege den offenen Betrag eines Abschlags, den
+   * eine wirksame Schlussrechnung bereits als beglichen abzieht (etwa auf einem anderen Gerät
+   * freigegeben). Endgültig, auch bestätigt: Das Geld gehört auf die Schlussrechnung.
+   */
+  | 'final_invoice_exists'
+  /**
+   * FINANZ-CORE-01A (Feiertage) — das Skonto der Rechnung hängt an einem ungeklärten Feiertag am Sitz
+   * des Kunden (`invoice_skonto_deadline_unclear`). Nicht endgültig: Ist der Ort am Kunden geklärt,
+   * sichert der nächste Abgleich die Zahlung nach (oder der Server nennt dann die Überzahlung).
+   */
+  | 'skonto_deadline_unclear'
   | 'failed';
 
 export type InvoicePaymentCloudResult =
@@ -209,9 +221,12 @@ function outcomeForMessage(message: string): Exclude<InvoicePaymentCloudOutcome,
   // KONTOSPERRE — auch "Kein Zugriff", "Keine Schreibberechtigung" und account_blocked sind endgueltig:
   // Das Formular nimmt die Zahlung dann zurueck, statt sie als "noch nicht gesichert" stehen zu lassen.
   if (isFinancialActionDenial(message) || isFinalPermissionDenialMessage(message)) return 'denied';
+  // FC01A-P1-Nacharbeit (ZAH-04) — der Abschlag ist durch eine wirksame Schlussrechnung abgerechnet.
+  if (message.includes('invoice_payment_final_invoice_exists')) return 'final_invoice_exists';
   // FINANZ-CORE-01A (SQL-05) — eine Fachentscheidung des Nutzers, kein Netzproblem.
   if (message.includes('invoice_payment_overpayment_unconfirmed')) return 'overpayment_unconfirmed';
   if (message.includes('Rechnung storniert')) return 'invoice_cancelled';
+  if (message.includes('invoice_skonto_deadline_unclear')) return 'skonto_deadline_unclear';
   return isConflictMessage(message) ? 'conflict' : 'failed';
 }
 

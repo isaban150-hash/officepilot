@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button';
 import { CustomerEditForm } from '../components/customer/CustomerEditForm';
 import { CustomerReceivablesPanel } from '../components/customer/CustomerReceivablesPanel';
 import { updateCustomer } from '../services/customerService';
+import { BUNDESLAND_NAMEN } from '../services/fristen/feiertage';
 import { getCustomerById } from '../services/customerStoreService';
 import type { CustomerBilling } from '../types/models';
 import { DataRow, PageHeader, StatusBadge } from '../components/ui/Card';
@@ -274,6 +275,17 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
           ) : null}
           {editableCustomer?.buyerReferenceDefault ? (
             <DataRow label={translate('customer.einvoice.buyerReferenceDefault')} value={editableCustomer.buyerReferenceDefault} />
+          ) : null}
+          {/* FINANZ-CORE-01A (Feiertage) — der ausdrücklich angegebene Sitz für Fristenden. */}
+          {editableCustomer?.holidayLocation ? (
+            <DataRow
+              label={translate('customer.holiday.region')}
+              value={
+                editableCustomer.holidayLocation.region === 'AUSLAND'
+                  ? translate('customer.holiday.abroad')
+                  : BUNDESLAND_NAMEN[editableCustomer.holidayLocation.region]
+              }
+            />
           ) : null}
         </SummaryList>
       </DetailSection>

@@ -424,6 +424,18 @@ export type CanonicalEInvoiceIssueCode =
   | 'prepayment_not_settled'
   /** WEISS-Recheck N02-R1 — Skonto auf einem Abschlag, aber die Aufteilung ist nicht eingefroren (Altbeleg). */
   | 'prepayment_skonto_unfrozen'
+  /**
+   * FC01A-P1-Restkorrektur (#8, Altformat) — Netto und Steuer eines abgezogenen Abschlags stehen
+   * nicht fest (umsatzsteuerpflichtiger Altabschlag ohne gespeichertes Netto oder widersprüchliche
+   * Angaben). Brutto wird nie als Netto ausgegeben.
+   */
+  | 'prepayment_net_unreliable'
+  /**
+   * FC01A-P1-Restkorrektur (lokaler Altbestand) — das Netto der Rechnung selbst steht nicht fest
+   * (`resolveInvoiceNet`): fehlt und lässt sich aus eingefrorenen Angaben nicht ermitteln, oder
+   * widerspricht dem Betrag. Das Brutto wird nie als Netto ausgegeben.
+   */
+  | 'net_unresolved'
   /* Noch nicht sicher abbildbar */
   | 'final_invoice_deduction_semantics_unsupported';
 

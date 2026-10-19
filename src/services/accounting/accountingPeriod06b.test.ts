@@ -33,6 +33,7 @@ import { setExpenseStoreForTests } from '../expenseStore';
 import { hydrateWorkspaceStore } from '../workspace/workspaceStore';
 import { normalizeExpense } from '../expenseNormalize';
 import { resetTestStores } from '../../test/resetStores';
+import { getSyncOutboxSnapshot, resetSyncOutboxForTests } from '../sync/syncOutboxService';
 import type { AccountingAssignment } from '../../types/accounting';
 import type { AccountingPeriodClosure } from '../../types/accountingPeriod';
 import type { Expense } from '../../types/expense';
@@ -358,7 +359,7 @@ describe('X — Fingerprint', () => {
   });
 
   it('der kanonische Text nennt die Belege in stabiler Reihenfolge', () => {
-    const text = buildPeriodCanonicalText(
+    const manifest = (version?: 4 | 5) =>
       buildPeriodManifest(
         model({
           eingangsbelege: [beleg({ id: 'exp-b' }), beleg({ id: 'exp-a' })],
@@ -366,10 +367,14 @@ describe('X — Fingerprint', () => {
         }),
         [],
         'SKR03',
-      ),
-    );
-    const zeilen = text.split('\n').slice(1).map((row) => row.split('\u0001')[1]);
-    expect(zeilen).toEqual(['exp-a', 'exp-b', 'inv-1']);
+        version,
+      );
+    // Fassung 4 (Altbestand) — unverändert prüfbar.
+    const v4 = buildPeriodCanonicalText(manifest(4)).split('\n').slice(1).map((row) => row.split('\u0001')[1]);
+    expect(v4).toEqual(['exp-a', 'exp-b', 'inv-1']);
+    // Fassung 5 (Systemische Gesamtnacharbeit) — E-Zeilen nach Quelle und Kennung in Bytefolge, wie der Server.
+    const v5 = buildPeriodCanonicalText(manifest()).split('\n').filter((row) => row.startsWith('E|')).map((row) => row.split('|')[2]);
+    expect(v5).toEqual(['exp-a', 'exp-b', 'inv-1']);
   });
 });
 
@@ -611,6 +616,14 @@ describe('AA — seit Abschluss geändert', () => {
     expect(veraltet.activeClosure).not.toBeNull();
 
     reopenAccountingPeriod(MONTH, { reason: 'Konto korrigiert' });
+    /*
+     * Bericht 20 (END19-R1/R2) — die geänderte Kontierung ist erst lokal: Bis der Server sie bestätigt, sperrt sie
+     * den Abschluss. Danach (Abgleich) stellt ein neuer Abschluss den Zustand wieder her.
+     */
+    const vorAbgleich = closeAccountingPeriod(MONTH);
+    expect(vorAbgleich.success).toBe(false);
+    expect(vorAbgleich.success ? [] : (vorAbgleich.blockers ?? []).map((item) => item.code)).toContain('unconfirmed_financial_changes');
+    resetSyncOutboxForTests(getSyncOutboxSnapshot().map((entry) => ({ ...entry, status: 'completed' as const })));
     const erneut = closeAccountingPeriod(MONTH);
     expect(erneut.success).toBe(true);
 
@@ -636,8 +649,9 @@ describe('U — die API für den DATEV-Block', () => {
       isCurrentClosureValid: false,
       activeClosure: null,
     });
-    // P1 MITARBEITERZAHLUNGEN — neue Stände entstehen mit Fingerprint-Version 3 (vorher 2).
-    expect(state.currentFingerprint).toMatch(/^p3:[0-9a-f]+:\d+$/);
+    // FINANZ-CORE-01A (Gesamtnacharbeit INV-04) — neue Stände entstehen mit Fingerprint-Version 4 (vorher 3).
+    // Systemische Gesamtnacharbeit — neue Stände in Fassung 5: SHA-256 über den kanonischen Text, wie der Server.
+    expect(state.currentFingerprint).toMatch(/^p5:[0-9a-f]{64}$/);
     expect(state.currentManifest.entries).toHaveLength(1);
     expect(Array.isArray(state.revisionHistory)).toBe(true);
   });

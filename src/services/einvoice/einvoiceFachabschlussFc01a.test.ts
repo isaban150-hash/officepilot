@@ -31,6 +31,11 @@ import { hydrateDocumentStore } from '../documentService';
 import { clearDocumentBlobStoreForTests } from '../storage/documentBlobIndexedDbService';
 import { resetTestStores } from '../../test/resetStores';
 import type { CompanyDocument, CompanyProfile, CustomerBilling, VorgangInvoice, VorgangInvoiceLine } from '../../types/models';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 const SELLER: CompanyProfile = {
   companyName: 'Cirmak Haustechnik',
@@ -219,7 +224,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.restoreAllMocks();
+  (vi.restoreAllMocks(), alsInhaber());
 });
 
 describe('FINANZ-CORE-01A — E-Rechnung im Fachabschluss', () => {
@@ -278,7 +283,7 @@ describe('FINANZ-CORE-01A — E-Rechnung im Fachabschluss', () => {
     });
     expect(canonical.value.notes).toEqual(
       expect.arrayContaining([
-        'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0032 vom 01.08.2026) 466,48 EUR gezahlt von 476,00 EUR brutto',
+        'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0032 vom 01.08.2026) 466,48 EUR gezahlt (netto 392,00 EUR, USt 74,48 EUR) von 476,00 EUR brutto',
         'Skonto auf Abschlag 1 (Rechnung 2026-0032): 9,52 EUR brutto (netto 8,00 EUR, USt 1,52 EUR), als Nachlass auf Belegebene ausgewiesen (Entgeltminderung).',
       ]),
     );
@@ -450,7 +455,7 @@ describe('FINANZ-CORE-01A — E-Rechnung im Fachabschluss', () => {
     });
     afterEach(() => {
       resetTestStores();
-      vi.restoreAllMocks();
+      (vi.restoreAllMocks(), alsInhaber());
     });
 
     it('legt die Gutschrift am Korrekturbeleg ab und lässt das Original unangetastet', async () => {
@@ -480,5 +485,158 @@ describe('FINANZ-CORE-01A — E-Rechnung im Fachabschluss', () => {
       }
       expect(getDocumentFileRepresentationBindingStoreSnapshot()).toHaveLength(1);
     });
+  });
+});
+
+/*
+ * FC01A-Nacharbeit (P-1) — Skonto-Schlussrechnungen mit § 13b und § 19 sowie die Korrektur-E-Rechnung
+ * einer Skonto-Schlussrechnung hatten keinen externen Validator-Nachweis. Abschlag und Schlussrechnung
+ * haben denselben Steuerfall (A3); ohne Umsatzsteuer ist das Skonto ganz Nettonachlass.
+ */
+const RC_HINWEIS = 'Steuerschuldnerschaft des Leistungsempfängers gemäß § 13b UStG.';
+const KU_HINWEIS = 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.';
+
+const ABSCHLAEGE_P1: Record<string, VorgangInvoice> = {
+  ...ABSCHLAEGE,
+  a13b: abschlag('a13b', '2026-0071', {
+    taxStatus: 'reverse_charge_13b',
+    amount: 400,
+    legalNotices: [RC_HINWEIS],
+    skontoText: '2 % Skonto bei Zahlung innerhalb von 10 Tagen',
+    payments: [zahlung('p-a13b', 392, '2026-08-05')],
+  }),
+  a19: abschlag('a19', '2026-0072', {
+    taxStatus: 'kleinunternehmer_19',
+    amount: 400,
+    legalNotices: [KU_HINWEIS],
+    skontoText: '2 % Skonto bei Zahlung innerhalb von 10 Tagen',
+    payments: [zahlung('p-a19', 392, '2026-08-05')],
+  }),
+};
+
+const SCHLUSS_13B_SKONTO = invoice({
+  id: 'inv-fc01a-13b-skonto',
+  number: '2026-0073',
+  type: 'schluss',
+  taxStatus: 'reverse_charge_13b',
+  amount: 600,
+  legalNotices: [RC_HINWEIS],
+  previousAbschlagDeductions: [
+    { invoiceId: 'a13b', invoiceNumber: '2026-0071', abschlagNumber: 1, date: '2026-08-01', subtotal: 400, amount: 400, paidAmount: 392, skontoAmount: 8 },
+  ],
+});
+
+const SCHLUSS_19_SKONTO = invoice({
+  id: 'inv-fc01a-19-skonto',
+  number: '2026-0074',
+  type: 'schluss',
+  taxStatus: 'kleinunternehmer_19',
+  amount: 600,
+  legalNotices: [KU_HINWEIS],
+  previousAbschlagDeductions: [
+    { invoiceId: 'a19', invoiceNumber: '2026-0072', abschlagNumber: 1, date: '2026-08-01', subtotal: 400, amount: 400, paidAmount: 392, skontoAmount: 8 },
+  ],
+});
+
+/* Die Skonto-Schlussrechnung, versendet und mit Korrekturbeleg storniert. */
+const SCHLUSS_SKONTO_KORRIGIERT = invoice({
+  ...SCHLUSS_SKONTO,
+  id: 'inv-fc01a-skonto-korr',
+  number: '2026-0075',
+  status: 'versendet',
+  cancelledAt: '2026-09-25T10:00:00.000Z',
+  cancellationKind: 'correction',
+  cancelReason: 'Falscher Leistungszeitraum',
+  correctionDocumentId: 'corr-inv-fc01a-skonto',
+  correctionNumber: '2026-0076',
+});
+
+describe('FC01A-Nacharbeit P-1 — Skonto mit § 13b, § 19 und als Korrektur-E-Rechnung', () => {
+  beforeEach(async () => {
+    vi.spyOn(invoiceRegistry, 'findInvoiceById').mockImplementation((invoiceId: string) => ABSCHLAEGE_P1[invoiceId]);
+    resetTestStores();
+    await clearDocumentBlobStoreForTests();
+    hydrateDocumentStore([
+      {
+        id: 'doc-inv-fc01a-skonto-korr',
+        title: '2026-0075 – Schlussrechnung',
+        category: 'ausgangsrechnung',
+        classifiedKind: 'ausgangsrechnung',
+        linkedInvoiceId: SCHLUSS_SKONTO_KORRIGIERT.id,
+        createdAt: '2026-09-24T08:00:00.000Z',
+        tags: [],
+      },
+      {
+        id: 'corr-inv-fc01a-skonto',
+        title: 'Rechnungskorrektur 2026-0076 zu Rechnung 2026-0075',
+        category: 'ausgangsrechnung',
+        classifiedKind: 'rechnungskorrektur',
+        linkedInvoiceId: SCHLUSS_SKONTO_KORRIGIERT.id,
+        createdAt: '2026-09-25T10:00:00.000Z',
+        tags: [],
+      },
+    ] as never);
+    hydrateDocumentFileStore([], {});
+    hydrateDocumentFileRepresentationBindingStore([]);
+  });
+  afterEach(() => {
+    resetTestStores();
+    (vi.restoreAllMocks(), alsInhaber());
+  });
+
+  it.each([
+    ['§ 13b', SCHLUSS_13B_SKONTO, 'reverse_charge'],
+    ['§ 19', SCHLUSS_19_SKONTO, 'exempt'],
+  ] as const)('P1 %s: Skonto ganz netto, BT-113 nur gezahlt, Restbetrag unverändert', (_fall, beleg, kategorie) => {
+    const canonical = buildCanonicalEInvoice(beleg, { prepaymentSettlements: prepaymentSettlementsFor(beleg) });
+    expect(canonical.ok, canonical.ok ? '' : JSON.stringify(canonical.issues)).toBe(true);
+    if (!canonical.ok) return;
+    const t = canonical.value.totals;
+    expect(t.lineNetTotal).toBe(1000);
+    expect(t.allowanceTotal).toBe(8);
+    expect(t.taxExclusiveAmount).toBe(992);
+    expect(t.taxAmount).toBe(0);
+    expect(t.taxInclusiveAmount).toBe(992);
+    expect(t.prepaidAmount).toBe(392);
+    expect(t.payableAmount).toBe(600);
+    expect(t.roundingAmount).toBeUndefined();
+    expect(canonical.value.allowances).toEqual([
+      expect.objectContaining({ amount: 8, reasonCode: '95', category: kategorie, rate: 0 }),
+    ]);
+  });
+
+  it('P1 Korrektur: die Gutschrift zur Skonto-Schlussrechnung entsteht am Korrekturbeleg', async () => {
+    const result = await ensureXRechnungArtifact(SCHLUSS_SKONTO_KORRIGIERT, { variant: 'correction' });
+    expect(result.ok, result.ok ? '' : JSON.stringify(result)).toBe(true);
+    if (!result.ok) return;
+    const xml = new TextDecoder().decode(result.artifact.bytes);
+    expect(xml).toContain('<ram:TypeCode>381</ram:TypeCode>');
+    expect(xml).toContain('<ram:ID>2026-0076</ram:ID>');
+  });
+
+  /* Nachweis-Export für die externe Prüfung; läuft nur mit gesetztem FC01A_EINVOICE_OUT. */
+  it.skipIf(!process.env.FC01A_EINVOICE_OUT)('P1 schreibt die Fälle für KoSIT und Mustang', async () => {
+    const { mkdirSync, writeFileSync } = await import('node:fs');
+    const path = await import('node:path');
+    const { buildZugferdInvoice } = await import('./zugferd/zugferdArtifactService');
+    const ziel = process.env.FC01A_EINVOICE_OUT!;
+    mkdirSync(ziel, { recursive: true });
+    for (const [name, beleg] of [
+      ['schluss-13b-skonto', SCHLUSS_13B_SKONTO],
+      ['schluss-19-skonto', SCHLUSS_19_SKONTO],
+    ] as const) {
+      const canonical = buildCanonicalEInvoice(beleg, { prepaymentSettlements: prepaymentSettlementsFor(beleg) });
+      expect(canonical.ok).toBe(true);
+      if (!canonical.ok) continue;
+      const rendered = renderXRechnungCii(canonical.value);
+      expect(rendered.ok).toBe(true);
+      if (rendered.ok) writeFileSync(path.join(ziel, `xrechnung-${name}.xml`), rendered.xml, 'utf8');
+      const hybrid = await buildZugferdInvoice(beleg);
+      expect(hybrid.ok, hybrid.ok ? '' : JSON.stringify(hybrid)).toBe(true);
+      if (hybrid.ok) writeFileSync(path.join(ziel, `zugferd-${name}.pdf`), hybrid.artifact.bytes);
+    }
+    const korrektur = await ensureXRechnungArtifact(SCHLUSS_SKONTO_KORRIGIERT, { variant: 'correction' });
+    expect(korrektur.ok).toBe(true);
+    if (korrektur.ok) writeFileSync(path.join(ziel, 'xrechnung-korrektur-schluss-skonto.xml'), korrektur.artifact.bytes);
   });
 });

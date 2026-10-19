@@ -9,14 +9,20 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
-import type { Customer, CustomerBilling } from '../../types/models';
+import type { Customer, CustomerBilling, CustomerHolidayLocation } from '../../types/models';
+import { BUNDESLAENDER, BUNDESLAND_NAMEN } from '../../services/fristen/feiertage';
+import { laenderFuerPlz, normalizeHolidayLocation } from '../../services/fristen/fristende';
 
 /**
  * E-RECHNUNG-04B — die Stammdaten, die eine spätere strukturierte Rechnung
  * braucht, stehen im selben Formular. Keine zweite Kundenseite: Es sind
  * Angaben zum Kunden, keine Angaben zu einem Verfahren.
  */
-export type CustomerEditValues = CustomerBilling & { buyerReferenceDefault: string };
+export type CustomerEditValues = CustomerBilling & {
+  buyerReferenceDefault: string;
+  /** FINANZ-CORE-01A (Feiertage) — `null`: keine Angabe, das Bundesland folgt der PLZ. */
+  holidayLocation: CustomerHolidayLocation | null;
+};
 
 interface CustomerEditFormProps {
   customer: Customer;
@@ -40,7 +46,17 @@ function valuesOf(customer: Customer): CustomerEditValues {
     vatId: customer.vatId ?? '',
     buyerReferenceDefault: customer.buyerReferenceDefault ?? '',
     leitwegId: customer.leitwegId ?? '',
+    holidayLocation: normalizeHolidayLocation(customer.holidayLocation) ?? null,
   };
+}
+
+/** Dreiwertige Auswahl für einen Gemeindefeiertag: ungeklärt (fehlt), ja, nein. */
+function triValue(value: boolean | undefined): string {
+  return value === true ? 'ja' : value === false ? 'nein' : '';
+}
+
+function fromTri(value: string): boolean | undefined {
+  return value === 'ja' ? true : value === 'nein' ? false : undefined;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -67,8 +83,43 @@ export function CustomerEditForm({
     setValues(valuesOf(customer));
   }, [customer.id]);
 
-  const set = (field: keyof CustomerEditValues) => (value: string) =>
+  const set = (field: Exclude<keyof CustomerEditValues, 'holidayLocation'>) => (value: string) =>
     setValues((prev) => ({ ...prev, [field]: value }));
+
+  const setHoliday = (holidayLocation: CustomerHolidayLocation | null) =>
+    setValues((prev) => ({ ...prev, holidayLocation }));
+
+  // Was ohne Angabe gilt: die Länder des PLZ-Leitbereichs, im Ausland nichts Deutsches.
+  const country = (values.countryCode ?? '').trim().toUpperCase();
+  const fromZip = laenderFuerPlz(values.zip.trim());
+  const automaticLabel =
+    country && country !== 'DE'
+      ? translate('customer.holiday.regionAutoAbroad')
+      : fromZip
+        ? translate('customer.holiday.regionAuto').replace(
+            '{laender}',
+            fromZip.laender.map((code) => BUNDESLAND_NAMEN[code]).join(' / '),
+          )
+        : translate('customer.holiday.regionAutoUnknown');
+
+  const triSelect = (key: 'fronleichnam' | 'mariaeHimmelfahrt' | 'augsburgerFriedensfest', label: string) => (
+    <Field label={label}>
+      <select
+        className="input"
+        data-testid={`kunden-edit-holiday-${key}`}
+        value={triValue(values.holidayLocation?.[key])}
+        onChange={(event) => {
+          const current = values.holidayLocation;
+          if (!current) return;
+          setHoliday(normalizeHolidayLocation({ ...current, [key]: fromTri(event.target.value) }) ?? null);
+        }}
+      >
+        <option value="">{translate('customer.holiday.unknown')}</option>
+        <option value="ja">{translate('customer.holiday.yes')}</option>
+        <option value="nein">{translate('customer.holiday.no')}</option>
+      </select>
+    </Field>
+  );
 
   return (
     <Card>
@@ -185,6 +236,59 @@ export function CustomerEditForm({
               onChange={(event) => set('leitwegId')(event.target.value)}
             />
           </Field>
+        </fieldset>
+
+        {/*
+          * FINANZ-CORE-01A (Feiertage, § 193 BGB) — der Sitz des Kunden für Fristenden. Ohne Angabe
+          * leitet OfficeTakt das Bundesland aus der PLZ ab; die Angabe hier geht vor und klärt
+          * Grenz-PLZ, Gemeindefeiertage und Kunden im Ausland.
+          */}
+        <fieldset className="invoice-edit__section" data-testid="kunden-edit-holiday">
+          <legend>{translate('customer.holiday.section')}</legend>
+          <p className="hint-text">{translate('customer.holiday.hint')}</p>
+          <Field label={translate('customer.holiday.region')}>
+            <select
+              className="input"
+              data-testid="kunden-edit-holiday-region"
+              value={values.holidayLocation?.region ?? ''}
+              onChange={(event) => {
+                const region = event.target.value;
+                setHoliday(region ? (normalizeHolidayLocation({ region }) ?? null) : null);
+              }}
+            >
+              <option value="">{automaticLabel}</option>
+              {BUNDESLAENDER.map((code) => (
+                <option key={code} value={code}>
+                  {BUNDESLAND_NAMEN[code]}
+                </option>
+              ))}
+              <option value="AUSLAND">{translate('customer.holiday.abroad')}</option>
+            </select>
+          </Field>
+          {values.holidayLocation?.region === 'BY' ? (
+            <>
+              {triSelect('mariaeHimmelfahrt', translate('customer.holiday.mariaeHimmelfahrt'))}
+              {triSelect('augsburgerFriedensfest', translate('customer.holiday.augsburgerFriedensfest'))}
+            </>
+          ) : null}
+          {values.holidayLocation?.region === 'SN' || values.holidayLocation?.region === 'TH'
+            ? triSelect('fronleichnam', translate('customer.holiday.fronleichnam'))
+            : null}
+          {values.holidayLocation?.region === 'AUSLAND' ? (
+            <label className="edit-field edit-field--checkbox">
+              <input
+                type="checkbox"
+                data-testid="kunden-edit-holiday-abroad-confirmed"
+                checked={values.holidayLocation.auslandOhneFeiertag === true}
+                onChange={(event) =>
+                  setHoliday(
+                    normalizeHolidayLocation({ region: 'AUSLAND', auslandOhneFeiertag: event.target.checked }) ?? null,
+                  )
+                }
+              />
+              <span>{translate('customer.holiday.abroadConfirmed')}</span>
+            </label>
+          ) : null}
         </fieldset>
 
         {error ? (

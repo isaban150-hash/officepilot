@@ -10,7 +10,7 @@ import { resolveInvoiceDefaults } from '../invoice/invoiceDefaults';
 import type { HistoricalInvoiceLogoSource } from '../../types/branding';
 import { buildInvoicePrintModelFromInvoice } from '../invoicePrintModel';
 import { buildLegalNotices } from '../invoiceTaxService';
-import { toInvoiceCompanySnapshot } from '../invoiceService';
+import { calculateLineItemTotals, toInvoiceCompanySnapshot } from '../invoiceService';
 import { resolveProfileDocumentTemplate } from '../company/companyProfileSettingsContract';
 
 /**
@@ -79,17 +79,25 @@ export function buildSettingsDocumentPreviewModel(
    * Kennung. Die Beträge sind so gewählt, dass Netto/Steuer/Brutto auf dem
    * Beleg gut lesbar sind.
    */
+  // Anzeigeeinheiten wie bisher (Freitext), deshalb über unknown.
+  const positions = [
+    { id: 'p1', description: 'Beispielposition: Wartung Heizungsanlage', quantity: 1, unit: 'Pauschal', unitPrice: 450, lineTotal: 450 },
+    { id: 'p2', description: 'Beispielposition: Monteurstunden', quantity: 4, unit: 'Std', unitPrice: 65, lineTotal: 260 },
+  ] as unknown as VorgangInvoice['positions'];
+  /*
+   * FC01A-P1-Restkorrektur (lokaler Altbestand) — Netto und Betrag wie bei einer Freigabe. Das
+   * Druckmodell prüft beide gegeneinander (`resolveInvoiceNet`); ein Betrag 0 zu 710 netto wäre ein
+   * widersprüchlicher Beleg. Angezeigt wird dasselbe wie bisher (Summen aus dem Netto).
+   */
+  const totals = calculateLineItemTotals(positions, taxStatus);
   const sample: VorgangInvoice = {
     id: 'settings-preview',
     number: PREVIEW_INVOICE_NUMBER,
     type: 'rechnung',
-    positions: [
-      { id: 'p1', description: 'Beispielposition: Wartung Heizungsanlage', quantity: 1, unit: 'Pauschal', unitPrice: 450, lineTotal: 450 },
-      { id: 'p2', description: 'Beispielposition: Monteurstunden', quantity: 4, unit: 'Std', unitPrice: 65, lineTotal: 260 },
-    ],
-    subtotal: 710,
+    positions,
+    subtotal: totals.subtotal,
     taxStatus,
-    amount: 0,
+    amount: totals.total,
     status: 'vorbereitet',
     date: issueDate,
     issueDate,

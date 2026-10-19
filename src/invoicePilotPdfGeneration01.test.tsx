@@ -10,6 +10,7 @@ import { buildInvoicePrintModelFromInvoice } from './services/invoicePrintModel'
 import type { VorgangInvoice } from './types/models';
 import * as invoicePdfService from './services/invoicePdfService';
 import * as invoicePrintService from './services/invoicePrintService';
+import { alsInhaber } from './test/workspaceRoleTestUtils';
 
 const companySnapshot = {
   ...DEFAULT_COMPANY_PROFILE,
@@ -95,6 +96,8 @@ afterEach(() => {
 
 describe('INVOICE-PILOT-PDF-GENERATION-01 — UI', () => {
   it('Download nur nach Klick; Freigabe-Vorschau-Aktionen bleiben; Status unverändert', async () => {
+    // SYS-04 — bei eingerichteter Cloud gibt nur eine bekannte Inhaber-/Verwaltungsrolle ohne Cloud-Nachweis aus.
+    alsInhaber();
     const invoice = createFinalizedInvoice();
     const model = buildInvoicePrintModelFromInvoice(invoice);
     const generateSpy = vi.spyOn(invoicePdfService, 'generateApprovedInvoicePdf');

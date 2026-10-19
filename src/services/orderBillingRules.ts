@@ -1,4 +1,5 @@
-import { lineTotalCents, sumCents, toCents } from './invoiceMoney';
+import { lineTotalCents, sumCents } from './invoiceMoney';
+import { invoiceNetCentsForBillingLimit } from './invoice/invoiceNetResolution';
 import type {
   MaterialStandard,
   OrderPosition,
@@ -271,7 +272,8 @@ export function getPreFinalBilledNetCents(vorgang: Vorgang): number {
   return sumCents(
     (vorgang.invoices ?? [])
       .filter((invoice) => PRE_FINAL_BILLING_TYPES.includes(invoice.type) && isBillingEffective(invoice))
-      .map((invoice) => toCents(invoice.subtotal))
+      // FC01A-P1-Restkorrektur (lokaler Altbestand) — ein ungeklärtes Netto zählt mit seiner Obergrenze.
+      .map((invoice) => invoiceNetCentsForBillingLimit(invoice))
       .filter((cents) => Number.isFinite(cents)),
   );
 }
@@ -284,7 +286,9 @@ export function getCountedAbschlagNetCents(vorgang: Vorgang): number {
     (vorgang.invoices ?? [])
       .filter((invoice) => invoice.type === 'abschlag' && isBillingEffective(invoice))
       // `subtotal` ist netto. `amount` wäre brutto und würde den Maßstab brechen.
-      .map((invoice) => toCents(invoice.subtotal))
+      // FC01A-P1-Restkorrektur (lokaler Altbestand) — Netto über `resolveInvoiceNet`; nur ein
+      // ungeklärtes zählt für die Grenze mit seiner Obergrenze (nie als Netto ausgewiesen).
+      .map((invoice) => invoiceNetCentsForBillingLimit(invoice))
       .filter((cents) => Number.isFinite(cents)),
   );
 }

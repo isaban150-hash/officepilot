@@ -29,6 +29,7 @@ import type { DocumentFileRef } from '../../types/documentFileRef';
 import type { DocumentFileRepresentationBinding } from '../../types/documentFileRepresentationBinding';
 import type { DocumentWorkResult } from '../../types/documentWorkResult';
 import { buildExpenseContentKey, isCloudSyncBlockedMockExpenseId } from '../expense/expenseCloudSyncService';
+import { affectedMonthsOf, expenseBookingMonths } from './syncAffectedMonths';
 import type { Expense } from '../../types/expense';
 import type { PaperRegisterEntry } from '../../types/memory';
 import { buildPaperRegisterEntryCloudContentKey } from '../memory/paperRegisterCloudService';
@@ -99,6 +100,8 @@ interface EntitySyncFingerprint {
   deleted: boolean;
   updatedAt: string;
   contentKey: string;
+  /** Bericht 20 — Buchungsmonate (nur Ausgaben); kein Teil des Änderungsvergleichs. */
+  months?: (string | null)[];
 }
 
 interface TrackedEntityRef {
@@ -172,6 +175,7 @@ function buildExpenseFingerprint(expense: Expense): EntitySyncFingerprint {
     deleted: sync?.deleted ?? false,
     updatedAt: sync?.updatedAt ?? '',
     contentKey: buildExpenseContentKey(expense),
+    months: expenseBookingMonths(expense),
   };
 }
 
@@ -568,11 +572,17 @@ export function trackPersistedChanges(state: AppPersistedState): void {
       continue;
     }
 
+    /*
+     * FINANZ-CORE-01A (Bericht 20) — ein Beleg berührt seinen alten und seinen neuen Monat: Verschiebt eine
+     * Datumsänderung ihn, bleibt der alte Monat gesperrt, bis der Server die Änderung bestätigt hat.
+     */
+    const affectedMonths = ref.entityType === 'expense' ? affectedMonthsOf(...(previous?.months ?? []), ...(ref.fingerprint.months ?? [])) : undefined;
     const auftrag = {
       entityType: ref.entityType,
       entityId: ref.entityId,
       operation: resolveOperation(previous, ref.fingerprint),
       version: resolveVersion(ref.fingerprint),
+      ...(affectedMonths ? { affectedMonths } : {}),
     };
     /*
      * GO-LIVE-SECURITY-01 / KONTOSPERRE — eine lokale Änderung ist hier eine Nutzeraktion

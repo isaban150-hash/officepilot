@@ -102,6 +102,12 @@ export function OrderFinancialsPanel({ financials, translate }: Props) {
           {translate('order.financials.overInvoicedHint')}
         </p>
       )}
+      {/* FC01A-P1-Restkorrektur (lokaler Altbestand) — eine Obergrenze wird als solche benannt. */}
+      {financials.netUnresolvedInvoiceCount > 0 && (
+        <p className="detail-hint" data-testid="vorgang-financials-net-unresolved">
+          {translate('order.financials.netUnresolvedHint')}
+        </p>
+      )}
 
       {/* ---------------- Zahlungsstand (brutto) ---------------- */}
       <h3 className="ui-section-header__title">{translate('order.financials.paymentTitle')}</h3>

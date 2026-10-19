@@ -9,7 +9,7 @@
  * Zwei Prüfungen, in dieser Reihenfolge:
  *  1. Für jede Rolle: ohne gültigen, bestätigten Leistungszeitraum keine Ausgabe (die
  *     Codes des PDF-Validators, siehe `einvoiceOutputRule`).
- *  2. Für ein angemeldetes Mitglied zusätzlich: Die Bestätigung muss nachweislich in der
+ *  2. Für ein Mitglied — und ebenso bei unbekannter Sitzung oder Mitgliedschaft (SYS-04) — zusätzlich: Die Bestätigung muss nachweislich in der
  *     Cloud liegen — ein früherer Nachweis auf diesem Gerät oder ein Einzelread jetzt
  *     (siehe `invoiceOutputClearance`). Die Rolle stammt aus der Sitzung des Browsers und
  *     dem gezogenen Mitgliederstand, nicht aus einer Angabe des Aufrufers.
@@ -67,7 +67,13 @@ export async function checkInvoiceOutput(invoice: VorgangInvoice): Promise<Invoi
   if (codes.length > 0) return { reason: 'service_period_unconfirmed', codes };
 
   const akteur = await sitzungsAkteur();
-  if (resolveWorkspaceWriteAccess(akteur).reason !== 'member') return null;
+  /*
+   * FINANZ-CORE-01A (SYS-04 / F39) — nur Inhaber, Verwaltung und der reine Lokalbetrieb bleiben beim lokalen Stand.
+   * Eine unbekannte Sitzung oder Mitgliedschaft bei eingerichteter Cloud ist KEIN Inhaber: Sie braucht denselben
+   * Cloud-Nachweis wie ein Mitglied (früher auf diesem Gerät belegt oder jetzt gelesen). Vorher fiel sie durch.
+   */
+  const zugang = resolveWorkspaceWriteAccess(akteur);
+  if (zugang.reason === 'owner_or_admin' || zugang.reason === 'local_only') return null;
 
   const betrieb = resolveActiveCloudWorkspaceId();
   if (hasServicePeriodCloudProof(betrieb, invoice.id)) return null;

@@ -11,6 +11,7 @@ import { getDocumentById } from './documentService';
 import { generateUuid } from './sync/syncMetaService';
 import { enqueueSyncOutbox } from './sync/syncOutboxService';
 import { buildExpensePaymentEntityId } from './expense/expenseCloudSyncService';
+import { affectedMonthsOf, bookingMonthOf } from './sync/syncAffectedMonths';
 import {
   calculateExpensePaymentSummary,
   getExpenseOpenAmount,
@@ -23,7 +24,16 @@ import {
   isSettledPaymentStatus,
   requiresOverpaymentConfirmation,
 } from './payment/paymentSemantics';
+import { fromCents, toCents } from './invoiceMoney';
 import type { Expense, ExpensePayment, ExpensePaymentInput } from '../types/expense';
+
+/** FINANZ-CORE-01A (Gesamtnacharbeit INV-08) — ein echter Kalendertag im ISO-Format. */
+function isRealIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [jahr, monat, tag] = value.split('-').map(Number);
+  const datum = new Date(Date.UTC(jahr!, monat! - 1, tag!));
+  return datum.getUTCFullYear() === jahr && datum.getUTCMonth() === monat! - 1 && datum.getUTCDate() === tag;
+}
 
 export type ExpensePaymentMutationResult =
   | { success: true; expense: Expense; payment: ExpensePayment }
@@ -102,12 +112,27 @@ export function recordExpensePayment(
     return { success: false, errorKey: 'expense.payment.cancelled' };
   }
 
-  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+  /*
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-08) — erst auf Cent normalisieren, dann prüfen: 0,004 € ist
+   * keine Zahlung (der Server rechnet `round(amount, 2) <= 0`). Bisher ging die Positivprüfung dem Runden
+   * voraus; lokal stand ein Erfolg über 0,004 €, den der Server abwies. Gespeichert wird der Centbetrag
+   * (0,005 → 0,01; 1,005 → 1,01, wie der Server).
+   */
+  if (!Number.isFinite(input.amount)) {
     return { success: false, errorKey: 'payment.amountInvalid' };
   }
+  const amountCents = toCents(input.amount);
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    return { success: false, errorKey: 'payment.amountInvalid' };
+  }
+  const amount = fromCents(amountCents);
 
   if (!input.date?.trim()) {
     return { success: false, errorKey: 'payment.dateRequired' };
+  }
+  // INV-08 — ein echter Kalendertag (der Server weist 2026-02-30 ab).
+  if (!isRealIsoDate(input.date.slice(0, 10))) {
+    return { success: false, errorKey: 'payment.dateInvalid' };
   }
 
   /*
@@ -117,7 +142,7 @@ export function recordExpensePayment(
    * abgelehnt: Zu viel gezahltes Geld ist eine echte Tatsache, die der Beleg
    * abbilden muss. Verlangt wird nur, dass der Nutzer sie gesehen hat.
    */
-  const overpayAmount = getPaymentOverpayAmount(getExpenseOpenAmount(expense), input.amount);
+  const overpayAmount = getPaymentOverpayAmount(getExpenseOpenAmount(expense), amount);
   if (overpayAmount > 0 && !options.confirmOverpayment) {
     return { success: false, errorKey: 'payment.overpaymentConfirmationRequired' };
   }
@@ -155,7 +180,7 @@ export function recordExpensePayment(
   const payment: ExpensePayment = {
     id: generateUuid(),
     date: input.date.slice(0, 10),
-    amount: input.amount,
+    amount,
     reference: input.reference?.trim() || undefined,
     note: input.note?.trim() || undefined,
     // 02B — optional; ohne Angabe bleibt sie nicht erfasst.
@@ -163,6 +188,8 @@ export function recordExpensePayment(
     // BLOCK 1 — optional; ohne Angabe ist kein Nachweis verknüpft.
     ...(proofDocumentId ? { proofDocumentId } : {}),
     createdAt: new Date().toISOString(),
+    // INV-08 — die Bestätigung reist mit; der Server verlangt sie über dem offenen Betrag.
+    ...(overpayAmount > 0 ? { overpaymentAcknowledged: true } : {}),
   };
 
   const summary = calculateExpensePaymentSummary({
@@ -181,7 +208,13 @@ export function recordExpensePayment(
    * Idempotenzschluessel, nie eine zweite Zahlung. Vor persistAll(), damit
    * der Auftrag mit der Zahlung zusammen gespeichert wird.
    */
-  enqueueSyncOutbox({ entityType: 'expense_payment', entityId: buildExpensePaymentEntityId(expenseId, payment.id), operation: 'create', version: 1 });
+  enqueueSyncOutbox({
+    entityType: 'expense_payment',
+    entityId: buildExpensePaymentEntityId(expenseId, payment.id),
+    operation: 'create',
+    version: 1,
+    affectedMonths: affectedMonthsOf(bookingMonthOf(payment.date)),
+  });
   persistAll();
   return { success: true, expense: updated, payment };
 }
@@ -200,6 +233,7 @@ export function removeExpensePayment(
     return { success: false, errorKey: 'payment.notFound' };
   }
 
+  const reversed = payments.find((payment) => payment.id === paymentId);
   const remaining = payments.filter((payment) => payment.id !== paymentId);
   const summary = calculateExpensePaymentSummary({ ...expense, payments: remaining });
   const updated = removePaymentFromExpenseStore(expenseId, paymentId, summary.status);
@@ -209,7 +243,14 @@ export function removeExpensePayment(
   }
 
   // 01C — Reversal in der Cloud (Grabstein), sonst lebt die Zahlung beim naechsten Pull wieder auf.
-  enqueueSyncOutbox({ entityType: 'expense_payment', entityId: buildExpensePaymentEntityId(expenseId, paymentId), operation: 'delete', version: 1 });
+  // Bericht 20 — lokal ist die Zahlung danach weg; ihr Monat reist mit dem Auftrag (Abschlusssperre bis zur Bestätigung).
+  enqueueSyncOutbox({
+    entityType: 'expense_payment',
+    entityId: buildExpensePaymentEntityId(expenseId, paymentId),
+    operation: 'delete',
+    version: 1,
+    affectedMonths: affectedMonthsOf(bookingMonthOf(reversed?.date)),
+  });
   persistAll();
   return { success: true, expense: updated };
 }
@@ -267,7 +308,13 @@ export function setExpensePaymentProof(
    * eigener Entitaetstyp — die Zahlung ist und bleibt die Einheit, die
    * reist.
    */
-  enqueueSyncOutbox({ entityType: 'expense_payment', entityId: buildExpensePaymentEntityId(expenseId, paymentId), operation: 'create', version: 1 });
+  enqueueSyncOutbox({
+    entityType: 'expense_payment',
+    entityId: buildExpensePaymentEntityId(expenseId, paymentId),
+    operation: 'create',
+    version: 1,
+    affectedMonths: affectedMonthsOf(bookingMonthOf(aktualisiert.date)),
+  });
   persistAll();
   return { success: true, expense: updated, payment: aktualisiert };
 }

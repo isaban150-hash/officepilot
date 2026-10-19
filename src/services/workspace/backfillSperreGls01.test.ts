@@ -305,8 +305,15 @@ const BEWUSSTE_AUFRUFSTELLEN: Record<string, number> = {
   'src/services/expensePaymentService.ts': 3,
   'src/services/order/orderDraftService.ts': 1,
   'src/services/orderAmendmentService.ts': 1,
-  // Definition und der gesperrte Weg selbst.
-  'src/services/sync/syncOutboxService.ts': 1,
+  // FINANZ-CORE-01A (INV-10) — einzige automatische Ausnahme, bewusst eng: der Archivverweis einer
+  // freigegebenen Angebotskopie, die der Abgleich als verlustbehaftet erkannt und durch den Serverbeleg ersetzt
+  // hat, wird genau einmal neu gesendet (löst die endgültige Abweisung des alten Auftrags ab). Andere
+  // abgewiesene Aktionen holt kein automatischer Weg nach (inventurPaket3Fc01a A3–A5).
+  'src/services/workspace/workspaceProvisioningService.ts': 1,
+  // Definition und der gesperrte Weg selbst; dazu FINANZ-CORE-01A (Bericht 20) „Bewusst erneut senden“
+  // (`resendFinallyDeniedOutboxEntry`, nur vom Knopf der Sync-Seite über `resendFinallyDeniedEntryFromUi` erreichbar):
+  // eine bewusste Nutzeraktion, die eine endgültige Abweisung einer Mitarbeiterzahlung/Kontierung ablöst.
+  'src/services/sync/syncOutboxService.ts': 2,
 };
 
 function quelltexte(dir: string, liste: string[] = []): string[] {
@@ -332,7 +339,9 @@ describe('V — Vertrag: automatische Wege nehmen nur den gesperrten Einreihungs
       if (anzahl > 0) gefunden[path.relative(process.cwd(), datei).split(path.sep).join('/')] = anzahl;
     }
     expect(gefunden).toEqual(BEWUSSTE_AUFRUFSTELLEN);
-  });
+    // Eigene Zeitgrenze: V1 liest jede Quelldatei unter src (ohne Cache, neben anderen Dateien im Satz bis 6,5 s;
+    // einzeln 2,7 s). Eine Zeitüberschreitung hier sagt nichts über den Vertrag aus — die Zusicherung bleibt dieselbe.
+  }, 30_000);
 
   it('V2 die bekannten automatischen Wege nutzen den gesperrten Einreihungsweg', () => {
     const lies = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');

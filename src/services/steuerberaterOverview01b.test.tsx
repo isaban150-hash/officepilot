@@ -30,6 +30,7 @@ import { SteuerberaterPage } from '../pages/SteuerberaterPage';
 import { setAccountingStoreForTests } from './accounting/accountingStore';
 import { setAccountingPeriodStoreForTests } from './accounting/accountingPeriodStore';
 import { closeAccountingPeriod } from './accounting/accountingPeriodService';
+import { abschluesseServerbestaetigt } from '../test/accountingClosureTestUtils';
 import { hydrateWorkspaceStore } from './workspace/workspaceStore';
 import type { AccountingAssignment } from '../types/accounting';
 
@@ -135,6 +136,8 @@ function kontierung(sourceId: string): AccountingAssignment {
 function abschliessen(invoiceIds: string[]): void {
   setAccountingStoreForTests(invoiceIds.map(kontierung));
   expect(closeAccountingPeriod(MONTH).success).toBe(true);
+  // Systemische Gesamtnacharbeit — der Server hat den Abschluss geprüft und angenommen (sonst kein reguläres Paket).
+  abschluesseServerbestaetigt();
 }
 
 beforeEach(() => {

@@ -17,6 +17,7 @@ import {
 } from './accountingPeriodFingerprint';
 import { buildAccountingPeriodState } from './accountingPeriodService';
 import { evaluateAccountingExportReadiness } from './accountingExportGateService';
+import { alsServerBestaetigt } from '../../test/accountingClosureTestUtils';
 import type { AccountingAssignment } from '../../types/accounting';
 import type { AccountingPeriodClosure } from '../../types/accountingPeriod';
 import type {
@@ -92,7 +93,7 @@ const kontierung: AccountingAssignment = {
 const fp = (zahlungen: MonatsmappeZahlung[]) =>
   buildPeriodFingerprint(buildPeriodManifest(model(zahlungen), [kontierung], 'SKR03'));
 
-function abschlussAus(zahlungen: MonatsmappeZahlung[], version: 1 | 2 = 2): AccountingPeriodClosure {
+function abschlussAus(zahlungen: MonatsmappeZahlung[], version: 1 | 2 | 5 = 2): AccountingPeriodClosure {
   const manifest = buildPeriodManifest(model(zahlungen), [kontierung], 'SKR03', version);
   return {
     id: 'closure-1',
@@ -168,7 +169,14 @@ describe('P2 — Zahlungen des Abschlussmonats im Fingerprint', () => {
     expect(state.isCurrentClosureValid).toBe(true);
     expect(state.readiness).toBe('closed');
     expect(state.currentFingerprint).toBe(alt.fingerprint);
-    expect(evaluateAccountingExportReadiness(MONTH, state).packageAllowed).toBe(true);
+    /*
+     * Systemische Gesamtnacharbeit — gültig nach seiner Regel, aber nie serverzertifiziert: kein reguläres Paket,
+     * eine ausdrücklich lokale Übergabe bleibt möglich.
+     */
+    const readiness = evaluateAccountingExportReadiness(MONTH, state);
+    expect(readiness.closureStatus).toBe('historisch');
+    expect(readiness.packageAllowed).toBe(false);
+    expect(readiness.localHandoverAllowed).toBe(true);
   });
 
   it('ein alter Abschluss erkennt weiterhin echte Belegänderungen', () => {
@@ -184,7 +192,8 @@ describe('P2 — Zahlungen des Abschlussmonats im Fingerprint', () => {
   });
 
   it('06C erkennt einen tatsächlich geänderten neuen Abschluss und blockiert den Export', () => {
-    const abschluss = abschlussAus([zahlung({ betrag: 500 })]);
+    // Systemische Gesamtnacharbeit — ein neuer Abschluss (Fassung 5), vom Server angenommen.
+    const abschluss = alsServerBestaetigt(abschlussAus([zahlung({ betrag: 500 })], 5));
     expect(evaluateAccountingExportReadiness(MONTH, zustand([zahlung({ betrag: 500 })], [abschluss])).packageAllowed).toBe(
       true,
     );

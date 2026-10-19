@@ -16,6 +16,11 @@ import { hydrateDocumentStore } from '../documentService';
 import { hydrateVorgangStore } from '../vorgangService';
 import { buildInvoicePrintModelFromInvoice } from '../invoicePrintModel';
 import { generateApprovedInvoicePdf } from '../invoicePdfService';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 const companySnapshot = {
   ...DEFAULT_COMPANY_PROFILE,
@@ -72,7 +77,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.restoreAllMocks();
+  (vi.restoreAllMocks(), alsInhaber());
 });
 
 describe('AUS-01 — Netto und Umsatzsteuer der abgezogenen Abschläge', () => {

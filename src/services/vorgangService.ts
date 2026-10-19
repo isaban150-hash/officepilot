@@ -79,6 +79,7 @@ import type {
   InvoiceCancellationKind,
   InvoicePayment,
   InvoicePaymentStatus,
+  RejectedInvoicePayment,
   MaterialStandard,
   ContractConfirmationSnapshot,
   ContractNegotiationState,
@@ -382,7 +383,13 @@ function normalizeVorgang(v: Vorgang): Vorgang {
     ...inv,
     type: inv.type ?? 'abschlag',
     positions: inv.positions ?? [],
-    subtotal: inv.subtotal ?? inv.amount ?? 0,
+    /*
+     * FC01A-P1-Restkorrektur (lokaler Altbestand) — ein fehlendes Netto bleibt fehlend. Bisher
+     * stand hier `inv.subtotal ?? inv.amount ?? 0`: Ein Altabschlag mit 476,00 € brutto bei 19 %
+     * bekam 476,00 € netto, der Nachdruck 566,44 € fällig. Druck, PDF, E-Rechnung und Export
+     * lösen das Netto über `resolveInvoiceNet` aus eingefrorenen Angaben auf oder sperren.
+     */
+    subtotal: inv.subtotal,
     taxStatus: inv.taxStatus ?? 'standard_19',
     createdAt: inv.createdAt ?? inv.date,
     legalNotices: inv.legalNotices ?? [],
@@ -1615,6 +1622,8 @@ export function immutableInvoiceFingerprint(
     paymentDueDate: invoice.paymentDueDate ?? null,
     paymentTermsText: invoice.paymentTermsText ?? '',
     skontoText: invoice.skontoText ?? '',
+    // FINANZ-CORE-01A (Feiertage) — nur wenn vereinbart; Altbelege behalten ihren Abdruck.
+    ...(invoice.deadlineShiftWaived === true ? { deadlineShiftWaived: true } : {}),
     introText: invoice.introText ?? '',
     closingText: invoice.closingText ?? '',
     baustelle: invoice.baustelle ?? '',
@@ -1852,12 +1861,23 @@ export function applyFinalizedInvoiceToList(
       return { ok: false, reason: 'cancellation_conflict' };
     }
 
+    /*
+     * FINANZ-CORE-01A (Gesamtnacharbeit INV-03) — die Fristgrundlage ist Serverwahrheit: bei der Freigabe
+     * gebunden, danach nur über die protokollierte Klärung geändert. Bringt die Cloud eine, gilt sie; ohne
+     * Angabe (alter Server) bleibt die lokale stehen.
+     */
+    const adoptedFristBasis =
+      invoice.fristBasis && JSON.stringify(invoice.fristBasis) !== JSON.stringify(byId.fristBasis)
+        ? invoice.fristBasis
+        : null;
+
     if (
       nextStatus === byId.status &&
       raisedConfirmation === byId.servicePeriodConfirmed &&
       !adoptedSent &&
       !relation.filledFromRemote &&
-      !cancellation.filledFromRemote
+      !cancellation.filledFromRemote &&
+      !adoptedFristBasis
     ) {
       return { ok: true, invoice: { ...byId }, action: 'noop', invoices };
     }
@@ -1871,6 +1891,9 @@ export function applyFinalizedInvoiceToList(
     }
     if (cancellation.filledFromRemote) {
       Object.assign(updated, cancellation.facts);
+    }
+    if (adoptedFristBasis) {
+      updated.fristBasis = JSON.parse(JSON.stringify(adoptedFristBasis)) as typeof adoptedFristBasis;
     }
     if (adoptedSent) {
       updated.sentAt = adoptedSent.sentAt;
@@ -2248,6 +2271,54 @@ export function updateInvoiceSentFields(
 
     const next = applySentFields(current.invoices[invoiceIndex]!);
 
+    updatedInvoice = next;
+    return {
+      ...current,
+      invoices: [
+        ...current.invoices.slice(0, invoiceIndex),
+        next,
+        ...current.invoices.slice(invoiceIndex + 1),
+      ],
+    };
+  });
+
+  if (!committed.ok) {
+    return {
+      ok: false,
+      reason:
+        committed.errorKey === 'vorgang.notFound' || committed.errorKey === 'invoice.notFound'
+          ? 'not_found'
+          : 'persist_failed',
+    };
+  }
+  if (!updatedInvoice) return { ok: false, reason: 'not_found' };
+  return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice) };
+}
+
+/**
+ * FINANZ-CORE-01A (Gesamtnacharbeit INV-01/03) — die geklärte Fristgrundlage einer freigegebenen
+ * Rechnung übernehmen. Angefasst wird nur `fristBasis`; Beleg, Zahlungen und Status bleiben. Erfolg heißt
+ * geschrieben und persistiert (derselbe Commit-Punkt wie der Versandstand).
+ */
+export function updateInvoiceFristBasis(
+  vorgangId: string | null,
+  invoiceId: string,
+  fristBasis: NonNullable<VorgangInvoice['fristBasis']>,
+): UpdateInvoiceSentFieldsResult {
+  const apply = (current: VorgangInvoice): VorgangInvoice => ({
+    ...current,
+    fristBasis: JSON.parse(JSON.stringify(fristBasis)) as NonNullable<VorgangInvoice['fristBasis']>,
+  });
+
+  if (vorgangId === null) {
+    return commitManualInvoiceMutation(invoiceId, apply);
+  }
+
+  let updatedInvoice: VorgangInvoice | null = null;
+  const committed = commitVorgangMutation(vorgangId, (current) => {
+    const invoiceIndex = current.invoices.findIndex((item) => item.id === invoiceId);
+    if (invoiceIndex === -1) return { errorKey: 'invoice.notFound' };
+    const next = apply(current.invoices[invoiceIndex]!);
     updatedInvoice = next;
     return {
       ...current,
@@ -2674,6 +2745,8 @@ export function mergeCloudPaymentsIntoInvoice(
       note: entry.note,
       ...(method ? { method } : {}),
       createdAt: entry.createdAt,
+      // Systemische Gesamtnacharbeit (D4) — eine Serverzeile ist die positive Bestätigung.
+      cloudBestaetigt: true,
     });
   }
 
@@ -2702,7 +2775,13 @@ function updateInvoicePaymentFields(
   invoiceId: string,
   payments: InvoicePayment[],
   paymentStatus: InvoicePaymentStatus,
+  /** END18-R3 — nur angegeben, wenn sich die abgewiesenen Zahlungen ändern; sonst bleiben sie. */
+  rejectedPayments?: RejectedInvoicePayment[],
 ): UpdateInvoicePaymentResult {
+  const rejected =
+    rejectedPayments === undefined
+      ? {}
+      : { rejectedPayments: rejectedPayments.map((payment) => ({ ...payment })) };
   /*
    * MANUAL-INVOICE-01B2c — die Zahlung einer Rechnung ohne Auftrag geht über
    * den First-Class-Speicher. Dieselben Felder, dieselbe Zusage; nur der
@@ -2713,6 +2792,7 @@ function updateInvoicePaymentFields(
       ...current,
       payments: payments.map(cloneInvoicePayment),
       paymentStatus,
+      ...rejected,
     }));
   }
 
@@ -2726,6 +2806,7 @@ function updateInvoicePaymentFields(
       ...current.invoices[invoiceIndex]!,
       payments: payments.map(cloneInvoicePayment),
       paymentStatus,
+      ...rejected,
     };
     updatedInvoice = next;
 
@@ -2750,6 +2831,21 @@ function updateInvoicePaymentFields(
   }
   if (!updatedInvoice) return { ok: false, reason: 'not_found' };
   return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice) };
+}
+
+/**
+ * FINANZ-CORE-01A (Restnacharbeit END18-R3) — Zahlungen und abgewiesene Zahlungen einer Rechnung in einem
+ * Schritt: Eine endgültig abgewiesene Zahlung wechselt aus `payments` nach `rejectedPayments` (oder bei
+ * bewusster Bestätigung zurück). Nichts geht dabei verloren; Summen und Status folgen `payments`.
+ */
+export function moveInvoicePayments(
+  vorgangId: string | null,
+  invoiceId: string,
+  payments: InvoicePayment[],
+  rejectedPayments: RejectedInvoicePayment[],
+  paymentStatus: InvoicePaymentStatus,
+): UpdateInvoicePaymentResult {
+  return updateInvoicePaymentFields(vorgangId, invoiceId, payments, paymentStatus, rejectedPayments);
 }
 
 export function addPaymentToInvoice(

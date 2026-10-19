@@ -24,7 +24,7 @@
  * Ansicht und E-Rechnung lesen nur diese Aufteilung; der Server prüft sie.
  */
 import type { AbschlagDeduction, VorgangInvoice } from '../../types/models';
-import { getOpenAmount, getPaidAmount, isInvoiceCancelled } from '../invoicePaymentService';
+import { getOpenAmount, getPaidAmount, getSkontoFristStatus, isInvoiceCancelled } from '../invoicePaymentService';
 import { fromCents, toCents } from '../invoiceMoney';
 import type { AbschlagSettlementShare } from './abschlagSkontoSplit';
 
@@ -41,6 +41,11 @@ export interface AbschlagSettlement {
   /** Was auf dem Abschlag noch offen ist. */
   readonly open: number;
   readonly settled: boolean;
+  /**
+   * FINANZ-CORE-01A (Feiertage) — nicht beglichen, weil das Skonto an einem ungeklärten Feiertag am
+   * Sitz des Kunden hängt (`getSkontoFristStatus` → `ungeklaert`). Kein „unbezahlt“: Geklärt wird der Ort.
+   */
+  readonly skontoUnclear?: boolean;
 }
 
 /** Wie ist dieser abgezogene Abschlag beglichen? Unbekannt oder storniert heisst: nicht. */
@@ -67,6 +72,7 @@ export function resolveAbschlagSettlement(
     skonto: settled ? fromCents(billedCents - paidCents) : 0,
     open: fromCents(openCents),
     settled,
+    ...(!settled && getSkontoFristStatus(abschlag).status === 'ungeklaert' ? { skontoUnclear: true } : {}),
   };
 }
 

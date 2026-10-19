@@ -11,6 +11,7 @@ import { ensureSyncClientFromState, hydrateSyncClient } from '../sync/syncClient
 import {
   completeIdenticalCompanyCloudOutboxEntry,
   enqueueBackfillSyncOutbox,
+  enqueueSyncOutbox,
   runAutomaticSyncWrite,
   getSyncOutboxSnapshot,
   markOutboxEntriesCompleted,
@@ -1175,6 +1176,26 @@ export function mergeRemoteWorkspacePullIntoState(
           .map((entry) => entry.id),
       );
       clearOutboxSentProof('offer', offerMerge.finalizedOverDraft);
+    }
+
+    /*
+     * FINANZ-CORE-01A (Gesamtnacharbeit INV-10) — gezielt wiederhergestellt: Ein freigegebenes Angebot,
+     * dessen Archivverweis an der verlustbehafteten Kopie scheiterte, ist jetzt repariert. Sein Verweis
+     * geht erneut hinaus — als bewusste Fortsetzung genau dieser zulässigen Änderung (sie löst eine
+     * endgültige Abweisung des alten, verlustbehafteten Sendeauftrags ab). Andere abgewiesene
+     * Geschäftsaktionen werden nicht nachgeholt.
+     */
+    for (const offerId of offerMerge.archiveRelink) {
+      const aktiv = getSyncOutboxSnapshot().some(
+        (entry) =>
+          entry.entityType === 'offer' &&
+          entry.entityId === offerId &&
+          (entry.status === 'pending' || entry.status === 'error' || entry.status === 'blocked'),
+      );
+      if (!aktiv) {
+        const repariert = (next.offers ?? []).find((offer) => offer.id === offerId);
+        enqueueSyncOutbox({ entityType: 'offer', entityId: offerId, operation: 'update', version: repariert?.sync?.version ?? 0 });
+      }
     }
 
     clearOutboxSentProof('offer', [

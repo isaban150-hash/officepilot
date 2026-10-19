@@ -9,6 +9,11 @@ import {
   toPdfSafeText,
 } from './invoicePdfService';
 import * as invoicePrintService from './invoicePrintService';
+import { alsInhaber } from '../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 const companySnapshot = {
   ...DEFAULT_COMPANY_PROFILE,
@@ -89,11 +94,11 @@ function createFinalizedInvoice(overrides: Partial<VorgangInvoice> = {}): Vorgan
 
 describe('INVOICE-PILOT-PDF-GENERATION-01', () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
+    (vi.restoreAllMocks(), alsInhaber());
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    (vi.restoreAllMocks(), alsInhaber());
   });
 
   it('freigegebene Rechnung erzeugt eine gültige PDF mit Positionen und Summen', async () => {

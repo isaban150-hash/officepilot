@@ -20,6 +20,7 @@ import {
   resolveEmployeeConflictFromUi,
   resolveOfferConflictFromUi,
   resolveSettingsConflictFromUi,
+  resendFinallyDeniedEntryFromUi,
   retrySyncFromUi,
   runSyncFromUi,
   shortenSyncId,
@@ -206,6 +207,13 @@ export function SyncPage() {
     const queued = enqueueIntakeBackfill(plan);
     showToast(translate('sync.backfill.queued').replace('{count}', String(queued)));
     await handleSync();
+  };
+
+  /* FINANZ-CORE-01A (Bericht 20) — eine endgültig abgewiesene Finanzaktion bewusst neu senden. */
+  const handleResend = (entryId: string) => {
+    const ok = resendFinallyDeniedEntryFromUi(entryId);
+    refresh();
+    showToast(translate(ok ? 'sync.failure.resent' : 'sync.failure.resendFailed'));
   };
 
   const handleRetry = async () => {
@@ -435,9 +443,22 @@ export function SyncPage() {
                     : translate('sync.failure.notRetryable'),
                 ].join(' · ')}
                 trailing={
-                  <Badge tone={failureTone(failure.kind)}>
-                    {translate(failureKindKey(failure.kind))}
-                  </Badge>
+                  <>
+                    <Badge tone={failureTone(failure.kind)}>
+                      {translate(failureKindKey(failure.kind))}
+                    </Badge>
+                    {failure.resendable && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={busy}
+                        data-testid={`sync-failure-resend-${failure.id}`}
+                        onClick={() => handleResend(failure.id)}
+                      >
+                        {translate('sync.failure.resend')}
+                      </Button>
+                    )}
+                  </>
                 }
               />
             ))}

@@ -135,6 +135,8 @@ export function stripInvoiceDraftForCloud(draft: InvoiceDraft): InvoiceDraftClou
   if (draft.calculationMode !== undefined) core.calculationMode = draft.calculationMode;
   if (draft.fixedAmountNet !== undefined) core.fixedAmountNet = draft.fixedAmountNet;
   if (draft.servicePeriodConfirmed !== undefined) core.servicePeriodConfirmed = draft.servicePeriodConfirmed;
+  // FINANZ-CORE-01A (Feiertage) — nur gesetzt im Kern: ältere Entwürfe behalten ihren Kernschlüssel.
+  if (draft.deadlineShiftWaived === true) core.deadlineShiftWaived = true;
   if (draft.customerId !== undefined) core.customerId = draft.customerId;
   if (draft.brandingSnapshot !== undefined) core.brandingSnapshot = detach(draft.brandingSnapshot);
   if (draft.expectedAmendmentSequence !== undefined) {

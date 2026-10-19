@@ -27,8 +27,10 @@ import {
   getAccountingPeriodState,
 } from './accountingPeriodService';
 import { buildPeriodFingerprint, buildPeriodManifest } from './accountingPeriodFingerprint';
+import { abschluesseServerbestaetigt } from '../../test/accountingClosureTestUtils';
 import { buildBookingExport } from './accountingBookingExportService';
 import { buildAccountingExport } from './accountingExportRunner';
+import { getSyncOutboxSnapshot, resetSyncOutboxForTests } from '../sync/syncOutboxService';
 import { evaluateAccountingExportReadiness } from './accountingExportGateService';
 import { buildMonatsmappeModel } from '../steuerberater/monatsmappeModelService';
 import { collectMonatsmappeInput } from '../steuerberater/monatsmappeInputService';
@@ -119,6 +121,14 @@ const loaders: MonatsmappeDocumentLoaders = {
 const model = (monthKey: string) => buildMonatsmappeModel(collectMonatsmappeInput(monthKey));
 
 async function paket(monthKey: string) {
+  /*
+   * Bericht 20 — die Stores werden hier direkt gesetzt; der Änderungsverfolger reiht die Kontierungen erst beim
+   * Speichern des Abschlusses ein. Das Paket entsteht nach einem Abgleich (der Server hat sie bestätigt) — sonst
+   * sperrt der Exportlauf zu Recht (`unconfirmed_financial_changes`).
+   */
+  resetSyncOutboxForTests(getSyncOutboxSnapshot().map((entry) => ({ ...entry, status: 'completed' as const })));
+  // Systemische Gesamtnacharbeit — nach dem Abgleich hat der Server den Abschluss geprüft und angenommen.
+  abschluesseServerbestaetigt();
   const { result, blob } = await buildAccountingExport({ monthKey, userId: undefined, skipGate: true, loaders });
   expect(result.outcome, JSON.stringify(result)).toBe('exported');
   const zip = await JSZip.loadAsync(blob!);
@@ -200,6 +210,7 @@ describe('S — Storno: Identität und Periodenwahrheit', () => {
     const augState = getAccountingPeriodState(AUG);
     expect(augState.isCurrentClosureValid).toBe(true);
     expect(augState.readiness).toBe('closed');
+    abschluesseServerbestaetigt();
     expect(evaluateAccountingExportReadiness(AUG).packageAllowed).toBe(true);
     const augModel = model(AUG);
     expect(augModel.ausgangsrechnungen.map((b) => [b.id, b.status, b.brutto])).toEqual([['inv-aug', 'aktiv', 119]]);
@@ -283,7 +294,8 @@ describe('P — Paketinhalt über den echten 06C-Weg', () => {
 
     const zahlungen = rows(sep.zahlungen);
     /* BLOCK 2: drei neue Spalten — hier ohne Nachweis, also sachlich benannt und leer. */
-    expect(zahlungen).toEqual(['Eingangsbeleg;exp-real-1;L-100;pay-exp;2026-09-20;59,50;;Lieferant GmbH;Bar;Kein Zahlungsnachweis;;']);
+    /* FC01A-Nacharbeit (A5): dahinter „Skontoabzug", für eine Ausgabenzahlung leer. */
+    expect(zahlungen).toEqual(['Eingangsbeleg;exp-real-1;L-100;pay-exp;2026-09-20;59,50;;Lieferant GmbH;Bar;Kein Zahlungsnachweis;;;']);
 
     // Manifest und Dateien sagen dasselbe.
     expect(sep.manifest.counts.buchungen).toBe(buchungen.length);
@@ -329,6 +341,10 @@ describe('U — ein gemeinsamer Übergabestatus', () => {
     hydrateInvoiceStore([{ invoice: invoice(), vorgangId: null }]);
     setAccountingStoreForTests([kontierung('invoice', 'inv-1')]);
     closeAccountingPeriod(SEP);
+    // Systemische Gesamtnacharbeit — vor der Serverannahme: abgeschlossen, aber nicht serverbestätigt.
+    const vorher = consistent();
+    expect(vorher.handover).toMatchObject({ state: 'not_server_confirmed', packageAllowed: false, packageComplete: false });
+    abschluesseServerbestaetigt();
     const overview = consistent();
     expect(overview.handover).toMatchObject({ state: 'ready', packageAllowed: true, packageComplete: true });
     expect(overview.state).toBe('ready');
@@ -349,6 +365,7 @@ describe('U — ein gemeinsamer Übergabestatus', () => {
     hydrateInvoiceStore([{ invoice: invoice(), vorgangId: null }]);
     setAccountingStoreForTests([kontierung('invoice', 'inv-1')]);
     closeAccountingPeriod(SEP);
+    abschluesseServerbestaetigt();
     const upload = processUpload({ kind: 'materialrechnung' });
     hydrateInboxStore([{ ...upload, receivedAt: '2026-09-14T09:00:00.000Z' }]);
     const overview = consistent();
@@ -360,6 +377,7 @@ describe('U — ein gemeinsamer Übergabestatus', () => {
     setExpenseStoreForTests([expense()]);
     setAccountingStoreForTests([kontierung('invoice', 'inv-1'), kontierung('expense', 'exp-real-1')]);
     expect(closeAccountingPeriod(SEP).success).toBe(true); // blockiert den Abschluss nicht
+    abschluesseServerbestaetigt();
     const overview = consistent();
     expect(overview.handover).toMatchObject({ state: 'missing_proofs', packageAllowed: true, packageComplete: false });
     expect(overview.state).toBe('open');

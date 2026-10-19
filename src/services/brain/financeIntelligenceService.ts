@@ -31,9 +31,11 @@ import {
   isInvoiceOverdue,
   isSentInvoice,
 } from '../invoicePaymentService';
-import { buildLegalNotices, buildSkontoDeadline, parseSkontoFromText } from '../invoiceTaxService';
+import { buildLegalNotices, buildSkontoDeadlineWindow, parseSkontoFromText } from '../invoiceTaxService';
+import { ermittleFristLage, invoiceFristLage, zahlungszielFenster } from '../fristen/fristende';
+import { getCompanyProfile } from '../companyProfileService';
 import { getNotesForVorgang } from '../vorgangNoteService';
-import { getBusinessDay, shiftToWorkingDay, toBusinessDay } from '../businessDateService';
+import { getBusinessDay, toBusinessDay } from '../businessDateService';
 import { getAllVorgaenge, getVorgangById, getVorgangInvoice } from '../vorgangService';
 import { isMaterialInvoiceInbox } from './workflowIntelligenceService';
 import { isInvoiceDeliveryBounced } from '../delivery/deliveryBounceRegistry';
@@ -114,10 +116,15 @@ function isIncomingInvoiceItem(item: InboxItem): boolean {
 function getDueRelation(invoice: VorgangInvoice, today: Date | string): DueRelation {
   if (!invoice.paymentDueDate) return 'none';
   const todayStr = toDateOnly(today);
-  // FINANZ-CORE-01A (ZAH-10) — § 193 BGB: das wirksame Fristende.
-  const due = shiftToWorkingDay(toDateOnly(invoice.paymentDueDate));
-  if (todayStr < due) return 'before';
-  if (todayStr === due) return 'on';
+  // FINANZ-CORE-01A (ZAH-10, Feiertage) — § 193 BGB: das wirksame Fristende am Sitz des Kunden. Ist es
+  // ungeklärt, gilt der ganze mögliche Zeitraum als „am Fälligkeitstag“, nie schon als überschritten.
+  const fenster = zahlungszielFenster(invoice);
+  const fruehestens = fenster?.fruehestens ?? toDateOnly(invoice.paymentDueDate);
+  if (todayStr < fruehestens) return 'before';
+  // INV-02 — ein offenes Ende (Ausland ohne Klärung) ist nie schon überschritten.
+  if (fenster && fenster.spaetestens === null) return 'on';
+  const spaetestens = fenster?.spaetestens ?? fruehestens;
+  if (todayStr <= spaetestens) return 'on';
   return 'after';
 }
 
@@ -165,7 +172,11 @@ function getOutgoingSkontoWindow(
   const baseDate = invoice.issueDate ?? invoice.date;
   if (!baseDate) return null;
 
-  const deadline = buildSkontoDeadline(baseDate, days);
+  // FINANZ-CORE-01A (Feiertage) — der Kunde zahlt: Skonto ist bis zum spätestmöglichen Fristende an
+  // seinem Sitz noch möglich (§ 193 BGB); ob es dann greift, entscheidet der Zahlungsabgleich.
+  // INV-02 — bei offenem Ende (Ausland ohne Klärung) wird nur das sichere Ende genannt.
+  const fenster = buildSkontoDeadlineWindow(baseDate, days, invoiceFristLage(invoice));
+  const deadline = fenster.spaetestens ?? fenster.fruehestens;
   if (toDateOnly(today) > deadline) return null;
 
   return { percent, days, deadline };
@@ -195,7 +206,14 @@ function getIncomingSkontoWindow(item: InboxItem, today: Date | string): SkontoW
   const baseDate = item.recognizedData.Rechnungsdatum ?? item.receivedAt;
   if (!baseDate) return null;
 
-  const deadline = buildSkontoDeadline(baseDate, days);
+  // FINANZ-CORE-01A (Feiertage) — hier zahlt der Betrieb selbst: Leistungsort ist sein eigener Sitz.
+  // Empfohlen wird das frühestmögliche Ende, damit kein Skonto an einem ungeklärten Feiertag verfällt.
+  const company = getCompanyProfile();
+  const deadline = buildSkontoDeadlineWindow(
+    baseDate,
+    days,
+    ermittleFristLage({ customerSnapshot: { zip: company.zip, countryCode: company.countryCode } }),
+  ).fruehestens;
   if (toDateOnly(today) > deadline) return null;
 
   return { percent, days, deadline };

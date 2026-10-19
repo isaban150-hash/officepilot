@@ -337,14 +337,40 @@ function markVersionConflict(entity: InvoiceDraftCloudEntity, now: string): Invo
 const pendingCommits = new Map<string, { record: InvoiceDraftRecord; draft: InvoiceDraft }>();
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 
+/*
+ * FC01A-Nacharbeit (B1) — die Freigaben, die dieser Tab selbst begonnen hat:
+ * Entwurfskennung → eigene `clientInvoiceId` (ab `begin` eingefroren). Ein
+ * Grabstein `finalized` mit genau dieser Rechnung ist das eigene Ende, kein
+ * „anderswo freigegeben" — auch wenn er erst ein späterer Abzug bringt.
+ */
+const ownFinalizations = new Map<string, string>();
+
 function dropPendingCommits(): void {
   pendingCommits.clear();
   if (pendingTimer !== null) clearTimeout(pendingTimer);
   pendingTimer = null;
 }
 
-// Wird der Spiegel zurückgesetzt (Bereichswechsel, Abmelden), verfallen auch die wartenden Commits.
-registerInvoiceDraftCloudStoreResetHook(dropPendingCommits);
+// Wird der Spiegel zurückgesetzt (Bereichswechsel, Abmelden), verfallen auch die wartenden Commits
+// und die vermerkten eigenen Freigaben (der Store hält genau einen Hook).
+registerInvoiceDraftCloudStoreResetHook(() => {
+  dropPendingCommits();
+  ownFinalizations.clear();
+});
+
+/** Vom Freigabe-Koordinator gemeldet, sobald die eigene Rechnungskennung dauerhaft ist (`begin`). */
+export function noteOwnInvoiceDraftFinalization(draftId: string, clientInvoiceId: string): void {
+  if (!draftId || !clientInvoiceId) return;
+  ownFinalizations.set(draftId, clientInvoiceId);
+}
+
+function isOwnFinalizationTombstone(entity: InvoiceDraftCloudEntity): boolean {
+  return (
+    entity.status === 'finalized' &&
+    Boolean(entity.finalizedClientInvoiceId) &&
+    ownFinalizations.get(entity.id) === entity.finalizedClientInvoiceId
+  );
+}
 
 /**
  * Vom Entwurfskern nach jedem bestätigten Speichern gemeldet. Gebündelt: Der
@@ -353,6 +379,22 @@ registerInvoiceDraftCloudStoreResetHook(dropPendingCommits);
  */
 export function noteInvoiceDraftCommitted(record: InvoiceDraftRecord, draft: InvoiceDraft): void {
   if (record.status !== 'active') return;
+  /*
+   * FC01A-Nacharbeit (B2) — ein aus der Cloud fortgesetzter Entwurf (Fall B)
+   * hat am Spiegel noch keine lokale Basis. Sein erster bestätigter Stand wird
+   * sofort abgeglichen (unverändert = `in_sync`, die Basis steht fest). Gebündelt
+   * ersetzte eine schnelle erste Änderung diesen Stand, bevor er ankam — ohne
+   * Basis galt sie dann als Versionskonflikt „auf einem anderen Gerät geändert".
+   */
+  const known = getInvoiceDraftCloudEntity(record.draftId);
+  if (known && !known.localLink && !pendingCommits.has(record.draftId)) {
+    try {
+      applyLocalDraftCommitToMirror({ ...record }, detach(draft));
+    } catch {
+      // Der Spiegel darf den lokalen Arbeitsstand nie gefährden; der nächste Commit versucht es erneut.
+    }
+    return;
+  }
   pendingCommits.set(record.draftId, { record: { ...record }, draft: detach(draft) });
   if (pendingTimer !== null) clearTimeout(pendingTimer);
   pendingTimer = setTimeout(() => {
@@ -385,6 +427,7 @@ export function flushInvoiceDraftCloudMirror(draftId?: string): InvoiceDraftMirr
 
 export function resetInvoiceDraftCloudBridgeForTests(): void {
   dropPendingCommits();
+  ownFinalizations.clear();
   backfillDone.clear();
 }
 
@@ -463,6 +506,8 @@ export function reconcileInvoiceDraftOnOpen(input: {
   if (entity.conflict) return { kind: 'conflict', draftId: entity.id, conflict: entity.conflict };
 
   if (isInvoiceDraftCloudTombstone(entity)) {
+    // FC01A-Nacharbeit (B1) — das eigene Ende: Der Editor wird ohnehin verlassen, nichts zu vermerken.
+    if (isOwnFinalizationTombstone(entity)) return { kind: 'none' };
     const conflict: InvoiceDraftCloudConflict = {
       kind: entity.status === 'finalized' ? 'finalized' : 'deleted',
       detectedAt: now,
@@ -824,6 +869,63 @@ export async function discardInvoiceDraft(
   if (!deleted.ok && deleted.reason !== 'not_found') return { ok: false, reason: 'storage' };
   clearConfirmation(record);
   return { ok: true, reload: true };
+}
+
+/**
+ * FINANZ-CORE-01A (Gesamtabschluss, P3/OBS-6) — der nie bearbeitete Entwurf, den der Assistent beim
+ * Öffnen für die Ausgangsart angelegt hat, wird beim Wechsel der Rechnungsart verworfen.
+ *
+ * Bisher blieb je Vorgang ein Entwurf vom Typ „rechnung“ (Version 1) dauerhaft aktiv liegen —
+ * lokal und in der Cloud (Produktion: 11 Zeilen) —, weil der Assistent vor der Typwahl einen
+ * Entwurf braucht. Verworfen wird nur, was nachweislich unberührt ist; im Zweifel bleibt der
+ * Entwurf (er lässt sich wie bisher wieder öffnen und über „Entwurf verwerfen“ entfernen):
+ *  - der Aufrufer hat ihn selbst frisch gebaut (nicht aus der Cloud übernommen) und sein Kern ist
+ *    unverändert (`buildInvoiceDraftCoreKeyFromDraft`);
+ *  - lokal noch Revision 1 — geprüft **in** der Löschung (`expectedRevision`), also nach jedem
+ *    Speicherlauf; eine Änderung, auch eine automatische, behält ihn;
+ *  - in der Cloud noch nicht gespiegelt, oder genau Version 1 vom Server bestätigt, ohne Konflikt,
+ *    nicht freigegeben, nicht schon gelöscht. Ein noch unbestätigter erster Versand (Version 0)
+ *    könnte gerade unterwegs sein; ein Grabstein darauf wäre ein Versionskonflikt — er bleibt.
+ * Anders als `discardInvoiceDraft` wird zuerst lokal gelöscht und erst danach der Grabstein
+ * geschrieben: Scheitert die Löschung, bleibt alles, wie es war.
+ */
+export async function discardUntouchedInvoiceDraftOnTypeSwitch(
+  record: InvoiceDraftRecord,
+  draft: InvoiceDraft,
+  freshCoreKey: string,
+): Promise<{ discarded: boolean }> {
+  if (record.status !== 'active' || record.revision !== 1) return { discarded: false };
+  if (buildInvoiceDraftCoreKeyFromDraft(draft) !== freshCoreKey) return { discarded: false };
+  const entity = getInvoiceDraftCloudEntity(record.draftId);
+  if (
+    entity &&
+    (entity.status !== 'active' || entity.conflict || entity.sync?.deleted || entity.sync?.version !== 1)
+  ) {
+    return { discarded: false };
+  }
+
+  const deleted = await deleteInvoiceDraftRecord({ identity: identityOf(record), expectedRevision: 1 });
+  if (!deleted.ok) return { discarded: false };
+
+  const base: InvoiceDraftCloudEntity = entity ?? {
+    id: record.draftId,
+    vorgangId: record.vorgangId,
+    invoiceType: record.invoiceType,
+    status: 'active',
+    core: stripInvoiceDraftForCloud(draft),
+  };
+  const { conflict: _conflict, localLink: _link, ...rest } = base;
+  putInvoiceDraftCloudEntity({
+    ...rest,
+    sync: {
+      ...(base.sync ?? { updatedAt: new Date().toISOString(), deviceId: '', workspaceId: record.workspaceId, version: 0 }),
+      deleted: true,
+      deletedAt: new Date().toISOString(),
+    },
+  });
+  persistMirror();
+  clearConfirmation(record);
+  return { discarded: true };
 }
 
 /* -------------------------------------------------------------------------- */

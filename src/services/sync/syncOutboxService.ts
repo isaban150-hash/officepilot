@@ -7,7 +7,8 @@ import type {
 } from '../../types/sync';
 import { generateUuid } from './syncMetaService';
 import { getSyncClient } from './syncClientService';
-import { isFinallyDeniedOutboxEntry } from './syncRoleDenial';
+import { isClosureBusinessRejection, isFinallyDeniedOutboxEntry } from './syncRoleDenial';
+import { newestOutboxEntriesByEntity, nextOutboxSequence, outboxEntityKey } from './syncOutboxOrder';
 
 let outbox: SyncOutboxEntry[] = [];
 
@@ -39,16 +40,26 @@ function resolveOutboxStatus(): SyncOutboxStatus {
   return 'pending';
 }
 
+/** Bericht 20 — Monatsvereinigung; ohne Monate bleibt das Feld weg. */
+function unionMonths(...lists: (readonly string[] | undefined)[]): string[] | undefined {
+  const months = [...new Set(lists.flatMap((list) => list ?? []))].sort();
+  return months.length > 0 ? months : undefined;
+}
+
 function mergeOutboxEntry(
   existing: SyncOutboxEntry,
   input: EnqueueSyncOutboxInput,
   status: SyncOutboxStatus,
 ): SyncOutboxEntry {
+  const affectedMonths = unionMonths(existing.affectedMonths, input.affectedMonths);
   return {
     ...existing,
+    ...(affectedMonths ? { affectedMonths } : {}),
     operation: input.operation,
     version: input.version,
     queuedAt: new Date().toISOString(),
+    // FINANZ-CORE-01A (WEISS B21-C1) — zusammengeführt ist neu eingereiht: höchste Nummer der Warteschlange.
+    sequence: nextOutboxSequence(outbox),
     status: existing.status === 'error' ? 'pending' : status,
     retryCount: existing.status === 'error' ? 0 : existing.retryCount,
     blockedReason: status === 'blocked' ? existing.blockedReason ?? 'beta_mode' : undefined,
@@ -74,6 +85,8 @@ export interface EnqueueSyncOutboxInput {
   entityId: string;
   operation: SyncOutboxOperation;
   version: number;
+  /** Bericht 20 — berührte Buchungsmonate (siehe `SyncOutboxEntry.affectedMonths`). */
+  affectedMonths?: string[];
 }
 
 /**
@@ -86,20 +99,72 @@ export interface EnqueueSyncOutboxInput {
  * Nachmeldung, Wiederaufnahme) nehmen `enqueueBackfillSyncOutbox` und lösen nichts ab.
  */
 export function enqueueSyncOutbox(input: EnqueueSyncOutboxInput): SyncOutboxEntry {
-  supersedeFinallyDeniedEntries(input.entityType, input.entityId);
-  return enqueueOutboxEntry(input);
+  const supersededMonths = supersedeFinallyDeniedEntries(input.entityType, input.entityId);
+  /*
+   * Bericht 20 — der neue Auftrag erbt die Monate der abgelösten Abweisung: Bis er bestätigt ist, bleibt offen,
+   * was der Server von der alten Aktion hat; ihre Monate bleiben gesperrt.
+   */
+  const affectedMonths = unionMonths(input.affectedMonths, supersededMonths);
+  return enqueueOutboxEntry(affectedMonths ? { ...input, affectedMonths } : input);
 }
 
-function supersedeFinallyDeniedEntries(entityType: SyncEntityType, entityId: string): void {
+/**
+ * FINANZ-CORE-01A (Bericht 20) — Finanzaufträge ohne eigenen Abgleich der Abweisung. Eine endgültige Abweisung
+ * sperrt ihre Monate, bis der Server sie klärt; Ausgaben klärt der vollständige Abzug, Rechnungszahlungen der Knopf
+ * „Sichern“. Mitarbeiterzahlungen und Kontierungen haben dafür nur diesen bewussten Weg.
+ */
+export const RESENDABLE_DENIED_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set<SyncEntityType>([
+  'employee_payment',
+  'accounting_assignment',
+  'accounting_period_closure',
+]);
+
+export function isResendableDeniedOutboxEntry(entry: SyncOutboxEntry): boolean {
+  if (!RESENDABLE_DENIED_ENTITY_TYPES.has(entry.entityType) || !isFinallyDeniedOutboxEntry(entry)) return false;
+  /*
+   * Systemische Gesamtnacharbeit (D7) — ein Monatsabschluss nur nach einer Rechteabweisung (nach Rückgabe der Rechte
+   * kann derselbe Stand angenommen werden). Eine fachliche Abweisung (falsches, veraltetes oder unvollständiges
+   * Manifest, alte Fassung) wird nie wiederbelebt: Derselbe Inhalt scheiterte genauso; es entsteht eine neue Revision.
+   */
+  if (entry.entityType === 'accounting_period_closure' && isClosureBusinessRejection(entry.lastErrorMessage)) return false;
+  // Nur der jüngste Auftrag der Entität: Ein späterer hat die Abweisung schon abgelöst. FINANZ-CORE-01A (WEISS B21-C1):
+  // „jünger“ eindeutig nach `syncOutboxOrder.ts`, nicht nach der Millisekunde allein.
+  const key = outboxEntityKey(entry);
+  const neuester = newestOutboxEntriesByEntity(outbox, (other) => outboxEntityKey(other) === key).get(key);
+  return neuester !== undefined && neuester.id === entry.id;
+}
+
+/**
+ * Bericht 20 — der Nutzer sendet eine endgültig abgewiesene Mitarbeiterzahlung oder Kontierung bewusst erneut
+ * (etwa nachdem seine Rechte wieder da sind). Das ist eine neue Aktion über den bewussten Weg: Die Abweisung wird
+ * abgelöst, der neue Auftrag erbt ihre Monate und sperrt sie, bis der Server ihn annimmt. Nichts wird dabei als
+ * bestätigt umgedeutet; weist der Server erneut ab, steht wieder eine Abweisung da.
+ */
+export function resendFinallyDeniedOutboxEntry(entryId: string): SyncOutboxEntry | null {
+  const entry = outbox.find((item) => item.id === entryId);
+  if (!entry || !isResendableDeniedOutboxEntry(entry)) return null;
+  return enqueueSyncOutbox({
+    entityType: entry.entityType,
+    entityId: entry.entityId,
+    operation: entry.operation,
+    version: entry.version,
+    ...(entry.affectedMonths ? { affectedMonths: entry.affectedMonths } : {}),
+  });
+}
+
+function supersedeFinallyDeniedEntries(entityType: SyncEntityType, entityId: string): string[] | undefined {
   let changed = false;
+  let months: string[] | undefined;
   outbox = outbox.map((entry) => {
     if (entry.entityType !== entityType || entry.entityId !== entityId || !isFinallyDeniedOutboxEntry(entry)) {
       return entry;
     }
     changed = true;
+    months = unionMonths(months, entry.affectedMonths);
     return { ...entry, status: 'completed' as const };
   });
   if (changed) notifyOutboxChanged();
+  return months;
 }
 
 function enqueueOutboxEntry(input: EnqueueSyncOutboxInput): SyncOutboxEntry {
@@ -125,9 +190,12 @@ function enqueueOutboxEntry(input: EnqueueSyncOutboxInput): SyncOutboxEntry {
     operation: input.operation,
     version: input.version,
     queuedAt: new Date().toISOString(),
+    // FINANZ-CORE-01A (WEISS B21-C1) — eindeutige Einreihungsfolge, auch bei gleicher Millisekunde.
+    sequence: nextOutboxSequence(outbox),
     retryCount: 0,
     status,
     blockedReason: isBetaTestMode() ? 'beta_mode' : undefined,
+    ...(unionMonths(input.affectedMonths) ? { affectedMonths: unionMonths(input.affectedMonths) } : {}),
   };
   outbox = [entry, ...outbox];
   notifyOutboxChanged();
@@ -389,12 +457,10 @@ export function releaseBlockedOutboxEntry(
  * Netzwerkfehler und Lizenzabweisungen sind keine endgültige Abweisung.
  */
 export function hasFinallyDeniedOutboxEntry(entityType: SyncEntityType, entityId: string): boolean {
-  let neuester: SyncOutboxEntry | undefined;
-  for (const entry of outbox) {
-    if (entry.entityType !== entityType || entry.entityId !== entityId) continue;
-    // Die Warteschlange führt Neues vorn; bei gleicher Zeit gewinnt der vordere Eintrag.
-    if (!neuester || entry.queuedAt > neuester.queuedAt) neuester = entry;
-  }
+  // FINANZ-CORE-01A (WEISS B21-C1) — der jüngste Auftrag eindeutig nach `syncOutboxOrder.ts` (Einreihungsnummer,
+  // sonst Zeit; Altbestand mit gleicher Zeit: die Abweisung gilt als jünger).
+  const key = outboxEntityKey({ entityType, entityId });
+  const neuester = newestOutboxEntriesByEntity(outbox, (entry) => entry.entityType === entityType && entry.entityId === entityId).get(key);
   return neuester !== undefined && isFinallyDeniedOutboxEntry(neuester);
 }
 

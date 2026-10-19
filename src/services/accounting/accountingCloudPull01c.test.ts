@@ -551,6 +551,8 @@ describe('J — der Pull hängt im normalen Produktpfad', () => {
       pull_workspace_accounting_assignments: {
         assignments: [assignmentRow({ row_version: 9 }, { accountNumber: '9999' })],
       },
+      // Systemische Gesamtnacharbeit (D6) — eine vollständige Antwort trägt auch die (leere) Abschlussliste.
+      pull_workspace_accounting_period_closures: { closures: [] },
     });
     const state = buildState({
       assignments: [assignment({ accountNumber: '3400' })],
@@ -563,6 +565,63 @@ describe('J — der Pull hängt im normalen Produktpfad', () => {
     expect(
       result.report.conflicts.some((c) => c.entityType === 'accounting_assignment' && c.entityId === 'k1'),
     ).toBe(true);
+  });
+});
+
+describe('J — Systemische Gesamtnacharbeit: unvollständige Antworten und Serverbestätigung', () => {
+  /*
+   * D6 — eine Antwort ohne Abschlussliste ist ein unvollständiger Abzug, kein leerer Serverbestand. Bisher wurde sie
+   * zu `[]`, und der Abgleich arbeitete mit „keine Abschlüsse, keine Kontierungen“ weiter.
+   */
+  it('J6: fehlt die Abschlussliste, übernimmt der Abschnitt nichts und meldet den Abzug als unvollständig', async () => {
+    const stub = pullStub({
+      pull_workspace_accounting_assignments: { assignments: [assignmentRow({ row_version: 9 }, { accountNumber: '9999' })] },
+      pull_workspace_accounting_period_closures: { etwasAnderes: true },
+    });
+    const state = buildState({ assignments: [assignment({ accountNumber: '3400' })] });
+    const result = await pull(state, stub.client);
+    expect(result.state.accountingAssignments?.[0].accountNumber).toBe('3400');
+    expect(result.report.errors.some((e) => e.outboxId === 'accounting-pull' && e.message.includes('pull_incomplete'))).toBe(true);
+  });
+
+  /*
+   * D8 — eine Abschlusszeile trägt die Serverbestätigung nur mit vollständigem Nachweis (validated_version 5,
+   * Datenstand, Zeitpunkt, derselbe p5-Fingerabdruck). Eine Altzeile bleibt historisch.
+   */
+  it('J7: nur eine servervalidierte Zeile kommt als bestätigt an; Altzeilen bleiben unbestätigt', async () => {
+    const stub = pullStub({
+      pull_workspace_accounting_assignments: { assignments: [] },
+      pull_workspace_accounting_period_closures: {
+        closures: [
+          closureRow({
+            client_closure_id: 'c-v5',
+            revision: 3,
+            fingerprint: 'p5:' + 'a'.repeat(64),
+            manifest: { fingerprintVersion: 5, monthKey: '2026-09', entries: [], offenePosten: [] },
+            validated_version: 5,
+            finance_revision: 42,
+            validated_at: '2026-10-01T10:00:00.000Z',
+          }),
+          closureRow({ client_closure_id: 'c-alt', revision: 1, fingerprint: 'p4:abcd:1', reopened_at: SPAETER }),
+          closureRow({
+            client_closure_id: 'c-falsch',
+            revision: 2,
+            fingerprint: 'p5:' + 'b'.repeat(64),
+            validated_version: 5,
+            finance_revision: null,
+            validated_at: null,
+          }),
+        ],
+      },
+    });
+    const result = await pull(buildState({}), stub.client);
+    const byId = new Map((result.state.accountingPeriodClosures ?? []).map((c) => [c.id, c]));
+    expect(byId.get('c-v5')?.server).toEqual({
+      revision: 3, fingerprint: 'p5:' + 'a'.repeat(64), validiert: true, datenstand: 42, bestaetigtAm: '2026-10-01T10:00:00.000Z',
+    });
+    expect(byId.get('c-v5')?.manifest.fingerprintVersion).toBe(5);
+    expect(byId.get('c-alt')?.server).toBeUndefined();
+    expect(byId.get('c-falsch')?.server).toBeUndefined();
   });
 });
 

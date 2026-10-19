@@ -28,6 +28,7 @@ import { setExpenseStoreForTests } from '../services/expenseStore';
 import { hydrateWorkspaceStore } from '../services/workspace/workspaceStore';
 import { normalizeExpense } from '../services/expenseNormalize';
 import { resetTestStores } from '../test/resetStores';
+import { abschluesseServerbestaetigt } from '../test/accountingClosureTestUtils';
 import type { AccountingAssignment } from '../types/accounting';
 import type { Expense } from '../types/expense';
 
@@ -159,8 +160,34 @@ describe('P3 — nur ein Exportweg, und der geht durch 06C', () => {
     expect(download).not.toHaveBeenCalled();
   });
 
+  /*
+   * Systemische Gesamtnacharbeit (Produktentscheidung) — abgeschlossen, aber nicht vom Server angenommen: kein
+   * reguläres Paket, sondern der Grund und — ausdrücklich — eine lokale, als „nicht cloudbestätigt“ gekennzeichnete
+   * Übergabe über denselben 06C-Weg.
+   */
+  it('nicht serverbestätigt: kein reguläres Paket, ausdrücklich lokale Übergabe über den 06C-Weg', async () => {
+    expect(closeAccountingPeriod(monthKey()).success).toBe(true);
+    berechtigt(true);
+    const neu = vi
+      .spyOn(exportRunner, 'exportAccountingPackage')
+      .mockResolvedValue({ outcome: 'exported', fileName: 'paket_lokal-nicht-cloudbestaetigt.zip', documentCount: 1, manifest: {} });
+    await zeigeSeite();
+    await monatsmappeVorbereiten();
+    expect(q('accounting-export-package')).toBeNull();
+    expect(q('accounting-export-blocker-closure_not_server_confirmed')).not.toBeNull();
+    const lokal = q('accounting-export-local-package');
+    expect(lokal, 'die lokale Übergabe fehlt').not.toBeNull();
+    await act(async () => {
+      lokal!.click();
+    });
+    expect(neu).toHaveBeenCalledTimes(1);
+    expect(neu.mock.calls[0][0]).toMatchObject({ monthKey: monthKey(), handover: 'lokal' });
+    expect(q('accounting-export-created')?.textContent).toBe('paket_lokal-nicht-cloudbestaetigt.zip');
+  });
+
   it('gültige Freigabe: genau der 06C-Weg; der Dateiname bleibt nach dem Export sichtbar', async () => {
     expect(closeAccountingPeriod(monthKey()).success).toBe(true);
+    abschluesseServerbestaetigt();
     berechtigt(true);
     const neu = vi
       .spyOn(exportRunner, 'exportAccountingPackage')
@@ -192,6 +219,7 @@ describe('P3 — nur ein Exportweg, und der geht durch 06C', () => {
 
   it('fehlgeschlagener Export: der Fehlerhinweis bleibt nach dem Neuaufbau sichtbar, kein Dateiname', async () => {
     expect(closeAccountingPeriod(monthKey()).success).toBe(true);
+    abschluesseServerbestaetigt();
     berechtigt(true);
     vi.spyOn(exportRunner, 'exportAccountingPackage').mockResolvedValue({ outcome: 'export_failed', detail: 'test' });
     await zeigeSeite();
@@ -206,6 +234,7 @@ describe('P3 — nur ein Exportweg, und der geht durch 06C', () => {
 
   it('Rollenprüfung: ohne Finanzrecht keine aktive Exportaktion, auch bei gültigem Abschluss', async () => {
     expect(closeAccountingPeriod(monthKey()).success).toBe(true);
+    abschluesseServerbestaetigt();
     berechtigt(false);
     const neu = vi.spyOn(exportRunner, 'exportAccountingPackage');
     await zeigeSeite();

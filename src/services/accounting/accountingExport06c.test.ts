@@ -31,6 +31,8 @@ import { setExpenseStoreForTests } from '../expenseStore';
 import { hydrateWorkspaceStore } from '../workspace/workspaceStore';
 import { normalizeExpense } from '../expenseNormalize';
 import { resetTestStores } from '../../test/resetStores';
+import { abschluesseServerbestaetigt, alsServerBestaetigt } from '../../test/accountingClosureTestUtils';
+import { getSyncOutboxSnapshot, resetSyncOutboxForTests } from '../sync/syncOutboxService';
 import type { AccountingAssignment } from '../../types/accounting';
 import type { AccountingPeriodClosure } from '../../types/accountingPeriod';
 import type { Expense } from '../../types/expense';
@@ -193,14 +195,76 @@ describe('Z — Export-Gate', () => {
     expect(ohneAbschluss.packageBlockers.map((b) => b.code)).toContain('period_blockers');
   });
 
-  it('Z4: ein gültiger aktueller Abschluss erlaubt das Paket', () => {
+  it('Z4: ein gültiger aktueller, vom Server angenommener Abschluss erlaubt das Paket', () => {
+    const vorher = zustand();
+    const readiness = evaluateAccountingExportReadiness(
+      MONTH,
+      zustand([beleg()], [kontierung()], [alsServerBestaetigt(closure({ fingerprint: vorher.currentFingerprint }))]),
+    );
+    expect(readiness.packageAllowed).toBe(true);
+    expect(readiness.packageBlockers).toHaveLength(0);
+    expect(readiness.closureStatus).toBe('angenommen');
+    expect(readiness.handoverKind).toBe('regulaer');
+  });
+
+  /*
+   * Systemische Gesamtnacharbeit (Produktentscheidung) — „abgeschlossen“ genügt im Cloudbetrieb nicht. Ein reguläres
+   * Paket verwendet nur eine vom Server geprüfte und angenommene Revision; eine ausdrücklich lokale Übergabe bleibt
+   * möglich und ist gekennzeichnet. Ein rein lokaler Abschluss (Betrieb ohne Cloud) bleibt zulässig.
+   */
+  it('Z11: gültiger Abschluss ohne Serverannahme → kein reguläres Paket, aber ausdrücklich lokale Übergabe', () => {
     const vorher = zustand();
     const readiness = evaluateAccountingExportReadiness(
       MONTH,
       zustand([beleg()], [kontierung()], [closure({ fingerprint: vorher.currentFingerprint })]),
     );
+    expect(readiness.state.isCurrentClosureValid).toBe(true);
+    expect(readiness.closureStatus).toBe('ausstehend');
+    expect(readiness.packageAllowed).toBe(false);
+    expect(readiness.packageBlockers).toEqual([{ code: 'closure_not_server_confirmed', detail: 'ausstehend' }]);
+    expect(readiness.localHandoverAllowed).toBe(true);
+  });
+
+  it('Z12: Betrieb ohne Cloud → lokaler Abschluss, Paket erlaubt und als lokal gekennzeichnet', () => {
+    const vorher = buildAccountingPeriodState(model({ eingangsbelege: [beleg()] }), [kontierung()], 'SKR03', [], [], {}, false);
+    const state = buildAccountingPeriodState(
+      model({ eingangsbelege: [beleg()] }),
+      [kontierung()],
+      'SKR03',
+      [closure({ fingerprint: vorher.currentFingerprint })],
+      [],
+      {},
+      false,
+    );
+    const readiness = evaluateAccountingExportReadiness(MONTH, state);
+    expect(readiness.closureStatus).toBe('lokal');
     expect(readiness.packageAllowed).toBe(true);
-    expect(readiness.packageBlockers).toHaveLength(0);
+    expect(readiness.handoverKind).toBe('lokal');
+  });
+
+  it('Z13: vom Server abgewiesene Revision → kein aktiver Abschluss, keine Übergabe, der Monat ist wieder abschließbar', () => {
+    const vorher = zustand();
+    const abgewiesen = closure({
+      fingerprint: vorher.currentFingerprint,
+      cloudAbweisung: { meldung: 'closure_manifest_mismatch: fehlend=1', am: '2026-09-24T10:01:00.000Z' },
+    });
+    const readiness = evaluateAccountingExportReadiness(MONTH, zustand([beleg()], [kontierung()], [abgewiesen]));
+    expect(readiness.state.activeClosure).toBeNull();
+    expect(readiness.state.revisionStatus?.[abgewiesen.id]).toBe('abgewiesen');
+    expect(readiness.packageAllowed).toBe(false);
+    expect(readiness.packageBlockers.map((b) => b.code)).toContain('not_closed');
+    expect(readiness.localHandoverAllowed).toBe(false);
+  });
+
+  it('Z14: Altfassung (v1–v4) bleibt lesbar und gültig, gilt aber nie als serverzertifiziert', () => {
+    const v4 = buildAccountingPeriodState(model({ eingangsbelege: [beleg()] }), [kontierung()], 'SKR03', [closure({ fingerprint: 'p4:alt:1', manifest: { ...closure().manifest, fingerprintVersion: 4 } })]);
+    const passend = closure({ fingerprint: v4.currentFingerprint, manifest: { ...closure().manifest, fingerprintVersion: 4 } });
+    const readiness = evaluateAccountingExportReadiness(MONTH, zustand([beleg()], [kontierung()], [alsServerBestaetigt(passend)]));
+    expect(readiness.state.isCurrentClosureValid).toBe(true);
+    expect(readiness.closureStatus).toBe('historisch');
+    expect(readiness.packageAllowed).toBe(false);
+    expect(readiness.packageBlockers).toEqual([{ code: 'closure_not_server_confirmed', detail: 'historisch' }]);
+    expect(readiness.localHandoverAllowed).toBe(true);
   });
 
   it('Z5: ein veränderter Stand blockiert', () => {
@@ -230,13 +294,20 @@ describe('Z — Export-Gate', () => {
   it('Z7: nach erneutem Abschluss ist der Export wieder erlaubt', () => {
     setAccountingStoreForTests([kontierung()]);
     expect(closeAccountingPeriod(MONTH).success).toBe(true);
+    // Systemische Gesamtnacharbeit — erst die Serverannahme gibt das reguläre Paket frei.
+    expect(evaluateAccountingExportReadiness(MONTH).packageAllowed).toBe(false);
+    abschluesseServerbestaetigt();
     expect(evaluateAccountingExportReadiness(MONTH).packageAllowed).toBe(true);
 
     setAccountingStoreForTests([kontierung({ accountNumber: '4980' })]);
     expect(evaluateAccountingExportReadiness(MONTH).packageAllowed).toBe(false);
 
     reopenAccountingPeriod(MONTH, { reason: 'Konto korrigiert' });
+    // Bericht 20 — die geänderte Kontierung sperrt, bis der Server sie bestätigt (Abgleich); danach wie gehabt.
+    expect(closeAccountingPeriod(MONTH).success).toBe(false);
+    resetSyncOutboxForTests(getSyncOutboxSnapshot().map((entry) => ({ ...entry, status: 'completed' as const })));
     expect(closeAccountingPeriod(MONTH).success).toBe(true);
+    abschluesseServerbestaetigt();
     const danach = evaluateAccountingExportReadiness(MONTH);
     expect(danach.packageAllowed).toBe(true);
     expect(danach.state.activeClosure?.revision).toBe(2);
@@ -274,7 +345,7 @@ describe('Z — Export-Gate', () => {
     const readiness = evaluateAccountingExportReadiness(
       MONTH,
       buildAccountingPeriodState(model({ isEmpty: true }), [], 'SKR03', [
-        closure({ fingerprint: leer.currentFingerprint }),
+        alsServerBestaetigt(closure({ fingerprint: leer.currentFingerprint })),
       ]),
     );
     expect(readiness.packageAllowed).toBe(true);
@@ -314,7 +385,7 @@ describe('AB — DATEV', () => {
     const vorher = zustand();
     const readiness = evaluateAccountingExportReadiness(
       MONTH,
-      zustand([beleg()], [kontierung()], [closure({ fingerprint: vorher.currentFingerprint })]),
+      zustand([beleg()], [kontierung()], [alsServerBestaetigt(closure({ fingerprint: vorher.currentFingerprint }))]),
     );
     expect(readiness.packageAllowed, 'das Paket bleibt erlaubt').toBe(true);
     expect(readiness.datevAllowed).toBe(false);

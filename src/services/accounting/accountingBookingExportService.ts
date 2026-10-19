@@ -119,6 +119,11 @@ export interface BookingExport {
   readonly totals: BookingExportTotals;
   /** Belege ohne Originaldokument — gemeldet, nicht verschwiegen. */
   readonly withoutDocument: readonly { sourceId: string; belegnummer: string }[];
+  /**
+   * FC01A-P1-Restkorrektur (lokaler Altbestand) — Ausgangsrechnungen mit ungeklärtem Netto: keine
+   * Buchungszeile (Netto und Steuer sind unbekannt, nicht geschätzt), aber gemeldet.
+   */
+  readonly netUnresolved: readonly { sourceId: string; belegnummer: string }[];
 }
 
 function sourceTypeOf(beleg: MonatsmappeBeleg): 'expense' | 'invoice' {
@@ -182,6 +187,7 @@ export function buildBookingExport(
 
   const rows: BookingExportRow[] = [];
   const withoutDocument: { sourceId: string; belegnummer: string }[] = [];
+  const netUnresolved: { sourceId: string; belegnummer: string }[] = [];
   const gesehen = new Set<string>();
 
   for (const beleg of [...model.ausgangsrechnungen, ...model.eingangsbelege, ...model.stornos]) {
@@ -195,6 +201,14 @@ export function buildBookingExport(
     const exportKey = belegExportKey(beleg);
     if (gesehen.has(exportKey)) continue;
     gesehen.add(exportKey);
+
+    // FC01A-P1-Restkorrektur (lokaler Altbestand) — ohne verlässliches Netto keine Buchung.
+    const netto = beleg.netto;
+    const steuer = beleg.steuer;
+    if (netto === null || steuer === null) {
+      netUnresolved.push({ sourceId: beleg.id, belegnummer: beleg.belegnummer });
+      continue;
+    }
 
     const assignment = bySource.get(`${sourceType}:${beleg.id}`);
     // FINANZ-CORE-01A (WEISS N06) — keine Buchung aus einer Bestätigung mit ungeklärter oder anderer Steuer als der Beleg.
@@ -218,8 +232,8 @@ export function buildBookingExport(
       belegdatum: beleg.datum,
       gegenpartei: beleg.gegenpartei,
       /* Vorzeichen bleiben — eine Gutschrift steht negativ da. */
-      netto: beleg.netto,
-      steuer: beleg.steuer,
+      netto,
+      steuer,
       brutto: beleg.brutto,
       steuerstatus: TAX_LABEL[assignment.taxTreatment] ?? assignment.taxTreatment,
       kontenrahmen: assignment.chartOfAccounts,
@@ -270,6 +284,7 @@ export function buildBookingExport(
       brutto: fromCents(bruttoCents),
     },
     withoutDocument,
+    netUnresolved,
   };
 }
 

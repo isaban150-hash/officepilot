@@ -28,6 +28,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
 import { AppProvider } from '../../context/AppContext';
 import { DEFAULT_SETUP } from '../../data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
@@ -292,13 +293,15 @@ describe('PRINT-RENDERING-01B — der Gate bleibt', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('P2: eine freigegebene Rechnung druckt', () => {
+  it('P2: eine freigegebene Rechnung druckt', async () => {
+    // SYS-04 — gedruckt wird nur mit bekannter Inhaber-/Verwaltungsrolle (oder Nachweis); der Druck fragt asynchron den Dienst-Guard.
+    alsInhaber();
     const spy = vi.spyOn(invoicePrintService, 'printInvoice').mockImplementation(() => {});
     render(finalizedInvoice());
-    act(() => {
+    await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="invoice-print"]')!.click();
     });
-    expect(spy).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
   });
 });
 

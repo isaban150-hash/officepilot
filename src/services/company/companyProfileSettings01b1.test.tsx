@@ -59,6 +59,11 @@ import { resetStorageScopeForTests, setActiveStorageScope } from '../storage/sto
 import type { CompanyProfile, CompanySetup, InvoiceDraft, Vorgang } from '../../types/models';
 import { buildDocumentBlobScopeKey } from '../storage/documentBlobScopeService';
 import { updateDraftPositionQuantity } from '../invoiceService';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 const WORKSPACE = '00000000-0000-4000-8000-00000000a1b1';
 const SCOPE = buildDocumentBlobScopeKey({ type: 'workspace', workspaceId: WORKSPACE });
@@ -116,7 +121,7 @@ describe('SETTINGS-01B1 — Datenmodell und Persistenz', () => {
     seedVorgang();
   });
   afterEach(() => {
-    vi.restoreAllMocks();
+    (vi.restoreAllMocks(), alsInhaber());
     resetTestStores();
   });
 

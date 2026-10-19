@@ -6,7 +6,7 @@ import {
 } from './invoicePaymentService';
 import { isValidInvoiceSentVia, INVOICE_SENT_VIA_OPTIONS } from './invoiceSentService';
 import { getVorgangInvoice } from './vorgangService';
-import { shiftToWorkingDay } from './businessDateService';
+import { zahlungszielFenster } from './fristen/fristende';
 import type { VorgangInvoice } from '../types/models';
 import type {
   DocumentDunningInput,
@@ -202,8 +202,15 @@ export function documentDunningDelivery(
    * (§ 286 BGB). Vor oder am Fälligkeitstag würde sie Mahnstufe 2 setzen, ohne
    * dass ein Verzug eintreten konnte; das bleibt eine Zahlungserinnerung.
    */
-  // FINANZ-CORE-01A (ZAH-10) — Verzug erst nach dem wirksamen Fristende (§ 193 BGB).
-  const dueDate = invoice.paymentDueDate?.trim() ? shiftToWorkingDay(invoice.paymentDueDate.trim().slice(0, 10)) : '';
+  // FINANZ-CORE-01A (ZAH-10, Feiertage) — Verzug erst nach dem spätestmöglichen Fristende (§ 193 BGB).
+  const zielFenster = invoice.paymentDueDate?.trim() ? zahlungszielFenster(invoice) : null;
+  const dueDate = invoice.paymentDueDate?.trim()
+    ? zielFenster?.spaetestens ?? zielFenster?.fruehestens ?? invoice.paymentDueDate.trim().slice(0, 10)
+    : '';
+  // INV-02 — bei offenem Ende (Ausland ohne Klärung) gibt es keinen Verzug, bis das Fristende geprüft ist.
+  if (input.kind === 'dunning_notice' && zielFenster && zielFenster.spaetestens === null) {
+    return { ok: false, reason: 'not_overdue' };
+  }
   if (input.kind === 'dunning_notice' && dueDate && documentedAt <= dueDate) {
     return { ok: false, reason: 'not_overdue' };
   }

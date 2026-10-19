@@ -129,6 +129,20 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster, disabled
           />
         </Field>
         {/*
+          FINANZ-CORE-01A (Feiertage, § 193 BGB) — nur bei einer ausdrücklich abweichenden Vereinbarung
+          mit dem Kunden: Zahlungsziel und Skontofrist enden dann kalendarisch, ohne Verschiebung über
+          Samstag, Sonntag oder Feiertag. Standard ist aus; mit der Freigabe eingefroren.
+        */}
+        <label className="edit-field edit-field--checkbox" data-testid="invoice-edit-deadline-shift-waived-field">
+          <input
+            type="checkbox"
+            checked={draft.deadlineShiftWaived === true}
+            onChange={(event) => onChange({ deadlineShiftWaived: event.target.checked })}
+            data-testid="invoice-edit-deadline-shift-waived"
+          />
+          <span>Abweichend vereinbart: Fristen enden kalendarisch, auch an Samstag, Sonntag oder Feiertag</span>
+        </label>
+        {/*
           FINANZ-CORE-01A (AUS-11/EIN-07) — § 14 Abs. 4 Satz 1 Nr. 9 UStG: Leistung an einem
           Grundstück für eine Privatperson → Hinweis auf deren Aufbewahrungspflicht.
         */}

@@ -849,7 +849,16 @@ async function renderInvoicePrintModelToPdf(
       summary.deductionsNetTotal !== undefined && summary.deductionsTaxTotal !== undefined && summary.deductionsTaxTotal !== 0
         ? ` (netto ${formatMoneyPdf(summary.deductionsNetTotal)}, USt ${formatMoneyPdf(summary.deductionsTaxTotal)})`
         : '';
-    drawLine(cursor, `Bereits berechnet: ${formatMoneyPdf(summary.deductionsTotal)}${totalParts}`, {
+    /*
+     * FC01A-Nacharbeit (A8) — im Korrekturbeleg ist der Abzug negiert: Die Summenzeile trägt dasselbe
+     * „+" wie die Abzugszeilen darüber und die Ansicht (bisher „-476,00 €" unter „+476,00 €").
+     * Der Originalbeleg bleibt unverändert (positiver Betrag ohne Vorzeichen).
+     */
+    const deductionsTotalText =
+      summary.deductionsTotal < 0
+        ? formatSignedDeductionPdf(summary.deductionsTotal)
+        : formatMoneyPdf(summary.deductionsTotal);
+    drawLine(cursor, `Bereits berechnet: ${deductionsTotalText}${totalParts}`, {
       size: 10,
     });
   }

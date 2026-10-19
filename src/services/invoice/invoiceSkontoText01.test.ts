@@ -58,7 +58,7 @@ describe('SKONTO-INVOICE-TEXT-01B — Firmenstandard im neuen Entwurf', () => {
       profile({ skontoEnabled: true, skontoPercent: 2, skontoDays: 10 }),
     );
     expect(draft.skontoText).toBe(
-      'Bei Zahlung innerhalb von 10 Tagen gewähren wir 2 % Skonto.',
+      'Bei Zahlung innerhalb von 10 Tagen ab Rechnungsdatum gewähren wir 2 % Skonto.',
     );
   });
 
@@ -68,7 +68,7 @@ describe('SKONTO-INVOICE-TEXT-01B — Firmenstandard im neuen Entwurf', () => {
       profile({ skontoEnabled: true, skontoPercent: 3, skontoDays: 14 }),
     );
     expect(draft.skontoText).toBe(
-      'Bei Zahlung innerhalb von 14 Tagen gewähren wir 3 % Skonto.',
+      'Bei Zahlung innerhalb von 14 Tagen ab Rechnungsdatum gewähren wir 3 % Skonto.',
     );
   });
 
@@ -88,7 +88,7 @@ describe('SKONTO-INVOICE-TEXT-01B — Firmenstandard im neuen Entwurf', () => {
   // R4 — Grammatik im Einzahlfall.
   it('R4: eine Frist von einem Tag heisst „1 Tag"', () => {
     const draft = newDraft(profile({ skontoEnabled: true, skontoPercent: 2, skontoDays: 1 }));
-    expect(draft.skontoText).toBe('Bei Zahlung innerhalb von 1 Tag gewähren wir 2 % Skonto.');
+    expect(draft.skontoText).toBe('Bei Zahlung innerhalb von 1 Tag ab Rechnungsdatum gewähren wir 2 % Skonto.');
     expect(draft.skontoText).not.toContain('1 Tagen');
   });
 
@@ -115,7 +115,7 @@ describe('SKONTO-INVOICE-TEXT-01B — Firmenstandard im neuen Entwurf', () => {
       }),
     );
     expect(draft.skontoText).toBe(
-      'Bei Zahlung innerhalb von 14 Tagen gewähren wir 3 % Skonto.',
+      'Bei Zahlung innerhalb von 14 Tagen ab Rechnungsdatum gewähren wir 3 % Skonto.',
     );
   });
 

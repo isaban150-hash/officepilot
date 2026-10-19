@@ -29,12 +29,24 @@ import {
   getActiveClosureForMonth,
   getClosuresForMonth,
   markClosureReopened,
+  revertUnsavedAccountingPeriodClosure,
 } from './accountingPeriodStore';
+import { buildClosureRevisionStatusMap, isActiveClosure, isClosureCloudMode } from './accountingPeriodRevisionStatus';
 import { auditExpenseMoneyIntegrity } from '../expense/expenseMoneyIntegrity';
 import { getAllExpensesFromStore } from '../expenseStore';
 import { generateUuid } from '../sync/syncMetaService';
-import { persistAll } from '../persistenceService';
-import { enqueueSyncOutbox } from '../sync/syncOutboxService';
+import { getLastPersistSuccess, persistAll } from '../persistenceService';
+import { enqueueSyncOutbox, getSyncOutboxSnapshot, hydrateSyncOutbox } from '../sync/syncOutboxService';
+import { listInvoiceEntries } from '../invoice/invoiceRegistryService';
+import { getEmployeePaymentStoreSnapshot } from '../employee/employeeStore';
+import { getUnconfirmedInvoicePaymentKeys } from '../invoice/invoicePaymentConfirmationStore';
+import {
+  collectUnconfirmedFinancialSources,
+  type UnconfirmedFinancialSource,
+  type UnconfirmedSourceInputs,
+} from './unconfirmedFinancialSources';
+import type { SyncOutboxEntry } from '../../types/sync';
+import type { Expense } from '../../types/expense';
 import type { MonatsmappeModel } from '../steuerberater/monatsmappeModelService';
 import type { AccountingAssignment } from '../../types/accounting';
 import type {
@@ -94,6 +106,11 @@ export function collectPeriodBlockers(
    * soweit bekannt. Eine Bestätigung mit anderer Steuer als der Beleg ist noch zu prüfen.
    */
   sourceTaxBySource: ReadonlyMap<string, string> = new Map(),
+  /**
+   * FINANZ-CORE-01A (END18-R3, Bericht 20) — Quellen mit Finanzwirkung in diesem Monat, die der Server noch nicht
+   * bestätigt hat (`collectUnconfirmedFinancialSources`). Sie sind vorläufig, nicht abschliessbar.
+   */
+  unconfirmedSourceIds: readonly string[] = [],
 ): AccountingPeriodBlocker[] {
   const unassigned: string[] = [];
   const needsReview: string[] = [];
@@ -151,6 +168,7 @@ export function collectPeriodBlockers(
     blocker('needs_clarification', needsClarification),
     blocker('confirmed_without_account', confirmedWithoutAccount),
     blocker('money_integrity', audit.invalid.map((entry) => entry.id)),
+    blocker('unconfirmed_financial_changes', unconfirmedSourceIds),
   ].filter((item): item is AccountingPeriodBlocker => item !== null);
 }
 
@@ -192,8 +210,14 @@ export function buildAccountingPeriodState(
   assignments: readonly AccountingAssignment[] = getAllAccountingAssignments(),
   chartOfAccounts = getChartOfAccounts(),
   closures: readonly AccountingPeriodClosure[] = getClosuresForMonth(model.monthKey),
+  outbox: readonly SyncOutboxEntry[] = getSyncOutboxSnapshot(),
+  /** Bericht 20 — die ungefilterten Bestände für die Abschlusssperre; ohne Angabe aus dem Gerät. */
+  sources: Partial<Omit<UnconfirmedSourceInputs, 'outbox' | 'assignments'>> = {},
+  /** Systemische Gesamtnacharbeit (D1) — Betrieb mit Cloud? Ohne Angabe aus der Konfiguration. */
+  cloudMode: boolean = isClosureCloudMode(),
 ): AccountingPeriodState {
-  const activeClosure = closures.find((item) => !item.reopenedAt) ?? null;
+  // Systemische Gesamtnacharbeit (D7) — eine vom Server abgewiesene Revision ist kein aktiver Abschluss.
+  const activeClosure = closures.find(isActiveClosure) ?? null;
   /*
    * P0/P1-INTEGRITAET 01B / P2 — ein aktiver Abschluss wird nach dem
    * Algorithmus geprüft, mit dem er entstand. Ein alter Abschluss (Version 1,
@@ -205,13 +229,35 @@ export function buildAccountingPeriodState(
     model,
     assignments,
     chartOfAccounts,
-    activeClosure ? closureFingerprintVersion(activeClosure) : 3,
+    // FINANZ-CORE-01A (Gesamtnacharbeit INV-04) — neue Abschlüsse mit Version 4 (Skonto und Zahlungsart gebunden).
+    // Systemische Gesamtnacharbeit — neue Revisionen mit Fassung 5 (servervalidiert, inkl. kumulierter offener Posten).
+    activeClosure ? closureFingerprintVersion(activeClosure) : 5,
   );
   const fingerprint = buildPeriodFingerprint(manifest);
-  const blockers = collectPeriodBlockers(manifest, sourceTaxOf(model));
+  const unconfirmedSources = collectUnconfirmedFinancialSources(model.monthKey, {
+    outbox,
+    assignments,
+    expenses: sources.expenses ?? getAllExpensesFromStore(),
+    employeePayments: sources.employeePayments ?? getEmployeePaymentStoreSnapshot(),
+    invoices: sources.invoices ?? listInvoiceEntries().map((entry) => entry.invoice),
+    unconfirmedInvoicePayments: sources.unconfirmedInvoicePayments ?? getUnconfirmedInvoicePaymentKeys(),
+    // Systemische Gesamtnacharbeit (SYS-02 / D4) — im Cloudbetrieb nur positive Serverbestätigung.
+    cloudMode,
+  });
+  const blockers = [
+    ...collectPeriodBlockers(manifest, sourceTaxOf(model), unconfirmedSources.map((source) => source.sourceId)),
+    /*
+     * Systemische Gesamtnacharbeit (SYS-02 / D5) — das letzte Speichern ist gescheitert: Der Bestand im Speicher ist
+     * dann weder gesichert noch eingereiht (die Persistenz nimmt den Sendeauftrag zurück). Darauf wird weder
+     * abgeschlossen noch übergeben, bis wieder erfolgreich gespeichert wurde.
+     */
+    ...(getLastPersistSuccess() ? [] : [{ code: 'persist_failed' as const, count: 1, sourceIds: [] as string[] }]),
+  ];
+  const revisionStatus = buildClosureRevisionStatusMap(closures, { cloudMode, outbox });
 
   return {
     monthKey: model.monthKey,
+    unconfirmedSources,
     readiness: resolveReadiness(manifest, blockers, activeClosure, fingerprint),
     blockers,
     currentFingerprint: fingerprint,
@@ -219,8 +265,36 @@ export function buildAccountingPeriodState(
     activeClosure,
     isCurrentClosureValid: activeClosure !== null && activeClosure.fingerprint === fingerprint,
     revisionHistory: [...closures].sort((a, b) => b.revision - a.revision),
+    activeClosureStatus: activeClosure ? revisionStatus[activeClosure.id] ?? null : null,
+    revisionStatus,
   };
 }
+
+/**
+ * FINANZ-CORE-01A (END18-R3) — Ausgaben dieses Monats, deren Finanzstand der Server noch nicht bestätigt hat.
+ *
+ * Bericht 20 (END19-R1/R2): Die Zugehörigkeit kam früher aus dem Manifest — also aus der bereits gefilterten
+ * Monatsmappe, in der ein lokaler Grabstein oder eine nie angenommene Zahlung schon fehlte. Jetzt nur noch eine
+ * Sicht auf den zentralen Vertrag `collectUnconfirmedFinancialSources` (ungefilterte Ausgaben, Monate aus Fakten
+ * und Aufträgen, Rechteabweisungen eingeschlossen), beschränkt auf Ausgaben.
+ */
+export function collectUnconfirmedExpenseSources(
+  manifest: AccountingPeriodManifest,
+  outbox: readonly SyncOutboxEntry[] = getSyncOutboxSnapshot(),
+  expenses: readonly Expense[] = getAllExpensesFromStore(),
+): string[] {
+  const quellen = collectUnconfirmedFinancialSources(manifest.monthKey, {
+    outbox,
+    expenses,
+    employeePayments: [],
+    assignments: [],
+    invoices: [],
+    unconfirmedInvoicePayments: new Set(),
+  });
+  return [...new Set(quellen.filter((quelle) => quelle.sourceType === 'expense').map((quelle) => quelle.sourceId))];
+}
+
+export type { UnconfirmedFinancialSource };
 
 /** FINANZ-CORE-01A (WEISS-Nacharbeit N06) — der Steuerstatus je Beleg des Monats. */
 function sourceTaxOf(model: MonatsmappeModel): Map<string, string> {
@@ -304,9 +378,20 @@ export function closeAccountingPeriod(
     updatedAt: timestamp,
   };
 
+  const postausgangVorher = getSyncOutboxSnapshot();
   const stored = appendAccountingPeriodClosure(closure);
   enqueue(stored, 'create');
-  persistAll();
+  /*
+   * Systemische Gesamtnacharbeit (SYS-02 / D5) — gilt nur, was gespeichert ist. Scheitert das Speichern, nimmt die
+   * Persistenz den Sendeauftrag zurück; hier geht die ungespeicherte Revision mit. Kein Abschluss, der nur im
+   * Arbeitsspeicher stünde und nie gesendet würde.
+   */
+  if (!persistAll().success) {
+    revertUnsavedAccountingPeriodClosure(stored.id, null);
+    // Die Persistenz setzt den Postausgang nur auf den Stand vor ihrem Aufruf zurück — der Auftrag kam davor.
+    hydrateSyncOutbox(postausgangVorher);
+    return { success: false, errorKey: 'accountingPeriod.persistFailed' };
+  }
   return { success: true, closure: stored, noop: false };
 }
 
@@ -332,6 +417,7 @@ export function reopenAccountingPeriod(
   }
 
   const timestamp = new Date().toISOString();
+  const postausgangVorher = getSyncOutboxSnapshot();
   const reopened = markClosureReopened(
     active.id,
     timestamp,
@@ -341,6 +427,11 @@ export function reopenAccountingPeriod(
   if (!reopened) return { success: false, errorKey: 'accountingPeriod.notClosed' };
 
   enqueue(reopened, 'update');
-  persistAll();
+  // Systemische Gesamtnacharbeit (SYS-02 / D5) — ungespeichert ist die Wiederöffnung nicht geschehen.
+  if (!persistAll().success) {
+    revertUnsavedAccountingPeriodClosure(active.id, active);
+    hydrateSyncOutbox(postausgangVorher);
+    return { success: false, errorKey: 'accountingPeriod.persistFailed' };
+  }
   return { success: true, closure: reopened, noop: false };
 }

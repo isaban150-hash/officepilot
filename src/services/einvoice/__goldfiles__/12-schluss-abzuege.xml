@@ -15,7 +15,7 @@
       <udt:DateTimeString format="102">20260923</udt:DateTimeString>
     </ram:IssueDateTime>
     <ram:IncludedNote>
-      <ram:Content>Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 476,00 EUR brutto</ram:Content>
+      <ram:Content>Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 476,00 EUR brutto (netto 400,00 EUR, USt 76,00 EUR)</ram:Content>
     </ram:IncludedNote>
   </rsm:ExchangedDocument>
   <rsm:SupplyChainTradeTransaction>

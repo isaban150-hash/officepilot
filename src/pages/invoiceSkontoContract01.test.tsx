@@ -45,7 +45,7 @@ import type { InboxItem } from '../types/models';
 
 const WORKSPACE_ID = 'ws-skonto-contract-01b';
 /** Der Firmenstandard dieses Betriebs. */
-const COMPANY_SKONTO = 'Bei Zahlung innerhalb von 10 Tagen gewähren wir 2 % Skonto.';
+const COMPANY_SKONTO = 'Bei Zahlung innerhalb von 10 Tagen ab Rechnungsdatum gewähren wir 2 % Skonto.';
 
 const company = {
   ...DEFAULT_COMPANY_PROFILE,

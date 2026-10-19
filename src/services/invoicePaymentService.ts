@@ -2,14 +2,22 @@ import { fromCents, sumCents, toCents } from './invoiceMoney';
 import {
   addPaymentToInvoice,
   getVorgangInvoice,
+  moveInvoicePayments,
   removePaymentFromInvoice,
   replaceInvoicePayments,
 } from './vorgangService';
 import { isFinalizedInvoice } from './invoiceArchiveService';
-import { buildSkontoDeadline, parseSkontoFromText } from './invoiceTaxService';
-import { getBusinessDay, shiftToWorkingDay, toBusinessDay } from './businessDateService';
+import { getSkontoFristStatus } from './invoice/skontoSettlement';
+import { getBusinessDay, toBusinessDay } from './businessDateService';
+import { nachFristende, zahlungszielFenster } from './fristen/fristende';
 import { generateUuid } from './sync/syncMetaService';
+import { clearInvoicePaymentUnconfirmed, markInvoicePaymentUnconfirmed } from './invoice/invoicePaymentConfirmationStore';
+import { listInvoiceEntries } from './invoice/invoiceRegistryService';
 import { reconcileInvoicePaymentTasks } from './invoice/invoicePaymentTaskSync';
+import {
+  findFinalInvoiceBlockingPaymentReversal,
+  hasFrozenFinalInvoiceDeduction,
+} from './invoice/invoiceCancelEligibility';
 import { resolveWorkspaceWriteAccess, type WorkspaceActor } from './workspace/workspaceRoleService';
 import { normalizePaymentMethod } from '../types/models';
 import {
@@ -25,6 +33,8 @@ import type {
   InvoicePaymentInput,
   InvoicePaymentStatus,
   PaymentSummary,
+  RejectedInvoicePayment,
+  RejectedInvoicePaymentReason,
   VorgangInvoice,
 } from '../types/models';
 
@@ -80,27 +90,9 @@ export function getPaidAmount(invoice: VorgangInvoice): number {
  * Basis, die `financeIntelligenceService` seinem Skontohinweis zugrunde legt.
  * Der Rundungsspielraum von einem Cent fängt nur die Multiplikation ab.
  */
-function resolveSkontoSettledAmount(invoice: VorgangInvoice): number | null {
-  const skontoText = invoice.skontoText?.trim();
-  if (!skontoText) return null;
-
-  const parsed = parseSkontoFromText(skontoText);
-  if (!parsed) return null;
-
-  const baseDate = invoice.issueDate ?? invoice.date;
-  if (!baseDate?.trim()) return null;
-
-  const deadline = buildSkontoDeadline(baseDate, parsed.days);
-  const timelyPaidCents = sumCents(
-    getInvoicePayments(invoice)
-      .filter((payment) => payment.date && toDateOnly(payment.date) <= deadline)
-      .map((payment) => toCents(payment.amount)),
-  );
-
-  // FINANZ-CORE-01A — Zahlbetrag nach Skonto in Cent, eine Rundung; ein Cent Toleranz wie bisher.
-  const payableCents = Math.round((toCents(invoice.amount) * (100 - parsed.percent)) / 100);
-  return timelyPaidCents + 1 >= payableCents ? fromCents(payableCents) : null;
-}
+// FINANZ-CORE-01A (Feiertage) — der Skonto-Fristenstatus wohnt im nur lesenden Skontomodul (der Bankabgleich
+// importiert keinen Zahlungsdienst, BANKABGLEICH-04 D2); hier unverändert weitergereicht.
+export { getSkontoFristStatus, type SkontoFristStatus } from './invoice/skontoSettlement';
 
 export function getOpenAmount(invoice: VorgangInvoice): number {
   /*
@@ -125,7 +117,7 @@ export function getOpenAmount(invoice: VorgangInvoice): number {
 
   const paidCents = toCents(getPaidAmount(invoice));
   const dueCents = toCents(invoice.amount);
-  if (paidCents < dueCents && resolveSkontoSettledAmount(invoice) !== null) {
+  if (paidCents < dueCents && getSkontoFristStatus(invoice).status === 'beglichen') {
     return 0;
   }
   return fromCents(Math.max(0, dueCents - paidCents));
@@ -157,8 +149,34 @@ export function isInvoiceOverdue(invoice: VorgangInvoice, today: Date | string =
     return false;
   }
 
-  // FINANZ-CORE-01A (ZAH-10) — § 193 BGB: ein Fristende am Wochenende rückt auf den Werktag.
-  return toDateOnly(today) > shiftToWorkingDay(toDateOnly(invoice.paymentDueDate));
+  /*
+   * FINANZ-CORE-01A (Feiertage) — ein Rest, der nur an einer ungeklärten Skontofrist hängt, ist nicht
+   * fällig: Ob er geschuldet ist, steht erst fest, wenn der Ort des Kunden geklärt ist.
+   */
+  if (getSkontoFristStatus(invoice).status === 'ungeklaert') {
+    return false;
+  }
+
+  // FINANZ-CORE-01A (ZAH-10, Feiertage) — § 193 BGB: überfällig erst nach dem spätestmöglichen Fristende.
+  // INV-02 — bei offenem Ende (Ausland ohne Klärung) nie: erst das geprüfte Fristende entscheidet.
+  const fenster = zahlungszielFenster(invoice);
+  if (!fenster) return toDateOnly(today) > toDateOnly(invoice.paymentDueDate);
+  return nachFristende(toDateOnly(today), fenster);
+}
+
+/**
+ * FINANZ-CORE-01A (Gesamtnacharbeit INV-01/02) — das Zahlungsziel ist nach dem frühestmöglichen Ende
+ * vorbei, aber ob es überschritten ist, hängt an einem Feiertag am Sitz des Kunden (oder an einem
+ * ausländischen Fristende, das niemand geprüft hat). Dann gibt es keine Überfälligkeit und keine Mahnung,
+ * sondern den Klärungsweg an der Rechnung. Eine ungeklärte Skontozahlung hat ihren eigenen Hinweis.
+ */
+export function isZahlungszielUngeklaert(invoice: VorgangInvoice, today: Date | string = new Date()): boolean {
+  if (!isExpectingPayment(invoice) || !invoice.paymentDueDate || getOpenAmount(invoice) <= 0) return false;
+  if (getSkontoFristStatus(invoice).status === 'ungeklaert') return false;
+  const fenster = zahlungszielFenster(invoice);
+  if (!fenster) return false;
+  const tag = toDateOnly(today);
+  return tag > fenster.fruehestens && !nachFristende(tag, fenster);
 }
 
 /** True when sent date is after payment due date — due date is not auto-adjusted. */
@@ -334,8 +352,35 @@ export function recordPayment(
     return { success: false, errorKey: 'payment.unsentConfirmationRequired' };
   }
 
+  /*
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-03) — Zahlung und Skonto dieses Abschlags hat eine wirksame
+   * Schlussrechnung eingefroren: keine neue Zahlung, gleich wie hoch der offene Betrag erscheint. Geld
+   * danach gehört auf die Schlussrechnung (Server: invoice_payment_final_invoice_exists).
+   */
+  if (hasFrozenFinalInvoiceDeduction(vorgangId, invoice)) {
+    return { success: false, errorKey: 'payment.finalInvoiceExists' };
+  }
+
+  /*
+   * FINANZ-CORE-01A (Feiertage) — hängt das Skonto an einem ungeklärten Feiertag am Sitz des Kunden,
+   * wird erst der Ort geklärt: Eine weitere Zahlung wäre je nach Ort geschuldet oder eine Überzahlung.
+   * Der Server weist sie ebenso ab (`invoice_skonto_deadline_unclear`).
+   */
+  if (getSkontoFristStatus(invoice).status === 'ungeklaert') {
+    return { success: false, errorKey: 'payment.skontoDeadlineUnclear' };
+  }
+
   const openAmount = getOpenAmount(invoice);
   const overpayAmount = getPaymentOverpayAmount(openAmount, input.amount);
+  /*
+   * FC01A-P1-Nacharbeit (ZAH-04) — ein Abschlag, den eine wirksame Schlussrechnung als beglichen
+   * abzieht, nimmt über seinen offenen Betrag hinaus keine Zahlung an, auch nicht bestätigt: Die
+   * Schlussrechnung hat Zahlung und Skonto eingefroren. Der Server
+   * (`add_workspace_invoice_payment`) weist das ebenso ab; Geld danach gehört auf die Schlussrechnung.
+   */
+  if (overpayAmount > 0 && findFinalInvoiceBlockingPaymentReversal(vorgangId, invoice)) {
+    return { success: false, errorKey: 'payment.finalInvoiceExists' };
+  }
   if (overpayAmount > 0 && !options.confirmOverpayment) {
     return { success: false, errorKey: 'payment.overpaymentConfirmationRequired' };
   }
@@ -409,6 +454,11 @@ export function removePayment(
     return { success: false, errorKey: 'payment.notFound' };
   }
 
+  // FC01A-Nacharbeit (A2) — hinter einer wirksamen Schlussrechnung bleibt die Abschlagszahlung stehen.
+  if (findFinalInvoiceBlockingPaymentReversal(vorgangId, invoice)) {
+    return { success: false, errorKey: 'payment.reverseBlockedByFinalInvoice' };
+  }
+
   const remaining = payments.filter((payment) => payment.id !== paymentId);
   const summary = calculatePaymentSummary({ ...invoice, payments: remaining });
   const updated = removePaymentFromInvoice(vorgangId, invoiceId, paymentId, summary.status);
@@ -467,6 +517,14 @@ export async function syncInvoicePaymentToCloud(
   invoiceId: string,
   payment: InvoicePayment,
 ): Promise<InvoicePaymentCloudOutcome> {
+  /*
+   * FINANZ-CORE-01A (Bericht 20) — bis der Server antwortet, ist die lokal gebuchte Zahlung keine bestätigte
+   * Finanztatsache: vermerkt, bevor gesendet wird (auch ein Abbruch mitten im Senden lässt den Vermerk stehen).
+   * Bestätigt (`synced`) oder reiner Lokalbetrieb ohne Cloud (`supabase_not_configured`) heben ihn auf; jeder
+   * andere Ausgang lässt ihn stehen — der Monatsabschluss sperrt, bis der Server sie kennt.
+   */
+  markInvoicePaymentUnconfirmed(invoiceId, payment.id);
+  let outcome: InvoicePaymentCloudOutcome;
   try {
     const { addInvoicePaymentToCloud } = await import(
       './invoice/workspaceInvoicePaymentCloudService'
@@ -481,10 +539,46 @@ export async function syncInvoicePaymentToCloud(
       method: payment.method,
       overpaymentAcknowledged: payment.overpaymentAcknowledged === true,
     });
-    return result.outcome;
+    outcome = result.outcome;
   } catch {
-    return 'failed';
+    outcome = 'failed';
   }
+  if (outcome === 'synced' || outcome === 'supabase_not_configured') clearInvoicePaymentUnconfirmed(invoiceId, payment.id);
+  // Systemische Gesamtnacharbeit (D4) — nur die Serverantwort „gebucht“ ist positive Evidenz, dauerhaft an der Zahlung.
+  if (outcome === 'synced') setInvoicePaymentCloudConfirmation(invoiceId, new Map([[payment.id, true]]));
+  return outcome;
+}
+
+/**
+ * FINANZ-CORE-01A (systemische Gesamtnacharbeit, SYS-02 / D4) — die Serverbestätigung von Zahlungen einer Rechnung
+ * setzen (`true`) oder entziehen (`false`, der vollständige Nachgleich belegt: der Server kennt sie nicht).
+ * Kennungen, Beträge und Reihenfolge bleiben; geschrieben und gespeichert wird nur bei einer echten Änderung.
+ * Scheitert das Speichern, nimmt der Commit die Änderung zurück — die Zahlung bleibt dann unbestätigt.
+ */
+export function setInvoicePaymentCloudConfirmation(
+  invoiceId: string,
+  confirmations: ReadonlyMap<string, boolean>,
+): boolean {
+  const entry = listInvoiceEntries().find((item) => item.invoice.id === invoiceId);
+  if (!entry) return false;
+  let changed = false;
+  const payments = getInvoicePayments(entry.invoice).map((payment) => {
+    const soll = confirmations.get(payment.id);
+    if (soll === undefined || (payment.cloudBestaetigt === true) === soll) return payment;
+    changed = true;
+    if (soll) return { ...payment, cloudBestaetigt: true };
+    const { cloudBestaetigt: _entzogen, ...rest } = payment;
+    void _entzogen;
+    return rest;
+  });
+  if (!changed) return true;
+  const result = replaceInvoicePayments(
+    entry.vorgangId,
+    invoiceId,
+    payments,
+    entry.invoice.paymentStatus ?? calculatePaymentSummary({ ...entry.invoice, payments }).status,
+  );
+  return result.ok;
 }
 
 /**
@@ -521,6 +615,143 @@ export function acknowledgeInvoicePaymentOverpayment(
     };
   }
   return { success: true, invoice: updated.invoice, payment: acknowledged };
+}
+
+/* -------------------------------------------------------------------------- */
+/* FINANZ-CORE-01A (Restnacharbeit END18-R3) — abgewiesene Zahlungen            */
+/* -------------------------------------------------------------------------- */
+
+const QUARANTINE_OUTCOMES: ReadonlySet<InvoicePaymentCloudOutcome> = new Set<InvoicePaymentCloudOutcome>([
+  'overpayment_unconfirmed',
+  'invoice_cancelled',
+  'final_invoice_exists',
+]);
+
+/**
+ * Ein Sicherungsausgang, nach dem die Zahlung beim Server nachweislich nicht existiert: Der Server prüft die
+ * Wiederholung derselben Kennung vor allen fachlichen Regeln; eine fachliche Abweisung heißt „nie
+ * angenommen“. Konflikt (andere Zahlung unter derselben Kennung), Rollenabweisung und Netzfehler zählen
+ * nicht dazu.
+ */
+export function isRejectedInvoicePaymentOutcome(
+  outcome: InvoicePaymentCloudOutcome,
+): outcome is RejectedInvoicePaymentReason {
+  return QUARANTINE_OUTCOMES.has(outcome);
+}
+
+/** Abgewiesene Zahlungen einer Rechnung (Nachweis, ohne Finanzwirkung). */
+export function getRejectedInvoicePayments(invoice: VorgangInvoice): RejectedInvoicePayment[] {
+  return (invoice.rejectedPayments ?? []).map((payment) => ({ ...payment }));
+}
+
+function afterPaymentMove(invoiceId: string): void {
+  try {
+    // Wie bei der Rücknahme: Ist die Rechnung dadurch wieder offen, beginnt eine neue Überfälligkeits-Episode.
+    reconcileInvoicePaymentTasks({ invoiceId, newEpisode: true });
+  } catch (error) {
+    console.warn('[payment] Überfälligkeitsaufgabe konnte nicht abgeglichen werden', error);
+  }
+}
+
+/**
+ * Eine vom Server endgültig abgewiesene Zahlung verliert ihre Finanzwirkung: Sie wechselt aus `payments`
+ * nach `rejectedPayments`. Bezahlt, offen, Status, Mahnung, Monatsmappe, Export und Abschluss folgen allein
+ * `payments`; die Zahlung bleibt als Nachweis sichtbar, bis der Nutzer entscheidet. Keine stille Löschung,
+ * kein automatischer neuer Versuch (der dauerhafte Vermerk bleibt, `recordInvoicePaymentResyncBlock`).
+ */
+export function quarantineRejectedInvoicePayment(
+  vorgangId: string | null,
+  invoiceId: string,
+  paymentId: string,
+  reason: RejectedInvoicePaymentReason,
+  rejectedAt: string = new Date().toISOString(),
+): PaymentMutationResult {
+  const invoice = getVorgangInvoice(vorgangId, invoiceId);
+  if (!invoice) return { success: false, errorKey: 'payment.invoiceNotFound' };
+  const payments = getInvoicePayments(invoice);
+  const payment = payments.find((entry) => entry.id === paymentId);
+  if (!payment) return { success: false, errorKey: 'payment.notFound' };
+  const remaining = payments.filter((entry) => entry.id !== paymentId);
+  const rejected: RejectedInvoicePayment[] = [
+    ...getRejectedInvoicePayments(invoice).filter((entry) => entry.id !== paymentId),
+    { ...payment, rejectedAt, reason },
+  ];
+  const summary = calculatePaymentSummary({ ...invoice, payments: remaining });
+  const updated = moveInvoicePayments(vorgangId, invoiceId, remaining, rejected, summary.status);
+  if (!updated.ok) {
+    return {
+      success: false,
+      errorKey: updated.reason === 'persist_failed' ? 'payment.persistFailed' : 'payment.invoiceNotFound',
+    };
+  }
+  afterPaymentMove(invoiceId);
+  return { success: true, invoice: updated.invoice, payment };
+}
+
+/**
+ * Der Nutzer bestätigt eine als unbestätigte Überzahlung abgewiesene Zahlung bewusst: Sie kehrt mit dem
+ * Bestätigungsmerkmal unter dieselbe Kennung zurück und wird danach gesendet. Nur für
+ * `overpayment_unconfirmed` — eine stornierte Rechnung oder ein durch die Schlussrechnung abgerechneter
+ * Abschlag nimmt auch eine bestätigte Zahlung nicht an.
+ */
+export function restoreRejectedInvoicePaymentAsOverpayment(
+  vorgangId: string | null,
+  invoiceId: string,
+  paymentId: string,
+): PaymentMutationResult {
+  const invoice = getVorgangInvoice(vorgangId, invoiceId);
+  if (!invoice) return { success: false, errorKey: 'payment.invoiceNotFound' };
+  if (isInvoiceCancelled(invoice)) return { success: false, errorKey: 'payment.invoiceCancelled' };
+  const rejected = getRejectedInvoicePayments(invoice);
+  const entry = rejected.find((item) => item.id === paymentId);
+  if (!entry) return { success: false, errorKey: 'payment.notFound' };
+  if (entry.reason !== 'overpayment_unconfirmed') return { success: false, errorKey: 'payment.rejectedNotRestorable' };
+  const { rejectedAt: _rejectedAt, reason: _reason, ...payment } = entry;
+  const acknowledged: InvoicePayment = { ...payment, overpaymentAcknowledged: true };
+  const payments = [...getInvoicePayments(invoice), acknowledged];
+  const summary = calculatePaymentSummary({ ...invoice, payments });
+  const updated = moveInvoicePayments(
+    vorgangId,
+    invoiceId,
+    payments,
+    rejected.filter((item) => item.id !== paymentId),
+    summary.status,
+  );
+  if (!updated.ok) {
+    return {
+      success: false,
+      errorKey: updated.reason === 'persist_failed' ? 'payment.persistFailed' : 'payment.invoiceNotFound',
+    };
+  }
+  afterPaymentMove(invoiceId);
+  return { success: true, invoice: updated.invoice, payment: acknowledged };
+}
+
+/** Der Nutzer verwirft den Nachweis einer abgewiesenen Zahlung bewusst (der Server kannte sie nie). */
+export function discardRejectedInvoicePayment(
+  vorgangId: string | null,
+  invoiceId: string,
+  paymentId: string,
+): RemovePaymentResult {
+  const invoice = getVorgangInvoice(vorgangId, invoiceId);
+  if (!invoice) return { success: false, errorKey: 'payment.invoiceNotFound' };
+  const rejected = getRejectedInvoicePayments(invoice);
+  if (!rejected.some((item) => item.id === paymentId)) return { success: false, errorKey: 'payment.notFound' };
+  const payments = getInvoicePayments(invoice);
+  const updated = moveInvoicePayments(
+    vorgangId,
+    invoiceId,
+    payments,
+    rejected.filter((item) => item.id !== paymentId),
+    calculatePaymentSummary({ ...invoice, payments }).status,
+  );
+  if (!updated.ok) {
+    return {
+      success: false,
+      errorKey: updated.reason === 'persist_failed' ? 'payment.persistFailed' : 'payment.invoiceNotFound',
+    };
+  }
+  return { success: true, invoice: updated.invoice };
 }
 
 /**
@@ -569,8 +800,10 @@ export function getOverdueDays(
     return 0;
   }
 
-  // FINANZ-CORE-01A (ZAH-10) — gezählt ab dem wirksamen Fristende (§ 193 BGB).
-  const due = new Date(shiftToWorkingDay(toDateOnly(invoice.paymentDueDate)));
+  // FINANZ-CORE-01A (ZAH-10, Feiertage) — gezählt ab dem wirksamen (spätestmöglichen) Fristende.
+  const fenster = zahlungszielFenster(invoice);
+  if (fenster && fenster.spaetestens === null) return 0;
+  const due = new Date(fenster?.spaetestens ?? toDateOnly(invoice.paymentDueDate));
   const now = new Date(toDateOnly(today));
   const diffMs = now.getTime() - due.getTime();
   return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));

@@ -27,7 +27,7 @@ import {
   type MonatsmappeInput,
   type MonatsmappeModel,
 } from './steuerberater/monatsmappeModelService';
-import { evaluateAccountingExportReadiness } from './accounting/accountingExportGateService';
+import { evaluateAccountingExportReadiness, type AccountingExportReadiness } from './accounting/accountingExportGateService';
 import {
   countHandoverOpenSteps,
   deriveSteuerberaterHandoverStatus,
@@ -320,9 +320,11 @@ export function collectSteuerberaterMonthFindings(monthKey: string): Steuerberat
 export function getSteuerberaterHandoverStatus(
   monthKey: string,
   findings: SteuerberaterMonthFindings = collectSteuerberaterMonthFindings(monthKey),
+  /** Systemische Gesamtnacharbeit (D9) — die Bewertung desselben Datenstands, sonst frisch. */
+  readiness: AccountingExportReadiness = evaluateAccountingExportReadiness(monthKey),
 ): SteuerberaterHandoverStatus {
   return deriveSteuerberaterHandoverStatus({
-    readiness: evaluateAccountingExportReadiness(monthKey),
+    readiness,
     unclearCases: findings.unclearDocuments.length + findings.model.stornosOhneDatum.length,
     missingProofs: findings.missingItems.length,
   });

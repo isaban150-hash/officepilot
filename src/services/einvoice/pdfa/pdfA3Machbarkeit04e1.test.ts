@@ -12,7 +12,7 @@
  * genau die Strukturen entfernt, auf denen dieses Urteil beruhte — ohne dass
  * dafür ein Java-Validator im Repository liegen müsste.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -41,6 +41,11 @@ import {
   PDFA_PART,
   PDFA_PRODUCER,
 } from './pdfaProfile';
+import { alsInhaber } from '../../../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 /** Ein echtes 1×1-PNG **mit Alphakanal** — der Transparenzfall. */
 const PNG_BASE64 =
@@ -157,7 +162,7 @@ async function readOutputIntent(bytes: Uint8Array): Promise<PDFDict> {
 }
 
 afterEach(() => {
-  vi.restoreAllMocks();
+  (vi.restoreAllMocks(), alsInhaber());
 });
 
 describe('E-RECHNUNG-04E1 — PDF/A-3 Metadaten', () => {
@@ -317,7 +322,7 @@ describe('E-RECHNUNG-04E1 — das sichtbare Dokument bleibt unverändert', () =>
     const normal = captureDrawnText();
     await normalOf(invoice());
     const normalCopy = [...normal];
-    vi.restoreAllMocks();
+    (vi.restoreAllMocks(), alsInhaber());
 
     const archival = captureDrawnText();
     await pdfaOf(invoice());
@@ -333,7 +338,7 @@ describe('E-RECHNUNG-04E1 — das sichtbare Dokument bleibt unverändert', () =>
     const normal = captureDrawnText();
     const normalBytes = await normalOf(lang);
     const normalCopy = [...normal];
-    vi.restoreAllMocks();
+    (vi.restoreAllMocks(), alsInhaber());
 
     const archival = captureDrawnText();
     const archivalBytes = await pdfaOf(lang);

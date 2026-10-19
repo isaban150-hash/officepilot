@@ -71,6 +71,7 @@ import {
 } from './invoiceDraftDurabilityService';
 import {
   markInvoiceDraftCloudFromFinalizedRecord,
+  noteOwnInvoiceDraftFinalization,
   resolveInvoiceDraftCloudBinding,
 } from './invoiceDraftCloudBridge';
 import {
@@ -629,6 +630,8 @@ async function runResume(
   const finalization = preparation.record.finalization;
   if (!finalization) return resumeFail('status_conflict', { detail: 'finalization' });
   const clientInvoiceId = finalization.clientInvoiceId;
+  // FC01A-Nacharbeit (B1) — der Grabstein dieser Freigabe ist das eigene Ende, kein „anderswo".
+  noteOwnInvoiceDraftFinalization(identity.draftId, clientInvoiceId);
   const contentFingerprint = finalization.contentFingerprint;
   const finalizingRevision = preparation.record.revision;
 
@@ -1241,6 +1244,12 @@ async function runStart(
 
   const finalizingRevision = begun.record.revision;
   const clientInvoiceId = begun.record.finalization?.clientInvoiceId ?? prepared.clientInvoiceId;
+  /*
+   * FC01A-Nacharbeit (B1) — ab hier ist die eigene Rechnungskennung dauerhaft. Der
+   * Grabstein, den diese Freigabe erzeugt (eigener Spiegelvermerk oder späterer
+   * Abzug), ist das eigene Ende und keine Freigabe „auf einem anderen Gerät".
+   */
+  noteOwnInvoiceDraftFinalization(identity.draftId, clientInvoiceId);
 
   /* 6. Execute — ausschließlich Identität und bestätigte Revision. */
   const executed = await executePreparedInvoiceFinalization({

@@ -62,18 +62,87 @@ export function isFinalPermissionDenialMessage(message: string | null | undefine
 }
 
 /**
+ * FINANZ-CORE-01A (Gesamtnacharbeit INV-08/09) — fachliche Abweisungen der Ausgabenregeln. Kein
+ * Rollenproblem, aber ebenso endgültig für diesen Auftrag: Derselbe Inhalt wird beim nächsten Versuch
+ * genauso abgewiesen (Zahlung auf Entwurf oder Gutschrift, unbestätigte Überzahlung, Betrag/Storno/
+ * Entwurf/Löschen trotz Zahlung, stornierte oder gelöschte Ausgabe, ungültiger Betrag oder Tag). Erst
+ * eine neue, bewusste Änderung erzeugt einen neuen Auftrag; nach einem Neustart wird nichts nachgeholt.
+ */
+const FINAL_BUSINESS_REJECTIONS = [
+  'expense_payment_not_payable',
+  'expense_payment_overpayment_unconfirmed',
+  'expense_amount_locked_after_payment',
+  'expense_cancel_has_payments',
+  'expense_cancel_not_booked',
+  'expense_status_locked_after_payment',
+  'expense_cancelled_immutable',
+  'Ausgabe hat gebuchte Zahlungen',
+  'Ausgabe storniert',
+  'Ausgabe geloescht',
+  'Ausgabe bereits geloescht',
+  'amount ungueltig',
+  'paid_on ungueltig',
+  // INV-10 — ein freigegebenes Angebot ist ein Beleg; eine Änderung daran wird nie angenommen.
+  'Angebot ist freigegeben und kann nicht mehr geaendert werden',
+] as const;
+
+/**
+ * Systemische Gesamtnacharbeit (D7) — fachliche Abweisungen eines Monatsabschlusses: falsches oder veraltetes
+ * Manifest, nicht abschlussbereit, alte Fassung, Monat bereits abgeschlossen. Bisher liefen sie als wiederholbarer
+ * Fehler endlos weiter. Derselbe Auftrag scheitert beim nächsten Mal genauso; erst ein neuer, bewusster Abschluss
+ * (neue Revision) kann angenommen werden.
+ */
+export const CLOSURE_BUSINESS_REJECTIONS = [
+  'closure_manifest_mismatch',
+  'closure_fingerprint_mismatch',
+  'closure_manifest_version_outdated',
+  'closure_not_ready',
+  'closure_id_conflict',
+  'closure_manifest_invalid',
+  'closure_manifest_period_mismatch',
+  'closure_without_fingerprint',
+  'period_already_closed',
+  'period_invalid',
+] as const;
+
+export function isClosureBusinessRejection(message: string | null | undefined): boolean {
+  const text = message ?? '';
+  return CLOSURE_BUSINESS_REJECTIONS.some((marker) => text.includes(marker));
+}
+
+export function isFinalBusinessRejectionMessage(message: string | null | undefined): boolean {
+  const text = message ?? '';
+  return FINAL_BUSINESS_REJECTIONS.some((marker) => text.includes(marker)) || isClosureBusinessRejection(text);
+}
+
+/**
  * Ein endgültig abgewiesener Auftrag: Endstatus `failed` mit einer Meldung von oben.
  * Er wird nicht gesendet, nicht per „Erneut versuchen" wiederbelebt und von keinem
  * Backfill neu eingereiht; erst eine neue, bewusst ausgelöste Änderung erzeugt einen
  * neuen Auftrag.
  */
 export function isFinallyDeniedOutboxEntry(entry: SyncOutboxEntry): boolean {
-  return entry.status === 'failed' && isFinalPermissionDenialMessage(entry.lastErrorMessage);
+  return (
+    entry.status === 'failed' &&
+    (isFinalPermissionDenialMessage(entry.lastErrorMessage) || isFinalBusinessRejectionMessage(entry.lastErrorMessage))
+  );
 }
 
 /** Ein Sendefehler des laufenden Laufs, der eine endgültige Rollenabweisung ist. */
 export function isRoleDenialFailure(failure: { message: string; retryable?: boolean }): boolean {
   return failure.retryable === false && isRoleDenialMessage(failure.message);
+}
+
+/**
+ * FINANZ-CORE-01A (END18-R3) — ein Sendefehler, der endgültig ist: Rollenabweisung oder fachliche
+ * Abweisung. Beide verlangen den Abgleich im selben Lauf — erst der Serverstand nimmt die lokale
+ * Wirkung der abgewiesenen Aktion zurück (`mergeExpensesFromPull`). Netzfehler gehören nicht dazu.
+ */
+export function isFinalRejectionFailure(failure: { message: string; retryable?: boolean }): boolean {
+  return (
+    failure.retryable === false &&
+    (isRoleDenialMessage(failure.message) || isFinalBusinessRejectionMessage(failure.message))
+  );
 }
 
 /**

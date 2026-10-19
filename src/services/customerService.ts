@@ -15,7 +15,8 @@ import {
 import { persistAll } from './persistenceService';
 import { checkCustomerFieldFormats } from './customer/customerFieldFormat';
 import { generateEntityId } from './sync/syncMetaService';
-import type { Customer, CustomerBilling } from '../types/models';
+import type { Customer, CustomerBilling, CustomerHolidayLocation } from '../types/models';
+import { normalizeHolidayLocation } from './fristen/fristende';
 import {
   findStrongCustomerDuplicateCandidates,
   type CustomerDuplicateCandidate,
@@ -36,6 +37,8 @@ export type CustomerInput = Partial<CustomerBilling> &
   Pick<CustomerBilling, 'name'> & {
     /** E-RECHNUNG-04B — Vorbelegung der Käuferreferenz; nur am Stammsatz. */
     buyerReferenceDefault?: string;
+    /** FINANZ-CORE-01A (Feiertage) — Sitz für Fristenden; nur am Stammsatz. */
+    holidayLocation?: CustomerHolidayLocation | null;
   };
 
 /**
@@ -187,6 +190,8 @@ export function buildValidatedCustomer(
   if (leitwegId) customer.leitwegId = leitwegId;
   const createdFromInboxId = text(options?.createdFromInboxId);
   if (createdFromInboxId) customer.createdFromInboxId = createdFromInboxId;
+  const holidayLocation = normalizeHolidayLocation(input.holidayLocation);
+  if (holidayLocation) customer.holidayLocation = holidayLocation;
 
   return { ok: true, customer };
 }
@@ -220,6 +225,11 @@ export function createCustomer(
  */
 export type CustomerMasterChanges = Partial<CustomerBilling> & {
   buyerReferenceDefault?: string;
+  /**
+   * FINANZ-CORE-01A (Feiertage) — `null` entfernt die Angabe (dann gilt wieder die PLZ der
+   * Rechnungsanschrift), `undefined` heisst „nicht angefasst“.
+   */
+  holidayLocation?: CustomerHolidayLocation | null;
 };
 
 export function updateCustomer(
@@ -275,6 +285,11 @@ export function updateCustomer(
     const value = key === 'buyerReferenceDefault' ? text(changes[key]) : (format.normalized[key] ?? '');
     if (value) updated[key] = value;
     else delete updated[key];
+  }
+  if (changes.holidayLocation !== undefined) {
+    const holidayLocation = normalizeHolidayLocation(changes.holidayLocation);
+    if (holidayLocation) updated.holidayLocation = holidayLocation;
+    else delete updated.holidayLocation;
   }
 
   const previous = getCustomerStoreSnapshot();

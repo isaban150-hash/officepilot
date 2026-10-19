@@ -55,14 +55,42 @@ end;
 $p$;
 
 /* Eine Rechnung, wie der Client sie baut. */
+-- FC01A-P1-NACHARBEIT (#8): Seit 20261115120000 traegt jede Abzugszeile Nummer, Datum, Netto und
+-- Abschlagsnummer des gespeicherten Abschlags -- wie jeder Client sie sendet
+-- (getPreviousAbschlagDeductions). Verkuerzte Abzuege dieser Datei ({invoiceId, amount}) werden
+-- deshalb wie im Client aus dem Abschlag ergaenzt. Kennung, Betrag und eingefrorene Zahlung/Skonto
+-- bleiben unberuehrt; ein Abzug mit eigener Nummer oder ohne gespeicherten Abschlag ebenso.
+create function pg_temp.abzuege_wie_client(p_payload jsonb) returns jsonb language sql stable as $p$
+  select case when jsonb_typeof(p_payload->'previousAbschlagDeductions') = 'array' then
+    p_payload || jsonb_build_object('previousAbschlagDeductions', coalesce((
+      select jsonb_agg(
+        case when a.client_invoice_id is null or d.value ? 'invoiceNumber' then d.value
+        else jsonb_strip_nulls(jsonb_build_object(
+               'invoiceNumber', a.invoice_number,
+               'abschlagNumber', a.payload->'abschlagNumber',
+               'date', coalesce(a.payload->>'issueDate', a.payload->>'date'),
+               'subtotal', a.payload->'subtotal')) || d.value
+        end order by d.n)
+      from jsonb_array_elements(p_payload->'previousAbschlagDeductions') with ordinality d(value, n)
+      left join lateral (
+        select wi.client_invoice_id, wi.invoice_number, wi.payload
+        from public.workspace_invoices wi
+        where wi.workspace_id in ('00000000-0000-0000-0000-000000000e01')
+          and wi.client_invoice_id = d.value->>'invoiceId'
+        limit 1
+      ) a on true
+    ), '[]'::jsonb))
+  else p_payload end;
+$p$;
+
 create function pg_temp.beleg(
   p_type text,
   p_menge numeric,
   p_subtotal numeric,
   p_amount numeric,
   p_extra jsonb default '{}'::jsonb
-) returns jsonb language sql immutable as $p$
-  select jsonb_build_object(
+) returns jsonb language sql stable as $p$
+  select pg_temp.abzuege_wie_client(jsonb_build_object(
     'type', p_type,
     'taxStatus', 'kleinunternehmer_19',
     'issueDate', '2026-10-03',
@@ -79,7 +107,7 @@ create function pg_temp.beleg(
     )) else '[]'::jsonb end,
     'subtotal', p_subtotal,
     'amount', p_amount
-  ) || p_extra;
+  ) || p_extra);
 $p$;
 
 do $$

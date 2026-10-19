@@ -14,7 +14,8 @@ import {
   planLostAckAdoption,
   type LostAckAdoptionPlan,
 } from '../sync/syncLostAckAdoptionService';
-import type { Customer } from '../../types/models';
+import type { Customer, CustomerHolidayLocation } from '../../types/models';
+import { normalizeHolidayLocation } from '../fristen/fristende';
 import type { SyncMeta } from '../../types/sync';
 
 /** Zeile aus `public.workspace_customers` — exakt die Spalten der Migration. */
@@ -47,6 +48,8 @@ export interface CustomerCloudPayload {
   vatId?: string;
   buyerReferenceDefault?: string;
   leitwegId?: string;
+  /* FINANZ-CORE-01A (Feiertage) — Sitz des Kunden für Fristenden (§ 193 BGB). */
+  holidayLocation?: CustomerHolidayLocation;
 }
 
 /**
@@ -81,6 +84,9 @@ export function stripCustomerForCloud(customer: Customer): CustomerCloudPayload 
   if (customer.vatId) payload.vatId = customer.vatId;
   if (customer.buyerReferenceDefault) payload.buyerReferenceDefault = customer.buyerReferenceDefault;
   if (customer.leitwegId) payload.leitwegId = customer.leitwegId;
+  // FINANZ-CORE-01A (Feiertage) — kanonisch, nur wenn gepflegt; der Server liest dieselbe Form.
+  const holidayLocation = normalizeHolidayLocation(customer.holidayLocation);
+  if (holidayLocation) payload.holidayLocation = holidayLocation;
   return payload;
 }
 
@@ -99,9 +105,17 @@ export function buildCustomerCloudPushPayload(
   customer: Customer,
   deleted = false,
 ): Record<string, unknown> {
+  /*
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-03) — ohne Ortsangabe ausdrücklich `null`. Der Server behält
+   * eine gespeicherte Angabe, wenn ein alter Client den Schlüssel nur weglässt (Trigger
+   * `workspace_customers_holiday_location`); entfernt wird sie nur mit `null`. Der Content-Key bleibt
+   * davon unberührt (`stripCustomerForCloud`).
+   */
+  const payload: Record<string, unknown> = { ...stripCustomerForCloud(customer) };
+  if (!('holidayLocation' in payload)) payload.holidayLocation = null;
   return {
     customer_id: customer.id,
-    payload: stripCustomerForCloud(customer),
+    payload,
     deleted,
   };
 }
@@ -146,6 +160,8 @@ export function parseCustomerCloudPayload(
     parsed.buyerReferenceDefault = inner.buyerReferenceDefault;
   }
   if (isNonEmptyString(inner.leitwegId)) parsed.leitwegId = inner.leitwegId;
+  const holidayLocation = normalizeHolidayLocation(inner.holidayLocation);
+  if (holidayLocation) parsed.holidayLocation = holidayLocation;
   return parsed;
 }
 

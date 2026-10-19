@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AppPersistedState, StoredInvoiceEntry, Vorgang, VorgangInvoice } from '../../types/models';
 import type { SyncOutboxEntry, SyncSimulationReport } from '../../types/sync';
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
-import { isFinalPermissionDenialMessage } from './syncRoleDenial';
+import { isClosureBusinessRejection, isFinalBusinessRejectionMessage, isFinalPermissionDenialMessage } from './syncRoleDenial';
 import type {
   SyncAcknowledgeInput,
   SyncAdapter,
@@ -51,6 +51,7 @@ import {
 } from '../accounting/accountingCloudSyncService';
 import {
   applyAccountingPeriodPushResultToState,
+  applyAccountingPeriodRejectionToState,
   pushAccountingPeriodClosure,
 } from '../accounting/accountingPeriodCloudSyncService';
 import {
@@ -185,7 +186,9 @@ import { withInvoiceNumberFormat } from '../invoiceNumberService';
 import {
   EXPENSE_PUSH_ORDER,
   applyExpensePullToState,
+  applyProvenExpensePaymentRejections,
   collectDirtyExpenseKeys,
+  collectRejectedExpenseEntries,
   isExpenseSyncEntityType,
   pushExpenseEntity,
   rpcPullWorkspaceExpenses,
@@ -291,6 +294,10 @@ function pushFailureOutcome(
     return { status: 'blocked', retryable: error.retryable };
   }
   if (isFinalPermissionDenialMessage(message)) {
+    return { status: 'failed', retryable: false };
+  }
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-08/09) — fachliche Abweisung der Ausgabenregeln: endgültig.
+  if (isFinalBusinessRejectionMessage(message)) {
     return { status: 'failed', retryable: false };
   }
   return { status: 'error', retryable: error instanceof WorkspaceCloudError ? error.retryable : true };
@@ -1194,6 +1201,24 @@ export class SupabaseSyncAdapter implements SyncAdapter {
               new Date().toISOString(),
               'deleted' in outcome ? outcome.deleted : false,
             );
+            /*
+             * Systemische Gesamtnacharbeit (D1) — die Serverbestätigung reist nur mit einer Antwort, die genau diesen
+             * Fingerabdruck gegen den Finanzbestand geprüft hat. Ohne sie bleibt die Revision „ausstehend“/historisch.
+             */
+            if (extracted.entityType === 'accounting_period_closure' && 'server' in outcome && outcome.server) {
+              currentState = {
+                ...currentState,
+                accountingPeriodClosures: applyAccountingPeriodPushResultToState(
+                  currentState.accountingPeriodClosures ?? [],
+                  entry.entityId,
+                  outcome.rowVersion,
+                  new Date().toISOString(),
+                  currentState.syncClient!.deviceId,
+                  workspaceId,
+                  outcome.server,
+                ),
+              };
+            }
           }
           completedOutboxIds.push(entry.id);
           outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
@@ -1216,6 +1241,22 @@ export class SupabaseSyncAdapter implements SyncAdapter {
             entry.retryCount + 1,
             { message, retryable },
           );
+          /*
+           * Systemische Gesamtnacharbeit (D7) — eine fachliche Abweisung des Abschlusses ist endgültig und gehört an
+           * die Revision selbst (dauerhaft, auch wenn der Auftrag später aufgeräumt wird): Sie gilt dann nicht mehr
+           * als aktiver Abschluss, der Monat ist wieder abschließbar, die Historie zeigt den Grund.
+           */
+          if (entry.entityType === 'accounting_period_closure' && isClosureBusinessRejection(message)) {
+            currentState = {
+              ...currentState,
+              accountingPeriodClosures: applyAccountingPeriodRejectionToState(
+                currentState.accountingPeriodClosures ?? [],
+                entry.entityId,
+                message,
+                new Date().toISOString(),
+              ),
+            };
+          }
           report.errorCount += 1;
           report.errors.push({ outboxId: entry.id, message });
           if (isVersionConflict) {
@@ -1509,6 +1550,11 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       ...currentState,
       syncOutbox: outbox,
     };
+    /*
+     * FINANZ-CORE-01A (END18-R3, Bericht 19) — eine neue Ausgabenzahlung, deren Abweisung beweist, dass der Server
+     * sie nicht hat, verliert ihre Wirkung schon hier und nicht erst mit dem nächsten gelungenen Abzug.
+     */
+    currentState = applyProvenExpensePaymentRejections(currentState);
 
     markOutboxEntriesCompleted(completedOutboxIds);
     if (failedOutbox.length > 0) {
@@ -1717,6 +1763,8 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           deviceId: input.state.syncClient!.deviceId,
           workspaceId,
           dirty: collectDirtyExpenseKeys(input.state.syncOutbox),
+          // FINANZ-CORE-01A (END18-R3) — endgültig abgewiesene Aktionen weichen dem Serverstand.
+          rejected: collectRejectedExpenseEntries(input.state.syncOutbox),
         });
         intakeState = appliedExpenses.state;
         report.mergedEntityCount += appliedExpenses.counts.expenses + appliedExpenses.counts.payments;

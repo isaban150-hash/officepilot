@@ -46,6 +46,16 @@ export type BankReconciliationRefusal =
   | 'payment_amount_mismatch'
   | 'payment_reversed'
   | 'payment_not_found'
+  /**
+   * FINANZ-CORE-01A (Feiertage) — das Skonto der Rechnung hängt an einem ungeklärten Feiertag am Sitz
+   * des Kunden; erst den Ort klären (Bundesland am Kunden), dann zuordnen.
+   */
+  | 'skonto_deadline_unclear'
+  /**
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-03) — eine wirksame Schlussrechnung hat Zahlung und Skonto dieses
+   * Abschlags eingefroren; Geld danach gehört auf die Schlussrechnung.
+   */
+  | 'final_invoice_exists'
   | 'offline';
 
 export type BankReconciliationOutcome =

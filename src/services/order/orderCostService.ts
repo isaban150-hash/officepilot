@@ -1,5 +1,6 @@
 import { fromCents, sumCents, toCents } from '../invoiceMoney';
 import { isBillingEffective } from '../orderBillingRules';
+import { invoiceNetCentsForBillingLimit } from '../invoice/invoiceNetResolution';
 import { getAllExpensesFromStore } from '../expenseStore';
 import { isEntitySyncActive } from '../sync/syncMetaService';
 import { getVorgangById } from '../vorgangService';
@@ -32,7 +33,12 @@ import type { Vorgang, VorgangInvoice } from '../../types/models';
  * Für eine normale Rechnung ohne Abzüge ist es schlicht ihr Netto.
  */
 export function invoiceBilledNetCents(invoice: VorgangInvoice): number {
-  const subtotalCents = toCents(invoice.subtotal ?? 0);
+  /*
+   * FC01A-P1-Restkorrektur (lokaler Altbestand) — das Netto über `resolveInvoiceNet`. Ein
+   * ungeklärtes zählt im Auftragsfortschritt mit seiner Obergrenze (wie die Abrechnungsgrenze);
+   * die Auftragsübersicht weist darauf hin (`netUnresolvedInvoiceCount`).
+   */
+  const subtotalCents = invoiceNetCentsForBillingLimit(invoice);
   if (!Number.isFinite(subtotalCents)) return 0;
   const deductionCents = sumCents(
     (invoice.previousAbschlagDeductions ?? [])

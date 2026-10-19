@@ -9,6 +9,9 @@ import { ExpensePaymentForm } from '../components/expenses/ExpensePaymentForm';
 import { getExpensePaymentSavedToastKey } from '../components/expenses/ExpensePaymentSummary';
 import { ExpensePaymentHistory } from '../components/expenses/ExpensePaymentHistory';
 import { ExpensePaymentSummary } from '../components/expenses/ExpensePaymentSummary';
+import { ExpenseRejectedActionsNotice, ExpenseUnreconciledRejectionsNotice } from '../components/expenses/ExpenseRejectedActionsNotice';
+import { collectUnreconciledExpenseRejections } from '../services/expense/expenseCloudSyncService';
+import { getSyncOutboxSnapshot } from '../services/sync/syncOutboxService';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
 import { EXPENSE_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
 import { Button } from '../components/ui/Button';
@@ -296,6 +299,13 @@ export function AusgabeDetailPage() {
           onRemovePayment={handleRemovePayment}
           allowRemove={darfFinanzen}
           onProofChanged={darfFinanzen ? setExpense : undefined}
+        />
+        {/* FINANZ-CORE-01A (END18-R3) — abgewiesene Aktionen: sichtbar, ohne Finanzwirkung. */}
+        <ExpenseRejectedActionsNotice expense={expense} translate={translate} />
+        {/* Bericht 19 — abgewiesen, Abgleich steht aus: vorläufig, nicht verbindlich. */}
+        <ExpenseUnreconciledRejectionsNotice
+          pending={collectUnreconciledExpenseRejections(expense, getSyncOutboxSnapshot())}
+          translate={translate}
         />
       </DetailSection>
 

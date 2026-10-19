@@ -91,6 +91,12 @@ const TEXTE: Readonly<Record<CanonicalEInvoiceIssueCode, string>> = {
   // FINANZ-CORE-01A (WEISS-Recheck N02-R1) — gezahlt und Skonto müssen getrennt eingefroren sein.
   prepayment_skonto_unfrozen:
     'Die Schlussrechnung zieht einen mit Skonto beglichenen Abschlag ab, wurde aber freigegeben, bevor Zahlung und Skonto getrennt festgehalten wurden. Eine E-Rechnung würde das Skonto als Zahlung ausweisen — bitte die Schlussrechnung korrigieren (stornieren und neu freigeben).',
+  // FC01A-P1-Restkorrektur (#8, Altformat) — Netto/USt eines abgezogenen Abschlags stehen nicht fest.
+  prepayment_net_unreliable:
+    'Die Schlussrechnung zieht einen Abschlag in einem älteren Format ab, zu dem Netto und Umsatzsteuer nicht verlässlich gespeichert sind (oder nicht zum Steuersatz passen). Eine E-Rechnung müsste die Steuer der Vorauszahlung ausweisen und wird deshalb nicht erzeugt — bitte den Abschlag prüfen und berichtigen und die Schlussrechnung danach neu stellen.',
+  // FC01A-P1-Restkorrektur (lokaler Altbestand) — das Netto der Rechnung selbst steht nicht fest.
+  net_unresolved:
+    'Netto und Umsatzsteuer dieser Altrechnung sind nicht verlässlich gespeichert und lassen sich aus den eingefrorenen Rechnungsdaten nicht sicher ermitteln. Eine E-Rechnung wird deshalb nicht erzeugt. Maßgeblich bleibt die ursprünglich versendete Rechnung; ist sie fehlerhaft, berichtigen Sie sie mit einer Rechnungskorrektur unter Bezug auf diese Rechnungsnummer.',
   final_invoice_deduction_semantics_unsupported:
     'Schlussrechnungen mit Abzug bereits abgerechneter Abschläge konnten früher nicht als E-Rechnung ausgegeben werden.',
 };

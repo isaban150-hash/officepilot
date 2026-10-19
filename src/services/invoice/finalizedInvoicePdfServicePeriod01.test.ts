@@ -42,6 +42,11 @@ import {
   buildInvoicePayloadV1,
   validatePreparedWorkspaceInvoiceFinalizeRequest,
 } from './workspaceInvoiceFinalizeRequestValidator';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 const companySnapshot = {
   ...DEFAULT_COMPANY_PROFILE,

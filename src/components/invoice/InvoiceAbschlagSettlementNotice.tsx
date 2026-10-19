@@ -32,6 +32,7 @@ export function InvoiceAbschlagSettlementNotice({ unsettled, translate }: Props)
                 : translate('invoice.abschlagUnsettled.labelPlain'),
               entry.invoiceNumber,
               translate('invoice.abschlagUnsettled.open').replace('{amount}', formatEuroAmount(entry.open)),
+              entry.skontoUnclear ? translate('invoice.abschlagUnsettled.skontoUnclear') : '',
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -39,6 +40,9 @@ export function InvoiceAbschlagSettlementNotice({ unsettled, translate }: Props)
         ))}
       </ul>
       <p>{translate('invoice.abschlagUnsettled.hint')}</p>
+      {unsettled.some((entry) => entry.skontoUnclear) ? (
+        <p data-testid="invoice-abschlag-skonto-unclear">{translate('invoice.abschlagUnsettled.skontoUnclearHint')}</p>
+      ) : null}
     </InlineNotice>
   );
 }

@@ -6,6 +6,8 @@ import {
   getOpenAmount,
   getPaymentOverpayAmount,
   isInvoiceCancelled,
+  isRejectedInvoicePaymentOutcome,
+  quarantineRejectedInvoicePayment,
   recordPayment,
   removePayment,
   willPaymentNeedUnsentConfirm,
@@ -185,6 +187,25 @@ export function InvoicePaymentForm({
           return;
         }
         /*
+         * FINANZ-CORE-01A (END18-R3) — fachlich abgewiesen (unbestätigte Überzahlung, stornierte Rechnung,
+         * abgerechneter Abschlag): Der Server kennt die Zahlung nicht. Sie ist nicht gebucht, zählt nirgends und
+         * steht auf der Rechnungsseite als abgewiesen, bis der Nutzer entscheidet.
+         */
+        if (isRejectedInvoicePaymentOutcome(outcome)) {
+          recordInvoicePaymentResyncBlock(invoice.id, payment.id, outcome);
+          const abgewiesen = quarantineRejectedInvoicePayment(vorgangId, invoice.id, payment.id, outcome);
+          setPendingPayment(null);
+          if (abgewiesen.success) (onReverted ?? onSaved)(abgewiesen.invoice);
+          setErrorKey(
+            outcome === 'overpayment_unconfirmed'
+              ? 'payment.cloudOverpaymentUnconfirmed'
+              : outcome === 'invoice_cancelled'
+                ? 'payment.cloudInvoiceCancelled'
+                : 'payment.cloudFinalInvoiceExists',
+          );
+          return;
+        }
+        /*
          * Die Zahlung bleibt lokal gebucht — der Nutzer hat sie erfasst. Aber
          * sie steht nur hier, und das darf die Oberfläche nicht verschweigen.
          * `supabase_not_configured` ist bei Geld kein stiller Normalfall.
@@ -193,15 +214,13 @@ export function InvoicePaymentForm({
         setErrorKey(
           outcome === 'conflict'
             ? 'payment.cloudConflict'
-            : outcome === 'overpayment_unconfirmed'
-              ? 'payment.cloudOverpaymentUnconfirmed'
-              : outcome === 'invoice_cancelled'
-                ? 'payment.cloudInvoiceCancelled'
-                : 'payment.cloudOnlyLocal',
+            : outcome === 'skonto_deadline_unclear'
+              ? 'payment.cloudSkontoDeadlineUnclear'
+              : 'payment.cloudOnlyLocal',
         );
         // FINANZ-CORE-01A (ZAH-02) — der nächste erfolgreiche Abgleich sichert nach, ohne Wartezeit.
-        // Konflikt, unbestätigte Überzahlung und stornierte Rechnung warten auf eine Entscheidung, nicht
-        // auf das Netz — WEISS-N01: dauerhaft vermerkt, auch über einen Neustart.
+        // Ein Konflikt wartet auf eine Entscheidung, nicht auf das Netz — WEISS-N01: dauerhaft vermerkt,
+        // auch über einen Neustart. (Fachliche Abweisungen sind oben schon abgewiesen abgelegt, END18-R3.)
         if (isFinalInvoicePaymentResyncOutcome(outcome)) {
           recordInvoicePaymentResyncBlock(invoice.id, payment.id, outcome);
         } else {

@@ -528,7 +528,7 @@ describe('F — Belegarten', () => {
     expect(result.value.totals.payableAmount).toBe(714);
     expect(result.value.totals.billedPrepayments[0]).toMatchObject({ paidAmount: 476, skontoAmount: 0 });
     expect(result.value.notes).toEqual([
-      'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 476,00 EUR brutto',
+      'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 476,00 EUR brutto (netto 400,00 EUR, USt 76,00 EUR)',
     ]);
     // Brutto 1.190 minus 476 ist 714 — ein anderer Zahlbetrag ist widersprüchlich.
     erwarteFehler(buildCanonicalEInvoice(schluss(690), bezahlt), 'money_inconsistent');
@@ -622,7 +622,7 @@ describe('F — Belegarten', () => {
       ]);
       expect(result.value.totals.billedPrepayments[0]).toMatchObject({ paidAmount: 466.48, skontoAmount: 9.52 });
       expect(result.value.notes).toEqual([
-        'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 466,48 EUR gezahlt von 476,00 EUR brutto',
+        'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 466,48 EUR gezahlt (netto 392,00 EUR, USt 74,48 EUR) von 476,00 EUR brutto',
         'Skonto auf Abschlag 1 (Rechnung 2026-0031): 9,52 EUR brutto (netto 8,00 EUR, USt 1,52 EUR), als Nachlass auf Belegebene ausgewiesen (Entgeltminderung).',
       ]);
     });
@@ -638,7 +638,7 @@ describe('F — Belegarten', () => {
         expect(result.value.allowances).toBeUndefined();
         expect(result.value.totals.allowanceTotal).toBeUndefined();
         expect(result.value.notes).toEqual([
-          'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 476,00 EUR brutto',
+          'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 476,00 EUR brutto (netto 400,00 EUR, USt 76,00 EUR)',
         ]);
       }
     });
@@ -665,6 +665,110 @@ describe('F — Belegarten', () => {
       // BR-S-09: Steuer = Bemessungsgrundlage × Satz; BR-CO-16: BT-115 = BT-112 − BT-113 + BT-114.
       expect(Math.round(993.97 * 19)).toBe(18885);
       expect(Math.round((t.taxInclusiveAmount - t.prepaidAmount + (t.roundingAmount ?? 0)) * 100)).toBe(71400);
+    });
+  });
+
+  /*
+   * FC01A-Nacharbeit (A1) — § 14 Abs. 5 Satz 2 UStG: In der Schlussrechnung sind die
+   * vereinnahmten Teilentgelte **und die auf sie entfallenden Steuerbeträge** abzusetzen.
+   * BT-113 kennt nur einen Bruttobetrag; die Notiz nennt deshalb je Abschlag Netto und USt —
+   * dieselben Werte wie PDF und Ansicht. Ohne Steuer bleibt der Text, wie er war.
+   */
+  describe('A1 — Netto und USt je abgezogenem Abschlag in der Notiz', () => {
+    const notizAbzuege = (notes: readonly string[]) => notes.find((note) => note.startsWith('Abzüglich bereits bezahlter Abschläge:'));
+
+    it('A1a: zwei Abschläge mit 19 %: jeder mit eigenem Netto und eigener USt, Netto + USt = Brutto', () => {
+      const result = buildCanonicalEInvoice(
+        invoice({
+          type: 'schluss',
+          subtotal: 1000,
+          amount: 476,
+          positions: [line({ quantity: 10, unitPrice: 100, lineTotal: 1000 })],
+          previousAbschlagDeductions: [
+            { invoiceId: 'inv-a1', invoiceNumber: '2026-0031', abschlagNumber: 1, date: '2026-08-01', subtotal: 400, amount: 476 },
+            { invoiceId: 'inv-a2', invoiceNumber: '2026-0035', abschlagNumber: 2, date: '2026-09-01', subtotal: 200, amount: 238 },
+          ],
+        }),
+        {
+          prepaymentSettlements: [
+            { invoiceId: 'inv-a1', paid: 476, skonto: 0, settled: true },
+            { invoiceId: 'inv-a2', paid: 238, skonto: 0, settled: true },
+          ],
+        },
+      );
+      expect(result.ok, JSON.stringify(codes(result))).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.totals).toMatchObject({ taxAmount: 190, prepaidAmount: 714, payableAmount: 476 });
+      expect(notizAbzuege(result.value.notes)).toBe(
+        'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 476,00 EUR brutto (netto 400,00 EUR, USt 76,00 EUR); Abschlag 2 (Rechnung 2026-0035 vom 01.09.2026) 238,00 EUR brutto (netto 200,00 EUR, USt 38,00 EUR)',
+      );
+    });
+
+    it('A1b: § 13b — kein Steuerbetrag im Abschlag, die Notiz bleibt ohne Steuerangabe', () => {
+      const result = buildCanonicalEInvoice(
+        invoice({
+          type: 'schluss',
+          taxStatus: 'reverse_charge_13b',
+          subtotal: 1000,
+          amount: 600,
+          legalNotices: ['Steuerschuldnerschaft des Leistungsempfängers gemäß § 13b UStG.'],
+          positions: [line({ quantity: 10, unitPrice: 100, lineTotal: 1000 })],
+          previousAbschlagDeductions: [
+            { invoiceId: 'inv-a1', invoiceNumber: '2026-0031', abschlagNumber: 1, date: '2026-08-01', subtotal: 400, amount: 400 },
+          ],
+        }),
+        { prepaymentSettlements: [{ invoiceId: 'inv-a1', paid: 400, skonto: 0, settled: true }] },
+      );
+      expect(result.ok, JSON.stringify(codes(result))).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.tax[0]).toMatchObject({ category: 'reverse_charge', taxAmount: 0 });
+      expect(notizAbzuege(result.value.notes)).toBe(
+        'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 400,00 EUR brutto',
+      );
+    });
+
+    /*
+     * FC01A-P1-Restkorrektur (#8, Altformat) — Regeländerung: Bisher entstand hier eine E-Rechnung,
+     * deren Notiz die Steuer der Vorauszahlung wegließ. § 14 Abs. 5 Satz 2 UStG verlangt sie; ohne
+     * gespeichertes Netto ist sie bei 19 % nicht verlässlich bestimmbar. Jetzt entsteht kein Beleg.
+     */
+    it('A1c: Altbestand ohne Netto im Abzug bei 19 % — keine geratene Steuer und keine E-Rechnung', () => {
+      const result = buildCanonicalEInvoice(
+        invoice({
+          type: 'schluss',
+          subtotal: 1000,
+          amount: 714,
+          positions: [line({ quantity: 10, unitPrice: 100, lineTotal: 1000 })],
+          previousAbschlagDeductions: [
+            { invoiceId: 'inv-a1', invoiceNumber: '2026-0031', abschlagNumber: 1, date: '2026-08-01', amount: 476 } as never,
+          ],
+        }),
+        { prepaymentSettlements: [{ invoiceId: 'inv-a1', paid: 476, skonto: 0, settled: true }] },
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(codes(result)).toContain('prepayment_net_unreliable');
+    });
+
+    it('A1d: Altbestand ohne Netto im Abzug bei § 13b — Netto = Brutto, die Notiz bleibt ohne Steuerangabe', () => {
+      const result = buildCanonicalEInvoice(
+        invoice({
+          type: 'schluss',
+          taxStatus: 'reverse_charge_13b',
+          subtotal: 1000,
+          amount: 600,
+          legalNotices: ['Steuerschuldnerschaft des Leistungsempfängers gemäß § 13b UStG.'],
+          positions: [line({ quantity: 10, unitPrice: 100, lineTotal: 1000 })],
+          previousAbschlagDeductions: [
+            { invoiceId: 'inv-a1', invoiceNumber: '2026-0031', abschlagNumber: 1, date: '2026-08-01', amount: 400 } as never,
+          ],
+        }),
+        { prepaymentSettlements: [{ invoiceId: 'inv-a1', paid: 400, skonto: 0, settled: true }] },
+      );
+      expect(result.ok, JSON.stringify(codes(result))).toBe(true);
+      if (!result.ok) return;
+      expect(notizAbzuege(result.value.notes)).toBe(
+        'Abzüglich bereits bezahlter Abschläge: Abschlag 1 (Rechnung 2026-0031 vom 01.08.2026) 400,00 EUR brutto',
+      );
     });
   });
 

@@ -28,7 +28,7 @@ import type { AccountingExportOutcome } from '../../services/accounting/accounti
 
 /** FINANZ-CORE-01A (BUH-05) — warum der letzte Export scheiterte, für die Anzeige. */
 export interface AccountingExportFailureView {
-  outcome: 'document_load_failed' | 'blocked' | 'forbidden' | 'export_failed' | 'invalid_month';
+  outcome: 'document_load_failed' | 'blocked' | 'forbidden' | 'export_failed' | 'invalid_month' | 'changed_during_export';
   failed?: ReadonlyArray<{ fileName: string; detail: string }>;
 }
 
@@ -78,6 +78,11 @@ interface Props {
    * Paket würde an ihnen scheitern. Vor dem Klick genannt, mit Weg zur Rechnung.
    */
   pdfProblems?: readonly AccountingExportPdfProblem[];
+  /**
+   * Systemische Gesamtnacharbeit (Produktentscheidung) — erzeugt eine ausdrücklich lokale, als „nicht cloudbestätigt“
+   * gekennzeichnete Übergabe, wenn der Server die gültige Revision (noch) nicht bestätigt hat.
+   */
+  onCreateLocalPackage?: () => Promise<string | null>;
 }
 
 export function AccountingExportPanel({
@@ -87,17 +92,18 @@ export function AccountingExportPanel({
   canExport = true,
   lastResult = null,
   pdfProblems = [],
+  onCreateLocalPackage,
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(lastResult ? lastResult.fileName === null : false);
   const [createdName, setCreatedName] = useState<string | null>(lastResult?.fileName ?? null);
 
-  const handleCreate = async () => {
+  const handleCreate = async (erzeugen: () => Promise<string | null> = onCreatePackage) => {
     if (busy) return;
     setBusy(true);
     setFailed(false);
     try {
-      const name = await onCreatePackage();
+      const name = await erzeugen();
       if (!name) {
         setFailed(true);
         return;
@@ -119,6 +125,14 @@ export function AccountingExportPanel({
         <>
           <p className="detail-hint" data-testid="accounting-export-package-hint">
             {translate('accountingExport.packageHint')}
+          </p>
+          {/* Systemische Gesamtnacharbeit (D1) — welche Revision das Paket verwendet und was der Server dazu sagt. */}
+          <p className="detail-hint" data-testid={`accounting-export-cloud-${readiness.closureStatus ?? 'keiner'}`}>
+            {readiness.closureStatus === 'angenommen'
+              ? translate('accountingExport.cloud.angenommen')
+                  .replace('{revision}', String(readiness.state.activeClosure?.server?.revision ?? ''))
+                  .replace('{datenstand}', String(readiness.state.activeClosure?.server?.datenstand ?? ''))
+              : translate('accountingExport.cloud.lokal')}
           </p>
           <div className="vorgang-dialog__actions">
             <Button
@@ -171,6 +185,8 @@ export function AccountingExportPanel({
                 <p data-testid="accounting-export-failed-blocked">{translate('accountingExport.failure.blocked')}</p>
               ) : lastResult?.failure?.outcome === 'forbidden' ? (
                 <p data-testid="accounting-export-failed-forbidden">{translate('steuerberater.export.forbidden')}</p>
+              ) : lastResult?.failure?.outcome === 'changed_during_export' ? (
+                <p data-testid="accounting-export-failed-changed">{translate('accountingExport.failure.changedDuringExport')}</p>
               ) : null}
             </InlineNotice>
           ) : null}
@@ -187,13 +203,51 @@ export function AccountingExportPanel({
           <ul className="detail-list" data-testid="accounting-export-blockers">
             {readiness.packageBlockers.map((blocker) => (
               <li key={blocker.code} data-testid={`accounting-export-blocker-${blocker.code}`}>
-                {translate(`accountingExport.blocker.${blocker.code}` as TranslationKey).replace(
-                  '{count}',
-                  blocker.detail ?? '',
-                )}
+                {blocker.code === 'closure_not_server_confirmed'
+                  ? translate('accountingExport.blocker.closure_not_server_confirmed').replace(
+                      '{status}',
+                      translate(`accountingPeriod.status.${blocker.detail ?? 'ausstehend'}` as TranslationKey),
+                    )
+                  : translate(`accountingExport.blocker.${blocker.code}` as TranslationKey).replace(
+                      '{count}',
+                      blocker.detail ?? '',
+                    )}
               </li>
             ))}
           </ul>
+          {/*
+            * Systemische Gesamtnacharbeit (Produktentscheidung) — eine ausdrücklich lokale Übergabe bleibt möglich,
+            * sichtbar als „nicht cloudbestätigt“. Sie täuscht keine Serverannahme vor.
+            */}
+          {readiness.localHandoverAllowed && canExport && onCreateLocalPackage ? (
+            <InlineNotice tone="warning" testId="accounting-export-local-handover" title={translate('accountingExport.localHandover.title')}>
+              <p>{translate('accountingExport.localHandover.hint')}</p>
+              <div className="vorgang-dialog__actions">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={busy}
+                  loading={busy}
+                  onClick={() => void handleCreate(onCreateLocalPackage)}
+                  data-testid="accounting-export-local-package"
+                >
+                  {translate('accountingExport.localHandover.action')}
+                </Button>
+              </div>
+              {createdName ? (
+                <p className="detail-hint" data-testid="accounting-export-created">
+                  {createdName}
+                </p>
+              ) : null}
+              {failed ? (
+                <p data-testid="accounting-export-local-failed">
+                  {lastResult?.failure?.outcome === 'changed_during_export'
+                    ? translate('accountingExport.failure.changedDuringExport')
+                    : translate('accountingExport.failed')}
+                </p>
+              ) : null}
+            </InlineNotice>
+          ) : null}
         </>
       )}
 

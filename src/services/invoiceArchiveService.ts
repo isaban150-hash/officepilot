@@ -1,6 +1,5 @@
 import { PAPER_FOLDERS } from '../data/mockData';
 import { addDocument, getDocumentByLinkedInvoiceId } from './documentService';
-import { getTaxRateForStatus } from './invoiceService';
 import { getVorgangById, updateInvoiceArchiveDocumentId } from './vorgangService';
 import type {
   CompanyDocument,
@@ -281,12 +280,6 @@ export async function syncGeneratedInvoiceDocumentToCloud(
 
 export function isFinalizedInvoice(invoice: VorgangInvoice): boolean {
   return invoice.status === 'vorbereitet' || invoice.status === 'versendet';
-}
-
-export function getInvoiceGrossAmount(invoice: VorgangInvoice): number {
-  const taxRate = getTaxRateForStatus(invoice.taxStatus);
-  const taxAmount = invoice.subtotal * (taxRate / 100);
-  return invoice.subtotal + taxAmount;
 }
 
 export function buildPrintTitle(model: InvoicePrintModel): string {

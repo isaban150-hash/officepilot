@@ -27,7 +27,8 @@ import { persistAll } from '../persistenceService';
 import { getAllInvoiceOverview } from '../invoiceOverviewService';
 import { getAllExpenseOverview } from '../expenseOverviewService';
 import { toCents } from '../invoiceMoney';
-import { getSkontoSettlementRemainderCents } from '../invoice/skontoSettlement';
+import { getSkontoFristStatus, getSkontoSettlementRemainderCents } from '../invoice/skontoSettlement';
+import { hasFrozenFinalInvoiceDeduction } from '../invoice/invoiceCancelEligibility';
 import { detectFinancialActionDenial } from '../auth/financialActionDenial';
 import { findRecordedPaymentMatches } from './bankSuggestionService';
 import type { BankRecordedPaymentMatch, BankSuggestionCandidate } from '../../types/bankSuggestion';
@@ -96,6 +97,18 @@ function aktuellerOffenerBetrag(kandidat: BankSuggestionCandidate): number {
   return Math.max(0, toCents(offen));
 }
 
+/** FINANZ-CORE-01A (Feiertage) — hängt das Skonto der Rechnung an einem ungeklärten Feiertag? */
+function skontoUngeklaertFuer(invoiceId: string): boolean {
+  const invoice = getAllInvoiceOverview().find((item) => item.invoice.id === invoiceId)?.invoice;
+  return invoice ? getSkontoFristStatus(invoice).status === 'ungeklaert' : false;
+}
+
+/** FINANZ-CORE-01A (Gesamtnacharbeit INV-03) — Abschlag mit eingefrorener Aufteilung in einer Schlussrechnung? */
+function schlussrechnungHaeltAbschlag(invoiceId: string): boolean {
+  const eintrag = getAllInvoiceOverview().find((item) => item.invoice.id === invoiceId);
+  return eintrag ? hasFrozenFinalInvoiceDeduction(eintrag.vorgangId, eintrag.invoice) : false;
+}
+
 /** FINANZ-CORE-01A (ZAH-04) — der Skonto-Rest der Rechnung zum Buchungstag, frisch gelesen. */
 function skontoRestFuer(invoiceId: string, bookingDate: string): number | null {
   const invoice = getAllInvoiceOverview().find((item) => item.invoice.id === invoiceId)?.invoice;
@@ -134,8 +147,25 @@ export function planBankConfirmation(
     return { ...basis, refusal: 'wrong_direction' };
   }
 
+  /*
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-03) — die Schlussrechnung hat Zahlung und Skonto dieses Abschlags
+   * eingefroren: keine neue Zahlung, auch nicht über den Bankabgleich (Server ebenso).
+   */
+  if (kandidat.targetType === 'invoice' && schlussrechnungHaeltAbschlag(kandidat.targetId)) {
+    return { ...basis, refusal: 'final_invoice_exists' };
+  }
+
   if (openCents <= 0) {
     return { ...basis, refusal: 'nothing_open' };
+  }
+
+  /*
+   * FINANZ-CORE-01A (Feiertage) — steht die Rechnung auf „Skontofrist ungeklärt“, wäre jede weitere
+   * Zahlung je nach Ort geschuldet oder eine Überzahlung. Der Server weist sie ebenso ab
+   * (`invoice_skonto_deadline_unclear`).
+   */
+  if (kandidat.targetType === 'invoice' && skontoUngeklaertFuer(kandidat.targetId)) {
+    return { ...basis, refusal: 'skonto_deadline_unclear' };
   }
 
   /*
@@ -191,6 +221,10 @@ function ausServerzeile(zeile: ServerZuordnung): BankReconciliation | null {
  */
 function deuteFehler(nachricht: string): BankReconciliationRefusal | null {
   if (nachricht.includes('bereits zugeordnet')) return 'already_reconciled';
+  // FINANZ-CORE-01A (Feiertage) — Skontofrist am Sitz des Kunden ungeklärt.
+  if (nachricht.includes('invoice_skonto_deadline_unclear')) return 'skonto_deadline_unclear';
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-03) — Abschlag in einer Schlussrechnung eingefroren.
+  if (nachricht.includes('invoice_payment_final_invoice_exists')) return 'final_invoice_exists';
   if (nachricht.includes('Bankbetrag hoeher')) return 'amount_exceeds_open';
   if (nachricht.includes('Falsche Richtung')) return 'wrong_direction';
   if (nachricht.includes('Kein offener Betrag')) return 'nothing_open';

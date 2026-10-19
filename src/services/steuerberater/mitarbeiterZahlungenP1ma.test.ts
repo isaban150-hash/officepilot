@@ -234,8 +234,12 @@ describe('Steuerberater-Paket', () => {
 });
 
 describe('Fingerprint Version 3 — und keine stille Umdeutung alter Abschlüsse', () => {
-  it('neue Stände entstehen mit Version 3 und enthalten die Mitarbeiterzahlungen', () => {
-    const manifest = buildPeriodManifest(buildMonatsmappeModel(eingabe(OKT, [zahlung()])), [], 'SKR03');
+  it('Version 3 enthält die Mitarbeiterzahlungen (neue Stände: Version 5, ebenso)', () => {
+    // Systemische Gesamtnacharbeit — neue Stände entstehen mit Version 5; sie enthält dieselben Mitarbeiterzahlungen.
+    const neu = buildPeriodManifest(buildMonatsmappeModel(eingabe(OKT, [zahlung()])), [], 'SKR03');
+    expect(neu.fingerprintVersion).toBe(5);
+    const manifest = buildPeriodManifest(buildMonatsmappeModel(eingabe(OKT, [zahlung()])), [], 'SKR03', 3);
+    expect(neu.employeePayments).toEqual(manifest.employeePayments);
     expect(manifest.fingerprintVersion).toBe(3);
     expect(manifest.employeePayments).toEqual([
       { paymentId: 'pay-1', art: 'zahlung', datum: '2026-10-02', betrag: 800, kind: 'wage', method: 'cash', status: 'aktiv' },

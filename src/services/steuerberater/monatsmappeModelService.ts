@@ -40,6 +40,8 @@ import { negateMoney, resolveCorrectionIssueDate } from '../invoice/invoiceCorre
 import { fromCents, sumCents, toCents } from '../invoiceMoney';
 import { getTaxRateForStatus } from '../invoiceTaxService';
 import { usesAbschlagDeductions } from '../invoiceTypeService';
+import { reliableDeductionNetCents } from '../invoice/abschlagSkontoSplit';
+import { resolveInvoiceNet, resolvedInvoiceNet } from '../invoice/invoiceNetResolution';
 import { toBusinessDay } from '../businessDateService';
 
 export type MonatsmappeBelegart = 'ausgangsrechnung' | 'eingangsbeleg' | 'rechnungsstorno' | 'ausgabenstorno';
@@ -61,8 +63,12 @@ export interface MonatsmappeBeleg {
   belegnummer: string;
   datum: string;
   gegenpartei: string;
-  netto: number;
-  steuer: number;
+  /**
+   * FC01A-P1-Restkorrektur (lokaler Altbestand) — `null`, wenn Netto und Steuer einer Ausgangsrechnung
+   * ungeklärt sind (`resolveInvoiceNet`): leer statt geschätzt, mit Prüfhinweis. Nur das Brutto steht fest.
+   */
+  netto: number | null;
+  steuer: number | null;
   brutto: number;
   status: MonatsmappeBelegStatus;
   zahlungsstatus: string;
@@ -132,6 +138,19 @@ export interface MonatsmappeZahlung {
   nachweisTitel?: string;
   /** Dateiname im Paket — nur wenn eine Datei wirklich mitgeliefert wird. */
   nachweisDatei?: string;
+  /**
+   * FC01A-Nacharbeit (A5) — diese Zahlung gleicht die Ausgangsrechnung per fristgerechtem Skonto
+   * aus; der Abzug (Entgeltminderung, § 17 UStG) steht im Monat dieser Zahlung. Bisher stand er nur
+   * am Beleg zum Monatsende des Belegmonats — kam die Skontozahlung im Folgemonat, stand er in keinem
+   * Paket.
+   *
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-05) — Skonto deckt höchstens die Lücke zum Rechnungsbetrag.
+   * Zahlt der Kunde nach dem Skontoausgleich weiter, sinkt das wirksame Skonto; die spätere Zahlung trägt
+   * diese Rücknahme als negativen Abzug im Monat ihres Eingangs. Frühere Monate bleiben unverändert, und
+   * Zahlungen plus Skonto übersteigen nie den Rechnungsbetrag (keine doppelte Entgeltminderung).
+   * Seit Abschlussfassung 4 Teil des Fingerprints (accountingPeriodFingerprint).
+   */
+  skontoAbzug?: number;
 }
 
 /**
@@ -322,6 +341,41 @@ function invoiceAsOf(invoice: VorgangInvoice, monthEnd: string, cancelledAsOf: b
   return { ...invoice, payments, cancelledAt: undefined, paymentStatus: undefined };
 }
 
+/**
+ * FC01A-Nacharbeit (A5) — der Skontoabzug gehört zu der Zahlung, die die Rechnung per
+ * fristgerechtem Skonto ausgleicht: vorher offen, mit ihr ausgeglichen, gezahlt weniger als
+ * berechnet (dieselbe Skontoregel wie überall, `calculatePaymentSummary`). Eine volle Zahlung, eine
+ * Teilzahlung oder eine verspätete Zahlung trägt keinen.
+ *
+ * FINANZ-CORE-01A (Gesamtnacharbeit INV-05) — allgemein: jede Zahlung trägt, um wie viel sich das
+ * wirksame Skonto mit ihr ändert. Wirksam ist nach dem Ausgleich höchstens die Lücke zum
+ * Rechnungsbetrag (`max(0, Betrag − gezahlt)`, wie die Schlussrechnung auf dem Server). Die
+ * ausgleichende Zahlung trägt also +Skonto, eine spätere Zahlung die Rücknahme (negativ) — in ihrem
+ * eigenen Monat, ohne den früheren zu ändern.
+ */
+function skontoAbzugDurchZahlung(invoice: VorgangInvoice, payment: InvoicePayment): number {
+  const tag = payment.date.slice(0, 10);
+  if (isInvoiceCancelledAsOf(invoice, monthEndOf(monthKeyOf(tag)))) return 0;
+  /*
+   * Systemische Gesamtnacharbeit (SYS-01) — gleichtägige Zahlungen nach Kennung in Bytefolge, wie der Server
+   * (`collate "C"`), der denselben Skontoabzug für den Monatsabschluss nachrechnet. `localeCompare` ordnete
+   * Groß-/Kleinschreibung und Sonderzeichen anders.
+   */
+  const bytefolge = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+  const geordnet = [...getInvoicePayments(invoice)].sort(
+    (a, b) => bytefolge(a.date.slice(0, 10), b.date.slice(0, 10)) || bytefolge(a.id, b.id),
+  );
+  const index = geordnet.findIndex((entry) => entry.id === payment.id);
+  if (index < 0) return 0;
+  const betragCents = toCents(Number(invoice.amount ?? 0));
+  const wirksamesSkontoCents = (payments: InvoicePayment[]): number => {
+    const stand = calculatePaymentSummary({ ...invoice, payments, cancelledAt: undefined, paymentStatus: undefined }, tag);
+    if (stand.openAmount > 0 || stand.paidAmount <= 0) return 0;
+    return Math.max(0, betragCents - toCents(stand.paidAmount));
+  };
+  return fromCents(wirksamesSkontoCents(geordnet.slice(0, index + 1)) - wirksamesSkontoCents(geordnet.slice(0, index)));
+}
+
 function isInvoiceCancelledAsOf(invoice: VorgangInvoice, monthEnd: string): boolean {
   const stornoDatum = resolveInvoiceStornoDatum(invoice);
   return Boolean(stornoDatum) && stornoDatum! <= monthEnd;
@@ -338,31 +392,69 @@ function isInvoiceCancelledAsOf(invoice: VorgangInvoice, monthEnd: string): bool
  * der Abschläge, beides aus deren eigenen Belegen. Über alle Belege eines
  * Auftrags ergeben sich so genau einmal Umsatz und Umsatzsteuer.
  */
-function invoiceBookingAmounts(invoice: VorgangInvoice): { netto: number; steuer: number; brutto: number } {
+function invoiceBookingAmounts(invoice: VorgangInvoice): { netto: number | null; steuer: number | null; brutto: number } {
   const brutto = Number(invoice.amount ?? 0);
+  /*
+   * FC01A-P1-Restkorrektur (lokaler Altbestand) — das Netto nur aus verlässlichen, eingefrorenen
+   * Angaben (`resolveInvoiceNet`). Bisher stand ein Altabschlag ohne Netto hier mit 476,00 netto /
+   * 0,00 Steuer / 476,00 brutto. Ungeklärt bleiben Netto und Steuer leer (`netUnresolvedHint`).
+   */
+  const net = resolveInvoiceNet(invoice);
+  if (!net.ok) return { netto: null, steuer: null, brutto };
   const deductions = usesAbschlagDeductions(invoice.type) ? (invoice.previousAbschlagDeductions ?? []) : [];
   if (deductions.length === 0) {
-    const netto = Number(invoice.subtotal ?? 0);
+    const netto = fromCents(net.netCents);
     return { netto, steuer: Math.round((brutto - netto) * 100) / 100, brutto };
   }
   const bruttoCents = toCents(brutto);
-  if (deductions.every((entry) => Number.isFinite(entry.subtotal))) {
-    const nettoCents = toCents(Number(invoice.subtotal ?? 0)) - sumCents(deductions.map((entry) => toCents(entry.subtotal)));
+  const rate = getTaxRateForStatus(invoice.taxStatus);
+  /*
+   * FC01A-P1-Restkorrektur (#8, Altformat) — das Netto der Abzüge nur, wenn es feststeht
+   * (dieselbe Regel wie PDF und E-Rechnung): gespeichert und zum Satz passend, oder ohne
+   * Umsatzsteuer gleich dem Brutto. Sonst die Ersatzrechnung darunter, mit Prüfhinweis
+   * (`finalInvoiceDeductionHint`).
+   */
+  const deductionNetCents = deductions.map((entry) => reliableDeductionNetCents(entry, rate));
+  if (deductionNetCents.every((cents): cents is number => cents !== null)) {
+    const nettoCents = net.netCents - sumCents(deductionNetCents);
     return { netto: fromCents(nettoCents), steuer: fromCents(bruttoCents - nettoCents), brutto };
   }
-  // Altbestand ohne Netto im Abzug: die Steuer des Rests über den Satz der Rechnung.
-  const rate = getTaxRateForStatus(invoice.taxStatus);
+  // Altbestand ohne verlässliches Netto im Abzug: die Steuer des Rests über den Satz der Rechnung.
   const steuerCents = rate > 0 ? Math.round((bruttoCents * rate) / (100 + rate)) : 0;
   return { netto: fromCents(bruttoCents - steuerCents), steuer: fromCents(steuerCents), brutto };
+}
+
+/**
+ * FC01A-P1-Restkorrektur (lokaler Altbestand) — Hinweis zu einer Ausgangsrechnung mit ungeklärtem
+ * Netto: was fehlt, dass nichts geschätzt ist und wie berichtigt wird.
+ */
+export const NET_UNRESOLVED_HINT =
+  'Bitte prüfen: Netto und Umsatzsteuer dieser Altrechnung sind nicht verlässlich gespeichert und lassen sich aus den eingefrorenen Rechnungsdaten nicht sicher ermitteln; sie sind deshalb leer, nicht geschätzt. Maßgeblich ist die ursprünglich versendete Rechnung; ist sie fehlerhaft, ist eine Rechnungskorrektur mit Bezug auf diese Rechnungsnummer nötig.';
+
+function netUnresolvedHint(invoice: VorgangInvoice): string | undefined {
+  return resolveInvoiceNet(invoice).ok ? undefined : NET_UNRESOLVED_HINT;
+}
+
+function joinHints(...hints: Array<string | undefined>): string | undefined {
+  const present = hints.filter((hint): hint is string => Boolean(hint));
+  return present.length > 0 ? present.join('. ') : undefined;
 }
 
 /** FINANZ-CORE-01A (BUH-01) — Hinweis für den Steuerberater: Gesamtleistung und Abzug. */
 function finalInvoiceDeductionHint(invoice: VorgangInvoice): string | undefined {
   const deductions = usesAbschlagDeductions(invoice.type) ? (invoice.previousAbschlagDeductions ?? []) : [];
   if (deductions.length === 0) return undefined;
+  const net = resolvedInvoiceNet(invoice);
+  // FC01A-P1-Restkorrektur (lokaler Altbestand) — ohne verlässliches Netto steht `NET_UNRESOLVED_HINT`.
+  if (net === null) return undefined;
   const nummern = deductions.map((entry) => entry.invoiceNumber).filter(Boolean).join(', ');
-  const netto = Number(invoice.subtotal ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `Schlussrechnung über netto ${netto} €; gebucht ist der Rest nach Abzug der Abschläge ${nummern}`;
+  const netto = net.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const hinweis = `Schlussrechnung über netto ${netto} €; gebucht ist der Rest nach Abzug der Abschläge ${nummern}`;
+  // FC01A-P1-Restkorrektur (#8, Altformat) — die Ersatzrechnung ist kenntlich, nie still.
+  const rate = getTaxRateForStatus(invoice.taxStatus);
+  return deductions.every((entry) => reliableDeductionNetCents(entry, rate) !== null)
+    ? hinweis
+    : `${hinweis}. Bitte prüfen: Netto/USt eines Abschlags sind nicht verlässlich gespeichert (Altformat); die Steuer des Rests ist über den Steuersatz ermittelt.`;
 }
 
 /** FINANZ-CORE-01A (BUH-10) — Leistungszeitraum, wie der Beleg ihn trägt. */
@@ -381,8 +473,14 @@ function buildInvoiceBeleg(invoice: VorgangInvoice): MonatsmappeBeleg {
   const summary = calculatePaymentSummary(invoiceAsOf(invoice, monthEnd, cancelled), monthEnd);
   const { netto, steuer, brutto } = invoiceBookingAmounts(invoice);
   const base = `${safeFileNamePart(invoice.number)}_${shortId(invoice.id)}`;
+  /*
+   * FC01A-P1-Restkorrektur (lokaler Altbestand) — ohne verlässliches Netto entsteht kein PDF
+   * (`invoice_net_unresolved`); der Beleg steht als fehlendes Dokument im Paket, damit der Monat
+   * übergeben werden kann und das Original aus der eigenen Ablage beigelegt wird.
+   */
+  const netResolved = netto !== null && steuer !== null;
   // Die Korrektur-PDF gehoert in die Periode des Stornos (siehe buildInvoiceStornoBeleg).
-  const documents: MonatsmappeDocumentSource[] = [{ kind: 'invoice_pdf', fileName: `${base}.pdf` }];
+  const documents: MonatsmappeDocumentSource[] = netResolved ? [{ kind: 'invoice_pdf', fileName: `${base}.pdf` }] : [];
   const stornoDatum = resolveInvoiceStornoDatum(invoice);
   const leistungszeitraum = invoiceLeistungszeitraum(invoice);
   /*
@@ -405,13 +503,16 @@ function buildInvoiceBeleg(invoice: VorgangInvoice): MonatsmappeBeleg {
     status: cancelled ? 'storniert' : 'aktiv',
     zahlungsstatus: cancelled ? 'storniert' : summary.status,
     zahlungssumme: cancelled ? 0 : summary.paidAmount,
-    documentStatus: 'generated',
+    documentStatus: netResolved ? 'generated' : 'missing',
     documents,
-    hinweis: cancelled
-      ? invoice.cancellationKind === 'correction'
-        ? `Storniert am ${stornoDatum}, Korrektur ${invoice.correctionNumber ?? `zu ${invoice.number}`}`
-        : `Storniert am ${stornoDatum}`
-      : finalInvoiceDeductionHint(invoice),
+    hinweis: joinHints(
+      cancelled
+        ? invoice.cancellationKind === 'correction'
+          ? `Storniert am ${stornoDatum}, Korrektur ${invoice.correctionNumber ?? `zu ${invoice.number}`}`
+          : `Storniert am ${stornoDatum}`
+        : finalInvoiceDeductionHint(invoice),
+      netUnresolvedHint(invoice),
+    ),
     offenerBetrag: cancelled ? 0 : summary.openAmount,
     ...(!cancelled && stornoDatum ? { spaeterStorniertAm: stornoDatum } : {}),
     ...(leistungszeitraum ? { leistungszeitraum } : {}),
@@ -435,7 +536,8 @@ function buildInvoiceStornoBeleg(invoice: VorgangInvoice, stornoDatum: string): 
   const correctionLabel = invoice.correctionNumber ?? `Korrektur-${invoice.number}`;
   // FINANZ-CORE-01A (BUH-01) — dieselben Buchungsbeträge wie der Originalbeleg, nur negiert.
   const original = invoiceBookingAmounts(invoice);
-  const netto = negateMoney(original.netto);
+  // FC01A-P1-Restkorrektur (lokaler Altbestand) — ungeklärt bleibt ungeklärt, auch in der Gegenbuchung.
+  const netto = original.netto === null ? null : negateMoney(original.netto);
   const brutto = negateMoney(original.brutto);
   const base = `${safeFileNamePart(invoice.number)}_${shortId(invoice.id)}`;
   return {
@@ -445,14 +547,18 @@ function buildInvoiceStornoBeleg(invoice: VorgangInvoice, stornoDatum: string): 
     datum: stornoDatum,
     gegenpartei: invoiceGegenpartei(invoice),
     netto,
-    steuer: Math.round((brutto - netto) * 100) / 100,
+    steuer: netto === null ? null : Math.round((brutto - netto) * 100) / 100,
     brutto,
     status: 'storno',
     zahlungsstatus: 'storniert',
     zahlungssumme: 0,
-    documentStatus: isCorrection ? 'generated' : 'none',
-    documents: isCorrection ? [{ kind: 'invoice_correction_pdf', fileName: `Korrektur_zu_${base}.pdf` }] : [],
-    hinweis: isCorrection
+    // FC01A-P1-Restkorrektur (lokaler Altbestand) — auch die Korrektur-PDF braucht ein verlässliches Netto.
+    documentStatus: isCorrection ? (netto === null ? 'missing' : 'generated') : 'none',
+    documents:
+      isCorrection && netto !== null
+        ? [{ kind: 'invoice_correction_pdf', fileName: `Korrektur_zu_${base}.pdf` }]
+        : [],
+    hinweis: joinHints(isCorrection
       ? `Rechnungskorrektur zu ${invoice.number} vom ${resolveInvoiceBelegDatum(invoice)}`
       : invoice.cancellationKind === 'internal'
         ? `Interner Storno zu ${invoice.number} vom ${resolveInvoiceBelegDatum(invoice)} (kein Korrekturbeleg)`
@@ -461,6 +567,7 @@ function buildInvoiceStornoBeleg(invoice: VorgangInvoice, stornoDatum: string): 
            * ausgeben: Die Rechnung kann versendet gewesen sein.
            */
           `Storno zu ${invoice.number} vom ${resolveInvoiceBelegDatum(invoice)} (Altbestand, Art nicht erfasst – bitte prüfen, ob ein Korrekturbeleg nötig ist)`,
+      netUnresolvedHint(invoice)),
     ...(invoice.taxStatus ? { steuerstatus: invoice.taxStatus } : {}),
   };
 }
@@ -785,11 +892,13 @@ export function buildMonatsmappeModel(input: MonatsmappeInput): MonatsmappeModel
        * ein Weg es setzt, genügt hier derselbe Aufruf wie unten.
        */
       const { anzeige } = resolveZahlungsnachweis(undefined, payment.id, input);
+      const skontoAbzug = skontoAbzugDurchZahlung(invoice, payment);
       zahlungenAusgang.push({
         belegart: 'ausgangsrechnung', belegId: invoice.id, belegnummer: invoice.number, zahlungId: payment.id,
         datum: payment.date.slice(0, 10), betrag: payment.amount, referenz: payment.reference ?? '', gegenpartei: invoiceGegenpartei(invoice),
         ...(payment.method ? { zahlungsart: payment.method } : {}),
         ...anzeige,
+        ...(skontoAbzug !== 0 ? { skontoAbzug } : {}),
       });
     }
   }
@@ -960,7 +1069,8 @@ export function buildUebersichtCsv(model: MonatsmappeModel): string {
   for (const beleg of [...model.ausgangsrechnungen, ...model.eingangsbelege, ...model.stornos]) {
     lines.push(csvLine([
       BELEGART_LABEL[beleg.belegart], beleg.id, beleg.belegnummer, beleg.datum, beleg.gegenpartei,
-      beleg.netto, beleg.steuer, beleg.brutto, beleg.status, beleg.zahlungsstatus, beleg.zahlungssumme,
+      // FC01A-P1-Restkorrektur (lokaler Altbestand) — ungeklärt: leer, der Hinweis sagt warum.
+      beleg.netto ?? '', beleg.steuer ?? '', beleg.brutto, beleg.status, beleg.zahlungsstatus, beleg.zahlungssumme,
       beleg.documentStatus === 'missing' ? 'nein' : beleg.documentStatus === 'none' ? 'kein Beleg' : 'ja',
       beleg.documents.map((d) => `${BELEGART_FOLDER[beleg.belegart]}/${d.fileName}`).join(' | '),
       beleg.hinweis ?? '',
@@ -975,9 +1085,10 @@ export function buildZahlungenCsv(model: MonatsmappeModel): string {
    * eingeschoben: Wer die Datei schon einliest, soll seine Spaltenzählung
    * behalten.
    */
+  // FC01A-Nacharbeit (A5) — „Skontoabzug" ebenfalls am Ende angehängt.
   const lines = [csvLine([
     'Belegart', 'Beleg-ID', 'Belegnummer', 'Zahlungs-ID', 'Zahlungsdatum', 'Betrag', 'Referenz', 'Gegenpartei', 'Zahlungsart',
-    'Zahlungsnachweis', 'Nachweisdokument', 'Nachweisdatei',
+    'Zahlungsnachweis', 'Nachweisdokument', 'Nachweisdatei', 'Skontoabzug',
   ])];
   for (const zahlung of [...model.zahlungenAusgang, ...model.zahlungenEingang]) {
     lines.push(csvLine([
@@ -986,6 +1097,7 @@ export function buildZahlungenCsv(model: MonatsmappeModel): string {
       NACHWEIS_LABEL[zahlung.nachweisStatus],
       zahlung.nachweisTitel ?? '',
       zahlung.nachweisDatei ? `${NACHWEIS_FOLDER}/${zahlung.nachweisDatei}` : '',
+      zahlung.skontoAbzug ? zahlung.skontoAbzug : '',
     ]));
   }
   return `﻿${lines.join('\r\n')}\r\n`;

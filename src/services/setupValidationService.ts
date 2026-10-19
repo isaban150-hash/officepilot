@@ -226,7 +226,8 @@ function mergeSkontoErrors(
   const percent = profile.skontoPercent ?? 0;
   const days = profile.skontoDays ?? 0;
 
-  if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
+  // FINANZ-CORE-01A (Gesamtabschluss) — 100 % wäre ein Erlass, kein Skonto (Client und Server lesen es nicht als Skonto).
+  if (!Number.isFinite(percent) || percent <= 0 || percent >= 100) {
     errors.skontoPercent = 'companyProfile.skontoPercentInvalid';
   }
   if (!Number.isFinite(days) || days <= 0) {

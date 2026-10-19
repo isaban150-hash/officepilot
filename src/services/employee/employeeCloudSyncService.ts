@@ -24,6 +24,7 @@ import { getSupabaseClient } from '../../lib/supabase';
 import { WorkspaceCloudError } from '../workspace/workspaceCloudService';
 import { isFinancialActionDenial } from '../auth/financialActionDenial';
 import { normalizeEmployee, normalizeEmployeePayment } from './employeeStore';
+import { requirePullLists } from '../sync/pullResponseGuard';
 
 export const EMPLOYEE_SYNC_ENTITY_TYPES: readonly SyncEntityType[] = ['employee', 'employee_payment'];
 
@@ -234,9 +235,11 @@ export async function rpcPullWorkspaceEmployeeData(
     p_workspace_id: workspaceId,
   });
   if (error) throw classify(error);
+  // Systemische Gesamtnacharbeit (D6) — eine fehlende Liste ist ein unvollständiger Abzug, kein leerer Bestand.
+  const listen = requirePullLists('pull_workspace_employee_data', data, ['employees', 'payments'] as const);
   return {
-    employees: (data?.employees as CloudEmployeeRow[] | null) ?? [],
-    payments: (data?.payments as CloudEmployeePaymentRow[] | null) ?? [],
+    employees: listen.employees as CloudEmployeeRow[],
+    payments: listen.payments as CloudEmployeePaymentRow[],
   };
 }
 

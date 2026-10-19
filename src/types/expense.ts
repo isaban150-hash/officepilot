@@ -74,6 +74,65 @@ export interface ExpensePayment {
    */
   proofDocumentId?: string;
   createdAt: string;
+  /**
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-08) — der Nutzer hat diese Zahlung ausdrücklich als
+   * Überzahlung bestätigt. Die Bestätigung reist mit an den Server (`p_overpayment_acknowledged`); ohne
+   * sie weist der Server eine Zahlung über den offenen Betrag ab, auch für einen alten Client.
+   */
+  overpaymentAcknowledged?: boolean;
+}
+
+/**
+ * FINANZ-CORE-01A (Restnacharbeit END18-R3) — eine Zahlung, die der Server endgültig abgewiesen hat und
+ * die er nachweislich nicht kennt. Sie zählt nirgends (Saldo, offene Posten, Monatsmappe, Export,
+ * Abschluss), bleibt aber als Nachweis sichtbar: keine stille Löschung, kein automatischer neuer Versuch.
+ */
+export interface RejectedExpensePayment extends ExpensePayment {
+  /** Wann der Abgleich die Abweisung festgestellt hat. */
+  rejectedAt: string;
+  /** Die Serverbegründung des endgültig abgewiesenen Auftrags. */
+  reason: string;
+  /** Der Auftrag, der abgewiesen wurde (Nachweis im Sync-Protokoll). */
+  outboxId: string;
+}
+
+/** Welche lokale Belegänderung der Server endgültig abgewiesen hat. */
+export type RejectedExpenseChangeKind = 'update' | 'cancel' | 'delete' | 'create' | 'payment_reverse';
+
+/**
+ * FINANZ-CORE-01A (Restnacharbeit END18-R3) — eine lokale Belegänderung, die der Server endgültig
+ * abgewiesen hat. Der Beleg trägt danach wieder den Serverstand; festgehalten wird, was versucht wurde.
+ */
+export interface RejectedExpenseChange {
+  outboxId: string;
+  kind: RejectedExpenseChangeKind;
+  reason: string;
+  rejectedAt: string;
+  /** Die abgewiesenen Werte (nur Geld und Zustand), zur Anzeige. */
+  attempted?: {
+    grossAmount?: number;
+    netAmount?: number;
+    taxAmount?: number;
+    status?: ExpenseStatus;
+    deleted?: boolean;
+  };
+  /** Bei `payment_reverse`: die Zahlung, deren Rücknahme abgewiesen wurde. */
+  paymentId?: string;
+}
+
+/**
+ * FINANZ-CORE-01A (Bericht 20, END19-R1/R2) — eine endgültige Abweisung, die ein vollständiger Abzug ohne
+ * sichtbare Wirkung geklärt hat: Der Server kannte die Zahlung bereits (angenommen, nur ein späterer Schritt
+ * oder die Wiederholung wurde abgewiesen) oder es gab nichts zurückzunehmen (abgewiesene Rücknahme einer dem
+ * Server unbekannten bzw. dort schon stornierten Zahlung). Mit `rejectedPayments`/`rejectedChanges` ist so jede
+ * endgültige Abweisung nach dem Abgleich belegt; vorher sperrt sie den Monatsabschluss.
+ */
+export interface ReconciledExpenseRejection {
+  outboxId: string;
+  outcome: 'server_confirmed' | 'nothing_to_undo';
+  reason: string;
+  reconciledAt: string;
+  paymentId?: string;
 }
 
 export interface ExpensePaymentInput {
@@ -143,6 +202,12 @@ export interface Expense {
   currency: string;
   paymentStatus: ExpensePaymentStatus;
   payments?: ExpensePayment[];
+  /** END18-R3 — endgültig abgewiesene, dem Server unbekannte Zahlungen; zählen nirgends. */
+  rejectedPayments?: RejectedExpensePayment[];
+  /** END18-R3 — endgültig abgewiesene Belegänderungen; der Beleg trägt den Serverstand. */
+  rejectedChanges?: RejectedExpenseChange[];
+  /** Bericht 20 — endgültige Abweisungen, die der Abgleich ohne sichtbare Wirkung geklärt hat (lokaler Nachweis). */
+  reconciledRejections?: ReconciledExpenseRejection[];
   positions: ExpenseLine[];
   allocations: ExpenseAllocation[];
   linkedInboxId?: string;

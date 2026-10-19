@@ -171,6 +171,13 @@ export interface SyncOutboxEntry {
   operation: SyncOutboxOperation;
   version: number;
   queuedAt: string;
+  /**
+   * FINANZ-CORE-01A (WEISS B21-C1) — laufende Einreihungsnummer dieses Geräts: Jede Einreihung (neu oder
+   * zusammengeführt) erhält eine höhere Nummer als alle Aufträge der Warteschlange. Sie bestimmt eindeutig den
+   * jüngsten Auftrag einer Entität — `queuedAt` hat nur Millisekunden, und die Position ändert sich beim Zusammenführen
+   * eines Sync-Laufs (`syncOutboxOrder.ts`). Fehlt bei Altbestand.
+   */
+  sequence?: number;
   retryCount: number;
   status: SyncOutboxStatus;
   blockedReason?: string;
@@ -204,6 +211,13 @@ export interface SyncOutboxEntry {
   lastErrorAt?: string;
   /** Ob ein erneuter Versuch überhaupt Aussicht auf Erfolg hat. */
   lastErrorRetryable?: boolean;
+  /**
+   * FINANZ-CORE-01A (Bericht 20) — die Buchungsmonate (`YYYY-MM`), die dieser Auftrag berührt: der alte und der
+   * neue Monat einer Datumsänderung, der Monat einer Zahlung oder Rücknahme. Der Monatsabschluss sperrt jeden
+   * dieser Monate, solange der Auftrag nicht bestätigt ist — auch wenn die lokale Fassung den alten Monat schon
+   * verlassen hat. Wird beim Zusammenführen vereinigt, nie verkleinert.
+   */
+  affectedMonths?: string[];
 }
 
 export interface SyncableEntity {

@@ -14,14 +14,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AppPersistedState } from '../../types/models';
 import { checkExpenseMoneyIntegrity } from './expenseMoneyIntegrity';
-import type { Expense, ExpensePayment } from '../../types/expense';
+import type { Expense, ExpensePayment, ReconciledExpenseRejection, RejectedExpenseChange, RejectedExpensePayment } from '../../types/expense';
 import type { SyncEntityType, SyncMeta, SyncOutboxEntry } from '../../types/sync';
 import { getSupabaseClient } from '../../lib/supabase';
 import { WorkspaceCloudError } from '../workspace/workspaceCloudService';
 import { isFinancialActionDenial } from '../auth/financialActionDenial';
+import { isFinalBusinessRejectionMessage, isFinallyDeniedOutboxEntry } from '../sync/syncRoleDenial';
+import { newestOutboxEntriesByEntity } from '../sync/syncOutboxOrder';
 import { calculateExpensePaymentSummary } from '../expensePaymentCalculations';
 import { normalizeExpense } from '../expenseNormalize';
 import { normalizePaymentMethod } from '../../types/models';
+import { requirePullLists } from '../sync/pullResponseGuard';
 
 export const EXPENSE_SYNC_ENTITY_TYPES: readonly SyncEntityType[] = ['expense', 'expense_payment'];
 
@@ -63,8 +66,17 @@ export interface ExpensePaymentSyncEntity {
 // ---------------------------------------------------------------------------
 
 function stripPaymentFields(expense: Expense): Record<string, unknown> {
-  const { payments: _payments, paymentStatus: _status, sync: _sync, updatedAt: _updatedAt, ...rest } =
-    expense as unknown as Record<string, unknown>;
+  const {
+    payments: _payments,
+    paymentStatus: _status,
+    sync: _sync,
+    updatedAt: _updatedAt,
+    // END18-R3 — Nachweise abgewiesener Aktionen sind lokale Protokollangaben, kein Belegstand.
+    rejectedPayments: _rejectedPayments,
+    rejectedChanges: _rejectedChanges,
+    reconciledRejections: _reconciledRejections,
+    ...rest
+  } = expense as unknown as Record<string, unknown>;
   return rest;
 }
 
@@ -127,6 +139,119 @@ export interface ExpenseMergeContext {
   workspaceId: string;
   /** `expense:<id>` mit lokal noch nicht gepushten Aenderungen. */
   dirty: ReadonlySet<string>;
+  /**
+   * FINANZ-CORE-01A (END18-R3) — `expense:<id>` bzw. `expense_payment:<expenseId|paymentId>`, deren
+   * jüngster Auftrag endgültig abgewiesen ist (`collectRejectedExpenseEntries`). Für sie gilt der
+   * Serverstand dieses vollständigen Abzugs; die abgewiesene lokale Wirkung wird als Nachweis abgelegt.
+   */
+  rejected?: ReadonlyMap<string, SyncOutboxEntry>;
+  /** Zeitpunkt der Feststellung (Tests); Standard: jetzt. */
+  now?: string;
+}
+
+/**
+ * FINANZ-CORE-01A (END18-R3) — Ausgabenaufträge, deren **jüngster** Auftrag je Entität endgültig
+ * abgewiesen ist (fachliche Abweisung oder Rollenabweisung, Endstatus `failed`). Ein späterer bewusster
+ * Auftrag derselben Entität löst die Abweisung ab (`enqueueSyncOutbox`) und hebt sie hier auf.
+ * Netzfehler (`error`), Konflikte (`blocked`) und ausstehende Aufträge zählen nicht dazu.
+ */
+export function collectRejectedExpenseEntries(outbox: readonly SyncOutboxEntry[] | undefined): Map<string, SyncOutboxEntry> {
+  /*
+   * FINANZ-CORE-01A (WEISS B21-C1) — „jüngster Auftrag“ eindeutig nach `syncOutboxOrder.ts`: Einreihungsnummer, sonst
+   * Zeit, Altbestand mit gleicher Zeit fail-closed. Bisher gewann bei gleicher Millisekunde der in der Warteschlange
+   * hintere Auftrag — die Warteschlange führt Neues vorn, also der ältere: Eine endgültig abgewiesene Zahlungsrücknahme
+   * verschwand hinter ihrem erledigten Erstellauftrag aus der Abschlusskontrolle.
+   */
+  const newest = newestOutboxEntriesByEntity(outbox, (entry) => entry.entityType === 'expense' || entry.entityType === 'expense_payment');
+  const rejected = new Map<string, SyncOutboxEntry>();
+  for (const [key, entry] of newest) {
+    if (isFinallyDeniedOutboxEntry(entry)) rejected.set(key, entry);
+  }
+  return rejected;
+}
+
+const REJECTION_FALLBACK = 'Vom Server endgültig abgewiesen';
+
+function rejectionReason(entry: SyncOutboxEntry): string {
+  return entry.lastErrorMessage?.trim() || REJECTION_FALLBACK;
+}
+
+function rejectionAt(entry: SyncOutboxEntry, now: string | undefined): string {
+  return entry.lastErrorAt ?? now ?? new Date().toISOString();
+}
+
+/** Der Serverstand einer Ausgabe; lokal bleiben nur Zahlungsprojektion und Nachweise. */
+function restoreFromServerRow(row: CloudExpenseRow, local: Expense | undefined, context: ExpenseMergeContext): Expense {
+  const lokal = local
+    ? ({
+        id: local.id,
+        payments: local.payments,
+        paymentStatus: local.paymentStatus,
+        ...(local.rejectedPayments ? { rejectedPayments: local.rejectedPayments } : {}),
+        ...(local.rejectedChanges ? { rejectedChanges: local.rejectedChanges } : {}),
+        ...(local.reconciledRejections ? { reconciledRejections: local.reconciledRejections } : {}),
+      } as Expense)
+    : undefined;
+  return mapCloudExpenseRow(row, lokal, context);
+}
+
+function describeRejectedChange(
+  attempted: Expense | undefined,
+  restored: Expense | undefined,
+  entry: SyncOutboxEntry,
+  now: string | undefined,
+): RejectedExpenseChange {
+  const deleted = entry.operation === 'delete' || attempted?.sync?.deleted === true;
+  const kind: RejectedExpenseChange['kind'] = deleted
+    ? 'delete'
+    : !restored
+      ? 'create'
+      : attempted?.status === 'storniert' && restored.status !== 'storniert'
+        ? 'cancel'
+        : 'update';
+  return {
+    outboxId: entry.id,
+    kind,
+    reason: rejectionReason(entry),
+    rejectedAt: rejectionAt(entry, now),
+    ...(attempted
+      ? {
+          attempted: {
+            grossAmount: attempted.grossAmount,
+            netAmount: attempted.netAmount,
+            taxAmount: attempted.taxAmount,
+            status: attempted.status,
+            ...(deleted ? { deleted: true } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+function withRejectedChange(expense: Expense, change: RejectedExpenseChange): Expense {
+  if ((expense.rejectedChanges ?? []).some((known) => known.outboxId === change.outboxId)) return expense;
+  return { ...expense, rejectedChanges: [...(expense.rejectedChanges ?? []), change] };
+}
+
+/** Bericht 20 — Abgleichsnachweis ohne sichtbare Wirkung (idempotent je Auftragskennung). */
+function withReconciledRejection(expense: Expense, record: ReconciledExpenseRejection): Expense {
+  if ((expense.reconciledRejections ?? []).some((known) => known.outboxId === record.outboxId)) return expense;
+  return { ...expense, reconciledRejections: [...(expense.reconciledRejections ?? []), record] };
+}
+
+function reconciledRecord(
+  entry: SyncOutboxEntry,
+  outcome: ReconciledExpenseRejection['outcome'],
+  now: string | undefined,
+  paymentId?: string,
+): ReconciledExpenseRejection {
+  return {
+    outboxId: entry.id,
+    outcome,
+    reason: rejectionReason(entry),
+    reconciledAt: now ?? new Date().toISOString(),
+    ...(paymentId ? { paymentId } : {}),
+  };
 }
 
 export function collectDirtyExpenseKeys(outbox: SyncOutboxEntry[] | undefined): Set<string> {
@@ -193,9 +318,26 @@ export function mergeExpensesFromPull(local: Expense[], pull: ExpenseCloudPull, 
   const byId = new Map(local.map((expense) => [expense.id, expense]));
   const conflicts: string[] = [];
   let mergedExpenses = 0;
+  const serverExpenseIds = new Set(pull.expenses.map((row) => row.client_expense_id));
 
   for (const row of pull.expenses) {
     const existing = byId.get(row.client_expense_id);
+    /*
+     * FINANZ-CORE-01A (END18-R3) — die jüngste lokale Belegänderung hat der Server endgültig
+     * abgewiesen (Betrag nach Zahlung, Storno trotz Zahlung, Löschen …). Dann gilt sein Stand, auch
+     * bei gleicher Version: Die lokale Fassung ist kein Geschäft. Festgehalten wird, was versucht
+     * wurde. Eine neue bewusste Änderung löst die Abweisung ab und ist dann wieder `dirty`.
+     */
+    const rejection = context.rejected?.get(`expense:${row.client_expense_id}`);
+    if (rejection && !context.dirty.has(`expense:${row.client_expense_id}`)) {
+      const restored = restoreFromServerRow(row, existing, context);
+      const change = describeRejectedChange(existing, restored, rejection, context.now);
+      byId.set(row.client_expense_id, withRejectedChange(restored, change));
+      if (!existing || buildExpenseContentKey(existing) !== buildExpenseContentKey(restored) || existing.sync?.deleted !== restored.sync?.deleted) {
+        mergedExpenses += 1;
+      }
+      continue;
+    }
     if (!existing) {
       byId.set(row.client_expense_id, mapCloudExpenseRow(row, undefined, context));
       mergedExpenses += 1;
@@ -266,11 +408,218 @@ export function mergeExpensesFromPull(local: Expense[], pull: ExpenseCloudPull, 
     byId.set(expenseId, { ...withPayments, paymentStatus: calculateExpensePaymentSummary(withPayments).status });
   }
 
+  mergedPayments += reconcileRejectedExpenseActions(byId, pull, serverExpenseIds, context);
+
   return { expenses: [...byId.values()], conflicts, counts: { expenses: mergedExpenses, payments: mergedPayments } };
 }
 
+/**
+ * FINANZ-CORE-01A (END18-R3) — endgültig abgewiesene Ausgabenaktionen verlieren ihre lokale
+ * Finanzwirkung, belegt durch diesen **vollständigen** Abzug:
+ *
+ *  - Zahlung: Kennt der Server die Kennung nicht (weder aktiv noch als Grabstein), wurde sie nie
+ *    angenommen. Sie verlässt `payments` und steht unter `rejectedPayments` — sichtbar, aber ohne
+ *    Wirkung auf Saldo, offene Posten, Monatsmappe, Export und Abschluss. Kennt der Server sie, war es
+ *    eine angenommene Zahlung mit verlorener Antwort oder ein abgewiesener Nachweis-Schritt: Sie bleibt.
+ *  - Rücknahme: Lebt die Zahlung beim Server weiter, steht sie (wie jeder Serverstand) wieder in
+ *    `payments`; die abgewiesene Rücknahme wird festgehalten.
+ *  - Neuanlage ohne Serverzeile: Der Beleg bleibt lokal und trägt den Nachweis; der Monatsabschluss
+ *    sperrt ihn (`unconfirmed_financial_changes`), bis er bewusst berichtigt oder entfernt ist.
+ */
+function reconcileRejectedExpenseActions(
+  byId: Map<string, Expense>,
+  pull: ExpenseCloudPull,
+  serverExpenseIds: ReadonlySet<string>,
+  context: ExpenseMergeContext,
+): number {
+  if (!context.rejected || context.rejected.size === 0) return 0;
+  const serverPayments = new Map<string, Set<string>>();
+  for (const row of pull.payments) {
+    const ids = serverPayments.get(row.client_expense_id) ?? new Set<string>();
+    ids.add(row.client_payment_id);
+    serverPayments.set(row.client_expense_id, ids);
+  }
+  let changed = 0;
+
+  for (const [key, entry] of context.rejected) {
+    if (key.startsWith('expense:')) {
+      // Neuanlage, die der Server nie angenommen hat (keine Serverzeile).
+      const expenseId = key.slice('expense:'.length);
+      const expense = byId.get(expenseId);
+      if (!expense || serverExpenseIds.has(expenseId) || context.dirty.has(key)) continue;
+      const change = describeRejectedChange(expense, undefined, entry, context.now);
+      const next = withRejectedChange(expense, change);
+      if (next !== expense) {
+        byId.set(expenseId, next);
+        changed += 1;
+      }
+      continue;
+    }
+    const parsed = parseExpensePaymentEntityId(key.slice('expense_payment:'.length));
+    if (!parsed) continue;
+    const expense = byId.get(parsed.expenseId);
+    if (!expense) continue;
+    const serverKennt = serverPayments.get(parsed.expenseId)?.has(parsed.paymentId) ?? false;
+
+    if (entry.operation === 'delete') {
+      const lebt = (expense.payments ?? []).some((payment) => payment.id === parsed.paymentId);
+      if (!serverKennt || !lebt) {
+        /*
+         * Bericht 20 (END19-R2) — der Server kennt die Zahlung nicht oder hat sie schon storniert: Die abgewiesene
+         * Rücknahme hatte nichts zurückzunehmen. Belegt, damit die Abschlusssperre endet.
+         */
+        const belegt = withReconciledRejection(expense, reconciledRecord(entry, 'nothing_to_undo', context.now, parsed.paymentId));
+        if (belegt !== expense) {
+          byId.set(parsed.expenseId, belegt);
+          changed += 1;
+        }
+        continue;
+      }
+      const next = withRejectedChange(expense, {
+        outboxId: entry.id,
+        kind: 'payment_reverse',
+        reason: rejectionReason(entry),
+        rejectedAt: rejectionAt(entry, context.now),
+        paymentId: parsed.paymentId,
+      });
+      if (next !== expense) {
+        byId.set(parsed.expenseId, next);
+        changed += 1;
+      }
+      continue;
+    }
+
+    if (serverKennt) {
+      /*
+       * Bericht 19 — der Server kennt sie doch (frühere Annahme): seine Zeile steht schon in `payments`; ein beim
+       * Senden abgelegter Nachweis wäre jetzt falsch. Bericht 20 (END19-R2) — auch eine Rechteabweisung eines
+       * späteren Schritts (Nachweis, Wiederholung) einer angenommenen Zahlung: Sie bleibt genau einmal gebucht, die
+       * Abweisung ist als „vom Server bestätigt“ belegt.
+       */
+      const ohneFalschenNachweis = (expense.rejectedPayments ?? []).some((item) => item.id === parsed.paymentId)
+        ? { ...expense, rejectedPayments: (expense.rejectedPayments ?? []).filter((item) => item.id !== parsed.paymentId) }
+        : expense;
+      const belegt = withReconciledRejection(ohneFalschenNachweis, reconciledRecord(entry, 'server_confirmed', context.now, parsed.paymentId));
+      if (belegt !== expense) {
+        byId.set(parsed.expenseId, belegt);
+        changed += 1;
+      }
+      continue;
+    }
+    const next = moveRejectedPayment(expense, parsed.paymentId, entry, context.now);
+    if (next !== expense) {
+      byId.set(parsed.expenseId, next);
+      changed += 1;
+    } else if (!(expense.rejectedPayments ?? []).some((item) => item.outboxId === entry.id)) {
+      // Weder gebucht noch als Nachweis abgelegt: nichts zurückzunehmen (Bericht 20).
+      const belegt = withReconciledRejection(expense, reconciledRecord(entry, 'nothing_to_undo', context.now, parsed.paymentId));
+      if (belegt !== expense) {
+        byId.set(parsed.expenseId, belegt);
+        changed += 1;
+      }
+    }
+  }
+  return changed;
+}
+
+/** Die abgewiesene Zahlung verlässt `payments` und steht als Nachweis unter `rejectedPayments`. */
+function moveRejectedPayment(expense: Expense, paymentId: string, entry: SyncOutboxEntry, now: string | undefined): Expense {
+  const payment = (expense.payments ?? []).find((item) => item.id === paymentId);
+  if (!payment) return expense;
+  const abgewiesen: RejectedExpensePayment = {
+    ...payment,
+    rejectedAt: rejectionAt(entry, now),
+    reason: rejectionReason(entry),
+    outboxId: entry.id,
+  };
+  const payments = (expense.payments ?? []).filter((item) => item.id !== paymentId);
+  const rejectedPayments = [...(expense.rejectedPayments ?? []).filter((item) => item.id !== paymentId), abgewiesen];
+  const withPayments = { ...expense, payments, rejectedPayments };
+  return { ...withPayments, paymentStatus: calculateExpensePaymentSummary(withPayments).status };
+}
+
+/**
+ * FINANZ-CORE-01A (END18-R3, Bericht 19) — Abweisungen, die beweisen, dass der Server die Zahlung nicht hat: Er
+ * prüft sie nur für eine **neue** Kennung (die Wiederholung derselben Kennung überspringt sie). Rollen-, Storno- und
+ * Löschabweisungen stehen davor und beweisen nichts — auch ein Nachweis-Schritt einer längst angenommenen Zahlung
+ * reist als `create` und kann so abgewiesen werden.
+ */
+const PROVEN_ABSENT_PAYMENT = /expense_payment_(overpayment_unconfirmed|not_payable)/;
+
+/**
+ * END18-R3 (Bericht 19) — direkt nach dem Senden, ohne auf den Abgleich zu warten: Eine neue Zahlung, deren
+ * jüngster Auftrag mit bewiesener Abwesenheit abgewiesen ist, verliert sofort ihre Wirkung. Scheitert der Abzug
+ * danach (Netz), zeigte das Gerät sie sonst weiter als gebucht, und Monatsmappe und Abschluss zählten sie.
+ */
+export function applyProvenExpensePaymentRejections(state: AppPersistedState, now?: string): AppPersistedState {
+  const rejected = collectRejectedExpenseEntries(state.syncOutbox);
+  if (rejected.size === 0) return state;
+  let changed = false;
+  const expenses = (state.expenses ?? []).map((expense) => {
+    let next = expense;
+    for (const [key, entry] of rejected) {
+      if (!key.startsWith('expense_payment:') || entry.operation !== 'create') continue;
+      if (!PROVEN_ABSENT_PAYMENT.test(entry.lastErrorMessage ?? '')) continue;
+      const parsed = parseExpensePaymentEntityId(key.slice('expense_payment:'.length));
+      if (!parsed || parsed.expenseId !== expense.id) continue;
+      next = moveRejectedPayment(next, parsed.paymentId, entry, now);
+    }
+    if (next !== expense) changed = true;
+    return next;
+  });
+  return changed ? { ...state, expenses } : state;
+}
+
+/** Eine endgültige Abweisung, deren Serverstand noch nicht abgeglichen ist. */
+export interface UnreconciledExpenseRejection {
+  outboxId: string;
+  kind: 'payment' | 'change' | 'reverse';
+  reason: string;
+  rejectedAt?: string;
+  paymentId?: string;
+}
+
+/**
+ * END18-R3 (Bericht 19) / Bericht 20 (END19-R1/R2) — endgültig abgewiesene Aktionen dieser Ausgabe, die noch kein
+ * vollständiger Abzug geklärt hat (Abzug gescheitert, Gerät offline, Rechte erst später wieder da). Fachliche und
+ * Rechteabweisungen gleich: Eine Rechteabweisung beweist nicht, ob ein früherer Schritt angenommen wurde, und ist
+ * daher weder zu entfernen noch als bestätigt abzuschließen. Die Ausgabe zeigt den Hinweis „vorläufig“, der
+ * Monatsabschluss sperrt (`unconfirmed_financial_changes`). Jeder gelungene Abzug belegt jede Abweisung mit
+ * derselben Auftragskennung — Wirkung zurückgenommen (`rejectedPayments`/`rejectedChanges`) oder ohne sichtbare
+ * Wirkung geklärt (`reconciledRejections`) —, danach erscheint sie hier nicht mehr.
+ */
+export function collectUnreconciledExpenseRejections(
+  expense: Expense,
+  outbox: readonly SyncOutboxEntry[] | undefined,
+): UnreconciledExpenseRejection[] {
+  const offen: UnreconciledExpenseRejection[] = [];
+  const geklaert = (outboxId: string) => (expense.reconciledRejections ?? []).some((record) => record.outboxId === outboxId);
+  for (const [key, entry] of collectRejectedExpenseEntries(outbox)) {
+    if (key === `expense:${expense.id}`) {
+      if (geklaert(entry.id) || (expense.rejectedChanges ?? []).some((change) => change.outboxId === entry.id)) continue;
+      offen.push({ outboxId: entry.id, kind: 'change', reason: rejectionReason(entry), rejectedAt: entry.lastErrorAt });
+      continue;
+    }
+    if (!key.startsWith('expense_payment:')) continue;
+    const parsed = parseExpensePaymentEntityId(key.slice('expense_payment:'.length));
+    if (!parsed || parsed.expenseId !== expense.id || geklaert(entry.id)) continue;
+    if (entry.operation === 'delete') {
+      if ((expense.rejectedChanges ?? []).some((change) => change.outboxId === entry.id)) continue;
+      offen.push({ outboxId: entry.id, kind: 'reverse', reason: rejectionReason(entry), rejectedAt: entry.lastErrorAt, paymentId: parsed.paymentId });
+      continue;
+    }
+    if ((expense.rejectedPayments ?? []).some((payment) => payment.outboxId === entry.id)) continue;
+    offen.push({ outboxId: entry.id, kind: 'payment', reason: rejectionReason(entry), rejectedAt: entry.lastErrorAt, paymentId: parsed.paymentId });
+  }
+  return offen;
+}
+
 export function applyExpensePullToState(state: AppPersistedState, pull: ExpenseCloudPull, context: ExpenseMergeContext): { state: AppPersistedState; conflicts: string[]; counts: ExpenseMergeResult['counts'] } {
-  const merged = mergeExpensesFromPull(state.expenses ?? [], pull, context);
+  // END18-R3 — die Abweisungen stehen im Zustand selbst; jeder Aufrufer bekommt denselben Vertrag.
+  const merged = mergeExpensesFromPull(state.expenses ?? [], pull, {
+    ...context,
+    rejected: context.rejected ?? collectRejectedExpenseEntries(state.syncOutbox),
+  });
   return { state: { ...state, expenses: merged.expenses }, conflicts: merged.conflicts, counts: merged.counts };
 }
 
@@ -313,6 +662,12 @@ function classify(error: { message?: string; code?: string }): WorkspaceCloudErr
    * Grund nennt der Servertext im Klartext.
    */
   if (message.includes('expense_money_')) return new WorkspaceCloudError(message, 'unknown', false);
+  /*
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-08/09) — fachliche Abweisungen der Ausgaben- und
+   * Zahlungsregeln sind ebenso ein Urteil über den Inhalt: endgültig, kein Wiederholungslauf. Ein
+   * Netzfehler (oben) bleibt wiederholbar.
+   */
+  if (isFinalBusinessRejectionMessage(message)) return new WorkspaceCloudError(message, 'unknown', false);
   return new WorkspaceCloudError(message, 'unknown', true);
 }
 
@@ -353,6 +708,8 @@ export async function rpcAddWorkspaceExpensePayment(
     p_note: payment.note ?? null,
     // 02B — nur wenn gesetzt (rückwärtskompatibel zum Server ohne Erweiterung).
     ...(payment.method ? { p_method: payment.method } : {}),
+    // INV-08 — nur eine ausdrücklich bestätigte Überzahlung trägt die Bestätigung.
+    ...(payment.overpaymentAcknowledged === true ? { p_overpayment_acknowledged: true } : {}),
   });
   if (error) throw classify(error);
 }
@@ -414,9 +771,11 @@ export async function rpcReverseWorkspaceExpensePayment(
 export async function rpcPullWorkspaceExpenses(workspaceId: string, explicit?: SupabaseClient | null): Promise<ExpenseCloudPull> {
   const { data, error } = await client(explicit).rpc('pull_workspace_expenses', { p_workspace_id: workspaceId });
   if (error) throw classify(error);
+  // Systemische Gesamtnacharbeit (D6) — eine fehlende Liste ist ein unvollständiger Abzug, kein leerer Bestand.
+  const listen = requirePullLists('pull_workspace_expenses', data, ['expenses', 'payments'] as const);
   return {
-    expenses: (data?.expenses as CloudExpenseRow[] | null) ?? [],
-    payments: (data?.payments as CloudExpensePaymentRow[] | null) ?? [],
+    expenses: listen.expenses as CloudExpenseRow[],
+    payments: listen.payments as CloudExpensePaymentRow[],
   };
 }
 

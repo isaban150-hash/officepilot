@@ -176,7 +176,8 @@ export function ManualInvoicePage() {
    * die Freigabe deshalb gar nicht erst an; der Entwurf bleibt erhalten. Eine
    * ungeklärte Rolle sperrt nicht — dort entscheidet der Server.
    */
-  const approvalRoleDenied = useWorkspaceWriteAccess().reason === 'member';
+  // SYS-04 — auch eine unbekannte Mitgliedschaft bei eingerichteter Cloud gibt nicht frei (nicht nur das bekannte Mitglied).
+  const approvalRoleDenied = !useWorkspaceWriteAccess().canWrite;
   const session = useInvoiceDraftDurabilitySession({
     locator,
     createDraft,

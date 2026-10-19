@@ -41,6 +41,11 @@ import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
 import { createOrderPosition, createTestVorgang, testSetup } from '../../test/fixtures';
 import { t } from '../../i18n';
 import type { AbschlagDeduction, CompanyProfile, InvoiceDraft, InvoicePayment, VorgangInvoice } from '../../types/models';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 const VORGANG_ID = 'v-test-1';
 const SKONTO = '2 % Skonto bei Zahlung innerhalb von 10 Tagen';
@@ -257,7 +262,7 @@ describe('N02-R1 P/K — PDF und Korrekturbeleg', () => {
     hydrateCompanyProfileStore(COMPANY);
     hydrateVorgangStore([createTestVorgang()]);
   });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => (vi.restoreAllMocks(), alsInhaber()));
 
   it('P1: das PDF setzt den gezahlten Teil ab und nennt das Skonto als eigene Zeile', async () => {
     const gezeichnet: string[] = [];

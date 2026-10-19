@@ -27,6 +27,11 @@ import type {
   VorgangInvoice,
   VorgangInvoiceLine,
 } from '../../types/models';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 const VERKAEUFER = {
   companyName: 'Beispiel Betrieb GmbH',
@@ -141,7 +146,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   resetTestStores();
-  vi.restoreAllMocks();
+  (vi.restoreAllMocks(), alsInhaber());
 });
 
 describe('GLS01 XRechnung — dieselbe Regel wie PDF und Druck', () => {

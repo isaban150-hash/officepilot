@@ -18,6 +18,7 @@ import { DataRow } from '../ui/Card';
 import { SummaryList } from '../ui/Section';
 import { Badge } from '../ui/Badge';
 import { InlineNotice } from '../ui/States';
+import { closureFingerprintVersion } from '../../services/accounting/accountingPeriodFingerprint';
 import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
 import { Dialog } from '../ui/Dialog';
 import { formatDisplayDatePadded } from '../../utils/displayFormat';
@@ -66,8 +67,29 @@ function readinessTone(readiness: AccountingPeriodReadiness): 'neutral' | 'warni
   }
 }
 
+/** Bericht 20 — die unbestätigten Quellen je Art („2 Ausgaben, 1 Mitarbeiterzahlung“), je Quelle einmal. */
+function unconfirmedBreakdown(state: AccountingPeriodState, translate: Props['translate']): string | null {
+  const sources = state.unconfirmedSources ?? [];
+  if (sources.length === 0) return null;
+  const perType = new Map<string, Set<string>>();
+  for (const source of sources) {
+    const ids = perType.get(source.sourceType) ?? new Set<string>();
+    ids.add(`${source.sourceId}#${source.paymentId ?? ''}`);
+    perType.set(source.sourceType, ids);
+  }
+  return [...perType.entries()]
+    .map(([type, ids]) =>
+      translate(`accountingPeriod.unconfirmed.type.${type}` as TranslationKey).replace('{count}', String(ids.size)),
+    )
+    .join(' · ');
+}
+
 export function AccountingPeriodPanel({ state, monthLabel, onChanged, translate, closedBy, canWrite = true }: Props) {
   const { readiness, blockers, currentManifest, activeClosure, revisionHistory } = state;
+  // Systemische Gesamtnacharbeit (D1) — was jede Revision gegenüber der Cloud ist (eine Quelle mit Gate und Paket).
+  const status = state.revisionStatus ?? {};
+  const aktiverStatus = state.activeClosureStatus ?? null;
+  const unconfirmedDetail = unconfirmedBreakdown(state, translate);
   const [closeOpen, setCloseOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -114,6 +136,23 @@ export function AccountingPeriodPanel({ state, monthLabel, onChanged, translate,
                 <span data-testid="accounting-period-revision">{String(activeClosure.revision)}</span>
               }
             />
+            {aktiverStatus ? (
+              <DataRow
+                label={translate('accountingPeriod.status.label')}
+                value={
+                  <span data-testid={`accounting-period-cloud-status-${aktiverStatus}`}>
+                    <Badge tone={aktiverStatus === 'angenommen' ? 'success' : aktiverStatus === 'lokal' ? 'neutral' : 'warning'}>
+                      {translate(`accountingPeriod.status.${aktiverStatus}` as TranslationKey)}
+                    </Badge>
+                    {aktiverStatus === 'angenommen' && activeClosure.server
+                      ? ` ${translate('accountingPeriod.status.serverDetail')
+                          .replace('{revision}', String(activeClosure.server.revision))
+                          .replace('{datenstand}', String(activeClosure.server.datenstand ?? ''))}`
+                      : ''}
+                  </span>
+                }
+              />
+            ) : null}
           </>
         ) : null}
       </SummaryList>
@@ -138,6 +177,16 @@ export function AccountingPeriodPanel({ state, monthLabel, onChanged, translate,
                   '{count}',
                   String(item.count),
                 )}
+                {item.code === 'unconfirmed_financial_changes' && unconfirmedDetail ? (
+                  <>
+                    <br />
+                    <span data-testid="accounting-period-unconfirmed-detail">{unconfirmedDetail}</span>
+                    <br />
+                    <span data-testid="accounting-period-unconfirmed-hint">
+                      {translate('accountingPeriod.unconfirmed.hint')}
+                    </span>
+                  </>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -153,6 +202,32 @@ export function AccountingPeriodPanel({ state, monthLabel, onChanged, translate,
       {readiness === 'closed' ? (
         <InlineNotice tone="info" testId="accounting-period-closed-hint">
           {translate('accountingPeriod.closedHint')}
+        </InlineNotice>
+      ) : null}
+
+      {/*
+        FINANZ-CORE-01A (Gesamtnacharbeit INV-04) — ein Abschluss älterer Fassung bleibt nach seiner
+        Logik gültig, deckt aber Skonto und Zahlungsart nicht ab. Das steht sichtbar daneben, statt ihn
+        still umzudeuten.
+      */}
+      {activeClosure && closureFingerprintVersion(activeClosure) < 4 ? (
+        <InlineNotice tone="warning" testId="accounting-period-legacy-version">
+          {translate('accountingPeriod.legacyVersionHint').replace(
+            '{version}',
+            String(closureFingerprintVersion(activeClosure)),
+          )}
+        </InlineNotice>
+      ) : null}
+
+      {/* Systemische Gesamtnacharbeit (D1) — nicht cloudbestätigt heißt es auch, sichtbar und mit Weg. */}
+      {aktiverStatus === 'ausstehend' || aktiverStatus === 'konflikt' ? (
+        <InlineNotice tone="warning" testId="accounting-period-cloud-pending">
+          {translate('accountingPeriod.status.pendingHint')}
+        </InlineNotice>
+      ) : null}
+      {aktiverStatus === 'historisch' ? (
+        <InlineNotice tone="warning" testId="accounting-period-cloud-historical">
+          {translate('accountingPeriod.status.historicalHint')}
         </InlineNotice>
       ) : null}
 
@@ -203,10 +278,27 @@ export function AccountingPeriodPanel({ state, monthLabel, onChanged, translate,
                 {' · '}
                 {closure.reopenedAt
                   ? translate('accountingPeriod.history.reopened')
-                  : translate('accountingPeriod.history.current')}
+                  : closure.cloudAbweisung
+                    ? translate('accountingPeriod.status.abgewiesen')
+                    : translate('accountingPeriod.history.current')}
                 {closure.reopenReason
                   ? ` · ${translate('accountingPeriod.history.reason')}: ${closure.reopenReason}`
                   : ''}
+                {/* Systemische Gesamtnacharbeit (D1/D7) — Cloudstatus je Revision; abgewiesen mit Grund und Weg. */}
+                {status[closure.id] && !closure.cloudAbweisung ? (
+                  <span data-testid={`accounting-period-history-status-${closure.revision}`}>
+                    {' · '}
+                    {translate(`accountingPeriod.status.${status[closure.id]}` as TranslationKey)}
+                  </span>
+                ) : null}
+                {closure.cloudAbweisung ? (
+                  <span data-testid={`accounting-period-history-rejected-${closure.revision}`}>
+                    {' · '}
+                    {translate('accountingPeriod.status.rejectedReason').replace('{reason}', closure.cloudAbweisung.meldung)}
+                    {' · '}
+                    {translate('accountingPeriod.status.rejectedHint')}
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>

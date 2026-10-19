@@ -178,6 +178,12 @@ export function parseOfferCloudPayload(payload: Record<string, unknown> | null):
     id: inner.id,
     workspaceId: text(inner.workspaceId),
     status: resolveStatus(inner.status),
+    /*
+     * FINANZ-CORE-01A (Gesamtnacharbeit INV-10) — der Kunde vollständig, mit Land, USt-IdNr.,
+     * Käuferreferenz und Leitweg-ID. Bisher las der Client nur die sieben Grundfelder: Der lokale Stand
+     * eines freigegebenen Angebots wich vom eingefrorenen Serverbeleg ab, und jeder spätere Push (etwa der
+     * Archivverweis) wurde als Änderung am Beleg abgewiesen — die Annahme blieb bei „wird noch gespeichert“.
+     */
     customer: stripCustomer({
       name: text(rawCustomer.name),
       contactPerson: text(rawCustomer.contactPerson),
@@ -186,6 +192,10 @@ export function parseOfferCloudPayload(payload: Record<string, unknown> | null):
       city: text(rawCustomer.city),
       email: text(rawCustomer.email),
       phone: text(rawCustomer.phone),
+      countryCode: text(rawCustomer.countryCode),
+      vatId: text(rawCustomer.vatId),
+      buyerReference: text(rawCustomer.buyerReference),
+      leitwegId: text(rawCustomer.leitwegId),
     }),
     title: text(inner.title),
     baustelle: text(inner.baustelle),
@@ -285,15 +295,53 @@ export function offerFromCloud(
  * Entwurf überschrieben. Die Kennungen kommen in `finalizedOverDraft`, damit
  * der Aufrufer die überholten Sendeaufträge abschliesst.
  */
+/** Die Empfängerfelder, die ein älterer Client beim Lesen verlor (INV-10). */
+const VERLORENE_KUNDENFELDER = ['countryCode', 'vatId', 'buyerReference', 'leitwegId'] as const;
+
+/**
+ * FINANZ-CORE-01A (Gesamtnacharbeit INV-10) — ist `local` die verlustbehaftete Kopie des freigegebenen
+ * Serverbelegs `remote`? Genau dann, wenn dem lokalen Kunden nur E-Rechnungsfelder fehlen, die der Server
+ * hat (keines weicht ab), und alles andere gleich ist bis auf die Zustandsfelder, die der Server nach der
+ * Freigabe annimmt (Archivverweis, Versand, Entscheidung). Kein Konflikt, sondern ein Lesefehler.
+ */
+export function isLossyFinalizedOfferCopy(local: Offer, remote: Offer): boolean {
+  if (remote.status === 'entwurf' || !remote.offerNumber || local.offerNumber !== remote.offerNumber) return false;
+  const lokal = (local.customer ?? {}) as unknown as Record<string, string | undefined>;
+  const server = (remote.customer ?? {}) as unknown as Record<string, string | undefined>;
+  let fehlt = false;
+  for (const key of VERLORENE_KUNDENFELDER) {
+    if (lokal[key]) {
+      if (lokal[key] !== server[key]) return false;
+    } else if (server[key]) {
+      fehlt = true;
+    }
+  }
+  if (!fehlt) return false;
+  const ohneZustand = (offer: Offer) =>
+    buildOfferCloudContentKey({
+      ...offer,
+      customer: remote.customer,
+      status: remote.status,
+      archiveDocumentId: undefined,
+      sentAt: undefined,
+      decidedAt: undefined,
+      resultingVorgangId: undefined,
+      updatedAt: undefined,
+    });
+  return ohneZustand(local) === ohneZustand(remote);
+}
+
 export function mergeOffersFromPull(
   localOffers: Offer[],
   remoteRows: WorkspaceOfferRow[],
   deviceId: string,
   workspaceId: string,
   dirtyIds: ReadonlySet<string> = new Set(),
-): { offers: Offer[]; conflicts: string[]; finalizedOverDraft: string[] } {
+): { offers: Offer[]; conflicts: string[]; finalizedOverDraft: string[]; archiveRelink: string[] } {
   const conflicts: string[] = [];
   const finalizedOverDraft: string[] = [];
+  /** INV-10 — reparierte Kopien, deren Archivverweis der Server noch nicht kennt: erneut senden. */
+  const archiveRelink: string[] = [];
   const byId = new Map(localOffers.map((offer) => [offer.id, offer]));
 
   for (const row of remoteRows) {
@@ -337,6 +385,19 @@ export function mergeOffersFromPull(
 
     if (local.sync?.deleted === true) continue;
 
+    /*
+     * FINANZ-CORE-01A (Gesamtnacharbeit INV-10) — der lokale Stand ist nur die verlustbehaftete Kopie
+     * des freigegebenen Belegs (älterer Client). Der Serverbeleg gilt; ein lokal gesetzter Archivverweis,
+     * den der Server noch nicht kennt, bleibt und wird gezielt erneut gesendet. Kein Konflikt, keine neue
+     * Nummer, nichts am Beleg geändert.
+     */
+    if (isLossyFinalizedOfferCopy(local, remote)) {
+      const relink = Boolean(local.archiveDocumentId) && !remote.archiveDocumentId;
+      byId.set(remote.id, relink ? { ...remote, archiveDocumentId: local.archiveDocumentId } : remote);
+      if (relink) archiveRelink.push(remote.id);
+      continue;
+    }
+
     if (local.sync && local.sync.version === mapped.rowVersion) {
       if (buildOfferCloudContentKey(local) === buildOfferCloudContentKey(remote)) {
         byId.set(remote.id, remote);
@@ -363,7 +424,7 @@ export function mergeOffersFromPull(
     if (merged.entity) byId.set(merged.entity.id, merged.entity);
   }
 
-  return { offers: [...byId.values()], conflicts, finalizedOverDraft };
+  return { offers: [...byId.values()], conflicts, finalizedOverDraft, archiveRelink };
 }
 
 /** Altbestand — Angebote, die der Server (einschliesslich Grabsteine) noch nicht kennt. */

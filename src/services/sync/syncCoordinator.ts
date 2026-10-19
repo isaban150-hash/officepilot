@@ -9,7 +9,7 @@ import {
 } from './syncSimulationReportService';
 import { retryFailedOutboxEntries, wrapStateAsVirtualDevice } from './syncSimulatorService';
 import { mergeOutboxAfterPull } from './syncOutboxMergeService';
-import { isRoleDenialFailure } from './syncRoleDenial';
+import { isFinalRejectionFailure } from './syncRoleDenial';
 
 export type SyncRunResult = {
   state: AppPersistedState;
@@ -195,11 +195,14 @@ export class SyncCoordinator {
        * kein Übertragungsfehler; erst der Abgleich holt den Serverstand und
        * nimmt eine abgewiesene Löschung zurück. Ohne ihn holte ein Gerät mit
        * einem solchen Auftrag nie wieder etwas ab.
+       *
+       * FINANZ-CORE-01A (END18-R3) — ebenso eine endgültige fachliche Abweisung: Erst der Abgleich
+       * im selben Lauf nimmt die lokale Wirkung der abgewiesenen Aktion zurück.
        */
       const nurKonflikteOderRollen =
         pushResult.failedOutbox.length > 0 &&
         pushResult.failedOutbox.every(
-          (failure) => konfliktIds.has(failure.outboxId) || isRoleDenialFailure(failure),
+          (failure) => konfliktIds.has(failure.outboxId) || isFinalRejectionFailure(failure),
         );
 
       if (!pushResult.success && !nurKonflikteOderRollen) {
@@ -400,8 +403,9 @@ export class SyncCoordinator {
          * GO-LIVE-SECURITY-01 — eine Rollenabweisung bleibt ein Fehler, verlangt
          * aber den vollständigen Abgleich: Erst er holt den Serverstand zurück.
          */
+        // FINANZ-CORE-01A (END18-R3) — auch eine endgültige fachliche Abweisung verlangt den Abgleich.
         const nurKonflikteOderRollen = pushResult.failedOutbox.every(
-          (failure) => konfliktIds.has(failure.outboxId) || isRoleDenialFailure(failure),
+          (failure) => konfliktIds.has(failure.outboxId) || isFinalRejectionFailure(failure),
         );
         return { state: pushResult.state, report, success: false, needsFullSync: nurKonflikteOderRollen };
       }

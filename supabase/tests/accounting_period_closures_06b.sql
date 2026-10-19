@@ -10,6 +10,11 @@
 --   6. Struktur- und Periodenpruefungen.
 --   7. Workspace-Isolation ueber RLS.
 --
+-- Systemische Gesamtnacharbeit (Migration 20261123120000): Der Server nimmt nur noch Manifeste der Fassung 5 an,
+-- die er gegen seinen eigenen Bestand nachrechnet. Der Testbetrieb hat keine Finanzdaten; ein gueltiger Abschluss
+-- ist deshalb der leere Monat, wie ihn der Server selbst bildet (`pg_temp.gueltig`). Ein neuer Stand entsteht ueber
+-- den Kontenrahmen des Betriebs (Kopfzeile des kanonischen Textes).
+--
 -- Ausfuehren (nur lokal, niemals --linked oder remote):
 --   docker exec -i supabase_db_officepilot psql -U postgres -d postgres \
 --     -v ON_ERROR_STOP=1 < supabase/tests/accounting_period_closures_06b.sql
@@ -74,6 +79,23 @@ create function pg_temp.abschluss(
   );
 $p$;
 
+/* Ein gueltiger Abschluss der Fassung 5: der Stand, den der Server fuer diesen Monat selbst bildet. */
+create function pg_temp.gueltig(p_id text, p_year integer, p_month integer)
+returns jsonb language sql as $p$
+  select jsonb_build_object(
+    'client_closure_id', p_id,
+    'period_year', p_year,
+    'period_month', p_month,
+    'fingerprint', pr->>'fingerprint',
+    'manifest', jsonb_build_object(
+      'fingerprintVersion', 5,
+      'monthKey', pr->>'monthKey',
+      'chartOfAccounts', pr->>'chartOfAccounts',
+      'documentCount', 0, 'totalBrutto', 0, 'totalNetto', 0, 'totalSteuer', 0,
+      'entries', '[]'::jsonb, 'payments', '[]'::jsonb, 'employeePayments', '[]'::jsonb, 'offenePosten', '[]'::jsonb))
+  from (select public.workspace_fc_abschluss_projektion('00000000-0000-0000-0000-0000000b0001', p_year, p_month) as pr) q;
+$p$;
+
 create function pg_temp.ok(p_label text, p_payload jsonb)
 returns jsonb language plpgsql as $p$
 declare v jsonb;
@@ -107,9 +129,10 @@ $p$;
 do $$
 declare v jsonb;
 begin
-  v := pg_temp.ok('A1 Revision 1', pg_temp.abschluss('c1', 2026, 9, 'p1:aaaa:100'));
+  v := pg_temp.ok('A1 Revision 1', pg_temp.gueltig('c1', 2026, 9));
   if (v->>'revision')::int <> 1 then raise exception 'A1 -- Revision ist nicht 1'; end if;
   if (v->>'noop')::boolean then raise exception 'A1 -- faelschlich als Replay gewertet'; end if;
+  if (v->>'validated_version')::int is distinct from 5 then raise exception 'A1 -- nicht servervalidiert'; end if;
 end;
 $$;
 
@@ -118,8 +141,9 @@ do $$
 declare r public.workspace_accounting_period_closures;
 begin
   select * into r from public.workspace_accounting_period_closures where client_closure_id = 'c1';
-  if r.fingerprint <> 'p1:aaaa:100' then raise exception 'A2 -- Fingerprint fehlt'; end if;
-  if jsonb_array_length(r.manifest->'entries') <> 2 then raise exception 'A2 -- Manifest fehlt'; end if;
+  if r.fingerprint <> pg_temp.gueltig('c1', 2026, 9)->>'fingerprint' or r.fingerprint not like 'p5:%' then raise exception 'A2 -- Fingerprint fehlt'; end if;
+  if r.manifest->>'fingerprintVersion' <> '5' or jsonb_typeof(r.manifest->'entries') <> 'array' then raise exception 'A2 -- Manifest fehlt'; end if;
+  if r.validated_version <> 5 or r.finance_revision is null or r.validated_at is null then raise exception 'A2 -- Pruefangaben fehlen'; end if;
   if r.closed_at is null or r.closed_by is null then raise exception 'A2 -- Abschlussspur fehlt'; end if;
   if r.reopened_at is not null then raise exception 'A2 -- faelschlich als geoeffnet'; end if;
   raise notice 'OK         A2 Fingerprint, Manifest, closedAt und closedBy gespeichert';
@@ -133,7 +157,7 @@ $$;
 do $$
 declare v jsonb; v_count integer;
 begin
-  v := pg_temp.ok('A3 identischer Abschluss', pg_temp.abschluss('c1', 2026, 9, 'p1:aaaa:100'));
+  v := pg_temp.ok('A3 identischer Abschluss', pg_temp.gueltig('c1', 2026, 9));
   if (v->>'noop')::boolean is not true then raise exception 'A3 -- kein Replay erkannt'; end if;
   -- FINANZ-CORE-01A (SQL-T2) — nur der eigene Betrieb: Fremde Abschluesse (lokale
   -- Altdaten anderer Pruefungen) gehoeren nicht zu dieser Zusicherung.
@@ -149,7 +173,13 @@ $$;
  * Revision. Dafuer muss der Monat erst bewusst wieder geoeffnet werden.
  */
 select pg_temp.nein('A4 anderer Stand auf offenen Abschluss',
-  pg_temp.abschluss('c2', 2026, 9, 'p1:bbbb:200'), 'period_already_closed');
+  jsonb_set(pg_temp.gueltig('c2', 2026, 9), '{fingerprint}', to_jsonb('p5:' || repeat('b', 64))), 'period_already_closed');
+
+-- A5 (Gesamtnacharbeit) — derselbe Stand von einem zweiten Geraet (andere Kennung) wird nicht gespeichert.
+select pg_temp.nein('A5 derselbe Stand, andere Kennung', pg_temp.gueltig('c-zweites-geraet', 2026, 9), 'period_already_closed');
+
+-- A6 (Gesamtnacharbeit) — ein Manifest aelterer Fassung ist nicht pruefbar und wird abgewiesen.
+select pg_temp.nein('A6 Altfassung', pg_temp.abschluss('c-alt', 2026, 10, 'p1:aaaa:100'), 'closure_manifest_version_outdated');
 
 /* ================================================================== */
 /* B — Struktur- und Periodenpruefungen                               */
@@ -198,12 +228,19 @@ begin
 end;
 $$;
 
--- C3 Danach entsteht Revision 2 — mit dem neuen Stand.
+-- C3 Danach entsteht Revision 2 — mit dem neuen Stand (der Betrieb wechselt den Kontenrahmen).
+insert into public.workspace_settings (workspace_id, settings)
+values ('00000000-0000-0000-0000-0000000b0001', '{"chartOfAccounts":"SKR04"}')
+on conflict (workspace_id) do update set settings = excluded.settings;
+
 do $$
 declare v jsonb;
 begin
-  v := pg_temp.ok('C3 Revision 2', pg_temp.abschluss('c2', 2026, 9, 'p1:bbbb:200'));
+  v := pg_temp.ok('C3 Revision 2', pg_temp.gueltig('c2', 2026, 9));
   if (v->>'revision')::int <> 2 then raise exception 'C3 -- Revision ist nicht 2'; end if;
+  if v->>'fingerprint' = (select fingerprint from public.workspace_accounting_period_closures where client_closure_id = 'c1') then
+    raise exception 'C3 -- kein neuer Stand';
+  end if;
 end;
 $$;
 
@@ -215,11 +252,11 @@ do $$
 declare r public.workspace_accounting_period_closures;
 begin
   select * into r from public.workspace_accounting_period_closures where client_closure_id = 'c1';
-  if r.fingerprint <> 'p1:aaaa:100' then
+  if r.fingerprint not like 'p5:%' or r.manifest->>'chartOfAccounts' <> 'SKR03' then
     raise exception 'C4 -- Revision 1 wurde umgeschrieben: %', r.fingerprint;
   end if;
   if r.revision <> 1 then raise exception 'C4 -- Revisionsnummer veraendert'; end if;
-  if jsonb_array_length(r.manifest->'entries') <> 2 then raise exception 'C4 -- Manifest veraendert'; end if;
+  if r.manifest->>'fingerprintVersion' <> '5' then raise exception 'C4 -- Manifest veraendert'; end if;
   raise notice 'OK         C4 Revision 1 unveraendert, Fingerprint und Manifest erhalten';
 end;
 $$;

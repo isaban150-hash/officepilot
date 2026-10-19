@@ -89,7 +89,8 @@ export function isExpenseCancelled(expense: Expense): boolean {
  * und dieser Dienst weist sie auch dann ab, wenn sie jemand anders aufruft.
  */
 export function isExpensePayable(expense: Expense): boolean {
-  if (isCreditNoteExpense(expense)) return false;
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-08) — wie der Server: auch das ausdrückliche Gutschriftkennzeichen.
+  if (isCreditNoteExpense(expense) || expense.isCreditNote === true) return false;
   return expense.status === 'gebucht' && !isExpenseCancelled(expense);
 }
 

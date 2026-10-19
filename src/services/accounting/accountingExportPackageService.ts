@@ -28,7 +28,8 @@ import type { SteuerberaterHandoverStatus } from '../steuerberater/steuerberater
 import type { MonatsmappeDocumentLoaders } from '../steuerberater/monatsmappeExportService';
 import { NACHWEIS_FOLDER, safeFileNamePart } from '../steuerberater/monatsmappeModelService';
 import { buildBookingCsv, type BookingExport } from './accountingBookingExportService';
-import type { AccountingPeriodClosure } from '../../types/accountingPeriod';
+import { closureFingerprintVersion } from './accountingPeriodFingerprint';
+import type { AccountingPeriodClosure, AccountingPeriodRevisionStatus } from '../../types/accountingPeriod';
 
 export interface ExportPackageInput {
   readonly model: MonatsmappeModel;
@@ -46,6 +47,15 @@ export interface ExportPackageInput {
     readonly missingItems: readonly { id: string; title: string }[];
   };
   readonly handover?: SteuerberaterHandoverStatus;
+  /**
+   * Systemische Gesamtnacharbeit (D9/D1) — was die Revision gegenüber der Cloud ist und welche Art Übergabe entsteht.
+   * `regulaer` nur mit servervalidierter Revision; `lokal` ist sichtbar als lokal bzw. nicht cloudbestätigt
+   * gekennzeichnet und behauptet keine Serverannahme.
+   */
+  readonly cloud?: {
+    readonly status: AccountingPeriodRevisionStatus;
+    readonly uebergabeArt: 'regulaer' | 'lokal';
+  };
 }
 
 export type ExportPackageResult =
@@ -101,7 +111,10 @@ export async function buildAccountingExportPackage(
 ): Promise<ExportPackageResult> {
   const { model, bookings, closure, exportedAt } = input;
   const zip = new JSZip();
-  const rootName = `Steuerberater_${model.monthKey}_Revision-${closure.revision}`;
+  // Systemische Gesamtnacharbeit (D1) — eine nicht cloudbestätigte Übergabe trägt das schon im Namen.
+  const cloudBestaetigt = input.cloud?.status === 'angenommen';
+  const lokaleUebergabe = input.cloud?.uebergabeArt === 'lokal';
+  const rootName = `Steuerberater_${model.monthKey}_Revision-${closure.server?.revision ?? closure.revision}${lokaleUebergabe ? '_lokal-nicht-cloudbestaetigt' : ''}`;
   const root = zip.folder(rootName)!;
 
   /* ---------------- Buchungsdaten ---------------- */
@@ -243,13 +256,32 @@ export async function buildAccountingExportPackage(
   const unklareFaelle = [
     ...(input.findings?.unclearDocuments ?? []).map((doc) => ({ id: doc.id, titel: `Nicht gebuchter Eingangsbeleg: ${doc.title}` })),
     ...model.stornosOhneDatum.map((entry) => ({ id: entry.id, titel: `Storno ohne Datum: ${entry.belegnummer || entry.id}` })),
+    // FC01A-P1-Restkorrektur (lokaler Altbestand) — Netto/USt ungeklärt: nicht gebucht, aber genannt.
+    ...(bookings.netUnresolved ?? []).map((entry) => ({
+      id: entry.sourceId,
+      titel: `Netto/USt ungeklärt (Altbestand), nicht gebucht: ${entry.belegnummer || entry.sourceId}`,
+    })),
   ];
   const manifest: Record<string, unknown> = {
     format: 'officetakt-steuerberater-paket',
-    version: 2,
+    version: 3,
     workspaceId: input.workspaceId,
     monthKey: model.monthKey,
     revision: closure.revision,
+    /*
+     * Systemische Gesamtnacharbeit (D9) — welche Revision das Paket verwendet und was der Server dazu gesagt hat:
+     * Serverrevision, Datenstand und Prüfzeitpunkt nur bei servervalidierter Revision; sonst ausdrücklich nicht
+     * cloudbestätigt. Keine Serverannahme wird vorgetäuscht.
+     */
+    abschlussCloud: {
+      status: input.cloud?.status ?? 'ausstehend',
+      cloudBestaetigt,
+      uebergabeArt: input.cloud?.uebergabeArt ?? 'regulaer',
+      fingerprintVersion: closureFingerprintVersion(closure),
+      serverRevision: cloudBestaetigt ? closure.server?.revision ?? null : null,
+      datenstand: cloudBestaetigt ? closure.server?.datenstand ?? null : null,
+      validiertAm: cloudBestaetigt ? closure.server?.bestaetigtAm ?? null : null,
+    },
     closedAt: closure.closedAt,
     closedBy: closure.closedBy ?? null,
     /* Der Fingerprint des Abschlusses — nicht umgeschrieben, nur zitiert. */
@@ -348,6 +380,7 @@ export function buildPruefbericht(
     `Steuerberater-Paket ${bookings.monthKey}`,
     `Erstellt: ${String(manifest.exportedAt)}`,
     `Abschluss: Revision ${String(manifest.revision)} vom ${String(manifest.closedAt)}`,
+    cloudZeile(manifest),
     /*
      * 01H — das Manifest darf `null` tragen, wenn niemand bekannt ist; das ist
      * dort die Wahrheit. Ein Mensch liest hier aber keinen Rohwert.
@@ -430,6 +463,23 @@ export function buildPruefbericht(
   );
 
   return `${zeilen.join('\r\n')}\r\n`;
+}
+
+/** Systemische Gesamtnacharbeit (D1) — der Cloudstatus der Revision, für Menschen. */
+function cloudZeile(manifest: Record<string, unknown>): string {
+  const cloud = (manifest.abschlussCloud ?? {}) as {
+    status?: string;
+    cloudBestaetigt?: boolean;
+    uebergabeArt?: string;
+    serverRevision?: number | null;
+    datenstand?: number | null;
+    fingerprintVersion?: number;
+  };
+  if (cloud.cloudBestaetigt) {
+    return `Cloudstatus: vom Server geprüft und angenommen (Serverrevision ${String(cloud.serverRevision)}, Datenstand ${String(cloud.datenstand)}, Fassung ${String(cloud.fingerprintVersion)})`;
+  }
+  if (cloud.status === 'lokal') return 'Cloudstatus: lokaler Abschluss (Betrieb ohne Cloud) — nicht vom Server geprüft';
+  return `Cloudstatus: NICHT CLOUDBESTÄTIGT — ausdrücklich lokale Übergabe (Status: ${String(cloud.status)}, Fassung ${String(cloud.fingerprintVersion)})`;
 }
 
 export { FOLDER as EXPORT_PACKAGE_FOLDERS };

@@ -98,8 +98,17 @@ const SERVER_REJECTION_KEYS: ReadonlyArray<[string, TranslationKey]> = [
   ['invoice_deductions_mismatch', 'invoice.approve.deductionsMismatch'],
   // FINANZ-CORE-01A (WEISS N02/D1)
   ['invoice_abschlag_unpaid', 'invoice.approve.abschlagUnpaid'],
+  // FINANZ-CORE-01A (Feiertage) — Skontofrist eines Abschlags hängt an einem ungeklärten Feiertag.
+  ['invoice_skonto_deadline_unclear', 'invoice.approve.skontoDeadlineUnclear'],
   // WEISS-Recheck N02-R1
   ['invoice_abschlag_settlement_mismatch', 'invoice.approve.abschlagSettlementMismatch'],
+  // FC01A-Nacharbeit (A3)
+  ['invoice_abschlag_tax_status_mismatch', 'invoice.approve.abschlagTaxStatusMismatch'],
+  // FC01A-P1-Restkorrektur (#8, Altformat)
+  ['invoice_abschlag_net_unreliable', 'invoice.approve.abschlagNetUnreliable'],
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-06/07) — kanonische Position vor der Nummernvergabe.
+  ['invoice_unit_price_precision', 'invoice.approve.unitPricePrecision'],
+  ['invoice_line_total_missing', 'invoice.approve.lineTotalMissing'],
 ];
 
 export function serverRejectionMessageKey(message: string | undefined): TranslationKey {

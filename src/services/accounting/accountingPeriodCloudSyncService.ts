@@ -23,8 +23,9 @@
 import { WorkspaceCloudError } from '../workspace/workspaceCloudService';
 import { isFinancialActionDenial } from '../auth/financialActionDenial';
 import { getSupabaseClient } from '../../lib/supabase';
+import { requirePullLists } from '../sync/pullResponseGuard';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AccountingPeriodClosure } from '../../types/accountingPeriod';
+import type { AccountingPeriodClosure, AccountingPeriodServerConfirmation } from '../../types/accountingPeriod';
 import type { SyncMeta, SyncOutboxEntry } from '../../types/sync';
 
 function client(explicit?: SupabaseClient | null): SupabaseClient {
@@ -97,6 +98,30 @@ export interface ClosureRpcResult {
   revision: number;
   rowVersion: number;
   noop: boolean;
+  /**
+   * Systemische Gesamtnacharbeit (E1/D1) — nur wenn der Server die Revision gegen seinen Finanzbestand geprüft hat
+   * (`validated_version = 5`, Datenstand, Zeitpunkt). Fehlt die Angabe (alter Server, alte Revision), ist die Revision
+   * nicht cloudbestätigt.
+   */
+  server?: AccountingPeriodServerConfirmation;
+}
+
+/** Die Serverbestätigung aus einer Antwort oder Zeile — nur mit vollständigem Nachweis, sonst `undefined`. */
+export function serverConfirmationFrom(
+  data:
+    | { validated_version?: unknown; finance_revision?: unknown; validated_at?: unknown; revision?: unknown; fingerprint?: unknown }
+    | null
+    | undefined,
+): AccountingPeriodServerConfirmation | undefined {
+  if (!data || Number(data.validated_version) !== 5) return undefined;
+  const fingerprint = typeof data.fingerprint === 'string' ? data.fingerprint : '';
+  const bestaetigtAm = typeof data.validated_at === 'string' ? data.validated_at : '';
+  const revision = Number(data.revision);
+  const datenstand = Number(data.finance_revision);
+  if (!fingerprint.startsWith('p5:') || !bestaetigtAm || !Number.isFinite(revision) || revision < 1 || !Number.isFinite(datenstand)) {
+    return undefined;
+  }
+  return { revision, fingerprint, validiert: true, datenstand, bestaetigtAm };
 }
 
 export async function rpcCloseWorkspaceAccountingPeriod(
@@ -109,10 +134,12 @@ export async function rpcCloseWorkspaceAccountingPeriod(
     p_payload: payload,
   });
   if (error) throw classifyPeriodCloudError(error);
+  const server = serverConfirmationFrom(data);
   return {
     revision: Number(data?.revision ?? 0),
     rowVersion: Number(data?.row_version ?? 0),
     noop: Boolean(data?.noop),
+    ...(server ? { server } : {}),
   };
 }
 
@@ -139,7 +166,7 @@ export async function rpcReopenWorkspaceAccountingPeriod(
 export type ClosurePushStep = 'close' | 'close_noop' | 'reopen' | 'reopen_noop';
 
 export type ClosurePushOutcome =
-  | { kind: 'pushed'; rowVersion: number; revision: number; steps: ClosurePushStep[] }
+  | { kind: 'pushed'; rowVersion: number; revision: number; steps: ClosurePushStep[]; server?: AccountingPeriodServerConfirmation }
   | { kind: 'skipped'; reason: string };
 
 /**
@@ -169,6 +196,7 @@ export async function pushAccountingPeriodClosure(
   const steps: ClosurePushStep[] = [];
   let version = rowVersion;
   let revision = closure.revision;
+  let server: AccountingPeriodServerConfirmation | undefined;
 
   if (rowVersion <= 0) {
     const closed = await rpcCloseWorkspaceAccountingPeriod(
@@ -185,6 +213,8 @@ export async function pushAccountingPeriodClosure(
      * treffen, die gerade entstanden ist.
      */
     revision = closed.revision || revision;
+    // Nur eine Antwort, die genau diesen Fingerabdruck validiert hat, bestätigt diese Revision.
+    if (closed.server && closed.server.fingerprint === closure.fingerprint) server = closed.server;
   }
 
   if (closure.reopenedAt) {
@@ -214,10 +244,13 @@ export async function pushAccountingPeriodClosure(
     }
   }
 
-  return { kind: 'pushed', rowVersion: version, revision, steps };
+  return { kind: 'pushed', rowVersion: version, revision, steps, ...(server ? { server } : {}) };
 }
 
-/** Übernimmt die Serverversion nach einem erfolgreichen Push. */
+/**
+ * Übernimmt die Serverversion nach einem erfolgreichen Push — und, wenn der Server die Revision gegen seinen
+ * Finanzbestand geprüft hat, seine Bestätigung (Systemische Gesamtnacharbeit, D1).
+ */
 export function applyAccountingPeriodPushResultToState(
   closures: AccountingPeriodClosure[],
   id: string,
@@ -225,6 +258,7 @@ export function applyAccountingPeriodPushResultToState(
   updatedAt: string,
   deviceId: string,
   workspaceId: string,
+  server?: AccountingPeriodServerConfirmation,
 ): AccountingPeriodClosure[] {
   return closures.map((item) => {
     if (item.id !== id) return item;
@@ -235,9 +269,28 @@ export function applyAccountingPeriodPushResultToState(
       updatedBy: deviceId,
       workspaceId,
     } as SyncMeta;
-    return { ...item, sync };
+    return { ...item, sync, ...(server ? { server } : {}) };
   });
 }
+
+/**
+ * Systemische Gesamtnacharbeit (D7) — der Server hat diese Revision endgültig abgewiesen. Dauerhaft an der Revision:
+ * Sie ist danach kein aktiver Abschluss mehr, wird nie automatisch erneut gesendet und bleibt in der Historie. Eine
+ * bereits bestätigte Revision bleibt bestätigt (eine spätere Abweisung betrifft dann nur das Wiederöffnen).
+ */
+export function applyAccountingPeriodRejectionToState(
+  closures: AccountingPeriodClosure[],
+  id: string,
+  meldung: string,
+  am: string,
+): AccountingPeriodClosure[] {
+  return closures.map((item) =>
+    item.id === id && !item.server && !item.reopenedAt ? { ...item, cloudAbweisung: { meldung, am } } : item,
+  );
+}
+
+/** Systemische Gesamtnacharbeit (D7) — die Liste steht zentral bei den endgültigen Abweisungen. */
+export { CLOSURE_BUSINESS_REJECTIONS, isClosureBusinessRejection } from '../sync/syncRoleDenial';
 
 /* -------------------------------------------------------------------------- */
 /* Abschluesse lesen                                                           */
@@ -268,6 +321,10 @@ export interface CloudAccountingPeriodRow {
   row_version: number;
   created_at?: string;
   updated_at?: string;
+  /** Systemische Gesamtnacharbeit (E1) — nur servervalidierte Revisionen tragen diese Angaben; fehlen sie: historisch. */
+  validated_version?: number | null;
+  finance_revision?: number | null;
+  validated_at?: string | null;
 }
 
 export interface AccountingPeriodCloudPull {
@@ -283,7 +340,8 @@ export async function rpcPullWorkspaceAccountingPeriodClosures(
     { p_workspace_id: workspaceId },
   );
   if (error) throw classifyPeriodCloudError(error);
-  return { closures: (data?.closures ?? []) as CloudAccountingPeriodRow[] };
+  // Systemische Gesamtnacharbeit (D6) — eine fehlende Liste ist ein unvollständiger Abzug, kein leerer Bestand.
+  return { closures: requirePullLists('pull_workspace_accounting_period_closures', data, ['closures'] as const).closures as CloudAccountingPeriodRow[] };
 }
 
 export interface AccountingPeriodPullContext {
@@ -321,6 +379,10 @@ export function rowToAccountingPeriodClosure(
       ...(manifest.fingerprintVersion === 2 ? { fingerprintVersion: 2 as const } : {}),
       // P1 MITARBEITERZAHLUNGEN — Version 3 samt Mitarbeiterzahlungen bleibt erhalten.
       ...(manifest.fingerprintVersion === 3 ? { fingerprintVersion: 3 as const } : {}),
+      // FINANZ-CORE-01A (Gesamtnacharbeit INV-04) — Version 4 samt Skonto und Zahlungsart bleibt erhalten.
+      ...(manifest.fingerprintVersion === 4 ? { fingerprintVersion: 4 as const } : {}),
+      // Systemische Gesamtnacharbeit — Fassung 5 samt kumulierter offener Posten bleibt erhalten.
+      ...(manifest.fingerprintVersion === 5 ? { fingerprintVersion: 5 as const } : {}),
       monthKey: (manifest.monthKey as string) ?? monthKey,
       chartOfAccounts: (manifest.chartOfAccounts as string) ?? '',
       documentCount: Number(manifest.documentCount ?? 0),
@@ -339,6 +401,9 @@ export function rowToAccountingPeriodClosure(
               manifest.employeePayments as NonNullable<AccountingPeriodClosure['manifest']['employeePayments']>,
           }
         : {}),
+      ...(Array.isArray(manifest.offenePosten)
+        ? { offenePosten: manifest.offenePosten as NonNullable<AccountingPeriodClosure['manifest']['offenePosten']> }
+        : {}),
     },
     reopenedAt: row.reopened_at ?? undefined,
     reopenedBy: row.reopened_by ?? undefined,
@@ -356,7 +421,14 @@ export function rowToAccountingPeriodClosure(
       deviceId: context?.deviceId ?? '',
       workspaceId: context?.workspaceId ?? '',
     } as SyncMeta,
+    // Systemische Gesamtnacharbeit (D8) — die Serverbestätigung nur mit vollständigem Nachweis (sonst historisch).
+    ...serverConfirmationOfRow(row),
   };
+}
+
+function serverConfirmationOfRow(row: CloudAccountingPeriodRow): { server?: AccountingPeriodServerConfirmation } {
+  const server = serverConfirmationFrom(row);
+  return server && server.fingerprint === row.fingerprint ? { server } : {};
 }
 
 export interface AccountingPeriodMergeResult {

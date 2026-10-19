@@ -181,6 +181,12 @@ export function getPreviousAbschlagDeductions(vorgang: Vorgang): AbschlagDeducti
       invoiceNumber: inv.number,
       abschlagNumber: inv.abschlagNumber,
       date: inv.issueDate ?? inv.date,
+      /*
+       * FC01A-P1-Restkorrektur (lokaler Altbestand) — der Abzug spiegelt den gespeicherten
+       * Abschlag (#8: der Server verlangt dieselben Angaben). Ein fehlendes Netto bleibt fehlend —
+       * seit der Hydratisierung kein Brutto mehr —, und `abschlag_net_unreliable` sperrt dann die
+       * Schlussrechnung, statt einen Abzug ohne verlässliches Netto einzufrieren.
+       */
       subtotal: inv.subtotal,
       amount: inv.amount,
     }));
@@ -631,6 +637,7 @@ export function setAbschlagDraftCalculationMode(
     paymentDueDate: draft.paymentDueDate,
     paymentTermsText: draft.paymentTermsText,
     skontoText: draft.skontoText,
+    ...(draft.deadlineShiftWaived === true ? { deadlineShiftWaived: true } : {}),
     introText: draft.introText,
     closingText: draft.closingText,
     vorgangTitle: draft.vorgangTitle,
@@ -953,6 +960,11 @@ export function updateInvoiceDraftMetadata(
   }
   if (changes.paymentDueDate !== undefined) next.paymentDueDate = changes.paymentDueDate;
   if (changes.paymentTermsText !== undefined) next.paymentTermsText = changes.paymentTermsText;
+  // FINANZ-CORE-01A (Feiertage) — nur ein ausdrückliches `true` bleibt stehen; aus heisst: Feld weg.
+  if (changes.deadlineShiftWaived !== undefined) {
+    if (changes.deadlineShiftWaived === true) next.deadlineShiftWaived = true;
+    else delete next.deadlineShiftWaived;
+  }
   if (changes.privateRetentionNotice !== undefined) {
     // FINANZ-CORE-01A (AUS-11/EIN-07) — genau ein Hinweis, an letzter Stelle; die übrigen bleiben.
     const ohne = (next.legalNotices ?? []).filter((text) => text.trim() !== PRIVATE_RETENTION_NOTICE);
@@ -1139,6 +1151,10 @@ function validateDraftForFinalize(
               e.code === 'deductions_exceed_total' ||
               // FINANZ-CORE-01A (WEISS N02/D1) — nur beglichene Abschläge werden abgezogen.
               e.code === 'abschlag_unpaid' ||
+              // FINANZ-CORE-01A (Feiertage) — oder sein Skonto hängt an einem ungeklärten Feiertag.
+              e.code === 'abschlag_skonto_unclear' ||
+              // FC01A-Nacharbeit (A3) — und nur Abschläge desselben Steuerfalls.
+              e.code === 'abschlag_tax_status_mismatch' ||
               /*
                * INVOICE-SERVICE-PERIOD-01B — der Leistungszeitraum ist eine
                * Tatsachenbehauptung auf dem Beleg und muss auch dort greifen,
@@ -1237,6 +1253,8 @@ export function buildInvoiceFinalizationCandidate(
     paymentDueDate: draft.paymentDueDate,
     paymentTermsText: draft.paymentTermsText,
     skontoText: draft.skontoText,
+    // FINANZ-CORE-01A (Feiertage) — abweichende Vereinbarung, nur wenn gesetzt; danach eingefroren.
+    ...(draft.deadlineShiftWaived === true ? { deadlineShiftWaived: true } : {}),
     /*
      * E-RECHNUNG-04B — die Währung wird hier haltbar gemacht.
      *
@@ -1306,6 +1324,8 @@ export function buildInvoiceFinalizationContentFingerprint(
     paymentDueDate: draft.paymentDueDate ?? null,
     paymentTermsText: draft.paymentTermsText ?? '',
     skontoText: draft.skontoText ?? '',
+    // FINANZ-CORE-01A (Feiertage) — nur wenn gesetzt: ältere Abdrücke bleiben gleich.
+    ...(draft.deadlineShiftWaived === true ? { deadlineShiftWaived: true as const } : {}),
     introText: draft.introText ?? '',
     closingText: draft.closingText ?? '',
     baustelle: draft.baustelle ?? '',
@@ -1351,6 +1371,7 @@ export function buildInvoiceContentFingerprintFromInvoice(invoice: VorgangInvoic
     paymentDueDate: invoice.paymentDueDate ?? null,
     paymentTermsText: invoice.paymentTermsText ?? '',
     skontoText: invoice.skontoText ?? '',
+    ...(invoice.deadlineShiftWaived === true ? { deadlineShiftWaived: true as const } : {}),
     introText: invoice.introText ?? '',
     closingText: invoice.closingText ?? '',
     baustelle: invoice.baustelle ?? '',
@@ -1364,7 +1385,8 @@ export function buildInvoiceContentFingerprintFromInvoice(invoice: VorgangInvoic
       email: '',
       phone: '',
     },
-    subtotal: invoice.subtotal,
+    // FC01A-P1-Restkorrektur (lokaler Altbestand) — ein fehlendes Netto bleibt fehlend (nie das Brutto).
+    subtotal: invoice.subtotal ?? null,
     amount: invoice.amount,
     calculationMode: resolveInvoiceCalculationMode(invoice),
     fixedAmountNet: isFixedAmountAbschlag(invoice)
@@ -1397,6 +1419,8 @@ function buildInvoiceContentFingerprintPayload(payload: {
   paymentDueDate: string | null;
   paymentTermsText: string;
   skontoText: string;
+  /** FINANZ-CORE-01A (Feiertage) — nur vorhanden, wenn ausdrücklich vereinbart. */
+  deadlineShiftWaived?: true;
   introText: string;
   closingText: string;
   baustelle: string;
@@ -1419,7 +1443,8 @@ function buildInvoiceContentFingerprintPayload(payload: {
    * zwei Fassungen derselben gespeicherten Rechnung und wird nie persistiert.
    */
   customerBilling: CustomerBilling;
-  subtotal: number;
+  /** `null` nur für einen lokalen Altbeleg ohne gespeichertes Netto (FC01A-P1, lokaler Altbestand). */
+  subtotal: number | null;
   amount: number;
   calculationMode: InvoiceCalculationMode;
   fixedAmountNet: number | null;

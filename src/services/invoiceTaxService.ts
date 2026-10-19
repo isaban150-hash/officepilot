@@ -1,4 +1,5 @@
 import type { CompanyProfile, TaxStatus } from '../types/models';
+import { berechneFristFenster, type FristFenster, type FristLage } from './fristen/fristende';
 
 export function getTaxRateForStatus(status: TaxStatus | string): number {
   switch (status) {
@@ -118,7 +119,13 @@ export function buildSkontoText(profile: CompanyProfile): string {
       : percentValue.toLocaleString('de-DE');
     // „1 Tag", nicht „1 Tagen".
     const days = daysValue === 1 ? '1 Tag' : `${daysValue} Tagen`;
-    return `Bei Zahlung innerhalb von ${days} gewähren wir ${percent} % Skonto.`;
+    /*
+     * FINANZ-CORE-01A (Gesamtabschluss, Entscheidung des Auftraggebers) — der Fristbeginn steht
+     * ausdrücklich im Satz. Ohne Angabe beginnt eine Skontofrist nach überwiegender Auffassung erst
+     * mit dem Zugang beim Kunden; gerechnet wird ab Rechnungsdatum (`buildSkontoDeadline`). Text und
+     * Rechnung stimmen damit überein. Bereits ausgestellte Rechnungen behalten ihren Wortlaut.
+     */
+    return `Bei Zahlung innerhalb von ${days} ab Rechnungsdatum gewähren wir ${percent} % Skonto.`;
   }
 
   // Altbestand ohne gesetzten Schalter behält seinen gespeicherten Satz.
@@ -140,27 +147,62 @@ export function buildSkontoText(profile: CompanyProfile): string {
  *
  * `null` heisst „kein belastbarer Skontosatz". Es wird nichts geraten und
  * nichts ergänzt — ohne Prozentsatz **und** Frist gibt es kein Skonto.
+ *
+ * FC01A-Nacharbeit (A4) — die Frist ist die Tagesangabe, die **zum Skontosatz gehört**:
+ * im selben Satz wie der (erste) Satz, nicht als Nettofrist gekennzeichnet („30 Tage
+ * netto", „ohne Abzug", „Zahlungsziel 30 Tage"), unter mehreren die nächstliegende.
+ * Bisher nahm die Lesart die erste Tagesangabe *nach* dem Satz — bei „Bei Zahlung
+ * innerhalb von 10 Tagen 2 % Skonto, sonst 30 Tage netto" also 30 Tage: Eine verspätete
+ * Zahlung galt als fristgerechtes Skonto. Eine Nettofrist ist nie die Skontofrist, und über
+ * Satzgrenzen hinweg wird nichts zusammengesetzt. Der Server liest genauso
+ * (`workspace_skonto_terms`); die gemeinsamen Beispiele stehen in beiden Tests.
  */
-export function parseSkontoFromText(text: string): { percent: number; days: number } | null {
-  const percentFirst = text.match(/(\d+(?:[.,]\d+)?)\s*%.*?(\d+)\s*tag(?:e|en)?\b/i);
-  if (percentFirst) {
-    const percent = Number(percentFirst[1].replace(',', '.'));
-    const days = Number(percentFirst[2]);
-    if (Number.isFinite(percent) && Number.isFinite(days) && percent > 0 && days > 0) {
-      return { percent, days };
-    }
-  }
+const SKONTO_PERCENT = /(\d+(?:[.,]\d+)?)\s*%/;
+const SKONTO_DAYS = /(\d+)\s*tag(?:e|en)?\b/gi;
+const SKONTO_NET_AFTER = /^[\s,:]*(?:(?:rein\s+)?netto\b|ohne\s+(?:(?:jeden|jeglichen)\s+)?abzug)/i;
+const SKONTO_NET_BEFORE = /(?:zahlungsziel|netto(?:zahlungsziel)?)\s*(?::|von|innerhalb(?:\s+von)?|bis\s+zu)?\s*$/i;
+const SKONTO_MAX_DAYS = 3660;
 
-  const daysFirst = text.match(/(\d+)\s*tag(?:e|en)?\b.*?(\d+(?:[.,]\d+)?)\s*%/i);
-  if (daysFirst) {
-    const days = Number(daysFirst[1]);
-    const percent = Number(daysFirst[2].replace(',', '.'));
-    if (Number.isFinite(percent) && Number.isFinite(days) && percent > 0 && days > 0) {
-      return { percent, days };
-    }
-  }
+function isSentenceBoundary(text: string, index: number): boolean {
+  const ch = text[index];
+  if (ch === '!' || ch === '?' || ch === ';' || ch === '\n' || ch === '\r') return true;
+  if (ch !== '.') return false;
+  // Dezimalpunkt und Datum („2.5 %", „01.10.2026") trennen keinen Satz.
+  return !(/\d/.test(text[index - 1] ?? '') && /\d/.test(text[index + 1] ?? ''));
+}
 
-  return null;
+export function parseSkontoFromText(rawText: string): { percent: number; days: number } | null {
+  // Geschützte Leerzeichen (etwa aus einer Textverarbeitung) liest der Server nicht als Leerraum.
+  const text = rawText.replace(/[  ]/g, ' ');
+  const percentMatch = SKONTO_PERCENT.exec(text);
+  if (!percentMatch) return null;
+  const percent = Number(percentMatch[1].replace(',', '.'));
+  // FINANZ-CORE-01A (Gesamtabschluss) — 100 % und mehr sind kein Skonto, sondern ein Erlass; der
+  // Server rechnet ebenso (`workspace_invoice_open_cents`: 0 < Satz < 100). Bisher galt eine Rechnung
+  // mit „100 % Skonto …“ im Client ohne Zahlung als ausgeglichen, auf dem Server nicht.
+  if (!Number.isFinite(percent) || percent <= 0 || percent >= 100) return null;
+  const percentStart = percentMatch.index;
+  const percentEnd = percentStart + percentMatch[0].length;
+
+  let sentenceStart = percentStart;
+  while (sentenceStart > 0 && !isSentenceBoundary(text, sentenceStart - 1)) sentenceStart -= 1;
+  let sentenceEnd = percentEnd;
+  while (sentenceEnd < text.length && !isSentenceBoundary(text, sentenceEnd)) sentenceEnd += 1;
+
+  let best: { days: number; distance: number } | null = null;
+  for (const match of text.matchAll(SKONTO_DAYS)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    if (start < sentenceStart || end > sentenceEnd) continue;
+    const after = text.slice(end, Math.min(sentenceEnd, end + 20));
+    const before = text.slice(Math.max(sentenceStart, start - 25), start);
+    if (SKONTO_NET_AFTER.test(after) || SKONTO_NET_BEFORE.test(before)) continue;
+    const days = Number(match[1]);
+    if (!Number.isFinite(days) || days <= 0 || days > SKONTO_MAX_DAYS) continue;
+    const distance = end <= percentStart ? percentStart - end : start - percentEnd;
+    if (!best || distance < best.distance) best = { days, distance };
+  }
+  return best ? { percent, days: best.days } : null;
 }
 
 /**
@@ -186,9 +228,24 @@ export function addCalendarDays(baseDate: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Letzter Tag, an dem das Skonto noch gilt — der Tag selbst zählt dazu. */
-export function buildSkontoDeadline(baseDate: string, days: number): string {
-  return addCalendarDays(baseDate, days);
+/**
+ * Letzter Tag, an dem das Skonto noch gilt — der Tag selbst zählt dazu.
+ *
+ * FINANZ-CORE-01A (Feiertage, Entscheidung des Auftraggebers vom 15.10.2026) — § 193 BGB:
+ * Fällt das kalendarische Fristende (Rechnungsdatum + Tage, OLG Hamm 21 U 134/04: Kalendertage)
+ * auf Samstag, Sonntag oder einen gesetzlichen Feiertag am Sitz des Kunden, tritt der nächste
+ * Werktag an seine Stelle — dieselbe Regel wie beim Zahlungsziel. Ist der Ort nicht eindeutig,
+ * liefert das Fenster jedes mögliche Ende (`fristen/fristende.ts`). Gilt für alle Rechnungen, auch
+ * bereits ausgestellte. Der Server rechnet gleich (`workspace_invoice_open_cents`, Migration
+ * 20261118). Bisher (20261117) verschob nur Samstag/Sonntag — WEISS-FAIL FC01A-END16-R1.
+ */
+export function buildSkontoDeadlineWindow(baseDate: string, days: number, lage: FristLage): FristFenster {
+  return berechneFristFenster(addCalendarDays(baseDate, days), lage);
+}
+
+/** Frühestes wirksames Skonto-Fristende am Ort `lage` (bei eindeutigem Ort: das Fristende). */
+export function buildSkontoDeadline(baseDate: string, days: number, lage: FristLage): string {
+  return buildSkontoDeadlineWindow(baseDate, days, lage).fruehestens;
 }
 
 export function getTaxStatusLabel(taxStatus: TaxStatus): string {

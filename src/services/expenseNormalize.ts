@@ -84,6 +84,12 @@ export function normalizeExpense(raw: Partial<Expense> & Pick<Expense, 'id'>): E
     currency: raw.currency?.trim() || 'EUR',
     paymentStatus,
     payments: (raw.payments ?? []).map(cloneExpensePayment),
+    // FINANZ-CORE-01A (END18-R3) — Nachweise endgültig abgewiesener Aktionen bleiben beim Laden erhalten.
+    ...(raw.rejectedPayments?.length ? { rejectedPayments: raw.rejectedPayments.map((payment) => ({ ...payment })) } : {}),
+    ...(raw.rejectedChanges?.length
+      ? { rejectedChanges: raw.rejectedChanges.map((change) => ({ ...change, ...(change.attempted ? { attempted: { ...change.attempted } } : {}) })) }
+      : {}),
+    ...(raw.reconciledRejections?.length ? { reconciledRejections: raw.reconciledRejections.map((entry) => ({ ...entry })) } : {}),
     positions: (raw.positions ?? []).map((line) => ({ ...line })),
     allocations: (raw.allocations ?? []).map((allocation) => ({ ...allocation })),
     linkedInboxId: raw.linkedInboxId,

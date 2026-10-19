@@ -14,7 +14,7 @@
  *
  * Neutrale Beispieldaten, kein Netzwerk, keine neue Rechnungsnummer.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -54,6 +54,11 @@ import type {
   VorgangInvoice,
   VorgangInvoiceLine,
 } from '../../../types/models';
+import { alsInhaber } from '../../../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 const GOLD = path.resolve(__dirname, '..', '__goldfiles__');
 const sha256 = (value: string | Uint8Array) =>

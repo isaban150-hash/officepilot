@@ -293,7 +293,9 @@ function wasRequeuedDuringRun(baseEntry: SyncOutboxEntry | undefined, localEntry
   return (
     baseEntry.queuedAt !== localEntry.queuedAt ||
     baseEntry.version !== localEntry.version ||
-    baseEntry.operation !== localEntry.operation
+    baseEntry.operation !== localEntry.operation ||
+    // FINANZ-CORE-01A (WEISS B21-C1) — auch eine Neueinreihung in derselben Millisekunde: jede trägt eine neue Nummer.
+    (typeof localEntry.sequence === 'number' && baseEntry.sequence !== localEntry.sequence)
   );
 }
 
@@ -325,6 +327,8 @@ export function mergeOutboxWithLocalChanges(
       operation: localEntry.operation,
       version: localEntry.version,
       queuedAt: localEntry.queuedAt,
+      // FINANZ-CORE-01A (WEISS B21-C1) — die lokale Neueinreihung trägt die jüngere Einreihungsnummer.
+      ...(typeof localEntry.sequence === 'number' ? { sequence: localEntry.sequence } : {}),
       status: keepsBetaBlock ? 'blocked' : 'pending',
       blockedReason: keepsBetaBlock ? localEntry.blockedReason : undefined,
       retryCount: confirmed ? 0 : candidateEntry.retryCount,

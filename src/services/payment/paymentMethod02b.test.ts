@@ -222,7 +222,8 @@ describe('Monatsmappe', () => {
     const kopf = lines[0].split(';');
     const artIndex = kopf.indexOf('Zahlungsart');
     expect(artIndex).toBeGreaterThanOrEqual(0);
-    expect(kopf.slice(artIndex + 1)).toEqual(['Zahlungsnachweis', 'Nachweisdokument', 'Nachweisdatei']);
+    // FC01A-Nacharbeit (A5) — „Skontoabzug" ist ebenfalls am Ende angehängt; die Zahlungsart bleibt an ihrer Stelle.
+    expect(kopf.slice(artIndex + 1)).toEqual(['Zahlungsnachweis', 'Nachweisdokument', 'Nachweisdatei', 'Skontoabzug']);
     expect(lines.slice(1).map((line) => line.split(';')[artIndex])).toEqual(['Bar', '']);
   });
 });

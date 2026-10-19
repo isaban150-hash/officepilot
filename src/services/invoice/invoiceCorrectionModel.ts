@@ -87,6 +87,13 @@ export function buildInvoiceCorrectionModel(
         amount: negateMoney(line.amount),
       })),
       deductionsTotal: negateMoney(base.summary.deductionsTotal),
+      /*
+       * FC01A-Nacharbeit (A8) — Netto und USt der Abzüge stehen wie an den Zeilen (dort bleiben
+       * `netAmount`/`taxAmount` unverändert, nur der Betrag trägt das Gegenzeichen). Bisher fielen
+       * die Summen weg; die Summenzeile des Korrekturbelegs nannte als einzige keine Steuer.
+       */
+      ...(base.summary.deductionsNetTotal !== undefined ? { deductionsNetTotal: base.summary.deductionsNetTotal } : {}),
+      ...(base.summary.deductionsTaxTotal !== undefined ? { deductionsTaxTotal: base.summary.deductionsTaxTotal } : {}),
       // FINANZ-CORE-01A (WEISS-Recheck N02-R1) — gezahlt und Skonto werden ebenso gegengebucht.
       ...(base.summary.skontoLines
         ? {

@@ -18,7 +18,7 @@
  * Mit FC01A_EINVOICE_EXPORT=<Verzeichnis> schreibt P7 die Dokumente für die externe
  * Prüfung (Mustang) heraus; ohne die Variable wird nichts geschrieben.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -35,6 +35,11 @@ import type {
   VorgangInvoice,
   VorgangInvoiceLine,
 } from '../../../types/models';
+import { alsInhaber } from '../../../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 const SELLER: CompanyProfile = {
   companyName: 'Cirmak Haustechnik',

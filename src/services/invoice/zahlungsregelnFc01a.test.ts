@@ -106,10 +106,11 @@ describe('ZAH-15 — Skonto mit einem Tag Frist', () => {
       skontoPercent: 2,
       skontoDays: 1,
     } as CompanyProfile);
-    expect(sentence).toBe('Bei Zahlung innerhalb von 1 Tag gewähren wir 2 % Skonto.');
+    expect(sentence).toBe('Bei Zahlung innerhalb von 1 Tag ab Rechnungsdatum gewähren wir 2 % Skonto.');
     expect(parseSkontoFromText(sentence)).toEqual({ percent: 2, days: 1 });
     expect(parseSkontoFromText('3 % Skonto bei Zahlung innerhalb von 10 Tagen')).toEqual({ percent: 3, days: 10 });
-    expect(parseSkontoFromText('14 Tage netto, 2,5 % Skonto')).toEqual({ percent: 2.5, days: 14 });
+    // FC01A-Nacharbeit (A4): eine Nettofrist ist keine Skontofrist — ohne eigene Frist kein Skonto.
+    expect(parseSkontoFromText('14 Tage netto, 2,5 % Skonto')).toBeNull();
     expect(parseSkontoFromText('Tagung am Montag, 2 % Rabatt')).toBeNull();
   });
 

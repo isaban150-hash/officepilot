@@ -206,14 +206,14 @@ describe('SP-RECOVERY-UI — Print/PDF-Parität', () => {
     expect(container.querySelector('[data-testid="invoice-pdf-error"]')).not.toBeNull();
   });
 
-  it('R8: nach dem Recovery druckt derselbe Knopf', () => {
+  it('R8: nach dem Recovery druckt derselbe Knopf', async () => {
     const printSpy = vi.spyOn(invoicePrintService, 'printInvoice').mockImplementation(() => {});
     render(legacyInvoice({ servicePeriodConfirmed: true }));
 
     const button = container.querySelector<HTMLButtonElement>('[data-testid="invoice-print"]')!;
-    act(() => button.click());
-
-    expect(printSpy).toHaveBeenCalledTimes(1);
+    // SYS-04 — der Druck fragt jetzt asynchron dieselbe Dienstgrenze wie das PDF.
+    await act(async () => button.click());
+    await vi.waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
     expect(container.querySelector('[data-testid="invoice-pdf-error"]')).toBeNull();
   });
 

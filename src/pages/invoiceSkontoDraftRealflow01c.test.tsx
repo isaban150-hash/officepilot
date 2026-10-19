@@ -44,7 +44,7 @@ const VORGANG_ID = 'v-test-1';
 
 const STANDARD_WITH_DEDUCTION = 'Zahlbar innerhalb von 14 Tagen ohne Abzug.';
 const STANDARD_PLAIN = 'Zahlbar innerhalb von 14 Tagen.';
-const SKONTO_SENTENCE = 'Bei Zahlung innerhalb von 10 Tagen gewähren wir 7 % Skonto.';
+const SKONTO_SENTENCE = 'Bei Zahlung innerhalb von 10 Tagen ab Rechnungsdatum gewähren wir 7 % Skonto.';
 
 const baseCompany: CompanyProfile = {
   ...DEFAULT_COMPANY_PROFILE,

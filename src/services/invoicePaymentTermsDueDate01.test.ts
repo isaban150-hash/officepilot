@@ -73,11 +73,18 @@ describe('Fälligkeitstag in der Zahlungsabstimmung', () => {
     expect(calculatePaymentSummary(offen, '2026-04-03').status).toBe('offen');
   });
 
-  it('H: einen Tag später ist der Restbetrag überfällig', () => {
-    expect(calculatePaymentSummary(invoice([]), '2026-04-04').status).toBe('ueberfaellig');
+  /*
+   * FINANZ-CORE-01A (Feiertage, § 193 BGB, WEISS FC01A-END16-R1) — der Fälligkeitstag 03.04.2026 ist
+   * Karfreitag. Das wirksame Fristende rückt über Samstag, Sonntag und Ostermontag auf Di 07.04.;
+   * überfällig wird die Rechnung erst am Tag danach. Bis Bericht 16 galt sie schon am 04.04. als überfällig.
+   */
+  it('H: einen Tag nach dem wirksamen Fristende (Karfreitag → Di 07.04.) ist der Restbetrag überfällig', () => {
+    expect(calculatePaymentSummary(invoice([]), '2026-04-04').status).toBe('offen');
+    expect(calculatePaymentSummary(invoice([]), '2026-04-07').status).toBe('offen');
+    expect(calculatePaymentSummary(invoice([]), '2026-04-08').status).toBe('ueberfaellig');
     /* Mit Teilzahlung bleibt es überfällig, solange etwas offen ist. */
     expect(
-      calculatePaymentSummary(invoice([{ amount: 400, date: '2026-03-25' }]), '2026-04-04').status,
+      calculatePaymentSummary(invoice([{ amount: 400, date: '2026-03-25' }]), '2026-04-08').status,
     ).toBe('ueberfaellig');
   });
 

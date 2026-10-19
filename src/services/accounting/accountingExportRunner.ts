@@ -17,7 +17,8 @@ import {
   collectMonatsmappeInput,
 } from '../steuerberater/monatsmappeExportService';
 import type { MonatsmappeDocumentLoaders } from '../steuerberater/monatsmappeExportService';
-import { isValidMonthKey } from '../steuerberater/monatsmappeModelService';
+import { buildMonatsmappeModel, isValidMonthKey } from '../steuerberater/monatsmappeModelService';
+import { buildAccountingPeriodState } from './accountingPeriodService';
 import { downloadBackupBlob } from '../backupExportService';
 import { getAllAccountingAssignments } from './accountingStore';
 import { getChartOfAccounts } from './accountingSettingsService';
@@ -34,6 +35,8 @@ export type AccountingExportOutcome =
   | { outcome: 'invalid_month' }
   | { outcome: 'forbidden'; detail?: string }
   | { outcome: 'blocked'; readiness: AccountingExportReadiness }
+  /** Systemische Gesamtnacharbeit (D9) — der Datenstand hat sich während des Bauens geändert; nichts wird ausgegeben. */
+  | { outcome: 'changed_during_export' }
   | { outcome: 'document_load_failed'; failed: Array<{ id: string; fileName: string; detail: string }> }
   | { outcome: 'export_failed'; detail?: string };
 
@@ -42,6 +45,11 @@ export interface AccountingExportRunInput {
   userId: string | null | undefined;
   /** Nur für Tests: umgeht Zugriffsprüfung bzw. Lader. */
   skipGate?: boolean;
+  /**
+   * Systemische Gesamtnacharbeit (Produktentscheidung) — `lokal`: ausdrücklich lokale, als „nicht cloudbestätigt“
+   * gekennzeichnete Übergabe einer gültigen, vom Server (noch) nicht bestätigten Revision. Standard: regulär.
+   */
+  handover?: 'regulaer' | 'lokal';
   loaders?: MonatsmappeDocumentLoaders;
   download?: (blob: Blob, fileName: string) => void;
 }
@@ -58,41 +66,61 @@ export async function buildAccountingExport(
   }
 
   /*
-   * Das Gate **jetzt** erneut. Die Seite kann seit dem Rendern veraltet sein,
-   * und ein Export auf einen veralteten Stand wäre genau das, was 06C
-   * verhindern soll.
+   * Systemische Gesamtnacharbeit (D9) — EIN Datenstand für Gate, Befunde, Buchungen und Paket. Bisher wurde das
+   * Modell dreimal gebaut (Gate, Befunde, Übergabestatus), und nach den asynchronen Ladevorgängen prüfte niemand
+   * mehr, ob die Daten noch dieselben waren. Jetzt: einmal erfassen, daraus bewerten und bauen — und nach dem Bauen
+   * nachprüfen. Hat sich der Stand inzwischen geändert, wird nichts ausgegeben.
    */
-  const readiness = evaluateAccountingExportReadiness(input.monthKey);
-  if (!readiness.packageAllowed || !readiness.state.activeClosure) {
+  const findings = collectSteuerberaterMonthFindings(input.monthKey);
+  const assignments = getAllAccountingAssignments();
+  const chartOfAccounts = getChartOfAccounts();
+  const state = buildAccountingPeriodState(findings.model, assignments, chartOfAccounts);
+  const readiness = evaluateAccountingExportReadiness(input.monthKey, state);
+  const lokal = input.handover === 'lokal';
+  const erlaubt = lokal ? readiness.localHandoverAllowed || (readiness.packageAllowed && readiness.closureStatus === 'lokal') : readiness.packageAllowed;
+  if (!erlaubt || !state.activeClosure) {
     return { result: { outcome: 'blocked', readiness } };
   }
+  const closure = state.activeClosure;
+  const status = readiness.closureStatus ?? 'ausstehend';
 
   try {
-    /*
-     * 02B — dieselben Befunde wie die Übersicht: Modell, unklare Fälle,
-     * fehlende Unterlagen und der gemeinsame Übergabestatus.
-     */
-    const findings = collectSteuerberaterMonthFindings(input.monthKey);
     const data = findings.input;
     const model = findings.model;
-    const bookings = buildBookingExport(model, getAllAccountingAssignments(), getChartOfAccounts());
-    const handover = getSteuerberaterHandoverStatus(input.monthKey, findings);
+    const bookings = buildBookingExport(model, assignments, chartOfAccounts);
+    const handover = getSteuerberaterHandoverStatus(input.monthKey, findings, readiness);
 
     const built = await buildAccountingExportPackage(
       {
         model,
         bookings,
-        closure: readiness.state.activeClosure,
-        currentFingerprint: readiness.state.currentFingerprint,
+        closure,
+        currentFingerprint: state.currentFingerprint,
         workspaceId: getWorkspaceStoreSnapshot()?.id ?? '',
         exportedAt: new Date().toISOString(),
         findings: { unclearDocuments: findings.unclearDocuments, missingItems: findings.missingItems },
         handover,
+        cloud: { status, uebergabeArt: lokal || status === 'lokal' ? 'lokal' : 'regulaer' },
       },
       input.loaders ?? (await defaultLoadersFor(data)),
     );
 
     if (!built.ok) return { result: { outcome: 'document_load_failed', failed: built.failed } };
+
+    // Nachprüfung nach allen asynchronen Schritten: derselbe Datenstand, dieselbe Revision, derselbe Cloudstatus.
+    const nachher = buildAccountingPeriodState(
+      buildMonatsmappeModel(collectMonatsmappeInput(input.monthKey)),
+      getAllAccountingAssignments(),
+      getChartOfAccounts(),
+    );
+    if (
+      nachher.currentFingerprint !== state.currentFingerprint ||
+      nachher.activeClosure?.id !== closure.id ||
+      nachher.activeClosureStatus !== state.activeClosureStatus ||
+      nachher.blockers.length > 0
+    ) {
+      return { result: { outcome: 'changed_during_export' } };
+    }
     return {
       result: {
         outcome: 'exported',

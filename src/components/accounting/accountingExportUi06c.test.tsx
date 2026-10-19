@@ -20,12 +20,13 @@ import { AccountingExportPanel } from './AccountingExportPanel';
 import { SteuerberaterPage } from '../../pages/SteuerberaterPage';
 import { collectDatevBlockers } from '../../services/accounting/accountingExportGateService';
 import { setAccountingStoreForTests } from '../../services/accounting/accountingStore';
-import { setAccountingPeriodStoreForTests } from '../../services/accounting/accountingPeriodStore';
+import { getClosuresForMonth, setAccountingPeriodStoreForTests } from '../../services/accounting/accountingPeriodStore';
 import { closeAccountingPeriod } from '../../services/accounting/accountingPeriodService';
 import { setExpenseStoreForTests } from '../../services/expenseStore';
 import { hydrateWorkspaceStore } from '../../services/workspace/workspaceStore';
 import { normalizeExpense } from '../../services/expenseNormalize';
 import { resetTestStores } from '../../test/resetStores';
+import { abschluesseServerbestaetigt } from '../../test/accountingClosureTestUtils';
 import { de } from '../../i18n';
 import type { AccountingExportReadiness } from '../../services/accounting/accountingExportGateService';
 import type { AccountingPeriodState } from '../../types/accountingPeriod';
@@ -281,6 +282,8 @@ describe('AF-Ersatz — die Übergabe ist in der Anwendung erreichbar', () => {
     setAccountingStoreForTests([kontierung()]);
     const monthKey = new Date().toISOString().slice(0, 7);
     expect(closeAccountingPeriod(monthKey).success).toBe(true);
+    // Systemische Gesamtnacharbeit — der Server hat den Abschluss geprüft und angenommen.
+    abschluesseServerbestaetigt();
     const spy = vi.spyOn(workspaceRoles, 'resolveWorkspaceWriteAccess').mockReturnValue({
       canWrite: true, canIntake: true, role: 'owner', reason: 'owner_or_admin',
     });
@@ -297,6 +300,8 @@ describe('AF-Ersatz — die Übergabe ist in der Anwendung erreichbar', () => {
     setAccountingStoreForTests([kontierung()]);
     const monthKey = new Date().toISOString().slice(0, 7);
     expect(closeAccountingPeriod(monthKey).success).toBe(true);
+    // Systemische Gesamtnacharbeit — der Server hat den Abschluss geprüft und angenommen.
+    abschluesseServerbestaetigt();
     const spy = vi.spyOn(workspaceRoles, 'resolveWorkspaceWriteAccess').mockReturnValue({
       canWrite: false, canIntake: true, role: 'member', reason: 'member',
     });
@@ -314,5 +319,54 @@ describe('AF-Ersatz — die Übergabe ist in der Anwendung erreichbar', () => {
     const bereich = q('steuerberater-export')!.textContent ?? '';
     expect(bereich).toContain('DATEV-Format ist noch nicht eingerichtet.');
     expect(bereich).not.toMatch(/GoBD|rechtssicher|festgeschrieben/i);
+  });
+
+  /*
+   * Systemische Gesamtnacharbeit (Bericht 21, T6-02/T6-03) — der Cloudstatus der Revision ist auf der echten Seite
+   * sichtbar: eine nur lokal abgeschlossene Revision wartet auf den Server (kein reguläres Paket, nur ausdrücklich
+   * lokale Übergabe); eine vom Server abgewiesene Revision steht mit Grund in der Historie, gilt nicht als
+   * Abschluss — kein Paket, auch kein lokales —, und der Monat ist wieder abschließbar.
+   */
+  it('T6-02 ausstehend: Status sichtbar, kein reguläres Paket, ausdrücklich lokale Übergabe', async () => {
+    setExpenseStoreForTests([ausgabe()]);
+    setAccountingStoreForTests([kontierung()]);
+    const monthKey = new Date().toISOString().slice(0, 7);
+    expect(closeAccountingPeriod(monthKey).success).toBe(true);
+    const spy = vi.spyOn(workspaceRoles, 'resolveWorkspaceWriteAccess').mockReturnValue({
+      canWrite: true, canIntake: true, role: 'owner', reason: 'owner_or_admin',
+    });
+
+    await zeigeSeite();
+    expect(q('accounting-period-cloud-status-ausstehend')?.textContent).toContain('wartet auf die Prüfung durch den Server');
+    expect(q('accounting-period-cloud-pending')).not.toBeNull();
+    expect(q('accounting-export-package'), 'kein reguläres Paket ohne Serverannahme').toBeNull();
+    expect(q('accounting-export-blocker-closure_not_server_confirmed')?.textContent).toContain('wartet auf die Prüfung durch den Server');
+    expect(q('accounting-export-local-package'), 'ausdrücklich lokale Übergabe').not.toBeNull();
+    expect(q('accounting-export-local-handover')?.textContent).toMatch(/nicht cloudbestätigt/i);
+    spy.mockRestore();
+  });
+
+  it('T6-03 abgewiesen: mit Grund sichtbar; keine Revision gilt, kein Paket (auch kein lokales), Monat wieder abschließbar', async () => {
+    setExpenseStoreForTests([ausgabe()]);
+    setAccountingStoreForTests([kontierung()]);
+    const monthKey = new Date().toISOString().slice(0, 7);
+    expect(closeAccountingPeriod(monthKey).success).toBe(true);
+    const [abschluss] = getClosuresForMonth(monthKey);
+    setAccountingPeriodStoreForTests([{
+      ...abschluss!,
+      cloudAbweisung: { meldung: 'closure_manifest_mismatch: fehlend=1 erfunden=0 abweichend=0 doppelt=0 kopf=0', am: '2026-10-17T10:00:00.000Z' },
+    }]);
+    const spy = vi.spyOn(workspaceRoles, 'resolveWorkspaceWriteAccess').mockReturnValue({
+      canWrite: true, canIntake: true, role: 'owner', reason: 'owner_or_admin',
+    });
+
+    await zeigeSeite();
+    expect(q(`accounting-period-history-${abschluss!.revision}`)?.textContent).toContain('vom Server abgewiesen');
+    expect(q(`accounting-period-history-rejected-${abschluss!.revision}`)?.textContent).toContain('Grund: closure_manifest_mismatch');
+    expect(q('accounting-period-cloud-status-angenommen')).toBeNull();
+    expect(q('accounting-export-package')).toBeNull();
+    expect(q('accounting-export-local-package')).toBeNull();
+    expect(q('accounting-period-close'), 'der Monat ist wieder abschließbar').not.toBeNull();
+    spy.mockRestore();
   });
 });

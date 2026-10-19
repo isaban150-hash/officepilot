@@ -24,6 +24,7 @@ import type { Expense } from '../../types/expense';
 import { getSyncClient } from '../sync/syncClientService';
 import { generateUuid } from '../sync/syncMetaService';
 import { enqueueSyncOutbox } from '../sync/syncOutboxService';
+import { affectedMonthsOf, bookingMonthOf, businessMonthOf } from '../sync/syncAffectedMonths';
 import { persistAll } from '../persistenceService';
 import { getDocumentById } from '../documentService';
 import { getExpenseStoreSnapshot } from '../expenseStore';
@@ -300,7 +301,9 @@ function sameFinancials(existing: EmployeePayment, intent: EmployeePaymentConfir
 }
 
 function enqueuePayment(payment: EmployeePayment, operation: 'create' | 'update'): void {
-  enqueueSyncOutbox({ entityType: 'employee_payment', entityId: payment.id, operation, version: 1 });
+  // Bericht 20 — Auszahlungs- und Rücknahmemonat reisen mit (Abschlusssperre bis zur Bestätigung).
+  const affectedMonths = affectedMonthsOf(bookingMonthOf(payment.paymentDate), businessMonthOf(payment.reversedAt));
+  enqueueSyncOutbox({ entityType: 'employee_payment', entityId: payment.id, operation, version: 1, ...(affectedMonths ? { affectedMonths } : {}) });
 }
 
 export function confirmEmployeePayment(

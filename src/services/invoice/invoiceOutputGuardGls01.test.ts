@@ -271,3 +271,47 @@ describe('GLS01 direkte Dienstaufrufe — Inhaber und Grenzen der Regel', () => 
     expect(cloud).not.toHaveBeenCalled();
   });
 });
+
+/*
+ * Systemische Gesamtnacharbeit (SYS-04, Abnahmefälle T6-05/06/07) — eine unbekannte Sitzung oder Mitgliedschaft gilt
+ * bei eingerichteter Cloud nie als Inhaber: Sie braucht denselben Nachweis wie ein Mitglied. Bisher fiel eine
+ * unbekannte Rolle durch den Guard (nur die Rolle „member“ wurde geprüft).
+ */
+describe('SYS-04 — unbekannte Sitzung oder Mitgliedschaft wird nie wie ein Inhaber behandelt', () => {
+  async function allesGesperrt() {
+    expect(await checkInvoiceOutput(rechnung())).toEqual({ reason: 'service_period_unverified' });
+    const pdf = await generateApprovedInvoicePdf(rechnung());
+    expect(pdf.ok ? null : pdf.message).toBe('service_period_unverified');
+    const korrektur = await generateInvoiceCorrectionPdf(
+      rechnung({ cancellationKind: 'correction', cancelledAt: '2026-10-01T10:00:00.000Z', cancelReason: 'Falscher Betrag' }),
+    );
+    expect(korrektur.ok).toBe(false);
+    const xr = await ensureXRechnungArtifact(rechnung());
+    expect(xr.ok ? null : xr.reason).toBe('service_period_unverified');
+    const zf = await ensureZugferdArtifact(rechnung());
+    expect(zf.ok ? null : zf.reason).toBe('service_period_unverified');
+    expect(dateien()).toHaveLength(0);
+  }
+
+  it('T6-05 unbekannte Sitzung bei eingerichteter Cloud: PDF, Korrektur, XRechnung und ZUGFeRD gesperrt', async () => {
+    angemeldet(null);
+    cloudSagt('unknown');
+    await allesGesperrt();
+  });
+
+  it('T6-06 unbekannte Mitgliedschaft (angemeldet, aber nicht in der Mitgliederliste): gesperrt', async () => {
+    angemeldet('user-ohne-mitgliedschaft');
+    cloudSagt('not_confirmed');
+    await allesGesperrt();
+  });
+
+  it('T6-07 Mitglied mit tatsächlich vorhandenem Nachweis: Ausgabe nach der bestehenden Regel erlaubt', async () => {
+    angemeldet(MITGLIED);
+    cloudSagt('unknown');
+    recordServicePeriodCloudProofs(BETRIEB, [rechnung().id]);
+    expect(await checkInvoiceOutput(rechnung())).toBeNull();
+    expect((await generateApprovedInvoicePdf(rechnung())).ok).toBe(true);
+    expect((await ensureXRechnungArtifact(rechnung())).ok).toBe(true);
+    expect((await ensureZugferdArtifact(rechnung())).ok).toBe(true);
+  });
+});

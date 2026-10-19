@@ -6,8 +6,10 @@ import { formatOrderUnitDisplay } from './orderUnitMapper';
 import { getTaxRateForStatus } from './invoiceTaxService';
 import { getInvoiceDocumentTitle, usesAbschlagDeductions } from './invoiceTypeService';
 import { selectHistoricalInvoiceLogo } from './invoice/invoiceHistoricalLogo';
+import { InvoiceNetUnresolvedError, resolveInvoiceNet } from './invoice/invoiceNetResolution';
 import {
   frozenSettlementShare,
+  reliableDeductionNetCents,
   splitAbschlagDeductions,
   type AbschlagSettlementShare,
 } from './invoice/abschlagSkontoSplit';
@@ -30,9 +32,14 @@ export { getTaxStatusLabel } from './invoiceTaxService';
  * Abschlag selbst: Netto steht dort als `subtotal`, die Steuer ist der
  * Unterschied zum Brutto — beides auf Cent, keine Rückrechnung über einen Satz.
  */
-function deductionTaxParts(item: AbschlagDeduction): Pick<InvoicePrintDeductionLine, 'netAmount' | 'taxAmount'> {
+function deductionTaxParts(
+  item: AbschlagDeduction,
+  taxRate: number,
+): Pick<InvoicePrintDeductionLine, 'netAmount' | 'taxAmount'> {
   if (!Number.isFinite(item.subtotal) || !Number.isFinite(item.amount)) return {};
-  const netCents = toCents(item.subtotal);
+  // FC01A-P1-Restkorrektur (#8) — Netto und Steuer nur, wenn sie zum Satz passen; sonst nichts drucken.
+  const netCents = reliableDeductionNetCents(item, taxRate);
+  if (netCents === null) return {};
   return { netAmount: fromCents(netCents), taxAmount: fromCents(toCents(item.amount) - netCents) };
 }
 
@@ -48,12 +55,12 @@ function deductionLabel(item: AbschlagDeduction, index: number): string {
   return item.abschlagNumber ? `Abschlag ${item.abschlagNumber}` : `Abschlag ${index + 1}`;
 }
 
-function billedDeductionLines(deductions: readonly AbschlagDeduction[]): InvoicePrintDeductionLine[] {
+function billedDeductionLines(deductions: readonly AbschlagDeduction[], taxRate: number): InvoicePrintDeductionLine[] {
   return deductions.map((item, index) => ({
     label: deductionLabel(item, index),
     invoiceNumber: item.invoiceNumber,
     amount: item.amount,
-    ...deductionTaxParts(item),
+    ...deductionTaxParts(item, taxRate),
   }));
 }
 
@@ -88,7 +95,7 @@ function buildDeductionSummary(
   invoice: { subtotalNet: number; taxRate: number },
   settlementOf: DeductionSettlementOf,
 ): DeductionSummary {
-  const billed = billedDeductionLines(deductions);
+  const billed = billedDeductionLines(deductions, invoice.taxRate);
   const split = splitAbschlagDeductions(deductions, invoice, settlementOf);
   if (!split.hasSkonto) return { deductionLines: billed, ...deductionTotals(billed) };
   return {
@@ -98,8 +105,12 @@ function buildDeductionSummary(
             label: deductionLabel(part.deduction, index),
             invoiceNumber: part.deduction.invoiceNumber,
             amount: part.paid,
-            netAmount: part.paidNet,
-            taxAmount: part.paidTax,
+            /*
+             * FC01A-P1-Restkorrektur (#8, Altformat) — steht das Netto des Abschlags nicht fest
+             * (umsatzsteuerpflichtig ohne gespeichertes Netto), werden Netto und Steuer des
+             * gezahlten Teils nicht gedruckt; bisher stand hier Brutto als Netto (468,00 €/−1,52 €).
+             */
+            ...(part.paidNet === null || part.paidTax === null ? {} : { netAmount: part.paidNet, taxAmount: part.paidTax }),
             paidPart: true,
           }
         : billed[index]!,
@@ -154,9 +165,10 @@ function buildPositions(draft: InvoiceDraft): InvoicePrintPosition[] {
     }));
 }
 
-function buildPositionsFromInvoice(invoice: VorgangInvoice): InvoicePrintPosition[] {
+function buildPositionsFromInvoice(invoice: VorgangInvoice, netCents: number): InvoicePrintPosition[] {
   if (isFixedAmountAbschlag(invoice)) {
-    const net = invoice.fixedAmountNet ?? invoice.subtotal;
+    // FC01A-P1-Restkorrektur (lokaler Altbestand) — die eine Zeile ist das aufgelöste Netto.
+    const net = fromCents(netCents);
     if (!(net > 0)) return [];
     return [
       {
@@ -184,8 +196,17 @@ export function buildInvoicePrintModelFromInvoice(invoice: VorgangInvoice): Invo
     throw new Error('Invoice snapshots missing – cannot render finalized invoice.');
   }
 
+  /*
+   * FC01A-P1-Restkorrektur (lokaler Altbestand) — Netto nur aus verlässlichen, eingefrorenen
+   * Angaben (`resolveInvoiceNet`). Ungeklärt entsteht kein Druckmodell: Sonst stünden Steuer und
+   * Bruttobetrag eines erfundenen Nettos auf dem Beleg (WEISS: 476,00 netto, 566,44 fällig).
+   * Die Ausgabewege prüfen das vorher (`validateFinalizedInvoiceForPdf`).
+   */
+  const net = resolveInvoiceNet(invoice);
+  if (!net.ok) throw new InvoiceNetUnresolvedError(invoice.number);
+  const subtotalNet = fromCents(net.netCents);
   const taxRate = getTaxRateForStatus(invoice.taxStatus);
-  const subtotalCents = toCents(invoice.subtotal);
+  const subtotalCents = net.netCents;
   const taxCents = taxCentsFromNet(subtotalCents, taxRate);
   const taxAmount = fromCents(taxCents);
   const grossTotal = fromCents(subtotalCents + taxCents);
@@ -215,15 +236,15 @@ export function buildInvoicePrintModelFromInvoice(invoice: VorgangInvoice): Invo
     servicePeriodTo: invoice.servicePeriodTo ?? invoice.issueDate ?? invoice.date,
     introText: invoice.introText ?? '',
     closingText: invoice.closingText ?? '',
-    positions: buildPositionsFromInvoice(invoice),
+    positions: buildPositionsFromInvoice(invoice, subtotalCents),
     summary: {
-      subtotalNet: invoice.subtotal,
+      subtotalNet,
       taxRate,
       taxAmount,
       grossTotal,
       deductionsTotal,
       // N02-R1 — die freigegebene Schlussrechnung liest nur ihre eingefrorene Aufteilung.
-      ...buildDeductionSummary(deductions, { subtotalNet: invoice.subtotal, taxRate }, frozenSettlementShare),
+      ...buildDeductionSummary(deductions, { subtotalNet, taxRate }, frozenSettlementShare),
       amountDue,
     },
     taxStatus: invoice.taxStatus,

@@ -1006,6 +1006,55 @@ export interface CustomerBilling {
 }
 
 /**
+ * FINANZ-CORE-01A (Feiertage) — Bundesland des Kundensitzes (zweistellig) oder `AUSLAND`.
+ *
+ * Gemeindefeiertage gelten nur in einzelnen Gemeinden; nur eine ausdrückliche Angabe (`true`/`false`)
+ * entscheidet, fehlt sie, bleibt ein solches Fristende ungeklärt. `auslandOhneFeiertag` bestätigt für
+ * einen Sitz im Ausland, dass dort keine Feiertage die Fristen verschieben.
+ */
+export interface CustomerHolidayLocation {
+  region:
+    | 'BW' | 'BY' | 'BE' | 'BB' | 'HB' | 'HH' | 'HE' | 'MV'
+    | 'NI' | 'NW' | 'RP' | 'SL' | 'SN' | 'ST' | 'SH' | 'TH'
+    | 'AUSLAND';
+  fronleichnam?: boolean;
+  mariaeHimmelfahrt?: boolean;
+  augsburgerFriedensfest?: boolean;
+  auslandOhneFeiertag?: boolean;
+}
+
+/**
+ * FINANZ-CORE-01A (Gesamtnacharbeit INV-01/02/03) — die Fristgrundlage einer Rechnung, wie der Server
+ * sie hält (`workspace_invoices.frist_basis`). `lage` ist die Fristlage im Serverformat; gelesen wird sie
+ * ausschließlich über `parseFristLage` (src/services/fristen/fristende.ts).
+ */
+export interface InvoiceFristBasis {
+  lage: unknown;
+  /** `freigabe`: bei der Freigabe gebunden; `bestand`: mit Migration 20261119 festgehalten; `klaerung`: geklärt. */
+  quelle: 'freigabe' | 'bestand' | 'klaerung';
+  festgelegtAm?: string;
+  /** Die letzte Klärung (das vollständige Protokoll hält der Server). */
+  klaerung?: {
+    id: string;
+    begruendung: string;
+    von?: string;
+    am?: string;
+    angabe?: Record<string, unknown>;
+  };
+}
+
+/** Eine Klärung der Fristgrundlage, wie sie an `clarify_workspace_invoice_frist` geht. */
+export type InvoiceFristKlaerung =
+  | {
+      art: 'inland';
+      region: Exclude<CustomerHolidayLocation['region'], 'AUSLAND'>;
+      fronleichnam?: boolean;
+      mariaeHimmelfahrt?: boolean;
+      augsburgerFriedensfest?: boolean;
+    }
+  | { art: 'ausland'; kalenderEnde: string; wirksamesEnde: string };
+
+/**
  * CUSTOMER-FACHOBJEKT-02A — persistent customer with a stable id.
  * Reuses CustomerBilling so no second contact structure exists.
  */
@@ -1024,6 +1073,16 @@ export interface Customer extends CustomerBilling {
    * und eine Änderung des Standards sähe aus wie eine Änderung des Belegs.
    */
   buyerReferenceDefault?: string;
+  /**
+   * FINANZ-CORE-01A (Feiertage, § 193 BGB) — der Sitz des Kunden für Feiertage an Fristenden.
+   *
+   * Leistungsort einer Geldschuld ist der Sitz des Schuldners (§§ 269, 270 Abs. 4 BGB), also des
+   * Kunden. Ohne diese Angabe leitet die App das Bundesland aus der PLZ der Rechnungsanschrift ab
+   * (`fristen/fristende.ts`); die Angabe hier geht vor und klärt Grenz-PLZ, Gemeindefeiertage und
+   * Kunden im Ausland. Am Kunden, nicht im Rechnungs-Snapshot: Sie gilt für alle Rechnungen mit
+   * dieser Kundenreferenz (`VorgangInvoice.customerId`).
+   */
+  holidayLocation?: CustomerHolidayLocation;
   /** Provenance only — never changed by a normal update. */
   createdFromInboxId?: string;
   /**
@@ -1067,7 +1126,12 @@ export interface AbschlagDeduction {
   invoiceNumber: string;
   abschlagNumber?: number;
   date: string;
-  subtotal: number;
+  /**
+   * Netto des abgezogenen Abschlags. Optional: Ein Abzug im Altformat trägt es nicht (Bericht 14,
+   * `reliableDeductionNetCents`), und ein Abschlag mit ungeklärtem Netto gibt keins weiter
+   * (FC01A-P1-Restkorrektur, lokaler Altbestand) — dann sperrt `abschlag_net_unreliable`.
+   */
+  subtotal?: number;
   amount: number;
   /**
    * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — wie der Abschlag bei der Freigabe der
@@ -1347,6 +1411,31 @@ export interface InvoicePayment {
    * es reist deshalb mit jedem (auch späteren, automatischen) Sicherungsversuch.
    */
   overpaymentAcknowledged?: boolean;
+  /**
+   * FINANZ-CORE-01A (systemische Gesamtnacharbeit, SYS-02 / D4) — positive Evidenz: Der Server kennt diese Zahlung
+   * (erfolgreich gesendet, als Serverzeile abgezogen oder im vollständigen Nachgleich gefunden). Gespeichert mit der
+   * Rechnung im Hauptbestand, nicht in einer Nebenablage. Im Cloudbetrieb ist eine Zahlung ohne dieses Merkmal
+   * unbestätigt — ein Lese- oder Schreibfehler kann sie nie zu „bestätigt“ machen.
+   */
+  cloudBestaetigt?: boolean;
+}
+
+/**
+ * FINANZ-CORE-01A (Restnacharbeit END18-R3) — fachliche Abweisungen, nach denen der Server diese
+ * Zahlungskennung nachweislich nicht führt: Er prüft die Wiederholung derselben Kennung zuerst; eine
+ * fachliche Abweisung heißt also „nie angenommen“. Konflikt (andere Zahlung unter derselben Kennung) und
+ * Rollenabweisung gehören nicht dazu.
+ */
+export type RejectedInvoicePaymentReason = 'overpayment_unconfirmed' | 'invoice_cancelled' | 'final_invoice_exists';
+
+/**
+ * Eine vom Server endgültig abgewiesene Rechnungszahlung: zählt nirgends (bezahlt, offen, Status, Mahnung,
+ * Monatsmappe, Export, Abschluss), bleibt aber als Nachweis sichtbar, bis der Nutzer entscheidet
+ * (als Überzahlung bestätigen und erneut senden — nur bei `overpayment_unconfirmed` — oder verwerfen).
+ */
+export interface RejectedInvoicePayment extends InvoicePayment {
+  rejectedAt: string;
+  reason: RejectedInvoicePaymentReason;
 }
 
 export interface InvoicePaymentInput {
@@ -1405,7 +1494,12 @@ export interface VorgangInvoice {
   calculationMode?: InvoiceCalculationMode;
   /** Net lump-sum for fixed_amount Abschlag; ignored for quantity_based. */
   fixedAmountNet?: number;
-  subtotal: number;
+  /**
+   * Netto der Rechnung, wie bei der Freigabe gespeichert. FC01A-P1-Restkorrektur (lokaler
+   * Altbestand) — optional, weil ein lokaler Altbeleg es nicht tragen kann; es wird nie durch
+   * das Brutto ersetzt. Belege lesen das Netto über `resolveInvoiceNet`.
+   */
+  subtotal?: number;
   taxStatus: TaxStatus;
   amount: number;
   status: 'entwurf' | 'vorbereitet' | 'versendet';
@@ -1437,6 +1531,24 @@ export interface VorgangInvoice {
   paymentDueDate?: string;
   paymentTermsText?: string;
   skontoText?: string;
+  /**
+   * FINANZ-CORE-01A (Feiertage, § 193 BGB) — ausdrücklich vereinbart: Zahlungsziel und Skontofrist
+   * enden kalendarisch, ohne Verschiebung über Samstag, Sonntag oder Feiertag.
+   *
+   * Optional und nur `true` bedeutsam: Fehlt das Feld, gilt § 193 BGB (Altbestand, Normalfall). Beim
+   * Finalisieren aus dem Entwurf übernommen und danach eingefroren; Client und Server lesen es. Im
+   * `immutableInvoiceFingerprint` nur, wenn gesetzt — Altbelege behalten ihren Abdruck.
+   */
+  deadlineShiftWaived?: boolean;
+  /**
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-01/03) — wo die Fristen dieser Rechnung enden: bei der
+   * Freigabe gebunden (Server `workspace_invoices.frist_basis`), danach nur über die protokollierte
+   * Klärung an der Rechnung änderbar. Spätere Kundenänderungen deuten die Rechnung nicht mehr um.
+   *
+   * Kein Belegtext: nicht im Payload, nicht in den Fingerprints. Fehlt sie (lokale Rechnung, Server
+   * ohne Migration 20261119), gilt wie bisher die Lage aus Kunde und Rechnungsanschrift.
+   */
+  fristBasis?: InvoiceFristBasis;
   customerSnapshot?: CustomerBilling;
   /**
    * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — die stabile Kundenreferenz
@@ -1472,6 +1584,8 @@ export interface VorgangInvoice {
   vorgangTitle?: string;
   archiveDocumentId?: string;
   payments?: InvoicePayment[];
+  /** END18-R3 — endgültig abgewiesene, dem Server unbekannte Zahlungen; zählen nirgends. */
+  rejectedPayments?: RejectedInvoicePayment[];
   paymentStatus?: InvoicePaymentStatus;
   cancelledAt?: string;
   cancelReason?: string;
@@ -1838,6 +1952,8 @@ export interface InvoiceDraft {
   paymentDueDate: string;
   paymentTermsText: string;
   skontoText: string;
+  /** FINANZ-CORE-01A (Feiertage) — siehe `VorgangInvoice.deadlineShiftWaived`; Standard: nicht gesetzt. */
+  deadlineShiftWaived?: boolean;
   customerBilling: CustomerBilling;
   /**
    * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — `Customer.id`, wenn ein bestehender
@@ -1999,6 +2115,7 @@ export interface InvoiceDraftMetadataChanges {
   paymentDueDate?: string;
   paymentTermsText?: string;
   skontoText?: string;
+  deadlineShiftWaived?: boolean;
   introText?: string;
   closingText?: string;
   projectTitle?: string;

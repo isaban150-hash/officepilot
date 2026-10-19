@@ -162,6 +162,8 @@ const INVOICE_KEYS = [
   'paymentDueDate',
   'paymentTermsText',
   'skontoText',
+  // FINANZ-CORE-01A (Feiertage) — ausdrücklich abweichende Fristvereinbarung; fehlt bei fast allen Rechnungen.
+  'deadlineShiftWaived',
   // E-RECHNUNG-04B — die eingefrorene Währung des Belegs.
   'currencyCode',
   'customerSnapshot',
@@ -544,6 +546,10 @@ function checkInvoiceShape(
   optionalString(invoice.paymentDueDate, `${path}.paymentDueDate`);
   optionalString(invoice.paymentTermsText, `${path}.paymentTermsText`);
   optionalString(invoice.skontoText, `${path}.skontoText`);
+  // FINANZ-CORE-01A (Feiertage) — abwesend gültig; vorhanden nur als `true`.
+  if (invoice.deadlineShiftWaived !== undefined && invoice.deadlineShiftWaived !== true) {
+    reject(`${path}.deadlineShiftWaived:not_true`);
+  }
   optionalString(invoice.introText, `${path}.introText`);
   optionalString(invoice.closingText, `${path}.closingText`);
   optionalString(invoice.baustelle, `${path}.baustelle`);

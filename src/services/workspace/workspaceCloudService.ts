@@ -8,6 +8,7 @@ import type {
   WorkspaceSyncPullPayload,
 } from '../../types/workspace';
 import { getSupabaseClient } from '../../lib/supabase';
+import { isFinalBusinessRejectionMessage } from '../sync/syncRoleDenial';
 import { stripLogoFromCompanyProfile } from './workspaceStore';
 import { applyBrandingContract } from '../branding/brandingProfileContract';
 import { COMPANY_PROFILE_SCHEMA_VERSION, applyCompanyProfileSettingsContract } from '../company/companyProfileSettingsContract';
@@ -137,6 +138,13 @@ function classifySupabaseError(error: { message?: string; code?: string }): Work
   }
   if (message.includes('Failed to fetch') || message.includes('Network')) {
     return new WorkspaceCloudError(message, 'network', true);
+  }
+  /*
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-10) — fachliche Abweisungen (etwa eine Änderung am
+   * freigegebenen Angebot) ändert kein neuer Versuch: nicht wiederholbar statt endloser Schleife.
+   */
+  if (isFinalBusinessRejectionMessage(message)) {
+    return new WorkspaceCloudError(message, 'unknown', false);
   }
   return new WorkspaceCloudError(message, 'unknown', true);
 }

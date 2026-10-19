@@ -2,7 +2,7 @@ import type { SyncCoordinatorReport, SyncOutboxEntry, SyncState } from '../../ty
 import type { SyncAdapterStatus } from './syncAdapter';
 import { buildPersistedStateSnapshot, persistAll } from '../persistenceService';
 import { getSyncClient } from './syncClientService';
-import { getSyncOutboxSnapshot, hasPendingCompanyCloudBackup } from './syncOutboxService';
+import { getSyncOutboxSnapshot, hasPendingCompanyCloudBackup, resendFinallyDeniedOutboxEntry } from './syncOutboxService';
 import { getSyncCoordinator } from './syncCoordinator';
 import { applySyncPullCandidateSafely, captureSyncRunBase } from './syncPullPersistService';
 import { runQueuedSyncOperation } from './syncOperationQueue';
@@ -430,6 +430,16 @@ export async function resolveCustomerConflictFromUi(
   decision: CustomerConflictDecision,
 ): Promise<CustomerConflictResult> {
   return resolveCustomerConflict(customerId, decision);
+}
+
+/**
+ * FINANZ-CORE-01A (Bericht 20) — „Bewusst erneut senden“ an einer endgültig abgewiesenen Mitarbeiterzahlung oder
+ * Kontierung. Erst speichern, dann melden (wie bei den Einstellungen); gesendet wird beim nächsten Abgleich.
+ */
+export function resendFinallyDeniedEntryFromUi(entryId: string): boolean {
+  const neu = resendFinallyDeniedOutboxEntry(entryId);
+  if (neu) persistAll();
+  return neu !== null;
 }
 
 export function resolveSettingsConflictFromUi(decision: WorkspaceSettingsDecision): boolean {

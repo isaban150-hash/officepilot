@@ -32,6 +32,17 @@ interface Props {
    */
   blockedPaymentReasons?: Readonly<Record<string, InvoicePaymentResyncBlockReason>>;
   onSecurePayment?: (paymentId: string) => void;
+  /**
+   * FC01A-Nacharbeit (A2) — die Zahlungen sind nicht rücknehmbar (etwa: eine wirksame
+   * Schlussrechnung zieht diesen Abschlag als bezahlt ab). Statt der Aktion steht der Grund.
+   */
+  removeBlockedReason?: string;
+  /**
+   * FINANZ-CORE-01A (END18-R3) — eine fachlich abgewiesene Zahlung als Überzahlung bestätigen und erneut
+   * senden (nur bei `overpayment_unconfirmed`), bzw. ihren Nachweis bewusst verwerfen.
+   */
+  onConfirmRejectedPayment?: (paymentId: string) => void;
+  onDiscardRejectedPayment?: (paymentId: string) => void;
 }
 
 export function InvoicePaymentHistory({
@@ -42,6 +53,9 @@ export function InvoicePaymentHistory({
   unsyncedPaymentIds,
   blockedPaymentReasons,
   onSecurePayment,
+  removeBlockedReason,
+  onConfirmRejectedPayment,
+  onDiscardRejectedPayment,
 }: Props) {
   /* UIUX-FOUNDATION-01G — Confirm-first über den kanonischen Dialog statt window.confirm. */
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
@@ -50,11 +64,54 @@ export function InvoicePaymentHistory({
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
 
+  /*
+   * FINANZ-CORE-01A (END18-R3) — vom Server fachlich abgewiesene Zahlungen: nicht gebucht, ohne Wirkung auf
+   * Summen, Status, Mahnung und Export. Sichtbar, bis der Nutzer entscheidet.
+   */
+  const rejected = invoice.rejectedPayments ?? [];
+  const rejectedSection =
+    rejected.length > 0 ? (
+      <div className="invoice-payment-history__rejected" data-testid="payment-rejected-list">
+        <InlineNotice tone="warning">{translate('payment.rejected.intro')}</InlineNotice>
+        {rejected.map((entry) => (
+          <div key={entry.id} className="invoice-payment-history__rejected-item" data-testid={`payment-rejected-${entry.id}`}>
+            <p>
+              {translate('payment.rejected.item')
+                .replace('{amount}', formatEuroAmount(entry.amount))
+                .replace('{date}', formatDisplayDate(entry.date))
+                .replace('{reason}', translate(`payment.cloudBlocked.${entry.reason}` as TranslationKey))}
+            </p>
+            {entry.reason === 'overpayment_unconfirmed' && onConfirmRejectedPayment ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onConfirmRejectedPayment(entry.id)}
+                data-testid={`payment-rejected-confirm-${entry.id}`}
+              >
+                {translate('payment.rejected.confirm')}
+              </Button>
+            ) : null}
+            {onDiscardRejectedPayment ? (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => onDiscardRejectedPayment(entry.id)}
+                data-testid={`payment-rejected-discard-${entry.id}`}
+              >
+                {translate('payment.rejected.discard')}
+              </Button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    ) : null;
+
   if (payments.length === 0) {
     return (
       <section className="invoice-payment-history">
         <h3 className="invoice-payment-history__title">{translate('payment.historyTitle')}</h3>
         <p className="invoice-payment-history__empty">{translate('payment.historyEmpty')}</p>
+        {rejectedSection}
       </section>
     );
   }
@@ -62,6 +119,11 @@ export function InvoicePaymentHistory({
   return (
     <section className="invoice-payment-history">
       <h3 className="invoice-payment-history__title">{translate('payment.historyTitle')}</h3>
+      {allowRemove && onRemovePayment && removeBlockedReason && (
+        <InlineNotice tone="neutral" testId="payment-remove-blocked">
+          {removeBlockedReason}
+        </InlineNotice>
+      )}
       <BusinessList className="invoice-payment-history__list">
         {payments.map((payment) => (
           <BusinessListItem
@@ -110,7 +172,7 @@ export function InvoicePaymentHistory({
                 )}
               </div>
             )}
-            {allowRemove && onRemovePayment && (
+            {allowRemove && onRemovePayment && !removeBlockedReason && (
               <Button
                 type="button"
                 variant="ghost"
@@ -125,6 +187,7 @@ export function InvoicePaymentHistory({
           />
         ))}
       </BusinessList>
+      {rejectedSection}
       {(() => {
         const pending = payments.find((entry) => entry.id === pendingRemoveId);
         return (

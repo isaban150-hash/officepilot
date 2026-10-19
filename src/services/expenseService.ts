@@ -324,8 +324,9 @@ export function hasBookedExpensePayments(expense: Expense): boolean {
   return (expense.payments ?? []).length > 0;
 }
 
+/** FINANZ-CORE-01A (Gesamtnacharbeit INV-09) — in Cent verglichen, wie der Server (bisher Gleitkomma ±0,004). */
 function amountChanged(next: number | undefined, current: number): boolean {
-  return next !== undefined && Math.abs(next - current) > 0.004;
+  return next !== undefined && toCents(next) !== toCents(current);
 }
 
 /**
@@ -351,13 +352,30 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
   const current = getExpenseFromStoreById(id);
   if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
   if (current.status === 'storniert') return { success: false, errorKey: 'expense.edit.cancelled' };
-  if (
-    hasBookedExpensePayments(current) &&
-    (amountChanged(changes.grossAmount, current.grossAmount) ||
+  /*
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-09) — derselbe Vertrag wie `cancelExpense` und der Server
+   * (`upsert_workspace_expense`), auch über diesen generischen Setter: Mit einer Zahlung sind Beträge,
+   * Steuerstatus und Gutschriftkennzeichen gebunden, und die Ausgabe wird weder storniert noch in einen
+   * Entwurf zurückgesetzt. Storniert wird nur eine gebuchte Ausgabe.
+   */
+  const nextStatus = changes.status ?? current.status;
+  if (nextStatus === 'storniert' && current.status !== 'gebucht') {
+    return { success: false, errorKey: 'expense.cancel.notBooked' };
+  }
+  if (hasBookedExpensePayments(current)) {
+    if (nextStatus === 'storniert') return { success: false, errorKey: 'expense.cancel.hasPayments' };
+    if (nextStatus === 'entwurf' && current.status !== 'entwurf') {
+      return { success: false, errorKey: 'expense.edit.statusLockedAfterPayment' };
+    }
+    if (
+      amountChanged(changes.grossAmount, current.grossAmount) ||
       amountChanged(changes.netAmount, current.netAmount) ||
-      amountChanged(changes.taxAmount, current.taxAmount))
-  ) {
-    return { success: false, errorKey: 'expense.edit.amountLockedAfterPayment' };
+      amountChanged(changes.taxAmount, current.taxAmount) ||
+      (changes.taxStatus !== undefined && changes.taxStatus !== current.taxStatus) ||
+      (changes.isCreditNote !== undefined && Boolean(changes.isCreditNote) !== Boolean(current.isCreditNote))
+    ) {
+      return { success: false, errorKey: 'expense.edit.amountLockedAfterPayment' };
+    }
   }
   /*
    * ORDER-COST-ALLOCATION-01B — ein kleinerer Nettobetrag darf vorhandene
@@ -425,6 +443,10 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
       payments: current.payments ?? [],
       positions: current.positions,
       allocations: current.allocations,
+      // FINANZ-CORE-01A (END18-R3, Bericht 19) — Nachweise abgewiesener Aktionen überstehen jede Bearbeitung.
+      ...(current.rejectedPayments ? { rejectedPayments: current.rejectedPayments } : {}),
+      ...(current.rejectedChanges ? { rejectedChanges: current.rejectedChanges } : {}),
+      ...(current.reconciledRejections ? { reconciledRejections: current.reconciledRejections } : {}),
       cancelledAt,
       cancelReason: becomesCancelled ? current.cancelReason : undefined,
     }),

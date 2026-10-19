@@ -21,12 +21,13 @@
 import type { CompanyProfile, CustomerBilling, VorgangInvoice } from '../../types/models';
 import { formatCompanyLegalName } from '../company/companyLegalName';
 import { isFixedAmountAbschlag } from '../invoiceCalculationMode';
-import { billingLineTotalCents, fromCents, taxCentsFromNet, toCents } from '../invoiceMoney';
+import { billingLineTotalCents, fromCents, isValidMoneyNumber, taxCentsFromNet, toCents } from '../invoiceMoney';
 import { resolveDocumentKind, resolveTaxCategory, resolveUnitCode } from './einvoiceCodes';
 import { normalizeCountryCode } from './einvoiceStandards';
 import { toBusinessDay } from '../businessDateService';
 import { PRIVATE_RETENTION_NOTICE, hasPrivateRetentionNotice } from '../invoiceTaxService';
 import { frozenSettlementShare, splitAbschlagDeductions } from '../invoice/abschlagSkontoSplit';
+import { resolveInvoiceNet } from '../invoice/invoiceNetResolution';
 import type {
   CanonicalAddress,
   CanonicalAllowance,
@@ -391,7 +392,16 @@ function checkMoney(
     lineNetTotalCents += expected;
   });
 
-  const subtotalCents = toCents(invoice.subtotal);
+  /*
+   * FC01A-P1-Restkorrektur (lokaler Altbestand) — das Netto nur aus verlässlichen, eingefrorenen
+   * Angaben (`resolveInvoiceNet`), nie das Brutto. Ungeklärt entsteht keine E-Rechnung.
+   */
+  const net = resolveInvoiceNet(invoice);
+  if (!net.ok) issues.add('net_unresolved', 'subtotal');
+  // Ohne gespeichertes Netto ist nichts weiter zu prüfen; ein widersprüchliches nennt wie bisher
+  // zusätzlich die einzelnen Abweichungen (`money_inconsistent`).
+  if (!net.ok && !isValidMoneyNumber(invoice.subtotal ?? NaN)) return null;
+  const subtotalCents = net.ok ? net.netCents : toCents(invoice.subtotal!);
   if (subtotalCents !== lineNetTotalCents) {
     issues.add('money_inconsistent', 'subtotal');
   }
@@ -599,11 +609,24 @@ export function buildCanonicalEInvoice(
     { subtotalNet: fromCents(money.lineNetTotalCents), taxRate: taxMapping.rate },
     frozenSettlementShare,
   );
+  /*
+   * FC01A-P1-Restkorrektur (#8, Altformat) — § 14 Abs. 5 Satz 2 UStG verlangt je abgesetztem
+   * Teilentgelt auch die darauf entfallende Steuer. Steht das Netto eines Abzugs nicht fest
+   * (umsatzsteuerpflichtiger Altabschlag ohne gespeichertes Netto, widersprüchliche Angaben),
+   * entsteht keine E-Rechnung — bisher stand dort Brutto als Netto und eine negative Steuer.
+   */
+  if (!split.netReliable) {
+    split.parts.forEach((part, index) => {
+      if (part.billedNet === null) issues.add('prepayment_net_unreliable', `previousAbschlagDeductions[${index}]`);
+    });
+    return { ok: false, issues: issues.all };
+  }
   const prepayments: CanonicalPrepaymentReference[] = split.parts.map((part) => ({
     invoiceId: part.deduction.invoiceId,
     invoiceNumber: part.deduction.invoiceNumber,
     date: part.deduction.date,
-    netAmount: part.deduction.subtotal,
+    // Verlässlich (`split.netReliable`): gespeichert und zum Satz passend, oder steuerfrei gleich dem Brutto.
+    netAmount: part.billedNet!,
     grossAmount: part.deduction.amount,
     paidAmount: part.paid,
     skontoAmount: part.skonto,
@@ -657,12 +680,23 @@ export function buildCanonicalEInvoice(
     notes.push(`Käuferreferenz: ${buyerReferenceNote}`);
   }
   if (prepayments.length > 0) {
+    /*
+     * FC01A-Nacharbeit (A1) — § 14 Abs. 5 Satz 2 UStG: Abgesetzt werden die vereinnahmten
+     * Teilentgelte **und die auf sie entfallenden Steuerbeträge**. BT-113 kennt nur einen
+     * Bruttobetrag; Netto und Umsatzsteuer je Abschlag stehen deshalb in dieser Notiz — dieselben
+     * Werte wie im PDF und in der Ansicht (AUS-01/N13), aus derselben Aufteilung. Ohne Steuer
+     * (§ 13b, § 19, Altbestand ohne Netto) bleibt der Text unverändert.
+     */
+    const taxParts = (net: number, tax: number): string =>
+      toCents(tax) !== 0 ? ` (netto ${formatGermanAmount(net)} EUR, USt ${formatGermanAmount(tax)} EUR)` : '';
     const entries = prepayments.map((entry, index) => {
       const head = `${deductionLabel(index)} (Rechnung ${entry.invoiceNumber} vom ${formatGermanDate(entry.date)})`;
+      const part = split.parts[index]!;
       // WEISS-Recheck N02-R1 — mit Skonto beglichen: nur das Gezahlte ist abgesetztes Teilentgelt.
+      // Netto steht hier fest (oben geprüft: split.netReliable).
       return entry.skontoAmount > 0
-        ? `${head} ${formatGermanAmount(entry.paidAmount)} EUR gezahlt von ${formatGermanAmount(entry.grossAmount)} EUR brutto`
-        : `${head} ${formatGermanAmount(entry.grossAmount)} EUR brutto`;
+        ? `${head} ${formatGermanAmount(entry.paidAmount)} EUR gezahlt${taxParts(part.paidNet!, part.paidTax!)} von ${formatGermanAmount(entry.grossAmount)} EUR brutto`
+        : `${head} ${formatGermanAmount(entry.grossAmount)} EUR brutto${taxParts(part.billedNet!, fromCents(toCents(part.billed) - toCents(part.billedNet!)))}`;
     });
     notes.push(`Abzüglich bereits bezahlter Abschläge: ${entries.join('; ')}`);
     split.parts.forEach((part, index) => {
@@ -716,7 +750,8 @@ export function buildCanonicalEInvoice(
     totals: {
       lineNetTotal: fromCents(money.lineNetTotalCents),
       // Ohne Nachlass das Netto des Belegs; mit Skonto-Nachlass gemindert (BT-109).
-      taxExclusiveAmount: split.hasSkonto ? fromCents(taxableCents) : invoice.subtotal,
+      // Das geprüfte Netto (gleich der Zeilensumme); ein Altbeleg ohne gespeichertes Netto trägt keins.
+      taxExclusiveAmount: split.hasSkonto ? fromCents(taxableCents) : fromCents(money.lineNetTotalCents),
       taxAmount: fromCents(taxCents),
       taxInclusiveAmount: fromCents(taxInclusiveCents),
       billedPrepayments: prepayments,

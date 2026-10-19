@@ -59,10 +59,12 @@ import {
   type InvoiceDraftSessionStatus,
 } from '../services/invoice/useInvoiceDraftDurabilitySession';
 import {
+  discardUntouchedInvoiceDraftOnTypeSwitch,
   markInvoiceDraftCloudFromFinalizedRecord,
   noteInvoiceDraftCommitted,
   resolveCloudDraftForEmptySlot,
 } from '../services/invoice/invoiceDraftCloudBridge';
+import { buildInvoiceDraftCoreKeyFromDraft } from '../services/invoice/invoiceDraftCloudService';
 import { useInvoiceDraftCloudState } from '../services/invoice/useInvoiceDraftCloudState';
 import {
   INVOICE_FINALIZE_SLOW_NOTICE_MS,
@@ -79,7 +81,8 @@ import { buildDocumentBlobScopeKey } from '../services/storage/documentBlobScope
 import { getActiveStorageScope } from '../services/storage/storageScopeService';
 import { buildPersistedStateSnapshot } from '../services/persistenceService';
 import { resolveCloudWorkspaceId } from '../services/workspace/workspaceSyncPayloadService';
-import { billingLineTotalMoney } from '../services/invoiceMoney';
+import { billingLineTotalMoney, fromCents, toCents } from '../services/invoiceMoney';
+import { getAbschlagDeductionsTotal } from '../services/invoiceDeductions';
 import { buildInvoicePrintModel, formatInvoiceCurrency } from '../services/invoicePrintModel';
 import { buildSkontoText } from '../services/invoiceTaxService';
 /* INVOICE-WIZARD-FULL-SAFE-RESUME-01B — sichere Bedienzustände nach Neuaufbau. */
@@ -391,15 +394,26 @@ export function RechnungPage() {
    */
   const setupRef = useRef(setup);
   setupRef.current = setup;
-  const createDraft = useCallback(
-    () =>
-      id
-        ? // CLOUD-SYNC S5 — Fall B: ein Cloud-Entwurf dieses Slots wird fortgesetzt, nicht still neu begonnen.
-          (resolveCloudDraftForEmptySlot(id, invoiceType) ??
-          buildInvoiceDraftForType(id, setupRef.current, invoiceType))
-        : null,
-    [id, invoiceType],
-  );
+  /*
+   * FINANZ-CORE-01A (Gesamtabschluss, P3/OBS-6) — welcher Entwurf hier frisch gebaut wurde (nicht
+   * aus der Cloud übernommen) und wie sein Kern dabei aussah. Nur so ein Entwurf darf beim Wechsel
+   * der Rechnungsart still verworfen werden, und nur solange er unberührt ist.
+   */
+  const freshDraftRef = useRef<{ draftId: string; coreKey: string } | null>(null);
+  // Ein laufender Wechsel nimmt keinen zweiten Klick an (vor jedem frühen Rücksprung: Hook-Reihenfolge).
+  const typeSwitchRef = useRef(false);
+  const createDraft = useCallback(() => {
+    if (!id) return null;
+    // CLOUD-SYNC S5 — Fall B: ein Cloud-Entwurf dieses Slots wird fortgesetzt, nicht still neu begonnen.
+    const fromCloud = resolveCloudDraftForEmptySlot(id, invoiceType);
+    if (fromCloud) {
+      freshDraftRef.current = null;
+      return fromCloud;
+    }
+    const fresh = buildInvoiceDraftForType(id, setupRef.current, invoiceType);
+    freshDraftRef.current = fresh ? { draftId: fresh.id, coreKey: buildInvoiceDraftCoreKeyFromDraft(fresh) } : null;
+    return fresh;
+  }, [id, invoiceType]);
 
   const [cloudReloadKey, setCloudReloadKey] = useState(0);
   const session = useInvoiceDraftDurabilitySession({
@@ -723,6 +737,9 @@ export function RechnungPage() {
   const finalizedInvoiceId = session.record?.finalization?.finalizedInvoiceId ?? null;
 
   const totals = draft ? calculateInvoiceTotals(draft, setup) : null;
+  // FC01A-Nacharbeit (A6) — die Abzüge einer Schlussrechnung für die Summenkarte.
+  const scheduleDeductionsTotal =
+    draft && usesAbschlagDeductions(draft.type) ? getAbschlagDeductionsTotal(draft.previousAbschlagDeductions) : 0;
   /*
    * FINANZ-CORE-01A (WEISS-Recheck N02-R1) — die Vorschau zeigt schon, was die Freigabe
    * einfriert: je mit Skonto beglichenem Abschlag den gezahlten Teil und das Skonto.
@@ -1050,8 +1067,47 @@ export function RechnungPage() {
     });
   };
 
+  /*
+   * FINANZ-CORE-01A (Gesamtabschluss, P3/OBS-6) — der Assistent legt vor der Typwahl einen Entwurf
+   * für die Ausgangsart an. Bisher blieb er beim Wechsel der Art liegen (je Vorgang ein Typ-
+   * „rechnung“-Entwurf, lokal und in der Cloud). Jetzt wird er verworfen, wenn er nachweislich
+   * unberührt ist (`discardUntouchedInvoiceDraftOnTypeSwitch`); dann ersetzt der Wechsel auch den
+   * Verlaufseintrag, damit „Zurück“ keinen neuen leeren Entwurf anlegt. Im Zweifel bleibt der
+   * Entwurf, und der Wechsel geschieht wie bisher. Der Wechsel wird nie blockiert.
+   */
   const handleTypeChange = (type: InvoiceDocumentType) => {
-    navigate(`/vorgaenge/${id}/rechnung?type=${type}`);
+    if (typeSwitchRef.current) return;
+    const target = `/vorgaenge/${id}/rechnung?type=${type}`;
+    const fresh = freshDraftRef.current;
+    const record = session.record;
+    if (
+      type === invoiceType ||
+      !fresh ||
+      !record ||
+      !draft ||
+      record.draftId !== fresh.draftId ||
+      approving ||
+      cloud.conflict
+    ) {
+      navigate(target);
+      return;
+    }
+    typeSwitchRef.current = true;
+    void (async () => {
+      let discarded = false;
+      try {
+        const flushed = await session.flush();
+        if (flushed.ok) {
+          discarded = (await discardUntouchedInvoiceDraftOnTypeSwitch(record, draft, fresh.coreKey)).discarded;
+        }
+      } catch {
+        discarded = false;
+      } finally {
+        typeSwitchRef.current = false;
+      }
+      if (discarded) freshDraftRef.current = null;
+      navigate(target, discarded ? { replace: true } : undefined);
+    })();
   };
 
   /*
@@ -1987,8 +2043,25 @@ export function RechnungPage() {
                   value={`${totals.tax.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
                 />
               )}
+              {/*
+                * FC01A-Nacharbeit (A6) — bei einer Schlussrechnung ist „Gesamt" der Restbetrag nach
+                * Abzug der Abschläge. Ohne den Abzug sah die Karte wie ein Rechenfehler aus
+                * (Zwischensumme 1.000, MwSt. 190, Gesamt 714) — jetzt steht er da, wie im Beleg.
+                */}
+              {scheduleDeductionsTotal > 0 && (
+                <>
+                  <DataRow
+                    label={translate('invoice.summary.grossBeforeDeductions')}
+                    value={`${fromCents(toCents(totals.subtotal) + toCents(totals.tax)).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
+                  />
+                  <DataRow
+                    label={translate('invoice.summary.deductions')}
+                    value={`− ${scheduleDeductionsTotal.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
+                  />
+                </>
+              )}
               <DataRow
-                label={translate('invoice.total')}
+                label={translate(scheduleDeductionsTotal > 0 ? 'invoice.summary.amountDue' : 'invoice.total')}
                 value={
                   <strong>
                     {totals.total.toLocaleString('de-DE', {

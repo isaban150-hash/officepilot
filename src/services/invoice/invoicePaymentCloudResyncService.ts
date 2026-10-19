@@ -28,8 +28,9 @@
  * Server sie an, ohne dass jemand sie neu bestätigt hatte. Jetzt gilt:
  *
  *   - Endgültig sind Rollen-/Kontoabweisung (`denied`), Datenkonflikt
- *     (`conflict`), unbestätigte Überzahlung (`overpayment_unconfirmed`) und
- *     stornierte Rechnung (`invoice_cancelled`). Sie werden je Betrieb
+ *     (`conflict`), unbestätigte Überzahlung (`overpayment_unconfirmed`),
+ *     stornierte Rechnung (`invoice_cancelled`) und ein durch die Schlussrechnung
+ *     abgerechneter Abschlag (`final_invoice_exists`). Sie werden je Betrieb
  *     (Speicherbereich) und Zahlung dauerhaft auf dem Gerät vermerkt.
  *   - Eine Rollenabweisung gilt für alle Zahlungen, die in diesem Moment
  *     ungesichert waren — der Server prüft die Person, nicht die Zahlung. Eine
@@ -45,9 +46,22 @@
  */
 import type { InvoicePayment, VorgangInvoice } from '../../types/models';
 import { isFinalizedInvoice } from '../invoiceArchiveService';
-import { getInvoicePayments, isInvoiceCancelled, syncInvoicePaymentToCloud } from '../invoicePaymentService';
+import {
+  getInvoicePayments,
+  isInvoiceCancelled,
+  isRejectedInvoicePaymentOutcome,
+  quarantineRejectedInvoicePayment,
+  setInvoicePaymentCloudConfirmation,
+  syncInvoicePaymentToCloud,
+} from '../invoicePaymentService';
 import { getActiveStorageKey } from '../storage/storageScopeService';
-import { listInvoices } from './invoiceRegistryService';
+import {
+  clearInvoicePaymentUnconfirmed,
+  markInvoicePaymentUnconfirmed,
+  resetInvoicePaymentConfirmationForTests,
+} from './invoicePaymentConfirmationStore';
+import { findInvoiceLocatorById, listInvoices } from './invoiceRegistryService';
+import type { RejectedInvoicePaymentReason } from '../../types/models';
 import type { SyncSchedulerStatus } from '../sync/syncScheduler';
 import {
   pullInvoicePaymentsFromCloud,
@@ -58,13 +72,20 @@ import {
 const MIN_INTERVAL_MS = 10 * 60 * 1000;
 
 /** Endgültige Ausgänge: Ein neuer automatischer Versuch ändert an ihnen nichts. */
-export type InvoicePaymentResyncBlockReason = 'denied' | 'conflict' | 'overpayment_unconfirmed' | 'invoice_cancelled';
+export type InvoicePaymentResyncBlockReason =
+  | 'denied'
+  | 'conflict'
+  | 'overpayment_unconfirmed'
+  | 'invoice_cancelled'
+  // FC01A-P1-Nacharbeit (ZAH-04) — Abschlag durch eine wirksame Schlussrechnung abgerechnet.
+  | 'final_invoice_exists';
 
 const FINAL_OUTCOMES: ReadonlySet<InvoicePaymentCloudOutcome> = new Set<InvoicePaymentCloudOutcome>([
   'denied',
   'conflict',
   'overpayment_unconfirmed',
   'invoice_cancelled',
+  'final_invoice_exists',
 ]);
 
 export function isFinalInvoicePaymentResyncOutcome(
@@ -81,6 +102,21 @@ export interface InvoicePaymentResyncReport {
   denied: boolean;
   /** WEISS-N01 — wegen eines dauerhaften Vermerks übergangene Zahlungen. */
   blocked?: number;
+  /**
+   * END18-R3 — fachlich abgewiesene Zahlungen, die dieser Lauf aus `payments` genommen hat (auch
+   * Altbestand mit älterem Vermerk; der vollständige Abzug belegt, dass der Server sie nicht kennt).
+   */
+  quarantined?: number;
+}
+
+/**
+ * FINANZ-CORE-01A (END18-R3) — eine fachlich abgewiesene Zahlung verliert ihre Finanzwirkung (siehe
+ * `quarantineRejectedInvoicePayment`). Nur für Rechnungen im lokalen Bestand; sonst bleibt der Vermerk.
+ */
+function quarantineFromStore(invoiceId: string, paymentId: string, reason: RejectedInvoicePaymentReason, at: string): boolean {
+  const locator = findInvoiceLocatorById(invoiceId);
+  if (!locator) return false;
+  return quarantineRejectedInvoicePayment(locator.vorgangId, invoiceId, paymentId, reason, at).success;
 }
 
 export interface InvoicePaymentResyncDeps {
@@ -88,6 +124,10 @@ export interface InvoicePaymentResyncDeps {
   listInvoices?: () => VorgangInvoice[];
   pull?: () => Promise<InvoicePaymentCloudPullResult>;
   push?: (invoiceId: string, payment: InvoicePayment) => Promise<InvoicePaymentCloudOutcome>;
+  /** END18-R3 — überschreibbar für Tests; Standard: aus dem lokalen Bestand. */
+  quarantine?: (invoiceId: string, paymentId: string, reason: RejectedInvoicePaymentReason, at: string) => boolean;
+  /** Systemische Gesamtnacharbeit (D4) — überschreibbar für Tests; Standard: an der Zahlung im Hauptbestand. */
+  setConfirmation?: (invoiceId: string, confirmations: ReadonlyMap<string, boolean>) => boolean;
 }
 
 let lastRunAt: number | null = null;
@@ -180,6 +220,8 @@ export function recordInvoicePaymentResyncBlock(
   blocks[key(invoiceId, paymentId)] = { reason, at: at.toISOString() };
   writeBlocks(blocks);
   failedAt.delete(key(invoiceId, paymentId));
+  // Bericht 20 — endgültig abgewiesen heißt: nicht bestätigt (Abschlusssperre bis zur Klärung).
+  markInvoicePaymentUnconfirmed(invoiceId, paymentId, at);
 }
 
 /** Die vermerkten Gründe je Zahlung einer Rechnung — für den Hinweis an der Zahlung. */
@@ -205,6 +247,7 @@ async function run(deps: InvoicePaymentResyncDeps, now: number): Promise<Invoice
   // Bewusst alle Kennungen, auch reversierte: Ein Grabstein beweist, dass die Cloud sie kennt.
   const known = new Set(pulled.rows.map((row) => key(row.clientInvoiceId, row.clientPaymentId)));
   const push = deps.push ?? syncInvoicePaymentToCloud;
+  const quarantine = deps.quarantine ?? quarantineFromStore;
   const blocks = readBlocks();
   let blocksChanged = false;
 
@@ -214,19 +257,48 @@ async function run(deps: InvoicePaymentResyncDeps, now: number): Promise<Invoice
    * nicht mehr erreicht.
    */
   const pending: Array<{ invoiceId: string; payment: InvoicePayment; id: string }> = [];
+  /*
+   * Systemische Gesamtnacharbeit (SYS-02 / D4) — dieser vollständige Abzug ist der Nachweis: bekannte Zahlungen
+   * bekommen die positive Bestätigung an der Zahlung selbst, unbekannte verlieren sie.
+   */
+  const bestaetigung = new Map<string, Map<string, boolean>>();
+  const vermerke = (invoiceId: string, paymentId: string, wert: boolean) => {
+    const proRechnung = bestaetigung.get(invoiceId) ?? new Map<string, boolean>();
+    proRechnung.set(paymentId, wert);
+    bestaetigung.set(invoiceId, proRechnung);
+  };
   for (const invoice of (deps.listInvoices ?? listInvoices)()) {
     if (!isFinalizedInvoice(invoice) || isInvoiceCancelled(invoice)) continue;
     for (const payment of getInvoicePayments(invoice)) {
       const id = key(invoice.id, payment.id);
+      vermerke(invoice.id, payment.id, known.has(id));
       if (known.has(id)) {
         // Die Cloud kennt sie (anderes Gerät, Knopf): ein alter Vermerk ist erledigt.
         if (blocks[id]) {
           delete blocks[id];
           blocksChanged = true;
         }
+        clearInvoicePaymentUnconfirmed(invoice.id, payment.id);
         continue;
       }
+      /*
+       * Bericht 20 — dieser vollständige Abzug belegt: Der Server kennt die Zahlung nicht. Auch eine Zahlung aus
+       * einem älteren Client ohne Vermerk ist damit unbestätigt (Monatsabschluss sperrt), bis sie gesichert ist.
+       */
+      markInvoicePaymentUnconfirmed(invoice.id, payment.id, new Date(now));
       if (blocks[id]) {
+        /*
+         * END18-R3 — Altbestand: Eine früher fachlich abgewiesene Zahlung stand bisher weiter unter
+         * `payments` und zählte. Dieser vollständige Abzug belegt, dass der Server sie nicht kennt: Sie
+         * verliert jetzt ihre Wirkung (sichtbar als abgewiesen). Rollenabweisung und Konflikt bleiben Vermerk.
+         */
+        const vermerk = blocks[id]!;
+        if (isRejectedInvoicePaymentOutcome(vermerk.reason) && quarantine(invoice.id, payment.id, vermerk.reason, vermerk.at || new Date(now).toISOString())) {
+          // Ohne Wirkung (unter `rejectedPayments`): nichts mehr zu bestätigen.
+          clearInvoicePaymentUnconfirmed(invoice.id, payment.id);
+          report.quarantined = (report.quarantined ?? 0) + 1;
+          continue;
+        }
         report.blocked = (report.blocked ?? 0) + 1;
         continue;
       }
@@ -243,12 +315,15 @@ async function run(deps: InvoicePaymentResyncDeps, now: number): Promise<Invoice
     const outcome = await push(invoiceId, payment);
     if (outcome === 'synced') {
       failedAt.delete(id);
+      clearInvoicePaymentUnconfirmed(invoiceId, payment.id);
+      vermerke(invoiceId, payment.id, true);
       report.synced += 1;
     } else if (outcome === 'denied') {
       report.denied = true;
       deniedThisSession = true;
       for (const rest of pending.slice(index)) blocks[rest.id] = { reason: 'denied', at };
       writeBlocks(blocks);
+      wendeBestaetigungAn(deps, bestaetigung);
       return report;
     } else if (isFinalInvoicePaymentResyncOutcome(outcome)) {
       // Konflikt, unbestätigte Überzahlung, stornierte Rechnung: wartet auf den Nutzer, nicht auf das Netz.
@@ -256,13 +331,31 @@ async function run(deps: InvoicePaymentResyncDeps, now: number): Promise<Invoice
       blocksChanged = true;
       failedAt.delete(id);
       report.failed += 1;
+      // END18-R3 — fachlich abgewiesen: Der Server kennt die Zahlung nicht; sie verliert ihre Wirkung.
+      if (isRejectedInvoicePaymentOutcome(outcome) && quarantine(invoiceId, payment.id, outcome, at)) {
+        clearInvoicePaymentUnconfirmed(invoiceId, payment.id);
+        report.quarantined = (report.quarantined ?? 0) + 1;
+      }
     } else {
       failedAt.set(id, now);
       report.failed += 1;
     }
   }
   if (blocksChanged) writeBlocks(blocks);
+  wendeBestaetigungAn(deps, bestaetigung);
   return report;
+}
+
+/** Systemische Gesamtnacharbeit (D4) — die Bestätigungen dieses Laufs an die Zahlungen schreiben (nur echte Änderungen). */
+function wendeBestaetigungAn(deps: InvoicePaymentResyncDeps, bestaetigung: ReadonlyMap<string, ReadonlyMap<string, boolean>>): void {
+  const setzen = deps.setConfirmation ?? setInvoicePaymentCloudConfirmation;
+  for (const [invoiceId, zahlungen] of bestaetigung) {
+    try {
+      setzen(invoiceId, zahlungen);
+    } catch {
+      /* Ohne geschriebene Bestätigung bleibt die Zahlung unbestätigt — die sichere Richtung. */
+    }
+  }
 }
 
 /**
@@ -343,4 +436,5 @@ export function resetInvoicePaymentResyncForTests(): void {
   inFlight = null;
   failedAt.clear();
   writeBlocks({});
+  resetInvoicePaymentConfirmationForTests();
 }

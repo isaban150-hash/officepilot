@@ -16,6 +16,11 @@ import * as rasterEncode from '../documentFileRasterEncodeService';
 import * as syncClient from '../sync/syncClientService';
 import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
 import type { VorgangInvoice } from '../../types/models';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 const WORKSPACE_ID = 'ws-pdf-branding';
 const LOGO_A = { assetId: 'asset-a-1111', mimeType: 'image/png' } as const;
@@ -124,7 +129,7 @@ describe('BRANDING-01F-3 — Logo im Rechnungs-PDF', () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    (vi.restoreAllMocks(), alsInhaber());
   });
 
   // TEST 11

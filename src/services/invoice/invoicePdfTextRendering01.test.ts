@@ -13,12 +13,17 @@
  * mitgeschnitten (und weiterhin ausgeführt), zusätzlich werden die erzeugten
  * Bytes geladen. Kein Netz, keine gespeicherten Daten.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { PDFDict, PDFDocument, PDFName, PDFPage } from 'pdf-lib';
 
 import { generateApprovedInvoicePdf, toPdfSafeText } from '../invoicePdfService';
 import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
 import type { VorgangInvoice } from '../../types/models';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
+
+// SYS-04 (systemische Gesamtnacharbeit): Bei eingerichteter Cloud gibt eine unbekannte Sitzung keine Rechnung mehr aus.
+// Diese Tests prüfen Inhalte der Ausgabe und laufen deshalb ausdrücklich als Inhaber (auch nach restoreAllMocks).
+beforeEach(() => alsInhaber());
 
 /** Der Name aus dem Realfall — mit `ı` (U+0131) ausserhalb von Latin-1. */
 const TURKISH_COMPANY = 'Çırmak Şahin Ağaç İşleri GmbH';
@@ -128,7 +133,7 @@ async function pdfOf(invoice: VorgangInvoice): Promise<Uint8Array> {
 }
 
 afterEach(() => {
-  vi.restoreAllMocks();
+  (vi.restoreAllMocks(), alsInhaber());
 });
 
 describe('PDF-TEXT-RENDERING-01B — Unicode', () => {

@@ -7,6 +7,7 @@
  * gar keine Funktion.
  */
 import type { AccountingPeriodClosure } from '../../types/accountingPeriod';
+import { isActiveClosure } from './accountingPeriodRevisionStatus';
 
 let closures: AccountingPeriodClosure[] = [];
 
@@ -20,6 +21,7 @@ function clone(value: AccountingPeriodClosure): AccountingPeriodClosure {
       ...(value.manifest.employeePayments
         ? { employeePayments: value.manifest.employeePayments.map((payment) => ({ ...payment })) }
         : {}),
+      ...(value.manifest.offenePosten ? { offenePosten: value.manifest.offenePosten.map((posten) => ({ ...posten })) } : {}),
     },
     sync: value.sync ? { ...value.sync } : undefined,
   };
@@ -49,9 +51,12 @@ export function getClosuresForMonth(monthKey: string): AccountingPeriodClosure[]
     .map(clone);
 }
 
-/** Die noch nicht wieder geöffnete Revision, falls es eine gibt. */
+/**
+ * Die noch nicht wieder geöffnete Revision, falls es eine gibt. Systemische Gesamtnacharbeit (D7): Eine vom Server
+ * endgültig abgewiesene Revision ist nicht aktiv — sie bleibt in der Historie, der Monat ist wieder abschließbar.
+ */
 export function getActiveClosureForMonth(monthKey: string): AccountingPeriodClosure | undefined {
-  const found = closures.find((item) => item.monthKey === monthKey && !item.reopenedAt);
+  const found = closures.find((item) => item.monthKey === monthKey && isActiveClosure(item));
   return found ? clone(found) : undefined;
 }
 
@@ -87,6 +92,22 @@ export function markClosureReopened(
   };
   closures = [...closures.slice(0, index), updated, ...closures.slice(index + 1)];
   return clone(updated);
+}
+
+/**
+ * Systemische Gesamtnacharbeit (D5) — eine Änderung zurücknehmen, die nie gespeichert wurde.
+ *
+ * Abschluss und Wiederöffnung speichern sofort. Scheitert das Speichern, nimmt die Persistenz zwar den Sendeauftrag
+ * zurück, der Speicher hier hätte die Revision aber behalten — ein Abschluss, der weder gespeichert noch je gesendet
+ * würde. Deshalb: mit `previous` den Stand vor der Änderung wiederherstellen, ohne `previous` die eben angehängte,
+ * ungespeicherte Revision entfernen. Für gespeicherte Revisionen gibt es weiterhin keinen solchen Weg.
+ */
+export function revertUnsavedAccountingPeriodClosure(id: string, previous: AccountingPeriodClosure | null): void {
+  const index = closures.findIndex((item) => item.id === id);
+  if (index < 0) return;
+  closures = previous
+    ? [...closures.slice(0, index), clone(previous), ...closures.slice(index + 1)]
+    : [...closures.slice(0, index), ...closures.slice(index + 1)];
 }
 
 export function setAccountingPeriodStoreForTests(items: AccountingPeriodClosure[]): void {

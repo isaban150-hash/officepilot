@@ -11,7 +11,10 @@ import {
   InvoicePaymentForm,
 } from '../components/invoice/InvoicePaymentForm';
 import { InvoiceCancelDialog } from '../components/invoice/InvoiceCancelDialog';
-import { canOfferInvoiceCancel } from '../services/invoice/invoiceCancelEligibility';
+import {
+  canOfferInvoiceCancel,
+  findFinalInvoiceBlockingPaymentReversal,
+} from '../services/invoice/invoiceCancelEligibility';
 import { InvoicePaymentHistory } from '../components/invoice/InvoicePaymentHistory';
 import { InvoicePaymentSummary } from '../components/invoice/InvoicePaymentSummary';
 import { AccountingAssignmentPanel } from '../components/accounting/AccountingAssignmentPanel';
@@ -37,16 +40,23 @@ import { paymentStatusTone } from '../services/ui/statusTone';
 import { useApp } from '../context/AppContext';
 import { isFinalizedInvoice, buildPrintTitle } from '../services/invoiceArchiveService';
 import { buildInvoicePrintModelFromInvoice, formatInvoiceDate } from '../services/invoicePrintModel';
+import { resolveInvoiceNet } from '../services/invoice/invoiceNetResolution';
+import { InvoiceNetUnresolvedNotice } from '../components/invoice/InvoiceNetUnresolvedNotice';
 import {
   acknowledgeInvoicePaymentOverpayment,
   calculatePaymentSummary,
   canRecordInvoicePayment,
+  discardRejectedInvoicePayment,
   formatPaymentCurrency,
   findLocallyOnlyPayments,
   getInvoicePayments,
+  getRejectedInvoicePayments,
   isInvoiceCancelled,
   isInvoicePaymentCloudSynced,
+  isRejectedInvoicePaymentOutcome,
+  quarantineRejectedInvoicePayment,
   removePayment,
+  restoreRejectedInvoicePaymentAsOverpayment,
   reverseInvoicePaymentInCloudForRemoval,
   syncInvoicePaymentToCloud,
 } from '../services/invoicePaymentService';
@@ -456,6 +466,14 @@ export function InvoiceDetailPage() {
         // FINANZ-CORE-01A (ZAH-02) — Netz oder Server: der nächste erfolgreiche Abgleich versucht es erneut.
         markInvoicePaymentResyncNeeded();
       }
+      /*
+       * FINANZ-CORE-01A (END18-R3) — fachlich abgewiesen heißt: Der Server kennt diese Zahlung nicht. Sie
+       * verliert ihre Finanzwirkung und steht als abgewiesen da, bis der Nutzer entscheidet.
+       */
+      if (isRejectedInvoicePaymentOutcome(outcome) && vorgangId !== undefined) {
+        const abgewiesen = quarantineRejectedInvoicePayment(vorgangId, current.id, paymentId, outcome);
+        if (abgewiesen.success) setInvoice(abgewiesen.invoice);
+      }
       setResyncBlockVersion((version) => version + 1);
       if (outcome === 'overpayment_unconfirmed') {
         setOverpaymentQuestionId(paymentId);
@@ -470,7 +488,11 @@ export function InvoiceDetailPage() {
               ? 'payment.cloudConflict'
               : outcome === 'invoice_cancelled'
                 ? 'payment.cloudInvoiceCancelled'
-                : 'payment.cloudOnlyLocal',
+                : outcome === 'final_invoice_exists'
+                  ? 'payment.cloudFinalInvoiceExists'
+                  : outcome === 'skonto_deadline_unclear'
+                    ? 'payment.cloudSkontoDeadlineUnclear'
+                    : 'payment.cloudOnlyLocal',
         ),
       );
       return;
@@ -483,7 +505,11 @@ export function InvoiceDetailPage() {
 
   const handleAcknowledgeOverpayment = async (paymentId: string) => {
     if (vorgangId === undefined || !invoiceId) return;
-    const result = acknowledgeInvoicePaymentOverpayment(vorgangId, invoiceId, paymentId);
+    // END18-R3 — eine abgewiesene Zahlung kehrt erst mit der bewussten Bestätigung zurück und wird gesendet.
+    const abgewiesen = invoice ? getRejectedInvoicePayments(invoice).some((entry) => entry.id === paymentId) : false;
+    const result = abgewiesen
+      ? restoreRejectedInvoicePaymentAsOverpayment(vorgangId, invoiceId, paymentId)
+      : acknowledgeInvoicePaymentOverpayment(vorgangId, invoiceId, paymentId);
     if (!result.success) {
       showToast(translate(result.errorKey as never));
       return;
@@ -509,8 +535,26 @@ export function InvoiceDetailPage() {
    * beweist, dass diese Kennung in der Cloud gar nicht vorkommt. Das ist der
    * einzige nachweisbare Local-only-Fall; fehlende Konfiguration ist keiner.
    */
+  /** END18-R3 — der Nutzer verwirft eine abgewiesene Zahlung bewusst; der Server kannte sie nie. */
+  const handleDiscardRejectedPayment = (paymentId: string) => {
+    if (vorgangId === undefined || !invoiceId) return;
+    const result = discardRejectedInvoicePayment(vorgangId, invoiceId, paymentId);
+    if (!result.success) {
+      showToast(translate(result.errorKey as never));
+      return;
+    }
+    releaseInvoicePaymentResyncConflict(invoiceId, paymentId);
+    setInvoice(result.invoice);
+    setResyncBlockVersion((version) => version + 1);
+  };
+
   const handleRemovePayment = async (paymentId: string) => {
     if (vorgangId === undefined || !invoiceId) return;
+    // FC01A-Nacharbeit (A2) — vor dem Serveraufruf: Die Schlussrechnung hält diese Abschlagszahlung fest.
+    if (invoice && findFinalInvoiceBlockingPaymentReversal(vorgangId, invoice)) {
+      showToast(translate('payment.reverseBlockedByFinalInvoice'));
+      return;
+    }
 
     const outcome = await reverseInvoicePaymentInCloudForRemoval(invoiceId, paymentId);
     if (!isInvoicePaymentCloudSynced(outcome)) {
@@ -574,6 +618,14 @@ export function InvoiceDetailPage() {
     );
   }
 
+  /*
+   * FC01A-P1-Restkorrektur (lokaler Altbestand) — ohne verlässliches Netto gibt es kein Druckmodell.
+   * Statt „kann nicht angezeigt werden" stehen hier die festen Angaben und der Berichtigungsweg.
+   */
+  if (isFinalizedInvoice(invoice) && invoice.companySnapshot && invoice.customerSnapshot && !resolveInvoiceNet(invoice).ok) {
+    return <InvoiceNetUnresolvedNotice invoice={invoice} translate={translate} onBack={() => navigate(backPath)} />;
+  }
+
   if (!isFinalizedInvoice(invoice) || !printModel) {
     return (
       <div className="page">
@@ -632,6 +684,8 @@ export function InvoiceDetailPage() {
    */
   // FINANZ-CORE-01A — dieselbe Regel, die der Test prüft (invoiceCancelEligibility).
   const canCancelInvoice = canOfferInvoiceCancel(invoice, vorgangId) && !invoiceCancelled;
+  // FC01A-Nacharbeit (A2) — hinter einer wirksamen Schlussrechnung keine Rücknahme der Abschlagszahlung.
+  const paymentReversalBlocked = findFinalInvoiceBlockingPaymentReversal(vorgangId, invoice) !== null;
 
   const autoDownloadPdf = searchParams.get('auto') === 'pdf';
   const correctionPath = `${buildInvoiceReachPath(vorgangId, invoice.id)}?doc=korrektur`;
@@ -1002,7 +1056,13 @@ export function InvoiceDetailPage() {
         </AccountingSection>
 
         <DetailSection title={translate('invoiceDetail.section.payment')} surface testId="invoice-detail-section-payment">
-          <InvoicePaymentSummary invoice={invoice} translate={translate} />
+          <InvoicePaymentSummary
+            invoice={invoice}
+            translate={translate}
+            vorgangId={vorgangId}
+            onInvoiceChange={(updated) => setInvoice(updated)}
+            actor={{ userId: authUserId ?? undefined, cloudConfigured }}
+          />
           {/* PAYMENT-REMINDER-01 — dokumentierter Mahnstand direkt beim Zahlungsstand, nicht versteckt. */}
           <div className="data-row" data-testid="invoice-dunning-status">
             <span className="data-row__label">{translate('invoice.dunning.statusLabel')}</span>
@@ -1030,9 +1090,14 @@ export function InvoiceDetailPage() {
             translate={translate}
             onRemovePayment={handleRemovePayment}
             allowRemove={darfFinanzen}
+            removeBlockedReason={
+              paymentReversalBlocked ? translate('payment.reverseBlockedByFinalInvoice') : undefined
+            }
             unsyncedPaymentIds={unsyncedPaymentIds ?? undefined}
             blockedPaymentReasons={resyncBlocks}
             onSecurePayment={darfFinanzen ? handleSecurePayment : undefined}
+            onConfirmRejectedPayment={darfFinanzen ? (paymentId) => setOverpaymentQuestionId(paymentId) : undefined}
+            onDiscardRejectedPayment={darfFinanzen ? handleDiscardRejectedPayment : undefined}
           />
         </DetailSection>
         </div>
@@ -1105,7 +1170,10 @@ export function InvoiceDetailPage() {
         />
       )}
       {(() => {
-        const pending = getInvoicePayments(invoice).find((entry) => entry.id === overpaymentQuestionId);
+        // END18-R3 — die Frage gilt auch einer abgewiesenen Zahlung (sie steht dann unter den abgewiesenen).
+        const pending = [...getInvoicePayments(invoice), ...getRejectedInvoicePayments(invoice)].find(
+          (entry) => entry.id === overpaymentQuestionId,
+        );
         return (
           <SimpleConfirmDialog
             open={Boolean(pending)}

@@ -20,7 +20,7 @@
  * ein Export fordert nie von sich aus eine neue Abschlussrevision an.
  */
 import { getAccountingPeriodState } from './accountingPeriodService';
-import type { AccountingPeriodState } from '../../types/accountingPeriod';
+import type { AccountingPeriodRevisionStatus, AccountingPeriodState } from '../../types/accountingPeriod';
 
 /* -------------------------------------------------------------------------- */
 /* Blocker                                                                    */
@@ -30,6 +30,11 @@ export type ExportBlockerCode =
   | 'not_closed'
   | 'changed_after_close'
   | 'period_blockers'
+  /*
+   * Systemische Gesamtnacharbeit (Produktentscheidung) — ein reguläres Cloud-Paket braucht eine vom Server geprüfte
+   * und angenommene Revision. Ausstehend, abgewiesen, Konflikt oder historisch genügt nicht; `detail` nennt den Status.
+   */
+  | 'closure_not_server_confirmed'
   /* DATEV-spezifisch — blockiert nur das DATEV-Format, nie das Paket. */
   | 'datev_no_specification'
   | 'datev_no_counter_account'
@@ -52,6 +57,19 @@ export interface AccountingExportReadiness {
   readonly datevBlockers: readonly ExportBlocker[];
   /** Der Stand, auf dem diese Bewertung beruht. */
   readonly state: AccountingPeriodState;
+  /** Systemische Gesamtnacharbeit (D1) — Cloudstatus des aktiven Abschlusses (`null` ohne Abschluss). */
+  readonly closureStatus: AccountingPeriodRevisionStatus | null;
+  /**
+   * Art des regulären Pakets: `lokal` im Betrieb ohne Cloud (sichtbar als lokaler Abschluss), sonst `regulaer`
+   * (nur mit servervalidierter Revision).
+   */
+  readonly handoverKind: 'regulaer' | 'lokal';
+  /**
+   * Eine ausdrücklich lokale, als „nicht cloudbestätigt“ gekennzeichnete Übergabe ist möglich: gültiger Abschluss
+   * ohne offene Punkte, der Server hat ihn nur (noch) nicht bestätigt (ausstehend oder historisch). Nie bei
+   * abgewiesener Revision oder Konflikt.
+   */
+  readonly localHandoverAllowed: boolean;
 }
 
 /**
@@ -120,6 +138,19 @@ export function evaluateAccountingExportReadiness(
     });
   }
 
+  /*
+   * Systemische Gesamtnacharbeit (Produktentscheidung) — „abgeschlossen“ genügt im Cloudbetrieb nicht: Ein reguläres
+   * Paket verwendet nur eine Revision, die der Server gegen seinen Finanzbestand geprüft und angenommen hat. Ein
+   * rein lokaler Abschluss (Betrieb ohne Cloud) bleibt zulässig und ist im Paket als lokal gekennzeichnet.
+   */
+  const closureStatus = state.activeClosure ? state.activeClosureStatus ?? null : null;
+  const fachlichBereit = packageBlockers.length === 0;
+  if (state.activeClosure && closureStatus !== 'angenommen' && closureStatus !== 'lokal') {
+    packageBlockers.push({ code: 'closure_not_server_confirmed', detail: closureStatus ?? 'ausstehend' });
+  }
+  const localHandoverAllowed =
+    fachlichBereit && Boolean(state.activeClosure) && (closureStatus === 'ausstehend' || closureStatus === 'historisch');
+
   const datevBlockers = collectDatevBlockers();
 
   return {
@@ -134,5 +165,8 @@ export function evaluateAccountingExportReadiness(
     datevAllowed: packageBlockers.length === 0 && datevBlockers.length === 0,
     datevBlockers,
     state,
+    closureStatus,
+    handoverKind: closureStatus === 'lokal' ? 'lokal' : 'regulaer',
+    localHandoverAllowed,
   };
 }

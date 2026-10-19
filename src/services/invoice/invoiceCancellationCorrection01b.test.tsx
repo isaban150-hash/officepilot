@@ -396,8 +396,10 @@ describe('NORMAL-INVOICE-CANCELLATION-01B', () => {
   });
 
   it('F3: Schlussrechnung mit Abschlagsabzug — Abzüge und fälliger Betrag negiert, Original unverändert', () => {
+    // FC01A-P1-Restkorrektur (lokaler Altbestand) — der Betrag einer Schlussrechnung ist Brutto minus
+    // Abzüge (476 − 119); ein widersprüchlicher Betrag ergibt keinen Beleg mehr.
     const schluss = orderInvoice({
-      id: 'inv-schluss', type: 'schluss',
+      id: 'inv-schluss', type: 'schluss', amount: 357,
       previousAbschlagDeductions: [{ invoiceId: 'inv-ab', invoiceNumber: '2026-0150', abschlagNumber: 1, amount: 119 }],
     } as Partial<VorgangInvoice>);
     const original = buildInvoicePrintModelFromInvoice(schluss);

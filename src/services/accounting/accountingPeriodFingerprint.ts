@@ -24,6 +24,7 @@ import type {
 } from '../../types/accountingPeriod';
 import type { AccountingAssignment } from '../../types/accounting';
 import { canonicalAccountingAssignmentsBySource } from './accountingCanonical';
+import { buildPeriodCanonicalTextV5, buildPeriodFingerprintV5, buildPeriodManifestV5 } from './accountingPeriodManifestV5';
 import { belegExportKey } from '../steuerberater/monatsmappeModelService';
 import type { MonatsmappeBeleg, MonatsmappeModel } from '../steuerberater/monatsmappeModelService';
 
@@ -36,6 +37,15 @@ function sourceTypeOf(beleg: MonatsmappeBeleg): 'expense' | 'invoice' {
 
 function round(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/** FC01A-P1-Restkorrektur (lokaler Altbestand) — ungeklärt bleibt `null`, nie eine geschätzte Zahl. */
+function roundOrNull(value: number | null): number | null {
+  return value === null ? null : round(value);
+}
+
+function moneyText(value: number | null): string {
+  return value === null ? 'ungeklaert' : value.toFixed(2);
 }
 
 /**
@@ -55,9 +65,18 @@ export function buildPeriodManifest(
    * alte Abschlüsse nach ihrer eigenen Logik geprüft werden.
    * P1 MITARBEITERZAHLUNGEN — neue Stände entstehen mit Version 3; Version 2
    * bleibt unverändert, damit ihre Abschlüsse nicht still umgedeutet werden.
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-04) — neue Stände entstehen mit Version 4; sie bindet
+   * Skonto, Zahlungsart, Zahlungsstatus und offenen Betrag, wie der Export sie ausweist. Version 3
+   * bleibt unverändert (keine stille Umdeutung alter Abschlüsse).
    */
-  version: AccountingPeriodFingerprintVersion = 3,
+  version: AccountingPeriodFingerprintVersion = 5,
 ): AccountingPeriodManifest {
+  /*
+   * FINANZ-CORE-01A (systemische Gesamtnacharbeit, SYS-01/SYS-03) — neue Revisionen entstehen mit Fassung 5: dazu die
+   * kumulierten offenen Posten, und der Server prüft sie gegen seinen eigenen Bestand (accountingPeriodManifestV5.ts).
+   * Fassungen 1–4 bleiben unverändert prüfbar, gelten aber nie als serverzertifiziert.
+   */
+  if (version === 5) return buildPeriodManifestV5(model, assignments, chartOfAccounts);
   /*
    * FINANZ-CORE-01A (WEISS-Nacharbeit N09) — ab Version 3 dieselbe Kontierung je Beleg wie
    * Export und Detail. Ältere Fassungen behalten ihre Regel (letzte Zeile gewinnt), damit
@@ -96,14 +115,26 @@ export function buildPeriodManifest(
       belegnummer: beleg.belegnummer,
       datum: beleg.datum,
       brutto: round(beleg.brutto),
-      netto: round(beleg.netto),
-      steuer: round(beleg.steuer),
+      netto: roundOrNull(beleg.netto),
+      steuer: roundOrNull(beleg.steuer),
       belegStatus,
       accountNumber: assignment?.accountNumber.trim() ?? '',
       taxTreatment: assignment?.taxTreatment ?? '',
       bookingText: assignment?.bookingText.trim() ?? '',
       assignmentStatus: assignment?.status ?? 'none',
       ...(version === 1 ? {} : { belegart: beleg.belegart }),
+      /*
+       * FINANZ-CORE-01A (Gesamtnacharbeit INV-04, Version 4) — was `buchungen.csv` und
+       * `offene_posten_monatsende.csv` zum Beleg ausweisen. Bisher galt eine steuerlich geänderte
+       * Übergabe (Skonto weg, Zahlungsstatus anders) als derselbe abgeschlossene Stand.
+       */
+      ...(version >= 4
+        ? {
+            skontoAbzug: round(beleg.skontoAbzug ?? 0),
+            zahlungsstatus: beleg.zahlungsstatus ?? '',
+            offenerBetrag: round(beleg.offenerBetrag ?? 0),
+          }
+        : {}),
     });
   }
 
@@ -125,8 +156,8 @@ export function buildPeriodManifest(
       chartOfAccounts,
       documentCount: entries.length,
       totalBrutto: round(entries.reduce((sum, entry) => sum + entry.brutto, 0)),
-      totalNetto: round(entries.reduce((sum, entry) => sum + entry.netto, 0)),
-      totalSteuer: round(entries.reduce((sum, entry) => sum + entry.steuer, 0)),
+      totalNetto: round(entries.reduce((sum, entry) => sum + (entry.netto ?? 0), 0)),
+      totalSteuer: round(entries.reduce((sum, entry) => sum + (entry.steuer ?? 0), 0)),
       entries,
     };
   }
@@ -146,6 +177,12 @@ export function buildPeriodManifest(
     paymentId: zahlung.zahlungId,
     datum: zahlung.datum,
     betrag: round(zahlung.betrag),
+    /*
+     * FINANZ-CORE-01A (Gesamtnacharbeit INV-04, Version 4) — WEISS I01: Die Zahlungsdatei verlor den
+     * Skontoabzug, der Fingerabdruck blieb gleich. Jetzt gehören Skonto (auch die Rücknahme, INV-05) und
+     * Zahlungsart der Zahlung dazu, wie `zahlungen.csv` sie ausweist.
+     */
+    ...(version >= 4 ? { skontoAbzug: round(zahlung.skontoAbzug ?? 0), zahlungsart: zahlung.zahlungsart ?? '' } : {}),
   }));
   payments.sort(
     (a, b) =>
@@ -159,8 +196,8 @@ export function buildPeriodManifest(
     chartOfAccounts,
     documentCount: entries.length,
     totalBrutto: round(entries.reduce((sum, entry) => sum + entry.brutto, 0)),
-    totalNetto: round(entries.reduce((sum, entry) => sum + entry.netto, 0)),
-    totalSteuer: round(entries.reduce((sum, entry) => sum + entry.steuer, 0)),
+    totalNetto: round(entries.reduce((sum, entry) => sum + (entry.netto ?? 0), 0)),
+    totalSteuer: round(entries.reduce((sum, entry) => sum + (entry.steuer ?? 0), 0)),
     entries,
     payments,
   };
@@ -185,17 +222,23 @@ export function buildPeriodManifest(
   );
   employeePayments.sort((a, b) => a.paymentId.localeCompare(b.paymentId) || a.art.localeCompare(b.art));
 
-  return { fingerprintVersion: 3, ...kopf, employeePayments };
+  return version >= 4
+    ? { fingerprintVersion: 4, ...kopf, employeePayments }
+    : { fingerprintVersion: 3, ...kopf, employeePayments };
 }
 
 /** Die Algorithmusversion eines Manifests; ohne Angabe Version 1. */
 export function manifestFingerprintVersion(manifest: AccountingPeriodManifest): AccountingPeriodFingerprintVersion {
+  if (manifest.fingerprintVersion === 5) return 5;
+  if (manifest.fingerprintVersion === 4) return 4;
   if (manifest.fingerprintVersion === 3) return 3;
   return manifest.fingerprintVersion === 2 ? 2 : 1;
 }
 
 /** Die Algorithmusversion, mit der ein gespeicherter Abschluss entstand. */
 export function closureFingerprintVersion(closure: AccountingPeriodClosure): AccountingPeriodFingerprintVersion {
+  if (manifestFingerprintVersion(closure.manifest) === 5 || closure.fingerprint.startsWith('p5:')) return 5;
+  if (manifestFingerprintVersion(closure.manifest) === 4 || closure.fingerprint.startsWith('p4:')) return 4;
   if (manifestFingerprintVersion(closure.manifest) === 3 || closure.fingerprint.startsWith('p3:')) return 3;
   return manifestFingerprintVersion(closure.manifest) === 2 || closure.fingerprint.startsWith('p2:') ? 2 : 1;
 }
@@ -208,6 +251,7 @@ export function closureFingerprintVersion(closure: AccountingPeriodClosure): Acc
  * Texte, nicht zwei Hexzahlen.
  */
 export function buildPeriodCanonicalText(manifest: AccountingPeriodManifest): string {
+  if (manifestFingerprintVersion(manifest) === 5) return buildPeriodCanonicalTextV5(manifest);
   const head = [
     `month=${manifest.monthKey}`,
     `chart=${manifest.chartOfAccounts}`,
@@ -225,8 +269,8 @@ export function buildPeriodCanonicalText(manifest: AccountingPeriodManifest): st
       entry.belegnummer,
       entry.datum,
       entry.brutto.toFixed(2),
-      entry.netto.toFixed(2),
-      entry.steuer.toFixed(2),
+      moneyText(entry.netto),
+      moneyText(entry.steuer),
       entry.belegStatus,
       entry.accountNumber,
       entry.taxTreatment,
@@ -234,6 +278,10 @@ export function buildPeriodCanonicalText(manifest: AccountingPeriodManifest): st
       entry.assignmentStatus,
       // 02B — ab Version 2 gehört die Belegart zur Identität des Eintrags.
       ...(version >= 2 ? [entry.belegart ?? ''] : []),
+      // INV-04 — ab Version 4 die Exportwerte des Belegs.
+      ...(version >= 4
+        ? [(entry.skontoAbzug ?? 0).toFixed(2), entry.zahlungsstatus ?? '', (entry.offenerBetrag ?? 0).toFixed(2)]
+        : []),
     ].join('\u0001'),
   );
 
@@ -243,9 +291,16 @@ export function buildPeriodCanonicalText(manifest: AccountingPeriodManifest): st
 
   // Version 2: Kopfzeile und Belegzeilen wie bisher, danach die Zahlungen des Monats.
   const paymentRows = (manifest.payments ?? []).map((payment) =>
-    ['payment', payment.sourceType, payment.sourceId, payment.paymentId, payment.datum, payment.betrag.toFixed(2)].join(
-      '\u0001',
-    ),
+    [
+      'payment',
+      payment.sourceType,
+      payment.sourceId,
+      payment.paymentId,
+      payment.datum,
+      payment.betrag.toFixed(2),
+      // INV-04 — ab Version 4 Skonto und Zahlungsart der Zahlung.
+      ...(version >= 4 ? [(payment.skontoAbzug ?? 0).toFixed(2), payment.zahlungsart ?? ''] : []),
+    ].join('\u0001'),
   );
   if (version === 2) return [`v=2|${head}`, ...rows, ...paymentRows].join('\n');
 
@@ -262,7 +317,7 @@ export function buildPeriodCanonicalText(manifest: AccountingPeriodManifest): st
       payment.status,
     ].join('\u0001'),
   );
-  return [`v=3|${head}`, ...rows, ...paymentRows, ...employeeRows].join('\n');
+  return [`v=${version >= 4 ? 4 : 3}|${head}`, ...rows, ...paymentRows, ...employeeRows].join('\n');
 }
 
 /**
@@ -278,6 +333,8 @@ export function buildPeriodCanonicalText(manifest: AccountingPeriodManifest): st
  * zweier fachlich verschiedener Stände noch unwahrscheinlicher.
  */
 export function buildPeriodFingerprint(manifest: AccountingPeriodManifest): string {
+  // Fassung 5: SHA-256 über den kanonischen Text, identisch mit dem Server (p5:<hex>).
+  if (manifestFingerprintVersion(manifest) === 5) return buildPeriodFingerprintV5(manifest);
   const text = buildPeriodCanonicalText(manifest);
   let hash = 2166136261;
   for (let index = 0; index < text.length; index += 1) {

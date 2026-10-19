@@ -11,6 +11,7 @@ import { getSupabaseClient } from '../../lib/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AccountingAssignment, AccountingSourceType } from '../../types/accounting';
 import { accountingSourceKey, isResolvedAccountingTaxTreatment } from './accountingCanonical';
+import { requirePullLists } from '../sync/pullResponseGuard';
 import type { SyncEntityType, SyncMeta, SyncOutboxEntry } from '../../types/sync';
 
 /**
@@ -160,7 +161,8 @@ export async function rpcPullWorkspaceAccountingAssignments(
     p_workspace_id: workspaceId,
   });
   if (error) throw classify(error);
-  return { assignments: (data?.assignments ?? []) as CloudAccountingRow[] };
+  // Systemische Gesamtnacharbeit (D6) — eine fehlende Liste ist ein unvollständiger Abzug, kein leerer Bestand.
+  return { assignments: requirePullLists('pull_workspace_accounting_assignments', data, ['assignments'] as const).assignments as CloudAccountingRow[] };
 }
 
 /**

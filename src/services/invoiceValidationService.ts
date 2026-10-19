@@ -17,6 +17,8 @@ import { getAbschlagDeductionsTotal } from './invoiceDeductions';
 import { getRemainingFixedAmountBillableNetCents, hasDeductibleAbschlag } from './orderBillingRules';
 import { getBusinessDay } from './businessDateService';
 import { findUnsettledAbschlagDeductions } from './invoice/abschlagSettlement';
+import { reliableDeductionNetCents } from './invoice/abschlagSkontoSplit';
+import { hasUnresolvedInvoiceNet } from './invoice/invoiceNetResolution';
 import {
   isPlausibleEmail,
   isPlausibleLeitwegId,
@@ -446,14 +448,67 @@ export function validateInvoiceDraftForApproval(
    * bis er bezahlt oder — ohne Zahlung — storniert ist. Gelesen wird der Stand des
    * Abschlags im Vorgang; der Server prüft dasselbe (`invoice_abschlag_unpaid`).
    */
+  const unsettledDeductions =
+    usesAbschlagDeductions(draft.type) && vorgang
+      ? findUnsettledAbschlagDeductions(draft.previousAbschlagDeductions, (invoiceId) =>
+          (vorgang.invoices ?? []).find((invoice) => invoice.id === invoiceId),
+        )
+      : [];
+  /*
+   * FINANZ-CORE-01A (Feiertage) — hängt das Skonto eines Abschlags an einem ungeklärten Feiertag am
+   * Sitz des Kunden, wird nicht „unbezahlt“ gemeldet, sondern die Klärung verlangt (Bundesland am
+   * Kunden). Der Server weist ebenso ab (`invoice_skonto_deadline_unclear`).
+   */
+  if (unsettledDeductions.some((entry) => entry.skontoUnclear)) {
+    blockingErrors.push({ code: 'abschlag_skonto_unclear', messageKey: 'invoice.validation.abschlagSkontoUnclear' });
+  }
+  if (unsettledDeductions.some((entry) => !entry.skontoUnclear)) {
+    blockingErrors.push({ code: 'abschlag_unpaid', messageKey: 'invoice.validation.abschlagUnpaid' });
+  }
+
+  /*
+   * FC01A-Nacharbeit (A3) — abgezogen werden nur Abschläge desselben Steuerfalls. Ein Abschlag
+   * mit 19 % und eine Schlussrechnung nach § 13b (oder umgekehrt) ergäben einen falschen
+   * Restbetrag und eine falsch ausgewiesene oder doppelt geschuldete Steuer; der Auftrag sperrt
+   * den Steuerstatus nicht immer (Vorgang ohne Steuerstatus, etwa aus dem Eingang). Der Server
+   * prüft dasselbe (`invoice_abschlag_tax_status_mismatch`). Ohne getroffene Steuerentscheidung
+   * meldet das bereits die Steuerprüfung.
+   */
   if (
     usesAbschlagDeductions(draft.type) &&
     vorgang &&
-    findUnsettledAbschlagDeductions(draft.previousAbschlagDeductions, (invoiceId) =>
+    draft.taxStatus &&
+    draft.taxStatus !== 'unclear' &&
+    hasAbschlagTaxStatusMismatch(draft.taxStatus, draft.previousAbschlagDeductions, (invoiceId) =>
       (vorgang.invoices ?? []).find((invoice) => invoice.id === invoiceId),
-    ).length > 0
+    )
   ) {
-    blockingErrors.push({ code: 'abschlag_unpaid', messageKey: 'invoice.validation.abschlagUnpaid' });
+    blockingErrors.push({
+      code: 'abschlag_tax_status_mismatch',
+      messageKey: 'invoice.validation.abschlagTaxStatusMismatch',
+    });
+  }
+
+  /*
+   * FC01A-P1-Restkorrektur (#8, Altformat) — eine Schlussrechnung weist je abgezogenem Abschlag
+   * Netto und Umsatzsteuer aus (§ 14 Abs. 5 Satz 2 UStG). Steht das nicht fest (Altabschlag mit
+   * Umsatzsteuer ohne gespeichertes Netto, widersprüchliche Angaben), entsteht keine
+   * Schlussrechnung — statt Brutto als Netto. Der Server prüft dasselbe
+   * (`invoice_abschlag_net_unreliable`).
+   */
+  if (
+    usesAbschlagDeductions(draft.type) &&
+    vorgang &&
+    draft.taxStatus &&
+    draft.taxStatus !== 'unclear' &&
+    hasUnreliableAbschlagNet(draft.taxStatus, draft.previousAbschlagDeductions, (invoiceId) =>
+      (vorgang.invoices ?? []).find((invoice) => invoice.id === invoiceId),
+    )
+  ) {
+    blockingErrors.push({
+      code: 'abschlag_net_unreliable',
+      messageKey: 'invoice.validation.abschlagNetUnreliable',
+    });
   }
 
   // FINANZ-CORE-01A (RE-16) — nur mit Auftrag; eine freie Rechnung hat keine Auftragsbezeichnung.
@@ -503,6 +558,28 @@ export function validateInvoiceDraftForApproval(
 }
 
 /**
+ * FINANZ-CORE-01A (Gesamtnacharbeit INV-06/07) — widerspricht der gespeicherte Positionsstand dem
+ * Centvertrag (siehe `validateFinalizedInvoiceForPdf`)? Eine Rechnung ohne Positionen (Pauschalabschlag)
+ * hat nichts nachzurechnen.
+ */
+export function hasInconsistentInvoicePositions(
+  invoice: Pick<VorgangInvoice, 'positions' | 'subtotal'>,
+): boolean {
+  const positions = invoice.positions ?? [];
+  if (positions.length === 0) return false;
+  const zeilen: number[] = [];
+  for (const position of positions) {
+    const { quantity, unitPrice, lineTotal } = position;
+    if (!isValidMoneyNumber(quantity) || !isValidMoneyNumber(unitPrice) || !isValidMoneyNumber(lineTotal)) return true;
+    if (toCents(unitPrice) / 100 !== unitPrice) return true;
+    if (toCents(lineTotal) !== billingLineTotalCents(quantity, unitPrice)) return true;
+    zeilen.push(toCents(lineTotal));
+  }
+  const subtotal = invoice.subtotal;
+  return typeof subtotal === 'number' && isValidMoneyNumber(subtotal) && sumCents(zeilen) !== toCents(subtotal);
+}
+
+/**
  * Reuses draft approval rules for PDF export of finalized invoices.
  * Draft / non-final invoices are rejected; nothing is invented.
  */
@@ -537,6 +614,29 @@ export function validateFinalizedInvoiceForPdf(
     };
   }
 
+  /*
+   * FC01A-P1-Restkorrektur (lokaler Altbestand) — ohne verlässliches Netto kein Beleg. Dieselbe
+   * Prüfung sperrt Druck, PDF, Korrektur-PDF, Versand, E-Rechnung (`einvoiceOutputRule`) und die
+   * Export-Vorprüfung. Kein Freigabecode: Sie gilt gerade für festgeschriebene Belege.
+   */
+  if (hasUnresolvedInvoiceNet(invoice)) {
+    return {
+      blockingErrors: [{ code: 'net_unresolved', messageKey: 'invoice.pdf.netUnresolved' }],
+      warnings: [],
+    };
+  }
+
+  /*
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-06/07) — der gespeicherte Positionsstand muss sich nach dem
+   * Centvertrag nachrechnen lassen: Einzelpreis auf Cent, Zeilenbetrag gespeichert und gleich Menge ×
+   * Einzelpreis (eine Rundung), Positionssumme gleich Netto. Sonst stünden auf Papier und in der
+   * E-Rechnung Zahlen, die niemand nachrechnen kann (WEISS: „10 × 0,05 € = 0,45 €“). Der Beleg wird nicht
+   * still geändert; er wird nicht ausgegeben (Weg: Storno mit Korrekturrechnung). Seit 20261121 nimmt der
+   * Server so eine Rechnung gar nicht mehr an; der Bestand ist geprüft. Die Sperre kommt zu den
+   * Freigaberegeln hinzu (unten), sie verdeckt keine spezifischere (etwa `fixed_amount_with_positions`).
+   */
+  const positionsInconsistent = hasInconsistentInvoicePositions(invoice);
+
   const draft = finalizedInvoiceToValidationDraft(invoice);
   const result = validateInvoiceDraftForApproval(draft, invoice.companySnapshot, undefined, {
     // Already approved — do not re-require interactive §13b checkbox.
@@ -550,7 +650,12 @@ export function validateFinalizedInvoiceForPdf(
    */
   return {
     ...result,
-    blockingErrors: result.blockingErrors.filter((issue) => !APPROVAL_ONLY_CODES.has(issue.code)),
+    blockingErrors: [
+      ...result.blockingErrors.filter((issue) => !APPROVAL_ONLY_CODES.has(issue.code)),
+      ...(positionsInconsistent
+        ? [{ code: 'positions_inconsistent', messageKey: 'invoice.pdf.positionsInconsistent' as const }]
+        : []),
+    ],
   };
 }
 
@@ -559,7 +664,62 @@ export function validateFinalizedInvoiceForPdf(
  * `abschlag_unpaid` (WEISS N02): Der Nachdruck einer älteren Schlussrechnung bleibt möglich;
  * ihre E-Rechnung prüft den Zahlungsstand der Abschläge selbst (`prepayment_not_settled`).
  */
-const APPROVAL_ONLY_CODES: ReadonlySet<string> = new Set(['company_tax_id', 'issue_date_future', 'abschlag_unpaid']);
+const APPROVAL_ONLY_CODES: ReadonlySet<string> = new Set([
+  'company_tax_id',
+  'issue_date_future',
+  'abschlag_unpaid',
+  // FINANZ-CORE-01A (Feiertage) — wie `abschlag_unpaid`: nur beim Ausstellen.
+  'abschlag_skonto_unclear',
+  // FC01A-Nacharbeit (A3) — der Nachdruck eines älteren Belegs bleibt möglich.
+  'abschlag_tax_status_mismatch',
+  // FC01A-P1-Restkorrektur — Nachdruck möglich, dann ohne Netto/USt des Abzugs (invoicePrintModel).
+  'abschlag_net_unreliable',
+]);
+
+/** Ausdrücklich ohne Umsatzsteuer: nur hier ist das Netto eines Abzugs ohne gespeichertes Netto das Brutto. */
+const TAX_FREE_STATUSES: ReadonlySet<string> = new Set(['kleinunternehmer_19', 'reverse_charge_13b', 'tax_free']);
+
+/**
+ * FC01A-P1-Restkorrektur (#8, Altformat) — fehlt einem Abzug ein verlässliches Netto? Ein
+ * gespeichertes Netto muss zum Satz passen; ohne gespeichertes Netto zählt nur ein ausdrücklich
+ * steuerfreier Abschlag (§ 19, § 13b, steuerfrei) — nicht „unklar" und nicht ein Altbestand ohne
+ * Steuerstatus. Dieselbe Regel wie `reliableDeductionNetCents` und der Server.
+ */
+export function hasUnreliableAbschlagNet(
+  taxStatus: InvoiceDraft['taxStatus'],
+  deductions: InvoiceDraft['previousAbschlagDeductions'],
+  findInvoice: (invoiceId: string) => VorgangInvoice | undefined,
+): boolean {
+  const rate = getTaxRateForStatus(taxStatus);
+  return (deductions ?? []).some((deduction) => {
+    if (reliableDeductionNetCents(deduction, rate) === null) return true;
+    if (typeof deduction.subtotal === 'number' && Number.isFinite(deduction.subtotal)) return false;
+    const status = findInvoice(deduction.invoiceId)?.taxStatus;
+    return !status || !TAX_FREE_STATUSES.has(status);
+  });
+}
+
+/**
+ * FC01A-Nacharbeit (A3) — trägt ein abgezogener Abschlag einen anderen Steuerfall als die
+ * Schlussrechnung? Ein Altbestand ohne Steuerstatus wird an Steuer ja/nein gemessen (wie der
+ * Server). Ein im Vorgang unbekannter Abschlag entscheidet hier nichts; das prüft der Server.
+ */
+export function hasAbschlagTaxStatusMismatch(
+  taxStatus: InvoiceDraft['taxStatus'],
+  deductions: InvoiceDraft['previousAbschlagDeductions'],
+  findInvoice: (invoiceId: string) => VorgangInvoice | undefined,
+): boolean {
+  const rate = getTaxRateForStatus(taxStatus);
+  return (deductions ?? []).some((deduction) => {
+    const abschlag = findInvoice(deduction.invoiceId);
+    if (!abschlag) return false;
+    if (abschlag.taxStatus && abschlag.taxStatus !== 'unclear') return abschlag.taxStatus !== taxStatus;
+    const subtotal = abschlag.subtotal;
+    if (subtotal === undefined || !isValidMoneyNumber(abschlag.amount) || !isValidMoneyNumber(subtotal)) return false;
+    const hadTax = toCents(abschlag.amount) !== toCents(subtotal);
+    return hadTax !== rate > 0;
+  });
+}
 
 function finalizedInvoiceToValidationDraft(invoice: VorgangInvoice): InvoiceDraft {
   const company = invoice.companySnapshot!;

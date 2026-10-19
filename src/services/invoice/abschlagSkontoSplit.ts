@@ -39,13 +39,13 @@ export interface AbschlagSettlementShare {
 
 export interface AbschlagDeductionPart {
   readonly deduction: AbschlagDeduction;
-  /** Abgezogen, wie abgerechnet (brutto/netto). */
+  /** Abgezogen, wie abgerechnet (brutto/netto). Netto `null`: nicht verlässlich bekannt. */
   readonly billed: number;
-  readonly billedNet: number;
-  /** Davon gezahlt. */
+  readonly billedNet: number | null;
+  /** Davon gezahlt. Netto und Steuer `null`, wenn das Netto des Abzugs nicht feststeht. */
   readonly paid: number;
-  readonly paidNet: number;
-  readonly paidTax: number;
+  readonly paidNet: number | null;
+  readonly paidTax: number | null;
   /** Davon als Skonto gewährt; 0 ohne Skonto. */
   readonly skonto: number;
   readonly skontoNet: number;
@@ -54,6 +54,11 @@ export interface AbschlagDeductionPart {
 
 export interface AbschlagSkontoSplit {
   readonly parts: readonly AbschlagDeductionPart[];
+  /**
+   * FC01A-P1-Restkorrektur (#8, Altformat) — steht das Netto jedes Abzugs fest? Sonst darf keine
+   * Netto-/Steueraufteilung der Abzüge ausgegeben werden (E-Rechnung gesperrt, PDF ohne Netto/USt).
+   */
+  readonly netReliable: boolean;
   readonly hasSkonto: boolean;
   readonly billedTotal: number;
   /** Summe der Zahlungen — BT-113. */
@@ -81,6 +86,36 @@ export function frozenSettlementShare(deduction: AbschlagDeduction): AbschlagSet
 /** Trägt der Abzug eine eingefrorene Aufteilung? */
 export function hasFrozenSettlement(deduction: AbschlagDeduction): boolean {
   return frozenSettlementShare(deduction) !== null;
+}
+
+/**
+ * FC01A-P1-Restkorrektur (#8, Altformat) — das Netto eines Abzugs in Cent, wenn es fachlich
+ * feststeht; sonst `null`.
+ *
+ * Bisher galt ein Abzug ohne gespeichertes Netto (`subtotal`, Altformat) als „netto = brutto“.
+ * Bei Umsatzsteuer war das falsch: Aus 476,00 € brutto mit 9,52 € Skonto wurden in E-Rechnung
+ * und PDF „466,48 € gezahlt (netto 468,00 €, USt −1,52 €)“ statt netto 392,00 €, USt 74,48 €
+ * (WEISS-Recheck zu Bericht 13).
+ *
+ * Verlässlich ist nur, was gespeichert ist und zusammenpasst:
+ *   - ein gespeichertes Netto, wenn Brutto − Netto genau die Steuer auf dieses Netto zum Satz
+ *     des Belegs ist (`taxCentsFromNet`, eine Rundung auf den Cent wie überall) — ein
+ *     widersprüchlicher Abzug (etwa 400 netto / 480 brutto bei 19 %) gilt als unbekannt;
+ *   - ohne gespeichertes Netto allein bei einem Beleg ohne Umsatzsteuer (Satz 0: § 19, § 13b,
+ *     steuerfrei): Dann ist das Netto der Bruttobetrag.
+ * Eine Rückrechnung aus Brutto und Satz gibt es bewusst nicht (wie AUS-01): Ob der Altabschlag
+ * zu diesem Satz gestellt war, steht nicht im Abzug. Der Server weist eine Schlussrechnung mit
+ * einem solchen Abzug ab (`invoice_abschlag_net_unreliable`, Migration 20261116).
+ */
+export function reliableDeductionNetCents(deduction: AbschlagDeduction, taxRate: number): number | null {
+  const grossCents = toCents(deduction.amount);
+  if (!Number.isFinite(grossCents)) return null;
+  const rate = Number.isFinite(taxRate) && taxRate > 0 ? taxRate : 0;
+  if (typeof deduction.subtotal === 'number' && Number.isFinite(deduction.subtotal)) {
+    const netCents = toCents(deduction.subtotal);
+    return grossCents - netCents === taxCentsFromNet(netCents, rate) ? netCents : null;
+  }
+  return rate === 0 ? grossCents : null;
 }
 
 /**
@@ -128,7 +163,8 @@ export function splitAbschlagDeductions(
 
   const rows = (deductions ?? []).map((deduction) => {
     const billedCents = toCents(deduction.amount);
-    const billedNetCents = Number.isFinite(deduction.subtotal) ? toCents(deduction.subtotal) : billedCents;
+    // FC01A-P1-Restkorrektur — nie Brutto als Netto: unbekanntes Netto bleibt unbekannt (null).
+    const billedNetCents = reliableDeductionNetCents(deduction, invoice.taxRate);
     const share = shareOf(deduction);
     let paidCents = billedCents;
     if (share && toCents(share.skonto) > 0) {
@@ -158,14 +194,14 @@ export function splitAbschlagDeductions(
 
   const parts: AbschlagDeductionPart[] = rows.map((row) => {
     const skontoNetCents = netByRow.get(row) ?? 0;
-    const paidNetCents = row.billedNetCents - skontoNetCents;
+    const paidNetCents = row.billedNetCents === null ? null : row.billedNetCents - skontoNetCents;
     return {
       deduction: row.deduction,
       billed: fromCents(row.billedCents),
-      billedNet: fromCents(row.billedNetCents),
+      billedNet: row.billedNetCents === null ? null : fromCents(row.billedNetCents),
       paid: fromCents(row.paidCents),
-      paidNet: fromCents(paidNetCents),
-      paidTax: fromCents(row.paidCents - paidNetCents),
+      paidNet: paidNetCents === null ? null : fromCents(paidNetCents),
+      paidTax: paidNetCents === null ? null : fromCents(row.paidCents - paidNetCents),
       skonto: fromCents(row.skontoCents),
       skontoNet: fromCents(skontoNetCents),
       skontoTax: fromCents(row.skontoCents - skontoNetCents),
@@ -174,6 +210,7 @@ export function splitAbschlagDeductions(
 
   return {
     parts,
+    netReliable: rows.every((row) => row.billedNetCents !== null),
     hasSkonto: skontoCents > 0,
     billedTotal: fromCents(rows.reduce((sum, row) => sum + row.billedCents, 0)),
     paidTotal: fromCents(rows.reduce((sum, row) => sum + row.paidCents, 0)),

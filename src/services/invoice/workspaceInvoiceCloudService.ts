@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { VorgangInvoice, VorgangInvoiceLine } from '../../types/models';
+import type { InvoiceFristBasis, VorgangInvoice, VorgangInvoiceLine } from '../../types/models';
+import { parseInvoiceFristBasis } from '../fristen/fristende';
 import { getSupabaseClient } from '../../lib/supabase';
 import { WorkspaceCloudError } from '../workspace/workspaceCloudService';
 import { formatInvoiceNumber } from '../invoiceNumberService';
@@ -199,6 +200,11 @@ export interface WorkspaceInvoicePullRow {
   cancellation_kind?: string | null;
   correction_document_id?: string | null;
   correction_number?: string | null;
+  /**
+   * FINANZ-CORE-01A (Gesamtnacharbeit INV-03) — die bei der Freigabe gebundene Fristgrundlage.
+   * Fehlt der Schlüssel, kennt der Server sie nicht (vor 20261119): Dann bleibt die lokale stehen.
+   */
+  frist_basis?: InvoiceFristBasis | null;
 }
 
 /*
@@ -328,7 +334,14 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
   ) {
     return new WorkspaceInvoiceCloudError(message, 'position_mismatch', false);
   }
-  if (message.includes('invoice_tax_status_mismatch') || message.includes('invoice_tax_status_invalid')) {
+  if (
+    message.includes('invoice_tax_status_mismatch') ||
+    message.includes('invoice_tax_status_invalid') ||
+    // FC01A-Nacharbeit (A3) — ein abgezogener Abschlag steht in einem anderen Steuerfall.
+    message.includes('invoice_abschlag_tax_status_mismatch') ||
+    // FC01A-P1-Restkorrektur (#8) — Netto/USt eines abgezogenen Abschlags stehen nicht fest.
+    message.includes('invoice_abschlag_net_unreliable')
+  ) {
     return new WorkspaceInvoiceCloudError(message, 'tax_status_mismatch', false);
   }
   if (
@@ -336,6 +349,8 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
     message.includes('invoice_deductions_mismatch') ||
     // FINANZ-CORE-01A (WEISS N02/D1) — ein abgezogener Abschlag ist auf dem Server nicht beglichen.
     message.includes('invoice_abschlag_unpaid') ||
+    // FINANZ-CORE-01A (Feiertage) — Skontofrist eines Abschlags ungeklärt (Ort des Kunden).
+    message.includes('invoice_skonto_deadline_unclear') ||
     // WEISS-Recheck N02-R1 — gezahlt/Skonto der Abzüge passen nicht zu den gebuchten Zahlungen.
     message.includes('invoice_abschlag_settlement_mismatch') ||
     message.includes('invoice_fixed_amount_invalid') ||
@@ -480,6 +495,8 @@ export function buildWorkspaceInvoiceFinalizePayload(invoice: VorgangInvoice): R
   const {
     payments: _payments,
     paymentStatus: _paymentStatus,
+    // FINANZ-CORE-01A (END18-R3) — abgewiesene Zahlungen sind lokaler Nachweis, kein Belegstand.
+    rejectedPayments: _rejectedPayments,
     archiveDocumentId: _archiveDocumentId,
     /*
      * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C — die Stornofelder
@@ -639,6 +656,8 @@ export function mapCloudPayloadToVorgangInvoice(payload: Record<string, unknown>
     paymentDueDate: optionalCloudText(payload.paymentDueDate),
     paymentTermsText: optionalCloudText(payload.paymentTermsText),
     skontoText: optionalCloudText(payload.skontoText),
+    // FINANZ-CORE-01A (Feiertage) — nur ein echtes `true` gilt; fehlt es, gilt § 193 BGB.
+    ...(payload.deadlineShiftWaived === true ? { deadlineShiftWaived: true } : {}),
     // E-RECHNUNG-04B — die eingefrorene Währung kommt wieder zurück.
     currencyCode: optionalCloudText(payload.currencyCode),
     customerSnapshot: optionalCloudObject<VorgangInvoice['customerSnapshot']>(
@@ -848,6 +867,17 @@ export function inspectWorkspaceInvoicePullRow(
             correction_number: row.correction_number == null ? null : String(row.correction_number),
           }
         : {}),
+      /*
+       * FINANZ-CORE-01A (INV-03) — dieselbe Regel für die Fristgrundlage. Eine unlesbare Angabe weist die
+       * Rechnung nicht ab; sie gilt als nicht geliefert (die Rechnung rechnet dann wie ohne Bindung).
+       */
+      ...('frist_basis' in row
+        ? row.frist_basis === null
+          ? { frist_basis: null }
+          : parseInvoiceFristBasis(row.frist_basis)
+            ? { frist_basis: parseInvoiceFristBasis(row.frist_basis) }
+            : {}
+        : {}),
     },
   };
 }
@@ -921,6 +951,14 @@ export function mapWorkspaceInvoicePullRowToVorgangInvoice(
     if (correctionNumber) invoice.correctionNumber = correctionNumber;
   }
 
+  /*
+   * FINANZ-CORE-01A (INV-03) — die Fristgrundlage ist Zeilenwahrheit, kein Payload. `undefined` heisst
+   * „diese Antwort kennt die Spalte nicht" und lässt die Rechnung ohne Angabe (der Merge behält dann die
+   * lokale); `null` heisst ungebunden.
+   */
+  delete (invoice as { fristBasis?: unknown }).fristBasis;
+  if (row.frist_basis) invoice.fristBasis = row.frist_basis;
+
   // Explicitly drop comfort/local-only fields from cloud mapping.
   delete (invoice as { payments?: unknown }).payments;
   delete (invoice as { paymentStatus?: unknown }).paymentStatus;
@@ -956,7 +994,14 @@ export async function rpcPullWorkspaceInvoiceRows(
       throw classifyInvoiceCloudError(error);
     }
 
-    return Array.isArray(data) ? data : [];
+    /*
+     * Systemische Gesamtnacharbeit (D6) — keine Liste ist ein unvollständiger Abzug, kein leerer Rechnungsbestand.
+     * Der Abgleich übernimmt dann für die Rechnungen nichts (Teilfehler), statt mit „keine Rechnungen“ zu arbeiten.
+     */
+    if (!Array.isArray(data)) {
+      throw new WorkspaceInvoiceCloudError('pull_incomplete: pull_workspace_invoices ohne Liste', 'unknown', true);
+    }
+    return data;
   } catch (error) {
     if (error instanceof WorkspaceInvoiceCloudError) {
       throw error;

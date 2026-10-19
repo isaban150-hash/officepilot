@@ -124,6 +124,10 @@ export function repairLegacyUtcBusinessDates(
  * oder Sonntag, tritt der nächste Werktag an seine Stelle. Eine am Samstag fällige Rechnung
  * galt bisher am Montag schon als überschritten. Feiertage bleiben unberücksichtigt — sie
  * hängen vom Leistungsort ab; dort gilt weiter das kalendarische Ende.
+ *
+ * FINANZ-CORE-01A (Gesamtabschluss) — auf Entscheidung des Auftraggebers dieselbe Regel für die
+ * Skontofrist (`buildSkontoDeadline`): Zahlungsziel, Überfälligkeit, Mahnung und Skonto rechnen
+ * einheitlich (Samstag/Sonntag → Montag, Feiertage bewusst nicht).
  */
 export function shiftToWorkingDay(day: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day.trim().slice(0, 10));

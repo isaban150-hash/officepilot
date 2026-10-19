@@ -23,7 +23,10 @@ export function SteuerberaterHandoverPanel({ status, translate }: Props) {
     ? translate('handover.closure.changed')
     : status.closedRevision !== null && status.packageAllowed
       ? translate('handover.closure.closed').replace('{revision}', String(status.closedRevision))
-      : translate('handover.closure.open');
+      : status.closedRevision !== null && status.issues.includes('not_server_confirmed')
+        ? // Systemische Gesamtnacharbeit (D1) — abgeschlossen, aber nicht (oder nicht mehr) vom Server angenommen.
+          translate('handover.closure.notConfirmed').replace('{revision}', String(status.closedRevision))
+        : translate('handover.closure.open');
   const count = (value: number) => (value === 0 ? translate('handover.none') : String(value));
 
   return (

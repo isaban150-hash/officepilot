@@ -235,6 +235,18 @@ export function SteuerberaterPage() {
             setPeriodToken((value) => value + 1);
             return feedback.fileName;
           }}
+          // Systemische Gesamtnacharbeit — ausdrücklich lokale, als „nicht cloudbestätigt“ gekennzeichnete Übergabe.
+          onCreateLocalPackage={async () => {
+            const result = await exportAccountingPackage({
+              monthKey: selectedMonthKey,
+              userId: user?.id,
+              handover: 'lokal',
+            });
+            const feedback = buildAccountingExportFeedback(selectedMonthKey, result);
+            setExportFeedback(feedback);
+            setPeriodToken((value) => value + 1);
+            return feedback.fileName;
+          }}
           translate={translate}
           canExport={financeAccess.canWrite}
           lastResult={exportFeedback?.monthKey === selectedMonthKey ? exportFeedback : null}

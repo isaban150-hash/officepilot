@@ -23,6 +23,8 @@ import type { AccountingExportReadiness } from '../accounting/accountingExportGa
 export type SteuerberaterHandoverState =
   | 'not_closed'
   | 'changed_after_close'
+  /** Systemische Gesamtnacharbeit (D1) — abgeschlossen, aber nicht (oder nicht mehr) vom Server angenommen. */
+  | 'not_server_confirmed'
   | 'unclear_cases'
   | 'missing_proofs'
   | 'ready';
@@ -30,6 +32,7 @@ export type SteuerberaterHandoverState =
 export type SteuerberaterHandoverIssue =
   | 'not_closed'
   | 'changed_after_close'
+  | 'not_server_confirmed'
   | 'period_blockers'
   | 'unclear_cases'
   | 'missing_proofs';
@@ -70,13 +73,16 @@ export function deriveSteuerberaterHandoverStatus(input: SteuerberaterHandoverIn
   const issues: SteuerberaterHandoverIssue[] = [];
   if (codes.has('changed_after_close')) issues.push('changed_after_close');
   if (codes.has('not_closed')) issues.push('not_closed');
+  if (codes.has('closure_not_server_confirmed')) issues.push('not_server_confirmed');
   if (periodBlockers > 0) issues.push('period_blockers');
   if (input.unclearCases > 0) issues.push('unclear_cases');
   if (input.missingProofs > 0) issues.push('missing_proofs');
 
   const state: SteuerberaterHandoverState = codes.has('changed_after_close')
     ? 'changed_after_close'
-    : !readiness.packageAllowed
+    : codes.has('closure_not_server_confirmed') && periodBlockers === 0
+      ? 'not_server_confirmed'
+      : !readiness.packageAllowed
       ? 'not_closed'
       : input.unclearCases > 0
         ? 'unclear_cases'

@@ -42,6 +42,7 @@ import {
   resetInvoiceDraftCloudStore,
 } from './invoiceDraftCloudStore';
 import { mapFinalizationFailureToUx } from './invoiceApprovalUx';
+import { reconcileInvoiceDraftOnOpen } from './invoiceDraftCloudBridge';
 
 const WORKSPACE = 'ws-s5-f';
 const SCOPE = `workspace:${WORKSPACE}`;
@@ -468,5 +469,76 @@ describe('S5-AB — anderswo bereits freigegeben: genau eine Rechnung, über den
     expect(record.record.finalization?.finalizedInvoiceId).toBe(OTHER_ID);
     expect(getInvoiceDraftCloudEntity(DRAFT_ID)).toMatchObject({ status: 'finalized', finalizedClientInvoiceId: OTHER_ID });
     expect(mapFinalizationFailureToUx(result as never).messageKey).toBe('invoiceDraftCloud.approve.finalizedElsewhere');
+  });
+});
+
+/*
+ * FC01A-Nacharbeit (B1) — der geöffnete Editor hält bis zum Seitenwechsel noch den
+ * Datensatz von vor der Freigabe (`active`). Gleicht er nach dem eigenen
+ * Spiegelvermerk ab, darf das eigene Ende nicht als „auf einem anderen Gerät
+ * freigegeben" erscheinen; das echte Ende anderswo bleibt sichtbar.
+ */
+describe('FC01A-Nacharbeit B1 — eigene Freigabe ist kein Konflikt „anderswo freigegeben"', () => {
+  async function editorStand() {
+    const loaded = await loadRecord();
+    if (!loaded.ok) throw new Error(loaded.reason);
+    return { record: loaded.record, draft: loaded.draft };
+  }
+
+  it('N1 — echter Koordinator: nach der eigenen Freigabe sieht der veraltete Editor keinen Konflikt, nichts wird vermerkt', async () => {
+    cloudSeiteFreigeben();
+    await seedActiveDraft();
+    spiegelAngekommen(7);
+    const veraltet = await editorStand();
+    expect(veraltet.record.status).toBe('active');
+
+    const result = await start();
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    expect(finalizeCalls()).toHaveLength(1);
+    expect(getInvoiceDraftCloudEntity(DRAFT_ID)).toMatchObject({ status: 'finalized', finalizedClientInvoiceId: CLIENT_ID });
+
+    expect(reconcileInvoiceDraftOnOpen(veraltet)).toEqual({ kind: 'none' });
+    expect(getInvoiceDraftCloudEntity(DRAFT_ID)?.conflict, 'kein Konfliktvermerk am eigenen Grabstein').toBeUndefined();
+  });
+
+  it('N2 — anderswo freigegeben (kanonische Rechnung eines anderen Geräts): der Konflikt bleibt sichtbar', async () => {
+    cloudSeiteFreigeben();
+    await seedActiveDraft();
+    spiegelAngekommen(7);
+    const veraltet = await editorStand();
+    cloudState.finalizeError = { message: `invoice_draft_already_finalized:${OTHER_ID}` };
+    cloudState.otherDeviceRow = true;
+
+    const result = await start();
+    expect(result).toMatchObject({ ok: false, reason: 'draft_finalized_elsewhere', existingInvoiceId: OTHER_ID });
+
+    expect(reconcileInvoiceDraftOnOpen(veraltet)).toMatchObject({
+      kind: 'conflict',
+      conflict: { kind: 'finalized', remote: { finalizedClientInvoiceId: OTHER_ID } },
+    });
+  });
+
+  it('N3 — Server festgeschrieben, lokaler Abschluss offen: der eigene Grabstein aus einem späteren Abzug ist kein Konflikt', async () => {
+    cloudSeiteFreigeben();
+    await seedActiveDraft();
+    spiegelAngekommen(7);
+    const veraltet = await editorStand();
+    cloudState.commitThenLoseResponse = true;
+
+    const result = await start();
+    expect(result.ok).toBe(false);
+    expect(finalizeCalls()).toHaveLength(1);
+    // Ein späterer Abzug bringt den Grabstein mit der eigenen Rechnung.
+    putInvoiceDraftCloudEntity({
+      id: DRAFT_ID,
+      vorgangId: VORGANG,
+      invoiceType: 'abschlag',
+      status: 'finalized',
+      core: null,
+      finalizedClientInvoiceId: CLIENT_ID,
+      sync: { version: 8, deleted: false, updatedAt: '2026-08-21T08:31:00.000Z', deviceId: 'd1', workspaceId: WORKSPACE },
+    });
+
+    expect(reconcileInvoiceDraftOnOpen(veraltet)).toEqual({ kind: 'none' });
   });
 });

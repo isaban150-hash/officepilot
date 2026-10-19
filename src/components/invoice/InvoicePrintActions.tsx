@@ -112,13 +112,19 @@ export function InvoicePrintActions({
    * Fehlercode: Es gilt derselbe zentrale Validator wie für das PDF, mit allen
    * seinen Blockern. Was der eine Weg verweigert, verweigert auch der andere.
    */
-  const runPrint = (): void => {
+  const runPrint = async (): Promise<void> => {
     if (holdRef.current) return;
     setPdfError(null);
     const validation = validateFinalizedInvoiceForPdf(invoiceRef.current);
     if (validation.blockingErrors.length > 0) {
       // FINANZ-CORE-01A (AUS-14) — Drucken ist kein PDF: eigene Meldung mit dem konkreten Grund.
       setPdfError(`${translate('invoice.print.error')} ${translate(validation.blockingErrors[0]!.messageKey)}`);
+      return;
+    }
+    // FINANZ-CORE-01A (SYS-04 / D10) — dieselbe Dienstgrenze wie PDF/XML/ZUGFeRD, nicht nur die Anzeige-Sperre.
+    const { checkInvoiceOutput } = await import('../../services/invoice/invoiceOutputGuard');
+    if (await checkInvoiceOutput(invoiceRef.current)) {
+      setPdfError(translate('invoice.print.error'));
       return;
     }
     invoicePrintService.printInvoice({ title });
@@ -136,7 +142,7 @@ export function InvoicePrintActions({
     <div className={`invoice-print-actions invoice-print-actions--${layout}`}>
       <Button
         type="button"
-        onClick={runPrint}
+        onClick={() => void runPrint()}
         disabled={Boolean(outputHold)}
         data-testid="invoice-print"
       >

@@ -27,6 +27,8 @@ import { getEmployeePaymentStoreSnapshot, getEmployeeStoreSnapshot } from '../em
 import { getWorkspaceSettingsSnapshot } from '../workspace/workspaceStore';
 import type { WorkspaceSettings } from '../../types/workspace';
 import { isSupabaseSyncAllowed } from './cloudSyncAllowlist';
+import { isFinalBusinessRejectionMessage } from './syncRoleDenial';
+import { isResendableDeniedOutboxEntry } from './syncOutboxService';
 import {
   detectFinancialActionDenial,
   financialActionDenialLabelKey,
@@ -45,6 +47,8 @@ export interface SyncOutboxDescription {
   /** Ob ein erneuter Versuch überhaupt Aussicht auf Erfolg hat. */
   readonly retryable: boolean;
   readonly attempts: number;
+  /** Bericht 20 — endgültig abgewiesene Mitarbeiterzahlung oder Kontierung: bewusst erneut senden möglich. */
+  readonly resendable?: boolean;
 }
 
 /**
@@ -111,6 +115,10 @@ export function mapSyncErrorReason(
     return 'sync.failure.reason.rejected';
   }
   if (message.includes('Sendenachweis')) return 'sync.failure.reason.notSent';
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-10) — ein freigegebenes Angebot bleibt unverändert.
+  if (message.includes('Angebot ist freigegeben')) return 'sync.failure.reason.offerFrozen';
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-08/09) — fachlich abgewiesen, wird nicht erneut gesendet.
+  if (isFinalBusinessRejectionMessage(message)) return 'sync.failure.reason.expenseRejected';
   return 'sync.failure.reason.unknown';
 }
 
@@ -211,5 +219,6 @@ export function describeSyncOutboxEntry(entry: SyncOutboxEntry): SyncOutboxDescr
           : mapSyncErrorReason(entry.lastErrorMessage, entry.status, decisionReady),
     retryable,
     attempts: entry.retryCount,
+    ...(isResendableDeniedOutboxEntry(entry) ? { resendable: true } : {}),
   };
 }

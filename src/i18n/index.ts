@@ -141,7 +141,7 @@ const deLegacy = {
   'companyProfile.taxStatusInvalid': 'Steuerstatus ist ungültig.',
   /* SKONTO-NUMERIC-INPUT-01B — nur wenn Skonto ausdrücklich eingeschaltet ist. */
   'companyProfile.skontoPercentInvalid':
-    'Skonto-Prozentsatz muss grösser als 0 und höchstens 100 sein.',
+    'Skonto-Prozentsatz muss grösser als 0 und kleiner als 100 sein.',
   'companyProfile.skontoDaysInvalid': 'Skonto-Frist muss mindestens 1 Tag betragen.',
   // SETTINGS-01B1 — neue Profilfelder.
   'companyProfile.accountHolder': 'Kontoinhaber',
@@ -418,6 +418,12 @@ const deLegacy = {
   'bankConfirm.refusal.target_not_found': 'Der Beleg wurde nicht gefunden.',
   'bankConfirm.refusal.transaction_not_found': 'Die Bankbewegung wurde nicht gefunden.',
   'bankConfirm.refusal.nothing_open': 'Für diesen Beleg ist nichts mehr offen.',
+  // FINANZ-CORE-01A (Feiertage) — Skontofrist am Sitz des Kunden ungeklärt.
+  'bankConfirm.refusal.skonto_deadline_unclear':
+    'Das Skonto dieser Rechnung hängt an einem möglichen Feiertag am Sitz des Kunden. Bitte zuerst an der Rechnung das Fristende klären (Rechnung öffnen › Fristende klären); dann lässt sich die Bewegung zuordnen.',
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-03)
+  'bankConfirm.refusal.final_invoice_exists':
+    'Dieser Abschlag ist in einer Schlussrechnung abgezogen; Zahlung und Skonto sind dort eingefroren. Bitte die Bewegung der Schlussrechnung zuordnen.',
   'bankConfirm.refusal.offline':
     'Die Zuordnung konnte nicht gespeichert werden. Bitte später erneut versuchen.',
   // FINANZ-CORE-01A (ZAH-18/ZAH-03)
@@ -1036,6 +1042,11 @@ const deLegacy = {
   'sync.failure.kind.local_only': 'Nur lokal',
   'sync.failure.retryable': 'Erneuter Versuch möglich',
   'sync.failure.notRetryable': 'Erneuter Versuch ändert nichts',
+  // FINANZ-CORE-01A (Bericht 20) — bewusst erneut senden (Mitarbeiterzahlung, Kontierung).
+  'sync.failure.resend': 'Bewusst erneut senden',
+  'sync.failure.resent':
+    'Erneut eingereiht. Der nächste Abgleich sendet den Auftrag; bis der Server ihn annimmt, bleibt der Monat gesperrt.',
+  'sync.failure.resendFailed': 'Dieser Auftrag lässt sich nicht erneut senden.',
   'sync.failure.attempts': '{count} Versuche',
   'sync.failure.reason.notDeployed':
     'Die Cloud kennt diesen Datentyp noch nicht. Die Freischaltung steht noch aus.',
@@ -1051,6 +1062,12 @@ const deLegacy = {
   'sync.failure.reason.rejected':
     'Die Cloud hat den Inhalt abgelehnt. Bitte den Datensatz prüfen.',
   'sync.failure.reason.notSent': 'Der Sendevorgang konnte nicht abgesichert werden.',
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-10)
+  'sync.failure.reason.offerFrozen':
+    'Das Angebot ist freigegeben und damit ein Beleg; der Server hat eine Änderung daran abgewiesen. Sie wird nicht erneut gesendet. Ein zulässiger Archivverweis wird nach dem nächsten Abgleich gezielt erneut übertragen.',
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-08/09)
+  'sync.failure.reason.expenseRejected':
+    'Der Server hat diese Änderung an einer Ausgabe fachlich abgewiesen (zum Beispiel Zahlung auf einen Entwurf oder eine Gutschrift, unbestätigte Überzahlung, Betrag oder Storno trotz Zahlung). Sie wird nicht erneut gesendet; bitte die Ausgabe prüfen.',
   'sync.failure.reason.waiting': 'Wartet auf die nächste Übertragung',
   'sync.failure.reason.unknown': 'Die Übertragung ist fehlgeschlagen.',
 
@@ -1727,6 +1744,19 @@ const deLegacy = {
   'accountingExport.blocker.changed_after_close':
     'Seit dem Monatsabschluss wurden steuerlich relevante Daten geändert. Öffnen und prüfen Sie den Monat erneut.',
   'accountingExport.blocker.period_blockers': 'Es sind noch {count} Punkte offen.',
+  // Systemische Gesamtnacharbeit (Produktentscheidung) — reguläres Paket nur mit servervalidierter Revision.
+  'accountingExport.blocker.closure_not_server_confirmed':
+    'Der Abschluss ist nicht vom Server bestätigt ({status}). Ein reguläres Steuerberater-Paket verwendet nur eine vom Server geprüfte und angenommene Revision.',
+  'accountingExport.cloud.angenommen':
+    'Das Paket verwendet die vom Server geprüfte und angenommene Revision (Serverrevision {revision}, Datenstand {datenstand}).',
+  'accountingExport.cloud.lokal':
+    'Lokaler Abschluss (Betrieb ohne Cloud): Das Paket ist als lokal gekennzeichnet und nicht vom Server geprüft.',
+  'accountingExport.localHandover.title': 'Ausdrücklich lokale Übergabe',
+  'accountingExport.localHandover.hint':
+    'Sie können den gültigen Abschluss als lokale Übergabe weitergeben. Das Paket ist deutlich als „nicht cloudbestätigt“ gekennzeichnet und behauptet keine Prüfung durch den Server.',
+  'accountingExport.localHandover.action': 'Lokale Übergabe erstellen (nicht cloudbestätigt)',
+  'accountingExport.failure.changedDuringExport':
+    'Die Daten dieses Monats haben sich während des Erstellens geändert. Es wurde nichts ausgegeben; bitte den Stand prüfen und erneut erstellen.',
   /* DATEV — getrennt bewertet und getrennt erklaert. */
   'accountingExport.datevTitle': 'DATEV-Buchungsstapel',
   'accountingExport.datevUnavailable': 'DATEV-Format ist noch nicht eingerichtet.',
@@ -1743,6 +1773,8 @@ const deLegacy = {
   'handover.title': 'Übergabestatus',
   'handover.state.not_closed': 'Noch nicht übergabebereit – der Monat ist nicht gültig abgeschlossen.',
   'handover.state.changed_after_close': 'Seit dem Abschluss geändert – bitte den Monat erneut prüfen und abschließen.',
+  'handover.state.not_server_confirmed':
+    'Abgeschlossen, aber nicht vom Server bestätigt – ein reguläres Paket ist erst nach der Annahme durch den Server möglich; eine ausdrücklich lokale Übergabe bleibt möglich.',
   'handover.state.unclear_cases': 'Paket möglich, aber nicht vollständig – es gibt unklare Fälle.',
   'handover.state.missing_proofs': 'Paket möglich, aber nicht vollständig – es fehlen Nachweise.',
   'handover.state.ready': 'Übergabe vollständig vorbereitet.',
@@ -1750,6 +1782,7 @@ const deLegacy = {
   'handover.closure.open': 'Nicht abgeschlossen',
   'handover.closure.changed': 'Seit Abschluss geändert',
   'handover.closure.closed': 'Abgeschlossen (Revision {revision})',
+  'handover.closure.notConfirmed': 'Abgeschlossen (Revision {revision}), nicht vom Server bestätigt',
   'handover.row.unclear': 'Unklare Fälle',
   'handover.row.proofs': 'Fehlende Nachweise',
   'handover.none': 'Keine',
@@ -1771,6 +1804,67 @@ const deLegacy = {
   'accountingPeriod.blocker.confirmed_without_account':
     'Bestätigte Kontierungen ohne Sachkonto: {count}',
   'accountingPeriod.blocker.money_integrity': 'Belege mit widersprüchlichen Beträgen: {count}',
+  // FINANZ-CORE-01A (END18-R3) — vom Server endgültig abgewiesene Ausgabenaktionen (zählen nirgends).
+  'expense.rejected.intro':
+    'Vom Server abgewiesen — diese Aktionen sind nicht gebucht und zählen weder im Saldo noch in Monatsmappe, Export oder Abschluss:',
+  'expense.rejected.payment': 'Zahlung {amount} vom {date} nicht gebucht. Grund: {reason}',
+  'expense.rejected.paymentHint':
+    'Wurde das Geld tatsächlich gezahlt, erfassen Sie die Zahlung bewusst neu — bei einem schon bezahlten Beleg als bestätigte Überzahlung.',
+  // Bericht 19 — abgewiesen, der Abgleich mit dem Server steht noch aus (Abzug danach gescheitert, offline).
+  'expense.rejected.pendingIntro':
+    'Vom Server abgewiesen, der Abgleich steht noch aus — die Angaben oben sind vorläufig und nicht verbindlich. Der Monatsabschluss ist bis zum nächsten erfolgreichen Abgleich gesperrt:',
+  'expense.rejected.pendingPayment': 'Zahlung nicht angenommen; sie wird beim nächsten Abgleich zurückgenommen, falls der Server sie nicht kennt. Grund: {reason}',
+  'expense.rejected.pendingChange': 'Änderung nicht angenommen; der Serverstand wird beim nächsten Abgleich übernommen. Grund: {reason}',
+  // Bericht 20 — auch eine abgewiesene Rücknahme ist bis zum Abgleich vorläufig.
+  'expense.rejected.pendingReverse': 'Zahlungsrücknahme nicht angenommen; besteht die Zahlung beim Server weiter, steht sie nach dem nächsten Abgleich wieder hier. Grund: {reason}',
+  'expense.rejected.change.update': 'Änderung (Bruttobetrag {amount}) zurückgenommen — der Beleg zeigt wieder den Serverstand. Grund: {reason}',
+  'expense.rejected.change.cancel': 'Storno zurückgenommen — die Ausgabe bleibt gebucht. Grund: {reason}',
+  'expense.rejected.change.delete': 'Löschen zurückgenommen — die Ausgabe bleibt bestehen. Grund: {reason}',
+  'expense.rejected.change.create':
+    'Neuanlage nicht angenommen — die Ausgabe existiert nur auf diesem Gerät und sperrt den Monatsabschluss, bis sie berichtigt oder entfernt ist. Grund: {reason}',
+  'expense.rejected.change.paymentReverse': 'Rücknahme einer Zahlung abgewiesen — die Zahlung bleibt gebucht. Grund: {reason}',
+  'expense.rejected.reason.overpayment': 'Überzahlung ohne Bestätigung (der Beleg war beim Server schon bezahlt)',
+  'expense.rejected.reason.notPayable': 'Ausgabe nicht zahlbar (Entwurf, Gutschrift oder storniert)',
+  'expense.rejected.reason.amountLocked': 'Beträge sind nach einer gebuchten Zahlung fest',
+  'expense.rejected.reason.cancelHasPayments': 'Storno nicht möglich, solange eine Zahlung gebucht ist',
+  'expense.rejected.reason.statusLocked': 'Status nach einer gebuchten Zahlung fest',
+  'expense.rejected.reason.cancelNotBooked': 'Storniert wird nur eine gebuchte Ausgabe',
+  'expense.rejected.reason.cancelledImmutable': 'Eine stornierte Ausgabe bleibt storniert',
+  'expense.rejected.reason.deleteHasPayments': 'Löschen nicht möglich, solange eine Zahlung gebucht ist',
+  'expense.rejected.reason.expenseCancelled': 'Die Ausgabe ist beim Server storniert',
+  'expense.rejected.reason.expenseDeleted': 'Die Ausgabe ist beim Server gelöscht',
+  'expense.rejected.reason.role': 'Keine Berechtigung für Finanzaktionen',
+  // FINANZ-CORE-01A (END18-R3) — noch nicht vom Server bestätigte Ausgabenänderungen sind vorläufig.
+  'accountingPeriod.blocker.unconfirmed_financial_changes':
+    'Finanzdaten, die der Server noch nicht bestätigt hat (Ausgaben, Zahlungen, Mitarbeiterzahlungen, Kontierungen): {count} — erst nach dem Abgleich abschließbar',
+  // Systemische Gesamtnacharbeit (SYS-02 / D5) — gescheitertes Speichern sperrt Abschluss und Übergabe.
+  'accountingPeriod.blocker.persist_failed':
+    'Das letzte Speichern auf diesem Gerät ist gescheitert. Erst nach erfolgreichem Speichern lässt sich abschließen oder übergeben.',
+  'accountingPeriod.persistFailed':
+    'Der Abschluss konnte nicht gespeichert werden und wurde deshalb nicht übernommen. Bitte Speicherplatz prüfen und erneut versuchen.',
+  // Systemische Gesamtnacharbeit (D1, Produktentscheidung) — was eine Revision gegenüber der Cloud ist.
+  'accountingPeriod.status.angenommen': 'vom Server geprüft und angenommen',
+  'accountingPeriod.status.lokal': 'lokaler Abschluss (Betrieb ohne Cloud)',
+  'accountingPeriod.status.ausstehend': 'wartet auf die Prüfung durch den Server',
+  'accountingPeriod.status.abgewiesen': 'vom Server abgewiesen',
+  'accountingPeriod.status.konflikt': 'Konflikt mit dem Serverstand',
+  'accountingPeriod.status.historisch': 'ältere Fassung, nicht vom Server geprüft',
+  'accountingPeriod.status.label': 'Cloudstatus',
+  'accountingPeriod.status.serverDetail': 'Serverrevision {revision}, Datenstand {datenstand}',
+  'accountingPeriod.status.rejectedReason': 'Grund: {reason}',
+  'accountingPeriod.status.rejectedHint':
+    'Diese Revision gilt nicht als Abschluss. Den Monat nach dem Abgleich prüfen und erneut abschließen; es entsteht eine neue Revision.',
+  'accountingPeriod.status.pendingHint':
+    'Der Server hat diesen Abschluss noch nicht geprüft. Bis dahin ist er nicht cloudbestätigt; ein reguläres Steuerberater-Paket ist erst danach möglich.',
+  'accountingPeriod.status.historicalHint':
+    'Diese Revision entstand mit einer älteren Fassung und wurde nie vom Server gegen den Finanzbestand geprüft. Für ein reguläres Paket den Monat wieder öffnen und neu abschließen.',
+  // FINANZ-CORE-01A (Bericht 20) — woraus die Sperre besteht und wie sie endet.
+  'accountingPeriod.unconfirmed.type.expense': 'Ausgaben: {count}',
+  'accountingPeriod.unconfirmed.type.employee_payment': 'Mitarbeiterzahlungen: {count}',
+  'accountingPeriod.unconfirmed.type.accounting_assignment': 'Kontierungen: {count}',
+  'accountingPeriod.unconfirmed.type.invoice_payment': 'Rechnungszahlungen: {count}',
+  'accountingPeriod.unconfirmed.hint':
+    'Synchronisieren klärt Ausstehendes. Abgewiesene Ausgaben klärt der nächste vollständige Abgleich, abgewiesene Rechnungszahlungen „Sichern“ an der Zahlung, abgewiesene Mitarbeiterzahlungen und Kontierungen „Bewusst erneut senden“ auf der Sync-Seite.',
   'accountingPeriod.action.close': 'Monat abschließen',
   'accountingPeriod.action.reopen': 'Monat wieder öffnen',
   'accountingPeriod.notReady': 'Der Monat lässt sich noch nicht abschließen.',
@@ -1784,6 +1878,9 @@ const deLegacy = {
     'Die Daten dieses Monats haben sich seit dem Abschluss geändert. Vor einer Übergabe bitte erneut prüfen und den Monat neu abschließen.',
   'accountingPeriod.closedHint':
     'Spätere Änderungen an Belegen oder Kontierungen werden erkannt und müssen erneut geprüft werden.',
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-04)
+  'accountingPeriod.legacyVersionHint':
+    'Dieser Abschluss entstand mit einer älteren Fassung (Version {version}). Er bleibt nach seiner Regel gültig, bindet aber Skontoabzüge, Zahlungsarten und den Zahlungsstand zum Monatsende nicht: Ändern sich nur diese, erkennt er es nicht. Für einen vollständigen Abschluss den Monat wieder öffnen und neu abschließen.',
   /* Abschlussdialog. */
   'accountingPeriod.closeDialog.title': 'Monat abschließen',
   'accountingPeriod.closeDialog.message':
@@ -1890,6 +1987,9 @@ const deLegacy = {
   'order.financials.noOrderValue': 'Kein fester Auftragswert',
   'order.financials.overInvoicedHint':
     'Es wurde mehr abgerechnet als beauftragt. Bitte prüfen, ob ein Nachtrag fehlt.',
+  // FC01A-P1-Restkorrektur (lokaler Altbestand)
+  'order.financials.netUnresolvedHint':
+    'Eine Altrechnung dieses Auftrags hat kein verlässliches Netto. Sie zählt hier vorsichtshalber höchstens mit ihrem Bruttobetrag, damit nicht mehr abgerechnet wird als beauftragt; ihr tatsächliches Netto ist ungeklärt.',
   'order.financials.paid': 'Bezahlt',
   'order.financials.open': 'Offen',
   'order.financials.overdue': 'Davon überfällig',
@@ -2287,6 +2387,22 @@ const deLegacy = {
   'customer.einvoice.vatId': 'USt-IdNr. des Kunden',
   'customer.einvoice.buyerReferenceDefault': 'Käuferreferenz (Standard)',
   'customer.einvoice.leitwegId': 'Leitweg-ID (nur öffentliche Auftraggeber)',
+  // FINANZ-CORE-01A (Feiertage, § 193 BGB) — Sitz des Kunden für Fristenden.
+  'customer.holiday.section': 'Sitz für Fristen (Feiertage)',
+  'customer.holiday.hint':
+    'Endet ein Zahlungsziel oder eine Skontofrist an einem Samstag, Sonntag oder gesetzlichen Feiertag am Sitz des Kunden, gilt der nächste Werktag (§ 193 BGB). Ohne Angabe nimmt OfficeTakt das Bundesland aus der PLZ. Bei Grenz-PLZ, Gemeindefeiertagen und Kunden im Ausland hier angeben.',
+  'customer.holiday.region': 'Bundesland des Sitzes',
+  'customer.holiday.regionAuto': 'Automatisch aus der PLZ ({laender})',
+  'customer.holiday.regionAutoUnknown': 'Automatisch aus der PLZ (nicht eindeutig — bitte angeben)',
+  'customer.holiday.regionAutoAbroad': 'Automatisch (Land ist nicht Deutschland — bitte angeben)',
+  'customer.holiday.abroad': 'Ausland',
+  'customer.holiday.fronleichnam': 'Fronleichnam ist am Sitz Feiertag',
+  'customer.holiday.mariaeHimmelfahrt': 'Mariä Himmelfahrt ist am Sitz Feiertag',
+  'customer.holiday.augsburgerFriedensfest': 'Augsburger Friedensfest ist am Sitz Feiertag (Stadt Augsburg)',
+  'customer.holiday.unknown': 'ungeklärt',
+  'customer.holiday.yes': 'ja',
+  'customer.holiday.no': 'nein',
+  'customer.holiday.abroadConfirmed': 'Geprüft: Am Sitz im Ausland verschieben keine Feiertage die Fristen',
   'companyProfile.countryCode': 'Ländercode (z. B. DE)',
   'kunden.edit.success': 'Kundenstammdaten gespeichert.',
   'customer.notFound': 'Kunde nicht gefunden.',
@@ -2982,6 +3098,9 @@ const deLegacy = {
   'expense.nextAction.cancelled': 'Storniert – gilt der Beleg doch, bitte neu erfassen.',
   'expense.edit.cancelled': 'Stornierte Ausgaben werden nicht mehr bearbeitet.',
   'expense.edit.amountLockedAfterPayment': 'Nach einer gebuchten Zahlung bleiben die Beträge fest. Bei falschem Betrag: Zahlung zurücknehmen oder Ausgabe stornieren und neu erfassen.',
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-09)
+  'expense.edit.statusLockedAfterPayment':
+    'Eine Ausgabe mit gebuchter Zahlung lässt sich nicht in einen Entwurf zurücksetzen. Bitte die Zahlung zuerst zurücknehmen.',
   'expense.edit.amountLockedHint': 'Beträge sind nach einer gebuchten Zahlung fest. Kategorie, Beschreibung und Datum bleiben änderbar.',
   'expense.saveNew': 'Ausgabe speichern',
   'expense.saveChanges': 'Änderungen speichern',
@@ -3171,6 +3290,10 @@ const deLegacy = {
   'invoice.subtotal': 'Zwischensumme',
   'invoice.tax': 'MwSt.',
   'invoice.total': 'Gesamt',
+  // FC01A-Nacharbeit (A6) — die Summenkarte einer Schlussrechnung nennt den Abzug.
+  'invoice.summary.grossBeforeDeductions': 'Gesamtbetrag (brutto)',
+  'invoice.summary.deductions': 'Abzüglich Abschläge',
+  'invoice.summary.amountDue': 'Restbetrag',
   'invoice.taxStatus': 'Steuerstatus',
   /*
    * INVOICE-TAX-FLOW-01D — Klartextkontrolle der getroffenen Steuerwahl.
@@ -3222,9 +3345,22 @@ const deLegacy = {
   'invoice.approve.legalNoticeMissing': 'Zum gewählten Steuerstatus fehlt der Pflichthinweis (etwa § 19 oder § 13b UStG). Bitte den Steuerstatus erneut wählen, damit der Hinweis übernommen wird. Es wurde keine Rechnung gespeichert.',
   'invoice.approve.deductionsExceedTotal': 'Die Abzüge früherer Abschläge übersteigen den Rechnungsbetrag. Bitte die Schlussrechnung prüfen. Es wurde keine Rechnung gespeichert.',
   'invoice.approve.abschlagUnpaid': 'Der Server hat die Schlussrechnung abgewiesen: Ein abgezogener Abschlag ist dort noch nicht vollständig bezahlt — oder ein Skonto wurde erst nach Ablauf der Skontofrist gezahlt. Ist die Zahlung auf diesem Gerät erfasst, aber noch nicht gesichert, bitte zuerst sichern. Es wurde keine Rechnung gespeichert.',
+  // FINANZ-CORE-01A (Feiertage)
+  'invoice.approve.skontoDeadlineUnclear':
+    'Der Server hat abgewiesen: Das Skonto eines abgezogenen Abschlags hängt an einem möglichen Feiertag am Sitz des Kunden (§ 193 BGB). Bitte am Abschlag das Fristende klären (Abschlag öffnen › Fristende klären). Es wurde nichts gespeichert.',
   'invoice.approve.abschlagSettlementMismatch': 'Der Server hat die Schlussrechnung abgewiesen: Wie ein abgezogener Abschlag beglichen ist (gezahlt und Skonto), stimmt nicht mit den dort gesicherten Zahlungen überein. Bitte zuerst synchronisieren und dann erneut freigeben. Es wurde keine Rechnung gespeichert.',
   'invoice.approve.deductionsMismatch': 'Die abgezogenen Abschläge stimmen nicht mehr mit dem Stand in der Cloud überein – vermutlich wurde inzwischen ein Abschlag erstellt oder storniert. Bitte die Seite neu laden und die Schlussrechnung neu aufbauen. Es wurde keine Rechnung gespeichert.',
   'invoice.approve.taxStatusOrderMismatch': 'Der Steuerstatus weicht vom bestätigten Auftrag ab. Bitte den Steuerstatus des Auftrags verwenden – sonst lehnt der Server die Rechnung ab. Es wurde nichts freigegeben.',
+  // FC01A-Nacharbeit (A3)
+  // FC01A-P1-Restkorrektur (#8, Altformat)
+  'invoice.approve.abschlagNetUnreliable':
+    'Der Server hat die Schlussrechnung abgewiesen: Zu einem abgezogenen Abschlag sind Netto und Umsatzsteuer nicht verlässlich gespeichert (älteres Format oder widersprüchliche Angaben). Bitte den Abschlag prüfen und berichtigen. Es wurde keine Rechnung gespeichert.',
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-06/07)
+  'invoice.approve.unitPricePrecision':
+    'Der Server hat die Freigabe abgewiesen: Ein Einzelpreis hat mehr als zwei Nachkommastellen. Einzelpreise werden auf Cent gerechnet, gedruckt und in der E-Rechnung übertragen. Bitte den Preis auf Cent angeben. Es wurde keine Rechnung gespeichert und keine Nummer vergeben.',
+  'invoice.approve.lineTotalMissing':
+    'Der Server hat die Freigabe abgewiesen: Zu einer Position fehlt der Zeilenbetrag. Bitte die Rechnung neu laden und erneut freigeben. Es wurde keine Rechnung gespeichert und keine Nummer vergeben.',
+  'invoice.approve.abschlagTaxStatusMismatch': 'Der Server hat die Schlussrechnung abgewiesen: Ein abgezogener Abschlag steht in einem anderen Steuerfall (etwa 19 % gegenüber § 13b). Bitte den Steuerstatus des Abschlags verwenden – oder den Abschlag zuerst korrigieren. Es wurde keine Rechnung gespeichert.',
   'invoice.approve.customerOrderMismatch': 'Der Rechnungsempfänger passt weder zum Auftrag noch zum Kundenstamm. Bitte den Namen prüfen – sonst lehnt der Server die Rechnung ab. Es wurde nichts freigegeben.',
   'invoice.taxStatusFromOrder': 'Die Steuer kommt aus dem bestätigten Auftrag und gilt auch für diese Rechnung.',
   'invoice.finalInvoiceExistsHint': 'Für diesen Auftrag gibt es bereits eine wirksame Schlussrechnung. Danach entsteht keine weitere Rechnung; für eine Korrektur bitte zuerst die Schlussrechnung stornieren.',
@@ -3343,12 +3479,74 @@ const deLegacy = {
   'invoice.validation.totalsNegative': 'Der Gesamtbetrag darf nicht negativ sein.',
   'invoice.validation.abschlagUnpaid':
     'Ein abgezogener Abschlag ist noch nicht vollständig bezahlt. Eine Schlussrechnung zieht nur bezahlte Abschläge ab (§ 14 Abs. 5 UStG); ein Skonto zählt nur bei Zahlung innerhalb der Skontofrist. Bitte zuerst die Zahlung zum Abschlag erfassen – oder einen unbezahlten Abschlag stornieren; dann berechnet die Schlussrechnung seinen Betrag mit.',
+  // FINANZ-CORE-01A (Feiertage) — Skontofrist eines Abschlags ungeklärt.
+  'invoice.validation.abschlagSkontoUnclear':
+    'Das Skonto eines abgezogenen Abschlags hängt an einem möglichen Feiertag am Sitz des Kunden (§ 193 BGB): Die Zahlung liegt nach dem frühestmöglichen Fristende. OfficeTakt entscheidet das nicht selbst. Bitte am Abschlag das Fristende klären (Abschlag öffnen › Fristende klären).',
+  // FC01A-Nacharbeit (A3) — Abschlag und Schlussrechnung im selben Steuerfall.
+  'invoice.validation.abschlagTaxStatusMismatch':
+    'Ein abgezogener Abschlag wurde mit einem anderen Steuerstatus gestellt als diese Schlussrechnung (etwa 19 % gegenüber § 13b). Abschlag und Schlussrechnung müssen im selben Steuerfall stehen: Bitte den Steuerstatus des Abschlags verwenden – oder den Abschlag zuerst korrigieren.',
+  // FC01A-P1-Restkorrektur (#8, Altformat)
+  'invoice.validation.abschlagNetUnreliable':
+    'Ein abgezogener Abschlag stammt aus einem älteren Format: Netto und Umsatzsteuer sind dort nicht verlässlich gespeichert (oder passen nicht zum Steuersatz). Die Schlussrechnung muss die Steuer jeder Vorauszahlung ausweisen (§ 14 Abs. 5 UStG) und wird deshalb nicht erstellt. Bitte den Abschlag prüfen und berichtigen (etwa stornieren und mit Netto neu stellen).',
   'invoice.abschlagUnsettled.title': 'Noch nicht bezahlte Abschläge',
   'invoice.abschlagUnsettled.label': 'Abschlag {number}',
   'invoice.abschlagUnsettled.labelPlain': 'Abschlag',
   'invoice.abschlagUnsettled.open': 'offen {amount}',
   'invoice.abschlagUnsettled.hint':
     'Die Schlussrechnung zieht nur bezahlte Abschläge ab; ein Skonto zählt nur bei Zahlung innerhalb der Skontofrist. Bitte die Zahlung zum Abschlag erfassen, sobald sie eingegangen ist. Zahlt der Kunde den Abschlag nicht, lässt er sich stornieren – dann berechnet die Schlussrechnung seinen Betrag mit.',
+  'invoice.abschlagUnsettled.skontoUnclear': 'Skontofrist ungeklärt (Feiertag am Sitz des Kunden?)',
+  'invoice.abschlagUnsettled.skontoUnclearHint':
+    'Bei „Skontofrist ungeklärt“ fehlt nicht Geld, sondern eine Angabe: Ob die Zahlung rechtzeitig war, hängt an einem Feiertag am Sitz des Kunden. Bitte am Abschlag das Fristende klären (Abschlag öffnen › Fristende klären).',
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-01/02) — Klärung der Fristgrundlage an der Rechnung.
+  'invoice.frist.open': 'Fristende klären',
+  'invoice.frist.title': 'Fristende klären',
+  'invoice.frist.intro':
+    'Ob die Frist dieser Rechnung an einem Feiertag am Sitz des Kunden endet, entscheidet OfficeTakt nicht selbst (§ 193 BGB). Halten Sie hier fest, wo der Sitz lag, oder im Ausland, welches Fristende Sie geprüft haben. Das gilt nur für diese Rechnung; der Beleg bleibt unverändert, die Klärung wird mit Name, Datum und Grund protokolliert.',
+  'invoice.frist.invoice': 'Rechnung',
+  'invoice.frist.deadlineSkonto': 'Skontofrist (kalendarisch)',
+  'invoice.frist.deadlinePaymentDue': 'Zahlungsziel (kalendarisch)',
+  'invoice.frist.current': 'Bisherige Grundlage',
+  'invoice.frist.currentAbroad': 'Ausland (Feiertage am Sitz nicht bekannt)',
+  'invoice.frist.currentWaived': 'abweichend vereinbart (kalendarisch)',
+  'invoice.frist.seat': 'Sitz des Kunden',
+  'invoice.frist.seatChoose': 'Bitte wählen',
+  'invoice.frist.seatCandidate': '(laut PLZ möglich)',
+  'invoice.frist.seatAbroad': 'Ausland',
+  'invoice.frist.abroadHint':
+    'Feiertage im Ausland kennt OfficeTakt nicht. Prüfen Sie den Feiertagskalender am Sitz des Kunden und tragen Sie das wirksame Ende genau dieser Frist ein (ein Werktag). Die andere Frist braucht eine eigene Prüfung.',
+  'invoice.frist.whichDeadline': 'Welche Frist',
+  'invoice.frist.effectiveEnd': 'Geprüftes wirksames Fristende',
+  'invoice.frist.reason': 'Grundlage der Klärung',
+  'invoice.frist.reasonPlaceholder': 'z. B. Sitz laut Handelsregister, Feiertagskalender des Landes',
+  'invoice.frist.saveAtCustomer':
+    'Auch am Kunden für künftige Rechnungen speichern (bestehende Rechnungen bleiben unverändert)',
+  'invoice.frist.submit': 'Klärung speichern',
+  'invoice.frist.clarifiedNote': 'Fristgrundlage am {date} geklärt: {reason}',
+  'invoice.frist.invalid':
+    'Die Angabe passt nicht zu dieser Rechnung. Bitte Sitz bzw. Fristende prüfen: Das wirksame Ende ist ein Werktag und liegt nicht vor dem kalendarischen Ende.',
+  'invoice.frist.reasonRequired': 'Bitte die Grundlage der Klärung angeben (mindestens 3 Zeichen).',
+  'invoice.frist.notFound': 'Die Rechnung wurde nicht gefunden.',
+  'invoice.frist.notFinalized': 'Nur eine freigegebene Rechnung lässt sich klären.',
+  'invoice.frist.cancelled': 'Die Rechnung ist storniert.',
+  'invoice.frist.waived':
+    'Für diese Rechnung ist abweichend vereinbart, dass Fristen kalendarisch enden; es gibt nichts zu klären.',
+  'invoice.frist.finalInvoiceExists':
+    'Dieser Abschlag ist in einer Schlussrechnung abgezogen; Zahlung und Skonto sind dort eingefroren und bleiben so.',
+  'invoice.frist.forbidden': 'Fristen klären dürfen nur Inhaber und Verwaltung.',
+  'invoice.frist.roleHint': 'Das Fristende klären Inhaber oder Verwaltung.',
+  // FINANZ-CORE-01A (END18-R2) — eine eindeutige, aber falsche Grundlage bewusst berichtigen.
+  'invoice.frist.correct': 'Fristgrundlage berichtigen',
+  'invoice.frist.correctTitle': 'Fristgrundlage berichtigen',
+  'invoice.frist.correctIntro':
+    'Die bisherige Grundlage ist eindeutig, aber falsch? Halten Sie den tatsächlichen Sitz des Kunden fest, im Ausland das geprüfte Fristende. Die Berichtigung gilt nur für diese Rechnung, der Beleg bleibt unverändert, und sie wird mit Name, Datum, Grund sowie der bisherigen und der neuen Grundlage protokolliert. Gebuchte Zahlungen bleiben gebucht; neu bewertet wird nur, ob sie fristgerecht waren.',
+  'invoice.frist.lockedByFinal':
+    'Die Fristgrundlage ist durch die Schlussrechnung festgeschrieben, die diesen Abschlag abzieht. Eine Berichtigung ist erst nach dem Storno der Schlussrechnung möglich.',
+  'invoice.frist.closedMonths':
+    'Abgeschlossene Monate betroffen: {months}. Die Berichtigung ändert dort Skonto und Zahlungsstatus; der Abschluss wird danach als „Seit Abschluss geändert“ angezeigt und muss bewusst neu geprüft werden. Nichts wird still umgeschrieben.',
+  'invoice.frist.closedMonthsAck': 'Verstanden — der Monatsabschluss muss danach neu geprüft werden',
+  'invoice.frist.conflict': 'Diese Klärung wurde bereits mit anderem Inhalt gespeichert. Bitte den Dialog neu öffnen.',
+  'invoice.frist.workspaceMissing': 'Kein Betrieb aktiv. Bitte neu anmelden.',
+  'invoice.frist.failed': 'Die Klärung konnte nicht gespeichert werden. Bitte später erneut versuchen.',
   'invoice.validation.deductionsExceedTotal':
     'Die bisherigen Abschlagsrechnungen übersteigen den endgültigen Leistungswert. Die Schlussrechnung kann so nicht abgeschlossen werden. Bitte Abschläge und Leistungswert prüfen. Falls die Angaben stimmen, ist eine Korrektur der Abrechnung erforderlich.',
   'invoice.validation.warn.iban': 'Bankverbindung (IBAN) fehlt – Rechnung kann freigegeben werden.',
@@ -3445,12 +3643,31 @@ const deLegacy = {
   'invoice.pdf.notFinalized': 'Nur freigegebene Rechnungen können als PDF erzeugt werden.',
   'invoice.pdf.draftNumber': 'Entwürfe ohne Rechnungsnummer können nicht als finale PDF ausgegeben werden.',
   'invoice.pdf.snapshotsMissing': 'Rechnungsdaten sind unvollständig – PDF nicht möglich.',
+  // FC01A-P1-Restkorrektur (lokaler Altbestand)
+  'invoice.pdf.netUnresolved':
+    'Netto und Umsatzsteuer dieser Altrechnung sind nicht verlässlich gespeichert und lassen sich aus den eingefrorenen Rechnungsdaten nicht sicher ermitteln. Damit kein abweichender Beleg entsteht, gibt es dafür keinen Nachdruck, kein PDF und keine E-Rechnung. Maßgeblich bleibt die ursprünglich versendete Rechnung; ist sie fehlerhaft, berichtigen Sie sie mit einer Rechnungskorrektur unter Bezug auf diese Rechnungsnummer.',
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-06/07)
+  'invoice.pdf.positionsInconsistent':
+    'Die gespeicherten Positionen dieser Rechnung lassen sich nicht nachrechnen (Einzelpreis nicht auf Cent, Zeilenbetrag fehlt oder passt nicht zu Menge × Einzelpreis, oder die Summe passt nicht zum Netto). Damit kein abweichender Beleg entsteht, gibt es dafür keinen Nachdruck, kein PDF und keine E-Rechnung. Bitte mit einer Rechnungskorrektur berichtigen.',
   'invoice.open': 'Öffnen',
   'invoice.moreActions': 'Weitere',
   'invoice.grossAmount': 'Brutto',
   'invoice.notFound': 'Rechnung nicht gefunden.',
   'invoice.readOnlyHint': 'Finalisierte Rechnung – nur Ansicht, keine Bearbeitung.',
   'invoice.readOnlyMissingSnapshots': 'Rechnung kann derzeit nicht angezeigt werden.',
+  // FC01A-P1-Restkorrektur (lokaler Altbestand) — Anzeige und Berichtigungsweg
+  'invoice.netUnresolved.title': 'Altrechnung: Netto und Umsatzsteuer ungeklärt',
+  'invoice.netUnresolved.facts':
+    'Für die Rechnung {number} stehen nur der Rechnungsbetrag von {amount} und der Steuerstatus „{taxStatus}“ fest. Netto und Umsatzsteuer fehlen oder widersprechen sich und lassen sich aus den eingefrorenen Rechnungsdaten nicht sicher ermitteln. Die gespeicherten Rechnungswerte bleiben unverändert.',
+  'invoice.netUnresolved.blocked':
+    'Damit kein abweichender Beleg entsteht, zeigt OfficeTakt keine Netto- und Steuerbeträge und erzeugt keinen Nachdruck, kein PDF, keine E-Rechnung und keine Steuerwerte im Steuerberater-Export.',
+  'invoice.netUnresolved.stepsTitle': 'So berichtigen Sie den Altbestand',
+  'invoice.netUnresolved.stepOriginal':
+    'Nehmen Sie die ursprünglich versendete Rechnung zur Hand (Ihre Ablage oder die Kopie beim Kunden). Sie bleibt der gültige Beleg.',
+  'invoice.netUnresolved.stepAdvisor':
+    'Stimmt sie, geben Sie genau diese Rechnung unverändert an Ihren Steuerberater weiter. Im Steuerberater-Export steht sie mit leerem Netto und leerer Umsatzsteuer, dem Vermerk „Bitte prüfen“ und als fehlendes Dokument.',
+  'invoice.netUnresolved.stepCorrection':
+    'Ist sie fehlerhaft, berichtigen Sie sie mit einer Rechnungskorrektur, die sich auf Nummer und Datum dieser Rechnung bezieht, und stellen Sie eine neue Rechnung mit den richtigen Beträgen aus.',
   'invoice.openArchiveDocument': 'Archivdokument öffnen',
   'invoice.status.entwurf': 'Entwurf',
   'invoice.status.vorbereitet': 'Vorbereitet',
@@ -3543,6 +3760,9 @@ const deLegacy = {
   'payment.totalDue': 'Gesamtbetrag',
   'payment.paidAmount': 'Bezahlt',
   'payment.openAmount': 'Offen',
+  // FC01A-Nacharbeit (A7)
+  'payment.totalDueAfterDeductions': 'Restbetrag nach Abschlägen',
+  'payment.skontoGranted': 'Skonto (fristgerecht)',
   'payment.overpaidAmount': 'Überzahlung',
   'payment.workflowStatus': 'Versand',
   'payment.paymentStatus': 'Zahlung',
@@ -3608,6 +3828,18 @@ const deLegacy = {
     'Zahlung vor Versand erfordert eine ausdrückliche Bestätigung.',
   'payment.overpaymentConfirmationRequired':
     'Überzahlung erfordert eine ausdrückliche Bestätigung.',
+  // FINANZ-CORE-01A (Feiertage, § 193 BGB)
+  'payment.skontoDeadlineUnclear':
+    'Das Skonto dieser Rechnung hängt an einem möglichen Feiertag am Sitz des Kunden. Bitte zuerst an der Rechnung das Fristende klären; dann lässt sich eine weitere Zahlung erfassen.',
+  'payment.skontoUnclearNotice':
+    'Skontofrist ungeklärt: Die Zahlung liegt nach dem {earliest}, aber spätestens am {latest}. Ob sie rechtzeitig war, hängt an einem Feiertag am Sitz des Kunden (§ 193 BGB). Bitte an der Rechnung das Fristende klären. Bis dahin keine Mahnung.',
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-01/02)
+  'payment.skontoUnclearOpenNotice':
+    'Skontofrist ungeklärt: Die Zahlung liegt nach dem {earliest}. Am Sitz des Kunden im Ausland können Feiertage das Fristende verschieben; OfficeTakt kennt sie nicht und entscheidet deshalb nicht selbst (§ 193 BGB). Bitte an der Rechnung das geprüfte Fristende festhalten. Bis dahin keine Mahnung und keine Schlussrechnung.',
+  'payment.dueUnclearNotice':
+    'Zahlungsziel ungeklärt: Es endet frühestens am {earliest}, spätestens am {latest}, je nach Feiertag am Sitz des Kunden (§ 193 BGB). Bis zur Klärung gilt die Rechnung nicht als überfällig.',
+  'payment.dueUnclearOpenNotice':
+    'Zahlungsziel ungeklärt: Es endet frühestens am {earliest}. Am Sitz des Kunden im Ausland können Feiertage das Ende verschieben; bis das Fristende geprüft ist, gilt die Rechnung nicht als überfällig und wird nicht gemahnt.',
   'payment.confirmIntro': 'Bitte bestätigen Sie die Zahlung ausdrücklich.',
   'payment.confirmSave': 'Zahlung bestätigen und buchen',
   'payment.overdueDays': 'Seit {days} Tagen überfällig',
@@ -3709,6 +3941,8 @@ const deLegacy = {
   'payment.invoiceCancelled': 'Stornierte Rechnung – keine Zahlung möglich.',
   'payment.amountInvalid': 'Bitte einen Betrag größer als 0 eingeben.',
   'payment.dateRequired': 'Bitte ein Zahlungsdatum angeben.',
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-08)
+  'payment.dateInvalid': 'Bitte ein gültiges Zahlungsdatum angeben.',
   'payment.notFound': 'Zahlung nicht gefunden.',
   'payment.cloudNotSecured': 'Diese Zahlung ist noch nicht in der Cloud gesichert.',
   'payment.cloudSecureAction': 'In der Cloud sichern',
@@ -3740,10 +3974,10 @@ const deLegacy = {
     'Für diese Zahlung ist in der Cloud bereits ein abweichender Betrag gespeichert. Bitte prüfen Sie den Zahlungseingang.',
   // FINANZ-CORE-01A (SQL-05/ZAH-02) — der Server weist eine unbestätigte Überzahlung ab.
   'payment.cloudOverpaymentUnconfirmed':
-    'In der Cloud sind zu dieser Rechnung inzwischen weitere Zahlungen gespeichert – mit dieser wäre sie überzahlt. Die Zahlung bleibt auf diesem Gerät. Bitte prüfen Sie auf der Rechnungsseite, ob sie doppelt erfasst wurde.',
+    'In der Cloud sind zu dieser Rechnung inzwischen weitere Zahlungen gespeichert – mit dieser wäre sie überzahlt. Der Server hat sie deshalb nicht gebucht; sie zählt nicht. Auf der Rechnungsseite können Sie sie als echte Überzahlung bestätigen oder als doppelt erfasst verwerfen.',
   // FINANZ-CORE-01A (ZAH-19) — die Rechnung ist inzwischen storniert; kein Versuch sichert die Zahlung noch.
   'payment.cloudInvoiceCancelled':
-    'Die Rechnung ist inzwischen storniert. Diese Zahlung kann nicht mehr in der Cloud gesichert werden – bitte prüfen und die Zahlung zurücknehmen.',
+    'Die Rechnung ist inzwischen storniert. Der Server hat diese Zahlung nicht gebucht; sie zählt nicht und steht auf der Rechnungsseite als abgewiesen.',
   'payment.overpaymentQuestionTitle': 'Überzahlung bestätigen?',
   'payment.overpaymentQuestionMessage':
     'Mit dieser Zahlung wäre die Rechnung überzahlt – vermutlich hat ein anderes Gerät denselben Eingang schon gesichert. Wurde sie doppelt erfasst, entfernen Sie sie bitte. Nur wenn der Kunde tatsächlich mehr gezahlt hat, bestätigen Sie die Überzahlung:',
@@ -3752,6 +3986,26 @@ const deLegacy = {
     'Ohne Verbindung zur Cloud lässt sich nicht klären, ob diese Zahlung dort gesichert ist. Sie bleibt deshalb bestehen.',
   'payment.cloudReversalFailed':
     'Die Zahlung konnte in der Cloud nicht storniert werden. Sie bleibt deshalb bestehen – bitte erneut versuchen.',
+  // FC01A-Nacharbeit (A2) — die Schlussrechnung hat die Zahlung des Abschlags eingefroren.
+  'payment.reverseBlockedByFinalInvoice':
+    'Diese Zahlung lässt sich nicht zurücknehmen: Die Schlussrechnung zieht den Abschlag als bezahlt ab. Für eine Korrektur bitte zuerst die Schlussrechnung stornieren.',
+  // FC01A-P1-Nacharbeit (ZAH-04) — der Abschlag ist durch die Schlussrechnung abgerechnet.
+  'payment.finalInvoiceExists':
+    'Die Schlussrechnung zieht diesen Abschlag bereits ab und hat Zahlung und Skonto eingefroren. Eine weitere Zahlung bitte auf die Schlussrechnung buchen.',
+  'payment.cloudFinalInvoiceExists':
+    'Der Server hat diese Zahlung abgewiesen: Die Schlussrechnung zieht den Abschlag bereits als beglichen ab. Hier ist sie nicht gebucht und zählt nicht; bitte die Zahlung auf die Schlussrechnung buchen.',
+  // FINANZ-CORE-01A (END18-R3) — fachlich abgewiesene Rechnungszahlungen: nicht gebucht, sichtbar bis zur Entscheidung.
+  'payment.rejected.intro':
+    'Vom Server abgewiesen — nicht gebucht. Diese Zahlungen zählen weder bei bezahlt/offen noch in Mahnung, Monatsmappe, Export oder Abschluss:',
+  'payment.rejected.item': '{amount} vom {date}: {reason}',
+  'payment.rejected.confirm': 'Als Überzahlung bestätigen und senden',
+  'payment.rejected.discard': 'Verwerfen',
+  'payment.rejectedNotRestorable':
+    'Diese Zahlung nimmt der Server auch bestätigt nicht an. Bitte verwerfen und, falls nötig, auf dem richtigen Beleg neu erfassen.',
+  'payment.cloudSkontoDeadlineUnclear':
+    'Der Server hat diese Zahlung noch nicht angenommen: Das Skonto der Rechnung hängt an einem möglichen Feiertag am Sitz des Kunden. Sobald das Fristende an der Rechnung geklärt ist, sichert der nächste Abgleich die Zahlung.',
+  'payment.cloudBlocked.final_invoice_exists':
+    'Die Schlussrechnung zieht diesen Abschlag bereits als beglichen ab. Diese Zahlung lässt sich hier nicht sichern; bitte auf die Schlussrechnung buchen.',
   'payment.persistFailed':
     'Die Zahlung konnte nicht gespeichert werden. Es wurde nichts geändert – bitte erneut versuchen.',
 
@@ -6282,6 +6536,40 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.abschlagUnpaid':
     'Düşülen bir hakediş henüz tamamen ödenmedi. Kapanış faturası yalnızca ödenmiş hakedişleri düşer (UStG § 14 Abs. 5). Önce hakedişin ödemesini kaydedin – ya da ödenmemiş hakedişi iptal edin; o zaman tutarı kapanış faturasında hesaplanır.',
   'invoice.approve.abschlagUnpaid': 'Sunucu kapanış faturasını reddetti: Düşülen bir hakediş orada henüz tamamen ödenmiş görünmüyor ya da iskonto, iskonto süresi dolduktan sonra ödendi. Ödeme bu cihazda kaydedildi ama henüz yedeklenmediyse önce onu yedekleyin. Fatura kaydedilmedi.',
+  // FC01A-Nacharbeit (A2, A3)
+  'invoice.validation.abschlagTaxStatusMismatch':
+    'Düşülen bir hakediş, bu kapanış faturasından farklı bir vergi durumuyla kesildi (ör. %19 yerine § 13b). Hakediş ve kapanış faturası aynı vergi durumunda olmalıdır: Lütfen hakedişin vergi durumunu kullanın ya da önce hakedişi düzeltin.',
+  // FC01A-P1-Restkorrektur (#8, Altformat)
+  'invoice.validation.abschlagNetUnreliable':
+    'Düşülen bir hakediş eski bir biçimden geliyor: Net tutar ve KDV orada güvenilir şekilde kayıtlı değil (ya da vergi oranıyla uyuşmuyor). Kapanış faturası her ön ödemenin vergisini göstermek zorundadır (UStG § 14 Abs. 5); bu yüzden oluşturulmaz. Lütfen hakedişi kontrol edip düzeltin (ör. iptal edip net tutarla yeniden kesin).',
+  // FC01A-P1-Restkorrektur (lokaler Altbestand)
+  'invoice.pdf.netUnresolved':
+    'Bu eski faturanın net tutarı ve KDV’si güvenilir şekilde kayıtlı değil ve dondurulmuş fatura verilerinden güvenle belirlenemiyor. Farklı bir belge oluşmaması için yeniden baskı, PDF ve e-fatura oluşturulmaz. Geçerli olan, başlangıçta gönderilen faturadır; hatalıysa bu fatura numarasına atıfla bir fatura düzeltmesi düzenleyin.',
+  'invoice.netUnresolved.title': 'Eski fatura: Net tutar ve KDV belirsiz',
+  'invoice.netUnresolved.facts':
+    '{number} numaralı fatura için yalnızca {amount} tutarındaki fatura tutarı ve „{taxStatus}“ vergi durumu kesindir. Net tutar ve KDV eksik ya da birbiriyle çelişiyor ve dondurulmuş fatura verilerinden güvenle belirlenemiyor. Kayıtlı fatura değerleri değiştirilmez.',
+  'invoice.netUnresolved.blocked':
+    'Farklı bir belge oluşmaması için OfficeTakt net ve vergi tutarlarını göstermez; yeniden baskı, PDF, e-fatura ve mali müşavir aktarımında vergi değerleri oluşturmaz.',
+  'invoice.netUnresolved.stepsTitle': 'Eski kaydı şöyle düzeltirsiniz',
+  'invoice.netUnresolved.stepOriginal':
+    'Başlangıçta gönderilen faturayı bulun (kendi arşiviniz ya da müşterideki kopya). Geçerli belge odur.',
+  'invoice.netUnresolved.stepAdvisor':
+    'Doğruysa tam bu faturayı değiştirmeden mali müşavirinize iletin. Mali müşavir aktarımında net tutar ve KDV boş, „Lütfen kontrol edin“ notuyla ve eksik belge olarak yer alır.',
+  'invoice.netUnresolved.stepCorrection':
+    'Hatalıysa bu faturanın numarasına ve tarihine atıfta bulunan bir fatura düzeltmesi düzenleyin ve doğru tutarlarla yeni bir fatura kesin.',
+  // FC01A-P1-Restkorrektur (#8, Altformat)
+  'invoice.approve.abschlagNetUnreliable':
+    'Sunucu kapanış faturasını reddetti: Düşülen bir hakediş için net tutar ve KDV güvenilir şekilde kayıtlı değil (eski biçim ya da çelişkili bilgiler). Lütfen hakedişi kontrol edip düzeltin. Fatura kaydedilmedi.',
+  'invoice.approve.abschlagTaxStatusMismatch': 'Sunucu kapanış faturasını reddetti: Düşülen bir hakediş farklı bir vergi durumunda (ör. %19 yerine § 13b). Lütfen hakedişin vergi durumunu kullanın ya da önce hakedişi düzeltin. Fatura kaydedilmedi.',
+  'payment.reverseBlockedByFinalInvoice':
+    'Bu ödeme geri alınamaz: Kapanış faturası bu hakedişi ödenmiş olarak düşüyor. Düzeltme için lütfen önce kapanış faturasını iptal edin.',
+  // FC01A-P1-Nacharbeit (ZAH-04)
+  'payment.finalInvoiceExists':
+    'Bu ödeme hakedişin açık tutarını aşıyor ve kapanış faturası bu hakedişi zaten kapanmış olarak düşüyor. Lütfen ödemeyi kapanış faturasına kaydedin.',
+  'payment.cloudFinalInvoiceExists':
+    'Sunucu bu ödemeyi reddetti: Kapanış faturası bu hakedişi zaten kapanmış olarak düşüyor. Lütfen ödemeyi kapanış faturasına kaydedin; burada yedeklenemez.',
+  'payment.cloudBlocked.final_invoice_exists':
+    'Kapanış faturası bu hakedişi zaten kapanmış olarak düşüyor. Bu ödeme burada yedeklenemez; lütfen kapanış faturasına kaydedin.',
   'invoice.approve.abschlagSettlementMismatch': 'Sunucu kapanış faturasını reddetti: Düşülen bir hakedişin nasıl kapandığı (ödeme ve iskonto) orada yedeklenmiş ödemelerle uyuşmuyor. Lütfen önce senkronize edip yeniden onaylayın. Fatura kaydedilmedi.',
   'invoice.abschlagUnsettled.title': 'Henüz ödenmemiş hakedişler',
   'invoice.abschlagUnsettled.label': 'Hakediş {number}',
@@ -7401,6 +7689,40 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.abschlagUnpaid':
     'Приспадната междинна фактура все още не е напълно платена. Окончателната фактура приспада само платени междинни фактури (§ 14, ал. 5 UStG). Първо въведете плащането по междинната фактура – или анулирайте неплатената междинна фактура; тогава сумата ѝ се начислява в окончателната фактура.',
   'invoice.approve.abschlagUnpaid': 'Сървърът отхвърли окончателната фактура: приспадната междинна фактура там все още не е напълно платена или отстъпката е платена след изтичане на срока за отстъпка. Ако плащането е въведено на това устройство, но още не е съхранено, първо го съхранете. Не е запазена фактура.',
+  // FC01A-Nacharbeit (A2, A3)
+  'invoice.validation.abschlagTaxStatusMismatch':
+    'Приспадната междинна фактура е издадена с различен данъчен статус от тази окончателна фактура (напр. 19 % спрямо § 13b). Междинната и окончателната фактура трябва да са в един и същ данъчен режим: използвайте данъчния статус на междинната фактура или първо я коригирайте.',
+  // FC01A-P1-Restkorrektur (#8, Altformat)
+  'invoice.validation.abschlagNetUnreliable':
+    'Приспадната междинна фактура е в по-стар формат: нетната сума и ДДС не са надеждно съхранени (или не съответстват на данъчната ставка). Окончателната фактура трябва да посочи данъка на всяко авансово плащане (§ 14, ал. 5 UStG) и затова не се създава. Моля, проверете и коригирайте междинната фактура (напр. анулирайте я и я издайте отново с нетна сума).',
+  // FC01A-P1-Restkorrektur (lokaler Altbestand)
+  'invoice.pdf.netUnresolved':
+    'Нетната сума и ДДС на тази стара фактура не са надеждно съхранени и не могат да бъдат сигурно определени от замразените данни на фактурата. За да не възникне различаващ се документ, не се създават повторен печат, PDF и електронна фактура. Валидна остава първоначално изпратената фактура; ако тя е грешна, коригирайте я с корекция на фактура с позоваване на този номер.',
+  'invoice.netUnresolved.title': 'Стара фактура: нетната сума и ДДС не са изяснени',
+  'invoice.netUnresolved.facts':
+    'За фактура {number} са сигурни само сумата на фактурата {amount} и данъчният статус „{taxStatus}“. Нетната сума и ДДС липсват или си противоречат и не могат да бъдат сигурно определени от замразените данни на фактурата. Съхранените стойности на фактурата остават непроменени.',
+  'invoice.netUnresolved.blocked':
+    'За да не възникне различаващ се документ, OfficeTakt не показва нетни и данъчни суми и не създава повторен печат, PDF, електронна фактура и данъчни стойности в експорта за счетоводителя.',
+  'invoice.netUnresolved.stepsTitle': 'Как да коригирате стария запис',
+  'invoice.netUnresolved.stepOriginal':
+    'Вземете първоначално изпратената фактура (вашия архив или копието при клиента). Тя остава валидният документ.',
+  'invoice.netUnresolved.stepAdvisor':
+    'Ако е вярна, предайте точно тази фактура непроменена на счетоводителя си. В експорта за счетоводителя тя е с празни нетна сума и ДДС, с бележка „Моля, проверете“ и като липсващ документ.',
+  'invoice.netUnresolved.stepCorrection':
+    'Ако е грешна, коригирайте я с корекция на фактура, която се позовава на номера и датата на тази фактура, и издайте нова фактура с правилните суми.',
+  // FC01A-P1-Restkorrektur (#8, Altformat)
+  'invoice.approve.abschlagNetUnreliable':
+    'Сървърът отхвърли окончателната фактура: за приспадната междинна фактура нетната сума и ДДС не са надеждно съхранени (по-стар формат или противоречиви данни). Моля, проверете и коригирайте междинната фактура. Не е запазена фактура.',
+  'invoice.approve.abschlagTaxStatusMismatch': 'Сървърът отхвърли окончателната фактура: приспадната междинна фактура е в различен данъчен режим (напр. 19 % спрямо § 13b). Използвайте данъчния статус на междинната фактура или първо я коригирайте. Не е запазена фактура.',
+  'payment.reverseBlockedByFinalInvoice':
+    'Това плащане не може да бъде отменено: окончателната фактура приспада междинната фактура като платена. За корекция първо анулирайте окончателната фактура.',
+  // FC01A-P1-Nacharbeit (ZAH-04)
+  'payment.finalInvoiceExists':
+    'Това плащане надвишава откритата сума по междинната фактура, а окончателната фактура вече я приспада като погасена. Моля, въведете плащането по окончателната фактура.',
+  'payment.cloudFinalInvoiceExists':
+    'Сървърът отхвърли това плащане: окончателната фактура вече приспада междинната фактура като погасена. Моля, въведете плащането по окончателната фактура; тук то не може да бъде съхранено.',
+  'payment.cloudBlocked.final_invoice_exists':
+    'Окончателната фактура вече приспада тази междинна фактура като погасена. Това плащане не може да бъде съхранено тук; моля, въведете го по окончателната фактура.',
   'invoice.approve.abschlagSettlementMismatch': 'Сървърът отхвърли окончателната фактура: начинът, по който е погасена приспадната междинна фактура (плащане и отстъпка), не съвпада със съхранените там плащания. Моля, първо синхронизирайте и одобрете отново. Не е запазена фактура.',
   'invoice.abschlagUnsettled.title': 'Все още неплатени междинни фактури',
   'invoice.abschlagUnsettled.label': 'Междинна фактура {number}',

@@ -41,6 +41,7 @@ import {
   isBillingEffective,
 } from '../orderBillingRules';
 import { getBilledNetCentsForVorgang, invoiceBilledNetCents } from './orderCostService';
+import { hasUnresolvedInvoiceNet } from '../invoice/invoiceNetResolution';
 import { calculatePaymentSummary, getOverdueDays } from '../invoicePaymentService';
 import { getInvoiceDocumentTitle } from '../invoiceTypeService';
 import { getVorgangById } from '../vorgangService';
@@ -109,6 +110,12 @@ export interface OrderFinancials {
   readonly invoicedPercent: number | null;
   /** `invoicedNet > orderValueNet` — ein Prüfhinweis, kein Fehler. */
   readonly isOverInvoiced: boolean;
+  /**
+   * FC01A-P1-Restkorrektur (lokaler Altbestand) — wirksame Rechnungen, deren Netto ungeklärt ist
+   * (`resolveInvoiceNet`). Sie zählen in `invoicedNet` mit ihrer Obergrenze (Brutto vor Abzügen),
+   * damit nicht doppelt abgerechnet wird; die Übersicht sagt das dazu.
+   */
+  readonly netUnresolvedInvoiceCount: number;
 
   /* --- Zahlungsstand, brutto --- */
 
@@ -322,6 +329,9 @@ export function summarizeOrderFinancials(
     remainingBillableNet,
     invoicedPercent,
     isOverInvoiced,
+    netUnresolvedInvoiceCount: (vorgang.invoices ?? []).filter(
+      (invoice) => isBillingEffective(invoice) && hasUnresolvedInvoiceNet(invoice),
+    ).length,
     paidAmount: fromCents(paidCents),
     openReceivables,
     overdueReceivables: fromCents(overdueCents),
