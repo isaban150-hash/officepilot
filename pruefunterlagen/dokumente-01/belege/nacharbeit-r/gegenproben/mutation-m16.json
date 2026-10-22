@@ -1,0 +1,13 @@
+[
+  {
+    "id": "M16",
+    "was": "eigener Token-Lieferant wird nicht gelesen",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 28,
+    "rote": [
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S12 eigener Token-Lieferant: Wechsel nur des Tokens (Bereich bleibt) → Halt; gesendet wird das geprüfte Token"
+    ]
+  }
+]

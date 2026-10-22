@@ -66,10 +66,10 @@ export const bgDocAssistant = {
     'Пропуснат срок може да доведе до допълнителни задължения.',
   'docAssistant.original.keep': 'Запазете оригинала.',
   'docAssistant.original.keepUntilTax':
-    'Запазете, докато Steuerberater не го обработи.',
+    'Запазете оригинала – важен е за данъците и счетоводството.',
   'docAssistant.original.disposeAfterDigital':
     'Може да се изхвърли след завършено дигитално архивиране.',
-  'docAssistant.original.uncertain': 'Запазете, докато архивирането не бъде проверено.',
+  'docAssistant.original.uncertain': 'Запазете оригинала, докато се изясни дали има задължение за съхранение.',
   'docAssistant.steuerberater.mark': 'Маркирайте за Steuerberater',
   'docAssistant.steuerberater.notRelevant': 'Не е от значение за данъците',
   'docAssistant.steuerberater.check': 'Проверете относителното съпоставяне',
@@ -123,13 +123,13 @@ export const bgDocAssistant = {
     'От разпознатото съдържание не се вижда непосредствен риск – все пак прегледайте накратко.',
   'docAssistant.answer.filing': 'Дигитално: {digital}. Хартия: {paper}.',
   'docAssistant.answer.disposeKeepTax':
-    'Запазете, докато Steuerberater не обработи материалите.',
+    'Не, моля, запазете го. Документите за данъци и счетоводство подлежат на законови срокове за съхранение, например 8 години за счетоводни документи.',
   'docAssistant.answer.disposeKeep':
-    'Запазете оригинала, докато писмото може да е актуално.',
+    'Моля, запазете оригинала. Дали и кога може да се изхвърли, зависи от законовите срокове за съхранение.',
   'docAssistant.answer.disposeOk':
     'След успешно дигитално архивиране оригиналът може да се изхвърли.',
   'docAssistant.answer.disposeUncertain':
-    'Не съм сигурен – запазете, докато архивирането не бъде проверено.',
+    'Не съм сигурен – моля, запазете. Изяснете задължението за съхранение най-добре със Steuerberater.',
   'docAssistant.answer.genericUncertain':
     'От този документ нямам сигурен отговор на този въпрос.',
   'docAssistant.answer.genericFollowUp':

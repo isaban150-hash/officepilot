@@ -1,0 +1,38 @@
+diff src/services/storage/workspaceAccountStorageService.ts (N1-Stand → R1/R2)
+index a68810f..576c295 100644
+--- a/src/services/storage/workspaceAccountStorageService.ts	(N1-Stand, belegt durch nacharbeit-n/pruefsummen.txt)
++++ b/src/services/storage/workspaceAccountStorageService.ts	(nach R1/R2)
+@@ -32,6 +32,11 @@ import {
+   type StorageAccess,
+   type StorageAccount,
+ } from './storageScopeService';
++import {
++  appendOutboxOriginLog,
++  holdOutboxEntriesInRawState,
++  toOutboxOriginLogEntity,
++} from '../sync/syncOutboxOriginService';
+ 
+ export type WorkspaceAccountStoreAdoption =
+   /** Der Kontobestand existiert schon oder es gibt nichts zu übernehmen. */
+@@ -113,7 +118,20 @@ export function prepareWorkspaceAccountStore(
+   }
+ 
+   if (legacyRaw !== null) {
+-    return moveRaw(legacyKey, targetKey, legacyRaw) ? { action: 'adopted_legacy' } : { action: 'write_failed' };
++    /*
++     * DOKUMENTE-01 R2 — wer die offenen Aufträge des Altbestands eingereiht hat, ist nicht nachweisbar. Sie wandern
++     * unverändert mit, sind aber gegen automatischen Versand gesperrt, bis dieses Konto sie bewusst freigibt.
++     */
++    const now = new Date().toISOString();
++    const gesperrt = holdOutboxEntriesInRawState(legacyRaw, 'legacy_adoption', now);
++    if (!moveRaw(legacyKey, targetKey, gesperrt.raw)) return { action: 'write_failed' };
++    appendOutboxOriginLog(targetKey, {
++      at: now,
++      action: 'held',
++      source: 'legacy_adoption',
++      entries: gesperrt.held.map(toOutboxOriginLogEntity),
++    });
++    return { action: 'adopted_legacy' };
+   }
+ 
+   const memberKey = buildStorageKey({

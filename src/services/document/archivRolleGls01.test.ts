@@ -103,7 +103,9 @@ describe('GLS01 Archivdokument löschen — Rolle vor jeder lokalen Änderung', 
     hydrateDocumentStore([archivDokument()]);
     aufrufeProtokollieren();
 
-    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC, INHABER);
+    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC, INHABER, {
+      aufbewahrungGeprueft: true,
+    });
     expect(result.ok).toBe(true);
     expect(getDocumentById(DOC)).toBeUndefined();
   });
@@ -168,7 +170,9 @@ describe('GLS01 Archivdokument löschen — Rolle vor jeder lokalen Änderung', 
       ),
     } as never);
 
-    await expect(deleteGeneratedInvoiceDocumentWithCloud('doc-gls01-rechnung', INHABER)).resolves.toEqual({
+    await expect(deleteGeneratedInvoiceDocumentWithCloud('doc-gls01-rechnung', INHABER, {
+      aufbewahrungGeprueft: true,
+    })).resolves.toEqual({
       ok: false,
       errorKey: 'document.delete.forbidden',
     });

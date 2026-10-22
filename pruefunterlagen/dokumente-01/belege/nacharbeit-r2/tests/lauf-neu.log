@@ -1,0 +1,4 @@
+{"portion":"01","dateien":3,"tests":39,"gruen":39,"rot":0,"sekunden":49,"exit":0,"rote":0}
+(node:26084) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+neu exit=0

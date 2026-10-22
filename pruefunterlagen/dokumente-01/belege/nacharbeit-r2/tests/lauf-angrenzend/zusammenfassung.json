@@ -1,0 +1,32 @@
+[
+  {
+    "portion": "01",
+    "dateien": 30,
+    "tests": 269,
+    "gruen": 269,
+    "rot": 0,
+    "sekunden": 267,
+    "exit": 0,
+    "rote": []
+  },
+  {
+    "portion": "02",
+    "dateien": 30,
+    "tests": 576,
+    "gruen": 576,
+    "rot": 0,
+    "sekunden": 155,
+    "exit": 0,
+    "rote": []
+  },
+  {
+    "portion": "03",
+    "dateien": 20,
+    "tests": 209,
+    "gruen": 209,
+    "rot": 0,
+    "sekunden": 126,
+    "exit": 0,
+    "rote": []
+  }
+]

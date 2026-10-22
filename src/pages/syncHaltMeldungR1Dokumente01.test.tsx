@@ -1,0 +1,212 @@
+/**
+ * DOKUMENTE-01 R1-WEISS-START — die Synchronisationsseite meldet einen angehaltenen Lauf nie als Erfolg.
+ *
+ *  U1  „Jetzt synchronisieren“ mit nicht lesbarer Startsitzung (echter Koordinator, echter Adapter, echtes SDK):
+ *      Hinweis „angehalten“, weder „abgeschlossen“ noch „fehlgeschlagen“; keine Anfrage
+ *  U2  „Erneut versuchen“ mit Haltbericht: Hinweis „angehalten“, nicht „Erneuter Versuch abgeschlossen“
+ */
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createClient } from '@supabase/supabase-js';
+import { AppProvider, useApp } from '../context/AppContext';
+import { DEFAULT_SETUP } from '../data/mockData';
+import { SyncPage } from './SyncPage';
+import type { AppPersistedState, CompanyDocument } from '../types/models';
+import type { SyncCoordinatorReport, SyncOutboxEntry } from '../types/sync';
+import { STORAGE_VERSION } from '../services/sync/syncMigrationService';
+import { createSyncClient, resetSyncClientForTests } from '../services/sync/syncClientService';
+import { resetSyncOutboxForTests } from '../services/sync/syncOutboxService';
+import { SupabaseSyncAdapter } from '../services/sync/supabaseSyncAdapter';
+import {
+  SYNC_IDENTITY_CHANGED_REPORT_ID,
+  getSyncCoordinator,
+  resetSyncCoordinatorForTests,
+} from '../services/sync/syncCoordinator';
+import { resetStorageScopeForTests, setActiveStorageScope } from '../services/storage/storageScopeService';
+import { applyStateToStores } from '../services/persistenceService';
+import * as syncUiService from '../services/sync/syncUiService';
+import * as supabaseLib from '../lib/supabase';
+
+const WS = 'ws-halt-seite';
+const INHABER = 'konto-inhaber-halt-seite';
+const JETZT = '2026-10-21T12:00:00.000Z';
+const HALT = 'Synchronisation angehalten: Das Konto dieses Laufs ließ sich nicht bestätigen oder wurde gewechselt.';
+
+function dokument(id: string): CompanyDocument {
+  return {
+    id,
+    title: 'Halt-Seite synthetisch',
+    category: 'sonstiges',
+    issuer: 'Halt-Prüfung',
+    recognizedText: 'synthetisch',
+    issueDate: null,
+    validUntil: null,
+    digitalFolder: { id: 'sonstiges', name: 'Sonstiges', path: '/sonstiges' },
+    paperFolder: { folderId: 'sonstiges', register: 'S', label: 'Sonstiges' },
+    tags: [],
+    linkedCompany: null,
+    linkedVorgang: null,
+    archived: false,
+    createdAt: JETZT,
+    sync: { version: 0, updatedAt: JETZT, deleted: false, deviceId: 'geraet-halt', workspaceId: WS },
+  } as unknown as CompanyDocument;
+}
+
+function auftrag(id: string, entityId: string, status: SyncOutboxEntry['status'] = 'pending'): SyncOutboxEntry {
+  return {
+    id,
+    entityType: 'document',
+    entityId,
+    operation: 'create',
+    version: 0,
+    queuedAt: JETZT,
+    sequence: 1,
+    retryCount: status === 'error' ? 1 : 0,
+    status,
+    origin: { userId: INHABER, workspaceId: WS, access: 'full' },
+  };
+}
+
+function zustand(teil: Partial<AppPersistedState>): AppPersistedState {
+  return {
+    version: STORAGE_VERSION,
+    invoiceEntries: [],
+    syncClient: { ...createSyncClient(), serverWorkspaceId: WS, workspaceId: WS, syncPolicy: 'cloud_ready' },
+    syncOutbox: [],
+    setup: { ...DEFAULT_SETUP, setupComplete: true, setupVersion: 1 },
+    vorgaenge: [],
+    customers: [],
+    inboxItems: [],
+    tasks: [],
+    documents: [],
+    savedAt: JETZT,
+    ...teil,
+  } as AppPersistedState;
+}
+
+class OhneVerbindung {
+  readonly readyState = 3;
+  close(): void {}
+  send(): void {}
+}
+
+function ToastProbe() {
+  const { toast } = useApp();
+  return <div data-testid="toast-probe">{toast ?? ''}</div>;
+}
+
+type Mount = { container: HTMLDivElement; root: Root };
+
+function renderSyncPage(): Mount {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  let root!: Root;
+  act(() => {
+    root = createRoot(container);
+    root.render(
+      <MemoryRouter>
+        <AppProvider initialSetup={{ ...DEFAULT_SETUP, setupComplete: true, setupVersion: 1 }}>
+          <SyncPage />
+          <ToastProbe />
+        </AppProvider>
+      </MemoryRouter>,
+    );
+  });
+  return { container, root };
+}
+
+function toast(mount: Mount): string {
+  return mount.container.querySelector('[data-testid="toast-probe"]')?.textContent ?? '';
+}
+
+describe('DOKUMENTE-01 R1-WEISS-START — Synchronisationsseite', () => {
+  let mounted: Mount | undefined;
+
+  beforeEach(() => {
+    localStorage.clear();
+    resetStorageScopeForTests();
+    resetSyncCoordinatorForTests();
+    resetSyncOutboxForTests([]);
+    resetSyncClientForTests({ ...createSyncClient(), serverWorkspaceId: WS, workspaceId: WS, syncPolicy: 'cloud_ready' });
+    vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    act(() => {
+      mounted?.root.unmount();
+    });
+    mounted?.container.remove();
+    mounted = undefined;
+    vi.restoreAllMocks();
+    resetStorageScopeForTests();
+  });
+
+  it('U1 nicht lesbare Startsitzung: Hinweis „angehalten“, kein Erfolg, keine Anfrage', async () => {
+    setActiveStorageScope({ type: 'workspace', workspaceId: WS, account: { userId: INHABER, access: 'full' } });
+    applyStateToStores(zustand({ documents: [dokument('doc-halt-1')], syncOutbox: [auftrag('out-halt-1', 'doc-halt-1')] }));
+    const anfragen: string[] = [];
+    const client = createClient('http://127.0.0.1:54321', 'synthetischer-anon-schluessel', {
+      realtime: { transport: OhneVerbindung as never },
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: {
+        fetch: (async (input: RequestInfo | URL) => {
+          anfragen.push(new URL(String(input)).pathname);
+          return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }) as typeof fetch,
+      },
+    });
+    client.auth.getSession = (async () => {
+      throw new Error('synthetisch: Sitzung beim Laufstart nicht lesbar');
+    }) as typeof client.auth.getSession;
+    getSyncCoordinator().setAdapter(new SupabaseSyncAdapter(client));
+    const lauf = vi.spyOn(syncUiService, 'runSyncFromUi');
+
+    mounted = renderSyncPage();
+    const knopf = mounted.container.querySelector('[data-testid="sync-run-button"]') as HTMLButtonElement;
+    await act(async () => {
+      knopf.click();
+      await lauf.mock.results[0]?.value;
+    });
+
+    expect(lauf).toHaveBeenCalledTimes(1);
+    expect(anfragen).toEqual([]);
+    expect(toast(mounted)).toContain(HALT);
+    expect(toast(mounted)).not.toContain('Synchronisation abgeschlossen.');
+    expect(toast(mounted)).not.toContain('Synchronisation fehlgeschlagen.');
+  });
+
+  it('U2 „Erneut versuchen“ mit Haltbericht: Hinweis „angehalten“, nicht „abgeschlossen“', async () => {
+    resetSyncOutboxForTests([auftrag('out-halt-fehler', 'doc-halt-fehler', 'error')]);
+    const haltBericht: SyncCoordinatorReport = {
+      startedAt: JETZT,
+      finishedAt: JETZT,
+      durationMs: 1,
+      pushCount: 1,
+      pullCount: 0,
+      mergedEntityCount: 0,
+      conflictCount: 0,
+      errorCount: 1,
+      completedOutboxCount: 0,
+      retryAttempts: 1,
+      uploadCount: 0,
+      downloadCount: 0,
+      syncedEntities: [],
+      conflicts: [],
+      errors: [{ outboxId: SYNC_IDENTITY_CHANGED_REPORT_ID, message: 'Synchronisation angehalten.' }],
+    };
+    const wiederholung = vi.spyOn(syncUiService, 'retrySyncFromUi').mockResolvedValue(haltBericht);
+
+    mounted = renderSyncPage();
+    const knopf = mounted.container.querySelector('[data-testid="sync-retry-button"]') as HTMLButtonElement;
+    await act(async () => {
+      knopf.click();
+      await Promise.resolve();
+    });
+
+    expect(wiederholung).toHaveBeenCalledTimes(1);
+    expect(toast(mounted)).toContain(HALT);
+    expect(toast(mounted)).not.toContain('Erneuter Versuch abgeschlossen.');
+  });
+});

@@ -1,0 +1,203 @@
+-- DOKUMENTE-01 / F9 — der Papierregister-Eintrag gehört seinem Dokument.
+--
+-- Befund (Mitgliedsgerät, „Keine Schreibberechtigung"):
+--
+--   Je Dokument gibt es genau einen Eintrag mit fester Kennung
+--   (`paper-reg-<Dokument-ID>`). Sichtbarkeit und Schreibrecht eines Mitglieds
+--   hängen aber am Anleger der Zeile (`created_by`), nicht am Dokument
+--   (20261030120000, 20261104120000). Legt der Inhaber den Eintrag zum Dokument
+--   eines Mitglieds zuerst an — er hakt es ab, bevor das Mitgliedsgerät seinen
+--   Eintrag gesendet hat, oder sein Gerät lädt Altbestand hoch —, sieht das
+--   Mitglied die Zeile nicht. Sein Gerät hält sie für fehlend, sendet seinen
+--   Eintrag mit Version 0, und der Server weist ihn endgültig ab. Das Mitglied
+--   sieht „nicht abgeheftet" und einen Sync-Fehler, für immer.
+--
+--   Der Kopfkommentar von 20261030120000 verspricht dagegen: „Rechte und
+--   Sichtbarkeit folgen dem Dokument". `created_by` war dafür nur der
+--   Stellvertreter — und versagt genau dann, wenn Eintrag und Dokument
+--   verschiedene Anleger haben.
+--
+-- Lösung, ohne den Dispatcher oder den Abzug anzufassen:
+--
+--   1  Jeder Zuordnungswechsel steht in der Prüfspur
+--      `workspace_paper_register_owner_changes` (vorher, nachher, Grund,
+--      Zeitpunkt). Damit bleibt sichtbar, wer einen Eintrag angelegt hat, und
+--      eine Rücknahme kann die früheren Anleger wiederherstellen.
+--   2  Ein Eintrag zu einem Archivdokument trägt als `created_by` den Anleger
+--      dieses Dokuments; wer ihn geschrieben hat, steht wie bisher in
+--      `updated_by`. Policy, Abzug und Schreibrecht (alle über `created_by`)
+--      folgen damit dem Dokument: Das Mitglied sieht und ändert den Eintrag zu
+--      seinem Dokument, auch wenn der Inhaber ihn angelegt hat. Das gilt in
+--      beiden Ankunftsreihenfolgen (DOK01-W2):
+--        a  das Dokument ist schon in der Cloud: beim Anlegen des Eintrags;
+--        b  der Eintrag kam zuerst (bis dahin gehört er dem Schreibenden): sobald
+--           das Archivdokument in der Cloud angelegt wird.
+--      Inhalt, Version, Grabstein und `updated_by` bleiben; nur die Zuordnung
+--      wechselt.
+--   3  Altbestand: bestehende Einträge bekommen einmalig denselben Anleger,
+--      ebenfalls mit Prüfspur.
+--
+-- Freigabe folgt allein dem Server-Anleger des Dokuments — in beiden
+-- Reihenfolgen gleich. Ein fremdes Dokument wird dadurch nicht sichtbar: Das
+-- Mitglied bekommt nur Einträge zu Dokumenten, die es selbst angelegt hat.
+-- Unverändert: Grabsteine setzen nur Inhaber und Admin; geschützte Belege
+-- (Mitarbeiterzahlungen) sieht und schreibt kein Mitglied; ein Eintrag wechselt
+-- nie sein Dokument.
+--
+-- Nur lokal vorbereitet. Die Anwendung auf die Cloud ist ein eigener,
+-- ausdrücklich freizugebender Schritt.
+
+/* ------------------------------------------------------------------------ */
+/* 1 — Prüfspur der Zuordnungswechsel                                        */
+/* ------------------------------------------------------------------------ */
+create table if not exists public.workspace_paper_register_owner_changes (
+  id bigint generated always as identity primary key,
+  workspace_id uuid not null,
+  client_entry_id text not null,
+  client_document_id text,
+  previous_created_by uuid,
+  new_created_by uuid not null,
+  reason text not null check (reason in ('anlage', 'dokument_nachgereicht', 'altbestand')),
+  changed_at timestamptz not null default now()
+);
+
+create index if not exists workspace_paper_register_owner_changes_entry_idx
+  on public.workspace_paper_register_owner_changes (workspace_id, client_entry_id, id);
+
+-- Nur intern: kein Client liest oder schreibt die Prüfspur.
+alter table public.workspace_paper_register_owner_changes enable row level security;
+revoke all on table public.workspace_paper_register_owner_changes from public, anon, authenticated, service_role;
+revoke all on sequence public.workspace_paper_register_owner_changes_id_seq from public, anon, authenticated, service_role;
+
+/* ------------------------------------------------------------------------ */
+/* 2a — neuer Eintrag: Anleger des Dokuments                                 */
+/* ------------------------------------------------------------------------ */
+create or replace function public.workspace_paper_register_entries_document_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_anleger uuid;
+begin
+  if new.client_document_id is null then
+    return new;
+  end if;
+  select d.created_by into v_anleger
+  from public.workspace_documents d
+  where d.workspace_id = new.workspace_id
+    and d.client_document_id = new.client_document_id
+    and d.document_kind = 'archived_document';
+  if v_anleger is not null and new.created_by is distinct from v_anleger then
+    insert into public.workspace_paper_register_owner_changes (
+      workspace_id, client_entry_id, client_document_id, previous_created_by, new_created_by, reason
+    ) values (
+      new.workspace_id, new.client_entry_id, new.client_document_id, new.created_by, v_anleger, 'anlage'
+    );
+    new.created_by := v_anleger;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.workspace_paper_register_entries_document_owner()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists workspace_paper_register_entries_document_owner on public.workspace_paper_register_entries;
+create trigger workspace_paper_register_entries_document_owner
+  before insert on public.workspace_paper_register_entries
+  for each row execute function public.workspace_paper_register_entries_document_owner();
+
+/* ------------------------------------------------------------------------ */
+/* 2b — Dokument kommt nach dem Eintrag (DOK01-W2)                           */
+/* ------------------------------------------------------------------------ */
+create or replace function public.workspace_documents_paper_register_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_eintrag record;
+begin
+  if new.created_by is null then
+    return null;
+  end if;
+  for v_eintrag in
+    select e.id, e.client_entry_id, e.created_by
+    from public.workspace_paper_register_entries e
+    where e.workspace_id = new.workspace_id
+      and e.client_document_id = new.client_document_id
+      and e.created_by is distinct from new.created_by
+    for update
+  loop
+    insert into public.workspace_paper_register_owner_changes (
+      workspace_id, client_entry_id, client_document_id, previous_created_by, new_created_by, reason
+    ) values (
+      new.workspace_id, v_eintrag.client_entry_id, new.client_document_id, v_eintrag.created_by,
+      new.created_by, 'dokument_nachgereicht'
+    );
+    -- Nur die Zuordnung: Inhalt, Version, Grabstein und `updated_by` bleiben.
+    update public.workspace_paper_register_entries
+    set created_by = new.created_by
+    where id = v_eintrag.id;
+  end loop;
+  return null;
+end;
+$$;
+
+revoke all on function public.workspace_documents_paper_register_owner()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists workspace_documents_paper_register_owner on public.workspace_documents;
+create trigger workspace_documents_paper_register_owner
+  after insert on public.workspace_documents
+  for each row
+  when (new.document_kind = 'archived_document')
+  execute function public.workspace_documents_paper_register_owner();
+
+/* ------------------------------------------------------------------------ */
+/* 3 — Altbestand                                                            */
+/* ------------------------------------------------------------------------ */
+create or replace function public.workspace_paper_register_entries_assign_document_owner()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_eintrag record;
+  v_anzahl integer := 0;
+begin
+  for v_eintrag in
+    select e.id, e.workspace_id, e.client_entry_id, e.client_document_id,
+           e.created_by as vorher, d.created_by as nachher
+    from public.workspace_paper_register_entries e
+    join public.workspace_documents d
+      on d.workspace_id = e.workspace_id
+     and d.client_document_id = e.client_document_id
+     and d.document_kind = 'archived_document'
+    where d.created_by is not null
+      and e.created_by is distinct from d.created_by
+    for update of e
+  loop
+    insert into public.workspace_paper_register_owner_changes (
+      workspace_id, client_entry_id, client_document_id, previous_created_by, new_created_by, reason
+    ) values (
+      v_eintrag.workspace_id, v_eintrag.client_entry_id, v_eintrag.client_document_id,
+      v_eintrag.vorher, v_eintrag.nachher, 'altbestand'
+    );
+    update public.workspace_paper_register_entries
+    set created_by = v_eintrag.nachher
+    where id = v_eintrag.id;
+    v_anzahl := v_anzahl + 1;
+  end loop;
+  return v_anzahl;
+end;
+$$;
+
+revoke all on function public.workspace_paper_register_entries_assign_document_owner()
+  from public, anon, authenticated, service_role;
+
+select public.workspace_paper_register_entries_assign_document_owner();

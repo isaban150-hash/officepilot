@@ -1,0 +1,59 @@
+BEGIN
+INSERT 0 3
+INSERT 0 2
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  OK  A1 -- Anlage mit Version 0 ergibt row_version 1
+NOTICE:  OK  A2 -- inhaltsgleiche Wiederholung aendert nichts (replayed)
+NOTICE:  OK  A3 -- abweichender Inhalt mit Version 0 ist ein Konflikt
+DO
+NOTICE:  OK  B1 -- abgeheftet mit Version 1 ergibt row_version 2
+DO
+NOTICE:  OK  B2 -- veraltete Version ist ein Konflikt, kein stilles Ueberschreiben
+NOTICE:  OK  C1-C7 -- fehlende ID, Bezug, Haken, Ordner, Groesse und Dokumentwechsel werden abgewiesen
+DO
+NOTICE:  OK  D1 -- Grabstein: Zeile bleibt, Bezug und Inhalt bleiben, deleted_at gesetzt
+NOTICE:  OK  D2 -- der Abzug liefert den Grabstein mit
+NOTICE:  OK  D3 -- wiederholter Grabstein ist ein Replay
+NOTICE:  OK  D4/D5 -- kein Wiederbeleben, weder mit passender Version noch mit 0
+NOTICE:  OK  D6 -- Grabstein ohne Vorgaenger wird als Grabstein angelegt
+DO
+NOTICE:  OK  E1/E2 -- fremder Betrieb kann weder schreiben noch abziehen
+NOTICE:  OK  E3/E4 -- gleiche Kennung in zwei Betrieben: zwei Zeilen, kein Uebersprechen
+DO
+NOTICE:  OK  F1 -- Mitglied legt an und hakt eigene Eintraege ab
+NOTICE:  OK  F2-F4 -- fremde Zeile weder aendern noch wiederholen; Grabstein nur Inhaber/Admin
+NOTICE:  OK  F5 -- Mitglied zieht nur die selbst angelegten Zeilen ab
+NOTICE:  OK  F6 -- Inhaber sieht alles und darf fremde Eintraege loeschen
+DO
+NOTICE:  OK  F7 -- ohne Anmeldung kein Zugriff
+ 
+
+SET
+NOTICE:  OK  G1/G2 -- direkt: kein fremdes Lesen, kein Schreiben an der RPC vorbei
+DO
+RESET
+ 
+
+SET
+DO
+RESET
+NOTICE:  OK  G3 -- Mitglied liest direkt nur eigene Zeilen
+ 
+
+SET
+DO
+NOTICE:  OK  G4 -- Inhaber liest direkt alle Zeilen des eigenen Betriebs
+RESET
+DO
+NOTICE:  OK  H1-H3 -- unbekannter Typ, Notiz-Zweig und alle Abzugsschluessel unveraendert
+NOTICE:  --------------------------------------------------
+NOTICE:  CLOUD-SYNC S1: alle Zusicherungen erfuellt.
+NOTICE:  --------------------------------------------------
+DO
+ROLLBACK

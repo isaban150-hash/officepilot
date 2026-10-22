@@ -1,0 +1,17 @@
+
+ RUN  v3.2.6 C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot
+
+ ✓ |default| src/services/storage/kontoTrennungDokumente01.test.ts (14 tests) 240ms
+ ✓ |default| src/abmeldeMenueN2Dokumente01.test.ts (3 tests) 25ms
+ ✓ |default| src/kontoTrennungGateDokumente01.test.tsx (6 tests) 2886ms
+   ✓ DOKUMENTE-01 N1 — Kontotrennung im Gate > G1 Inhaber → Abmelden → Mitglied → Abmelden → Inhaber: nichts Fremdes, Ungesendetes bleibt  1320ms
+   ✓ DOKUMENTE-01 N1 — Kontotrennung im Gate > G2 direkter Kontowechsel ohne Abmelden: Firmensitzung und Bindung des Inhabers sind verworfen  365ms
+   ✓ DOKUMENTE-01 N1 — Kontotrennung im Gate > G3 Rollenentzug Admin → Mitglied: Admin-Bestand ruht unangetastet; mit der Rolle kehrt er zurück  593ms
+
+ Test Files  3 passed (3)
+      Tests  23 passed (23)
+   Start at  16:39:08
+   Duration  45.50s (transform 24.77s, setup 39.34s, collect 22.73s, tests 3.15s, environment 4.41s, prepare 1.12s)
+
+JSON report written to C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/pruefunterlagen/dokumente-01/belege/nacharbeit-n/client/neu-n.vitest.json
+

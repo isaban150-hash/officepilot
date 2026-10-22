@@ -129,8 +129,17 @@ $$;
 do $$
 declare r public.workspace_documents;
 begin
+  -- DOKUMENTE-01: Seit 20261125 weist der Aufbewahrungswaechter auch dieses direkte UPDATE ab.
+  -- Altbestand entsteht deshalb wie vor der Migration: ohne diesen Waechter, nur in dieser
+  -- zurueckgerollten Transaktion.
+  if exists (select 1 from pg_trigger where tgname = 'workspace_documents_retention_guard') then
+    alter table public.workspace_documents disable trigger workspace_documents_retention_guard;
+  end if;
   update public.workspace_documents set deleted_at = now(), row_version = row_version + 1
   where workspace_id = '00000000-0000-0000-0000-0000000baf01' and client_document_id = 'doc-prep';
+  if exists (select 1 from pg_trigger where tgname = 'workspace_documents_retention_guard') then
+    alter table public.workspace_documents enable trigger workspace_documents_retention_guard;
+  end if;
   select * into r from public.tombstone_workspace_document('00000000-0000-0000-0000-0000000baf01', 'doc-prep');
   if r.deleted_at is null or r.row_version <> 2 then raise exception '4 -- Altbestand-Grabstein nicht idempotent'; end if;
   raise notice 'OK         4 bereits geloeschter Beleg bleibt idempotent';

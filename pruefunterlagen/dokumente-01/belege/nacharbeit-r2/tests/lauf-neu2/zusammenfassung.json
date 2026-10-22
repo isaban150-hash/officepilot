@@ -1,0 +1,12 @@
+[
+  {
+    "portion": "01",
+    "dateien": 4,
+    "tests": 44,
+    "gruen": 44,
+    "rot": 0,
+    "sekunden": 36,
+    "exit": 0,
+    "rote": []
+  }
+]

@@ -1,0 +1,66 @@
+Dateien 82/85 ok, Tests 1179 ok / 64 rot / 0 übersprungen; Schutzartefakte unverändert
+  ROT src/documentAssistFillFreeTextBridge01.test.tsx > DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge eindeutige Rechnungsnummer wird proposed und bleibt unbestätigt
+  ROT src/documentAssistFillFreeTextBridge01.test.tsx > DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge Betrag, Frist, Datum und Absender werden korrekt zugeordnet
+  ROT src/documentAssistFillFreeTextBridge01.test.tsx > DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge bestehender bestätigter Wert wird nicht überschrieben
+  ROT src/documentAssistFillFreeTextBridge01.test.tsx > DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge normale Fragen verändern keine Felder und nutzen weiter den AI-Pfad
+  ROT src/documentAssistFillFreeTextBridge01.test.tsx > DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge mehrdeutige Eingabe wird nicht übernommen
+  ROT src/documentAssistFillFreeTextBridge01.test.tsx > DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge eindeutige Feldangabe verursacht keinen AI-Aufruf
+  ROT src/documentAssistFillFreeTextBridge01.test.tsx > DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge Remount verwirft den Vorschlag
+  ROT src/documentAssistFillFreeTextBridge01.test.tsx > DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge Bridge-Vorschlag ohne Bestätigen löst keine Persistenz aus
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Vorbereitung und Download U11: die Vorbereitung schreibt nichts und verwendet genau den gewählten Schlüssel
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Vorbereitung und Download U12: kein automatischer Download und Dateiauswahl erst danach
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Vorbereitung und Download U13: zwei Download-Klicks im selben Tick lösen nur einen Vorgang aus
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Vorbereitung und Download U14: zwei Vorbereitungs-Klicks im selben Tick erzeugen nur eine Sitzung
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Wiederauswahl U15: ohne Datei bleibt die Quarantäne gesperrt
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Wiederauswahl U16: gleicher Dateiname mit anderen Bytes wird abgelehnt
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Wiederauswahl U17: eine andere synthetische Notfall-ZIP wird abgelehnt und niemals importiert
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Wiederauswahl U18: exakt die heruntergeladene Zielsicherung wird angenommen
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Wiederauswahl U19: zwei change-Ereignisse lösen nur eine Prüfung aus
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Generationsschutz U20: ein storage-Ereignis entwertet die vorbereitete Sitzung
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Generationsschutz U21: ein Zielwechsel entwertet die vorbereitete Sitzung
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Generationsschutz U22: nach einem Remount existiert keine alte Sitzung
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Quarantäne U23: vor dem Startklick null Quarantäneschreibzugriffe
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Quarantäne U24: die Quarantäne läuft nur nach eigenem Startklick und nur einmal
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Quarantäne U25: der Bericht zeigt alle gebundenen Prüfdaten
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Quarantäne U26: ein staging-Marker desselben Ziels blockiert und bietet keine Bereinigung an
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/Quarantäne U27: ein complete-Marker löst weder Import noch App-Start aus
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/storage-Ereignis während der Quarantäne U28: eine erkannte Zieländerung führt zum blockierten Abschlussbericht
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3/storage-Ereignis während der Quarantäne U29: eine echte Zieländerung während der Quarantäne verhindert complete
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/A — kein Wiederauswahlweg vor dem Download V1: ein change-Ereignis vor dem Download löst keine Prüfung aus
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/B — verspätete Promise-Ergebnisse V2: ein storage-Ereignis während prepare verwirft dessen spätes ok
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/B — verspätete Promise-Ergebnisse V3: ein storage-Ereignis während verify verwirft dessen spätes ok
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/B — verspätete Promise-Ergebnisse V4: ein Zielwechsel während prepare verwirft dessen spätes Ergebnis
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/B — verspätete Promise-Ergebnisse V5: ein Unmount während verify verwirft dessen spätes Ergebnis
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/C — tatsächliche Dienstaufrufzahlen V6: doppelter Prepare-Klick ruft den Dienst genau einmal
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/C — tatsächliche Dienstaufrufzahlen V7: zwei change-Ereignisse rufen die Prüfung genau einmal
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/C — tatsächliche Dienstaufrufzahlen V8: doppelter Quarantäneklick ruft den Kern genau einmal
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/D — Auswahl während laufender Quarantäne V9: ein Zielwechsel während der Quarantäne bleibt wirkungslos
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/E — complete ist ein Endzustand V10: nach complete gibt es keine Auswahl und keinen neuen Ablauf
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/F — storage-Ereignis nach complete V11: der Bericht bleibt vollständig und erhält eine Warnung
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/G — storage-Ereignis vor dem Quarantänestart V12: der Bereich muss danach erneut ausdrücklich gewählt werden
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/H — Downloadfehler V13: ein fehlgeschlagener Download bleibt wiederholbar
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/I — gebundene Resultatschlüssel V14: der Bericht verwendet markerKey, stateKey und Blob-Bereich der Rückgabe
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/J — Markeränderung eines anderen Tabs V15: ein neuer staging-Marker blockiert das vorbereitete Ziel ohne Bereinigung
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3C/A — Dateiereignis nach Verifikation und nach complete W1: nach erfolgreicher Wiederauswahl gibt es keinen Auswahlknopf und keine zweite Prüfung
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3C/A — Dateiereignis nach Verifikation und nach complete W2: nach complete bleibt ein Dateiereignis vollständig wirkungslos
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3C/B — Dateiereignis während der Quarantäne W3: ein Dateiereignis während quarantining verändert nichts
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3C/C — Markerereignis nach complete W4: ein fremder staging-Marker beschädigt den Abschlussbericht nicht
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3E — mobil lesbare Zielauswahl X1: der Zielknopf trägt die eigene Klasse und behält alle Bindungen
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3E — mobil lesbare Zielauswahl X2: der Knopf enthält genau sechs fachliche Zeilen
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3E — mobil lesbare Zielauswahl X3: jede Zeile trägt die richtige Beschriftung und den richtigen Wert
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3E — mobil lesbare Zielauswahl X4: keine Verkettung, keine führenden Gedankenstriche, Schlüssel nur in seiner Zeile
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3E — mobil lesbare Zielauswahl X5: technische Werte tragen die Monospace-Klasse und bleiben vollständig
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3E — mobil lesbare Zielauswahl X6: je Workspace genau ein Knopf ohne verschachtelte Bedienelemente
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3F — technische Prüfwerte mobil sicher darstellen Y1: das Vorbereitungsergebnis besteht aus beschrifteten Zeilen
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3F — technische Prüfwerte mobil sicher darstellen Y2: die vollständigen Werte bleiben unverändert im DOM
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3F — technische Prüfwerte mobil sicher darstellen Y3: gewählter Bereich und Markerliste tragen die Umbruchklasse
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3F — technische Prüfwerte mobil sicher darstellen Y4: der blockierende staging-Marker ist strukturiert
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3F — technische Prüfwerte mobil sicher darstellen Y5: der Abschlussbericht verwendet die Umbruchklasse lückenlos
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3F — technische Prüfwerte mobil sicher darstellen Y6: jeder Dateieintrag zeigt getrennte, vollständige Werte
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3F — technische Prüfwerte mobil sicher darstellen Y7: system.css erfüllt den scoped Umbruchvertrag
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3D/W5 — Markerereignis während laufender Quarantäne W5: ein fremder staging-Marker entwertet die laufende Quarantäne nicht
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/K — fremde ZIP verändert wirklich nichts V16: localStorage und Zielblobs bleiben byteidentisch
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/K — fremde ZIP verändert wirklich nichts U-Resume: nach Download und Remount kehrt der Ablauf sicher zurück
+  ROT src/localScopeEmergencyQuarantineUi03.test.tsx > 02P3B/K — fremde ZIP verändert wirklich nichts U-Resume-Changed: ein veränderter Zielbestand verwirft den Wiederaufsetzpunkt
+  ROT src/uxHome01.test.tsx > UX-HOME-01 ABSCHLUSSFIX Desktop-Schreibtisch zeigt Mobile-First Startseite
+exit=1

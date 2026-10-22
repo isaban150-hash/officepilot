@@ -250,9 +250,9 @@ function buildLegacyDocumentAiContextFromDocument(
 ): DocumentAiContext {
   const quality = collectDocumentQualityNotes(document, lang);
   const confirmedLink = Boolean(document.linkedVorgang?.vorgangId);
-  const recognizedText = document.recognizedText
-    ? sanitizeAiText(truncateText(document.recognizedText))
-    : undefined;
+  /* DOKUMENTE-01 / F7 — die KI liest den Originaltext, nicht den ganzen Archivtext. */
+  const aiText = resolveArchivedMeaningText(document, { nurEigenerText: true });
+  const recognizedText = aiText ? sanitizeAiText(truncateText(aiText)) : undefined;
   const documentNature = detectDocumentNature({
     title: document.title,
     recognizedText: document.recognizedText,
@@ -585,6 +585,37 @@ export function resolveArchivedMainDocumentText(document: CompanyDocument): stri
   return mainDocumentTextFromPages(pages, resolveMainDocumentPageScope(pages)) ?? null;
 }
 
+/**
+ * DOKUMENTE-01 / F7 — der Text, aus dem die Bedeutung eines abgelegten
+ * Dokuments gelesen wird: wie im Eingang nur der Originaltext (Eingangselement,
+ * Seitentexte oder das archivierte `_extractedText`), nie der ganze Archivtext.
+ *
+ * Im Archivtext stehen die erkannten Felder, der Originaltext ein zweites Mal
+ * (`_vertragstext`) und die Seiten als eine einzige JSON-Zeile (`_pageTexts`).
+ * Der Kern las Beträge daraus mehrfach und verband Wörter und Beträge
+ * verschiedener Zeilen, weil die Seiten-JSON-Zeile keine Zeilenumbrüche kennt
+ * („Auslagenerstattung" + „12,50 €" wurde zur Gutschrift). Ohne Originaltext
+ * bleibt es bei der Feldliste, ohne die Seiten-JSON-Zeile.
+ *
+ * `nurEigenerText`: nur das abgelegte Dokument selbst, nie der Eingangsposten.
+ * So liest der KI-Kontext; sein Rückfall ohne gültigen Arbeitsstand ist
+ * ausdrücklich der eigene Text des Dokuments (DOCUMENT-ARCHIVE-TRUTH-03A3).
+ */
+export function resolveArchivedMeaningText(
+  document: CompanyDocument,
+  options: { nurEigenerText?: boolean } = {},
+): string {
+  const sourceItem =
+    !options.nurEigenerText && document.sourceInboxItemId ? getInboxItemById(document.sourceInboxItemId) : undefined;
+  const original = readArchivedSourceText(document, sourceItem).text?.trim();
+  if (original) return original;
+  return (document.recognizedText ?? '')
+    .split('\n')
+    .filter((zeile) => !zeile.startsWith('_pageTexts: '))
+    .join('\n')
+    .trim();
+}
+
 export function resolveArchivedCreditNoteMeaningSource(
   document: CompanyDocument,
 ): { text: string; mainDocument: MeaningMainDocument } | null {
@@ -625,9 +656,9 @@ export function buildDocumentAiContextFromDocument(document: CompanyDocument): D
     deadlineDiscarded,
   });
   const confirmedLink = Boolean(document.linkedVorgang?.vorgangId);
-  const recognizedText = document.recognizedText
-    ? sanitizeAiText(truncateText(document.recognizedText))
-    : undefined;
+  /* DOKUMENTE-01 / F7 — die KI liest den Originaltext, nicht den ganzen Archivtext. */
+  const aiText = resolveArchivedMeaningText(document, { nurEigenerText: true });
+  const recognizedText = aiText ? sanitizeAiText(truncateText(aiText)) : undefined;
   const documentNature = detectDocumentNature({
     title: document.title,
     recognizedText: document.recognizedText,

@@ -1,0 +1,40 @@
+BEGIN
+INSERT 0 2
+UPDATE 2
+INSERT 0 1
+INSERT 0 2
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ als 
+-----
+ 
+(1 row)
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                    upsert_workspace_sync_entity                                                                                                                                                                                                                                                                                                                                                                                                                                     
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"deleted": false, "payload": {"id": "fd57714c-6157-494e-9c9d-e536b6dc9c7f", "deleted": false, "payload": {"id": "paper-reg-doc-weiss-spaeter", "folderId": "folder-5", "register": "B", "createdAt": "2026-10-20T08:00:00.000Z", "updatedAt": "2026-10-20T08:00:00.000Z", "documentId": "doc-weiss-spaeter", "documentTitle": "Bescheid doc-weiss-spaeter", "physicalFiled": true}, "created_at": "2026-10-20T11:41:15.16605+00:00", "created_by": "00000000-0000-0000-0000-0000000d0201", "deleted_at": null, "updated_at": "2026-10-20T11:41:15.16605+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0201", "row_version": 1, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "client_entry_id": "paper-reg-doc-weiss-spaeter", "client_document_id": "doc-weiss-spaeter"}, "entity_id": "paper-reg-doc-weiss-spaeter", "entity_type": "paper_register_entry", "row_version": 1}
+(1 row)
+
+ als 
+-----
+ 
+(1 row)
+
+                                                                                                                                                                                                                                                                                                                                                                       upsert_workspace_intake_entity                                                                                                                                                                                                                                                                                                                                                                        
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"deleted": false, "payload": {"id": "a89b7995-c6a2-487b-bf99-ef798ff260e7", "deleted": false, "payload": {"id": "doc-weiss-spaeter", "title": "WEISS synthetisches Schreiben", "classifiedKind": "brief"}, "created_at": "2026-10-20T11:41:15.16605+00:00", "created_by": "00000000-0000-0000-0000-0000000d0202", "deleted_at": null, "deleted_by": null, "updated_at": "2026-10-20T11:41:15.16605+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0202", "row_version": 1, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "document_kind": "archived_document", "linked_invoice_id": null, "linked_vorgang_id": null, "client_document_id": "doc-weiss-spaeter"}, "entity_id": "doc-weiss-spaeter", "entity_type": "archived_document", "row_version": 1}
+(1 row)
+
+ERROR:  WEISS Papierregister trotz eigenem Dokument unsichtbar -- Zusicherung verletzt
+CONTEXT:  PL/pgSQL function pg_temp_29.pruefe(text,boolean) line 4 at RAISE

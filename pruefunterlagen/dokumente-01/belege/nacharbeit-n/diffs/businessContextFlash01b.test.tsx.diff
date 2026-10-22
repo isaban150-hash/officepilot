@@ -1,0 +1,92 @@
+diff --git a/src/businessContextFlash01b.test.tsx b/src/businessContextFlash01b.test.tsx
+index de8c458..c16906b 100644
+--- a/src/businessContextFlash01b.test.tsx
++++ b/src/businessContextFlash01b.test.tsx
+@@ -195,14 +195,19 @@ describe('BUSINESS-CONTEXT-FLASH-01B — Erstlauf', () => {
+     expect(container.querySelector('[data-testid="workspace-setup-not-found"]')).toBeNull();
+     expect(container.querySelector('[data-testid="app-shell"]'), 'App nicht offen').not.toBeNull();
+     expect(getCachedSetup().setupComplete).toBe(true);
+-    expect(getActiveStorageScope()).toEqual({ type: 'workspace', workspaceId: WORKSPACE_ID });
++    // DOKUMENTE-01 N1 — der Betriebsbestand ist je Konto und Sicht getrennt.
++    expect(getActiveStorageScope()).toEqual({
++      type: 'workspace',
++      workspaceId: WORKSPACE_ID,
++      account: { userId, access: 'full' },
++    });
+   });
+ 
+   it('R12: ohne vorbekannten Workspace läuft der normale Cloud-Bootstrap', async () => {
+     await mountApp();
+ 
+     // Der Workspace entstand erst über den RPC-Weg, nicht aus einer geratenen ID.
+-    expect(workspaceKeys()).toEqual([`officepilot-state:workspace:${WORKSPACE_ID}`]);
++    expect(workspaceKeys()).toEqual([`officepilot-state:workspace:${WORKSPACE_ID}:account:${userId}:full`]);
+   });
+ });
+ 
+@@ -234,7 +239,12 @@ describe('BUSINESS-CONTEXT-FLASH-01B — Zweitlauf für denselben Nutzer', () =>
+   it('R3/R11: der Zweitlauf bleibt im Workspace-Scope', async () => {
+     await secondGateRun();
+ 
+-    expect(getActiveStorageScope()).toEqual({ type: 'workspace', workspaceId: WORKSPACE_ID });
++    // DOKUMENTE-01 N1 — derselbe Kontobestand wie im Erstlauf (Sicht inklusive).
++    expect(getActiveStorageScope()).toEqual({
++      type: 'workspace',
++      workspaceId: WORKSPACE_ID,
++      account: { userId, access: 'full' },
++    });
+   });
+ 
+   it('R10: das abgeschlossene Setup bleibt erhalten', async () => {
+@@ -250,7 +260,7 @@ describe('BUSINESS-CONTEXT-FLASH-01B — Zweitlauf für denselben Nutzer', () =>
+     const userSetup = userScopeState();
+     // Entweder gar kein User-Scope-Eintrag — oder jedenfalls kein leerer Ersatz.
+     expect(userSetup?.setupComplete ?? true, 'leerer User-Seed entstanden').toBe(true);
+-    expect(workspaceKeys()).toEqual([`officepilot-state:workspace:${WORKSPACE_ID}`]);
++    expect(workspaceKeys()).toEqual([`officepilot-state:workspace:${WORKSPACE_ID}:account:${userId}:full`]);
+   });
+ });
+ 
+@@ -265,11 +275,12 @@ describe('BUSINESS-CONTEXT-FLASH-01C — Testreset trennt sauber', () => {
+    */
+   it('R14: ohne Testreset überlebt die Bindung — das ist der produktive Remount-Schutz', async () => {
+     await mountApp();
+-    expect(getLastSuccessfulWorkspaceBootstrap()).toEqual({ userId, workspaceId: WORKSPACE_ID });
++    // DOKUMENTE-01 N1 — die Bindung trägt die Sicht, unter der das Konto freigegeben wurde.
++    expect(getLastSuccessfulWorkspaceBootstrap()).toEqual({ userId, workspaceId: WORKSPACE_ID, access: 'full' });
+     await unmountApp();
+ 
+     // Ein Remount allein löscht nichts.
+-    expect(getLastSuccessfulWorkspaceBootstrap()).toEqual({ userId, workspaceId: WORKSPACE_ID });
++    expect(getLastSuccessfulWorkspaceBootstrap()).toEqual({ userId, workspaceId: WORKSPACE_ID, access: 'full' });
+   });
+ 
+   it('R13: der gemeinsame Testreset löscht die Bindung', async () => {
+@@ -305,7 +316,11 @@ describe('BUSINESS-CONTEXT-FLASH-01B — Kontowechsel', () => {
+    */
+   it('R8: ein anderes Konto übernimmt den Workspace des vorherigen Nutzers nicht', async () => {
+     await mountApp();
+-    expect(getActiveStorageScope()).toEqual({ type: 'workspace', workspaceId: WORKSPACE_ID });
++    expect(getActiveStorageScope()).toEqual({
++      type: 'workspace',
++      workspaceId: WORKSPACE_ID,
++      account: { userId, access: 'full' },
++    });
+     const firstUserId = userId;
+     await unmountApp();
+ 
+@@ -334,10 +349,10 @@ describe('BUSINESS-CONTEXT-FLASH-01B — Kontowechsel', () => {
+     await mountApp();
+ 
+     const scope = getActiveStorageScope();
+-    expect(scope, 'Workspace des Vorgängers wurde übernommen').not.toEqual({
+-      type: 'workspace',
+-      workspaceId: WORKSPACE_ID,
+-    });
++    // DOKUMENTE-01 N1 — der Bereich trägt jetzt ein Konto; verglichen wird deshalb die Betriebskennung.
++    expect(scope.type === 'workspace' ? scope.workspaceId : null, 'Workspace des Vorgängers wurde übernommen').not.toBe(
++      WORKSPACE_ID,
++    );
+   });
+ });
+ 

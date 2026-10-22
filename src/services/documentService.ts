@@ -5,6 +5,13 @@ import { resolvePaperFilingFromInbox } from './paperFolderService';
 import { getDocumentFileRefById } from './documentFileStoreService';
 import { isGeneratedInvoiceDocumentKind } from './document/generatedInvoiceDocumentKind';
 import {
+  isRetentionDowngrade,
+  resolveDocumentRetention,
+  retentionBlocksDelete,
+  type DocumentRetention,
+  type GeneratedInvoiceRetentionState,
+} from './document/documentRetention';
+import {
   getDocumentFileRepresentationBindingStoreSnapshot,
   removeDocumentFileRepresentationBindingsForDocument,
   replaceDocumentFileRepresentationBindingStore,
@@ -504,6 +511,15 @@ export function stageDocumentUpdate(
    */
   const built = buildDocumentFromInput(merged, current.id, current.createdAt);
   const updated: CompanyDocument = current.sync ? { ...built, sync: current.sync } : built;
+  /*
+   * DOKUMENTE-01 / D-017 — während der Aufbewahrungsfrist macht keine Änderung
+   * aus einem Beleg ein „prüfen" (Kategorie oder Art). Der Server weist dasselbe
+   * ab (`workspace_documents_retention_guard`); ohne diese Spiegelung entstünde
+   * eine lokale Änderung, die nie in die Cloud gelangt.
+   */
+  if (isRetentionDowngrade(getDocumentRetention(current), getDocumentRetention(updated))) {
+    return { success: false, errorKey: DOCUMENT_RETENTION_DOWNGRADE_KEY };
+  }
   documents = [...documents.slice(0, index), updated, ...documents.slice(index + 1)];
   return { success: true, document: cloneDocument(updated) };
 }
@@ -573,6 +589,43 @@ export function isFinalizedInvoiceArchiveDocument(document: CompanyDocument): bo
 }
 
 export const DOCUMENT_DELETE_FINALIZED_INVOICE_KEY = 'document.delete.blocked.finalizedInvoice';
+
+/** DOKUMENTE-01 / D-017 — die gesetzliche Aufbewahrungsfrist läuft noch. */
+export const DOCUMENT_DELETE_RETENTION_KEY = 'document.delete.blocked.retention';
+
+/** DOKUMENTE-01 / D-017 — eine Änderung hätte die Einstufung während der Frist abgeschwächt. */
+export const DOCUMENT_RETENTION_DOWNGRADE_KEY = 'document.retention.downgradeBlocked';
+
+function resolveGeneratedInvoiceRetentionState(document: CompanyDocument): GeneratedInvoiceRetentionState | null {
+  if (!isGeneratedInvoiceDocumentKind(document)) return null;
+  if (isInvoiceCorrectionDocument(document)) return 'korrektur';
+  return isFinalizedInvoiceArchiveDocument(document) ? 'festgeschrieben' : 'offen';
+}
+
+/**
+ * DOKUMENTE-01 / D-017 — die gesetzliche Aufbewahrung dieses Dokuments.
+ *
+ * Die Fakten stammen aus dem lokalen Stand: Art, Kategorie, Rechnung, Ausgabe,
+ * Zahlung, Daten. Verbindlich prüft der Server (`workspace_document_retention`,
+ * 20261125120000); er kennt auch, was dieses Gerät nicht kennt, und zählt
+ * zusätzlich das Jahr seiner eigenen Anlage.
+ */
+export function getDocumentRetention(document: CompanyDocument, heute: Date = new Date()): DocumentRetention {
+  return resolveDocumentRetention(
+    {
+      rechnungsbeleg: resolveGeneratedInvoiceRetentionState(document),
+      classifiedKind: document.classifiedKind,
+      category: document.category,
+      ausgabenbeleg: isExpenseReceipt(document),
+      zahlungsnachweis: isPaymentProofDocument(document.id),
+      documentDate: document.documentDate,
+      issueDate: document.issueDate,
+      uploadedAt: document.uploadedAt,
+      createdAt: document.createdAt,
+    },
+    heute,
+  );
+}
 
 /** Why an archive document may not be deleted — null when it may. */
 export type DocumentDeleteBlockReason =
@@ -726,6 +779,14 @@ export function deleteDocument(id: string): DocumentMutationResult {
   // BROWSER-ACCEPTANCE-FIX 01 / A1 — Beleg einer festgeschriebenen Rechnung.
   if (isFinalizedInvoiceArchiveDocument(document)) {
     return { success: false, errorKey: DOCUMENT_DELETE_FINALIZED_INVOICE_KEY };
+  }
+  /*
+   * DOKUMENTE-01 / D-017 — während der gesetzlichen Aufbewahrungsfrist wird
+   * nicht gelöscht. Der Server weist den Grabstein auf beiden Löschwegen ab
+   * (20261125120000); hier entsteht er gar nicht erst.
+   */
+  if (retentionBlocksDelete(getDocumentRetention(document))) {
+    return { success: false, errorKey: DOCUMENT_DELETE_RETENTION_KEY };
   }
   // Capture original + binding FileRefs before bindings are removed.
   const heldFileRefIds = new Set<string>();

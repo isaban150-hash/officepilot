@@ -215,10 +215,31 @@ describe('BROWSER-ACCEPTANCE-FIX 01 / A1 — Löschschutz in der Oberfläche', (
     if (!foreign.success) throw new Error('Fremddokument nicht angelegt');
     const mount = await mountDetail(foreign.document.id);
 
-    expect(byTestId(mount, 'document-detail-delete-trigger')).not.toBeNull();
+    // Der Rechnungsschutz greift nicht über: kein Hinweis auf eine festgeschriebene Rechnung.
     expect(byTestId(mount, 'document-detail-delete-protected')).toBeNull();
-
+    /*
+     * DOKUMENTE-01 / D-017 — eine Eingangsrechnung ist aber ein Buchungsbeleg mit
+     * gesetzlicher Aufbewahrung: Statt „Löschen" steht dort die Frist.
+     */
+    expect(byTestId(mount, 'document-detail-delete-trigger')).toBeNull();
+    expect(byTestId(mount, 'document-detail-delete-retention')?.textContent).toMatch(/bis 31\.12\.20\d\d/);
     unmount(mount);
+
+    // Ein Dokument ohne feste Frist behält den Löschweg.
+    const schreiben = addDocument({
+      title: 'Schreiben Holz AG',
+      category: 'sonstiges',
+      issuer: 'Holz AG',
+      recognizedText: 'Sehr geehrte Damen und Herren',
+      issueDate: '2026-08-01',
+      classifiedKind: 'brief',
+      archived: true,
+    });
+    if (!schreiben.success) throw new Error('Schreiben nicht angelegt');
+    const zweite = await mountDetail(schreiben.document.id);
+    expect(byTestId(zweite, 'document-detail-delete-trigger')).not.toBeNull();
+    expect(byTestId(zweite, 'document-detail-delete-protected')).toBeNull();
+    unmount(zweite);
   });
 });
 

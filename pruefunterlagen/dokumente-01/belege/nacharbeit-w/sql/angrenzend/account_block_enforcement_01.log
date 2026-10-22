@@ -1,0 +1,57 @@
+BEGIN
+INSERT 0 9
+UPDATE 9
+UPDATE 4
+UPDATE 2
+UPDATE 1
+INSERT 0 2
+INSERT 0 8
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 4
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 1
+INSERT 0 2
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  OK  K1 gesperrter Admin: kein Mitglied, keine Rolle, kein Schreibrecht (auch Edge-Brücke); freigegebener Admin unverändert
+DO
+NOTICE:  OK  K2 gesperrter Admin liest nichts: Tabellen, Speicherobjekte, Speicherbrücke, Abzüge, Versandliste
+DO
+DO
+NOTICE:  OK  K3 gesperrter Admin löscht und stellt nichts wieder her; freigegebener Admin wie bisher
+DO
+NOTICE:  OK  K4 gesperrtes Mitglied: kein Eingang, keine Synchronisation; freigegebenes Mitglied wie bisher
+NOTICE:  OK  K5 Finanzaktionen gesperrt, Meldung finance_account_blocked bleibt
+DO
+DO
+NOTICE:  OK  K6 Sperre gilt kontoweit: gesperrter Admin auch in Firma B, gesperrter Inhaber im eigenen Betrieb
+NOTICE:  OK  K7 Sperre und Entsperren wirken in einer bestehenden Sitzung beim nächsten Aufruf
+DO
+DO
+NOTICE:  OK  K8 gesperrter Plattform-Admin: keine Admin-Funktion, kein Selbst-Entsperren; freigegebener wie bisher
+NOTICE:  OK  K9 gesperrte Konten erhalten und erzeugen keine Betriebsbindung; Inhaber wie bisher
+DO
+NOTICE:  OK  K10 gesperrtes Konto liest keinen Mailbox-OAuth-Zwischenstand; freigegebenes wie bisher
+DO
+DO
+NOTICE:  OK  K11 abgelaufene Lizenz ist keine Kontosperre: Lesen bleibt, Finanzaktionen abgewiesen
+NOTICE:  OK  K12 neue Hilfsfunktion intern (kein EXECUTE für anon, authenticated, service_role)
+DO
+ROLLBACK

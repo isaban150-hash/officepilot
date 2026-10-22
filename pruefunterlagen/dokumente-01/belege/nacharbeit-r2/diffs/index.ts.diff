@@ -1,0 +1,18 @@
+diff --git a/src/i18n/locales/de/index.ts b/src/i18n/locales/de/index.ts
+index 3c270a5..132053f 100644
+--- a/src/i18n/locales/de/index.ts
++++ b/src/i18n/locales/de/index.ts
+@@ -29,6 +29,7 @@ import { deEmployeePayments } from './employeePayments';
+ import { deWorkspaceRole } from './workspaceRole';
+ import { deDocumentRetention } from './documentRetention';
+ import { deSyncHeldOrders } from './syncHeldOrders';
++import { deVorgangsbindung } from './vorgangsbindung';
+ 
+ export const deModules = {
+   ...deAuth,
+@@ -64,4 +65,5 @@ export const deModules = {
+   ...deWorkspaceRole,
+   ...deDocumentRetention,
+   ...deSyncHeldOrders,
++  ...deVorgangsbindung,
+ } as const;

@@ -498,7 +498,7 @@ export function buildDocumentExplanation(
   const paperFolder = memory?.paperFolder ?? document.paperFolder;
   const paperLocation =
     paperResolution.skipPhysicalFiling
-      ? 'Kein Papierordner – Entsorgen oder manuell ablegen.'
+      ? 'Kein Papierordner vorgesehen.'
       : letter.paperStorage || formatPaperLocation(document);
 
   // CLOUD-SYNC S1 — ohne Gedächtnis Ordner und Register aus derselben Quelle, wie die Ablage-Karte.

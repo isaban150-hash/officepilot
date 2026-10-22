@@ -416,7 +416,15 @@ describe('S4-N1-C1 — eine auf Dokumentebene gelöste Zuordnung bleibt gelöst'
   it('C1-7 — der Grabstein verhält sich unverändert', () => {
     const dokument = archiviere(fallbackvertrag('inbox-n1-c1-f', V));
     linkDocumentToVorgang(dokument.id, null);
-    expect(deleteDocument(dokument.id).success).toBe(true);
+    // DOKUMENTE-01 / D-017 — ein Werkvertrag ist ein Geschäftsbrief (6 Jahre): gelöscht
+    // wird erst nach dem rechnerischen Ende der Frist.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2040-01-02T09:00:00Z'));
+    try {
+      expect(deleteDocument(dokument.id).success).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(getDocumentMemoryByDocumentId(dokument.id)).toBeUndefined();
     expect(aktuelleArten(V.id)).toEqual([]);

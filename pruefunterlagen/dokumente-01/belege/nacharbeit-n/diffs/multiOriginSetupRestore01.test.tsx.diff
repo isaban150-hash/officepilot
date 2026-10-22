@@ -1,0 +1,24 @@
+diff --git a/src/multiOriginSetupRestore01.test.tsx b/src/multiOriginSetupRestore01.test.tsx
+index 454edbe..ab536e5 100644
+--- a/src/multiOriginSetupRestore01.test.tsx
++++ b/src/multiOriginSetupRestore01.test.tsx
+@@ -268,7 +268,8 @@ describe('OFFICEPILOT-MULTI-ORIGIN-SETUP-01B2/01B3', () => {
+   it('F3: nach erfolgreichem Pull bleiben Firmenname und setupComplete erhalten', async () => {
+     await mountApp();
+ 
+-    const raw = localStorage.getItem(`officepilot-state:workspace:${WORKSPACE_ID}`);
++    // DOKUMENTE-01 N1 — der Betriebsbestand liegt je Konto und Sicht (hier: Inhaber).
++    const raw = localStorage.getItem(`officepilot-state:workspace:${WORKSPACE_ID}:account:${userId}:full`);
+     expect(raw, 'Workspace-Zustand fehlt').not.toBeNull();
+     const stored = JSON.parse(raw!) as { setup?: { companyName?: string; setupComplete?: boolean } };
+     expect(stored.setup?.companyName).toBe(COMPANY_NAME);
+@@ -382,7 +383,8 @@ describe('OFFICEPILOT-MULTI-ORIGIN-SETUP-01B2/01B3', () => {
+     const workspaceKeys = Object.keys(localStorage).filter((key) =>
+       key.startsWith('officepilot-state:workspace:'),
+     );
+-    expect(workspaceKeys).toEqual([`officepilot-state:workspace:${WORKSPACE_ID}`]);
++    // DOKUMENTE-01 N1 — genau ein Betriebsbestand, der des angemeldeten Kontos.
++    expect(workspaceKeys).toEqual([`officepilot-state:workspace:${WORKSPACE_ID}:account:${userId}:full`]);
+   });
+ 
+   it('F10: ein technischer Fehler löscht keine lokalen Daten', async () => {

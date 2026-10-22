@@ -187,8 +187,9 @@ export function DocumentMeaningPanel({
         <section className="document-meaning__section">
           <h3 className="document-meaning__label">{translate('documentMeaning.complaint')}</h3>
           <ul className="document-meaning__list" data-testid="document-meaning-complaint">
-            {buildComplaintMeaningLines(view.complaint, translate).map((zeile) => (
-              <li key={zeile}>{zeile}</li>
+            {buildComplaintMeaningLines(view.complaint, translate).map((zeile, index) => (
+              /* DOKUMENTE-01 / F7 — gleicher Text zweimal ist kein doppelter Schlüssel. */
+              <li key={`${zeile}-${index}`}>{zeile}</li>
             ))}
           </ul>
         </section>
@@ -208,8 +209,8 @@ export function DocumentMeaningPanel({
         <section className="document-meaning__section">
           <h3 className="document-meaning__label">{translate('documentMeaning.obligations')}</h3>
           <ul className="document-meaning__list" data-testid="document-meaning-obligations">
-            {view.obligations.map((pflicht) => (
-              <li key={pflicht.text} className="document-meaning__item">
+            {view.obligations.map((pflicht, index) => (
+              <li key={`${pflicht.text}-${index}`} className="document-meaning__item">
                 {pflicht.text}
                 {pflicht.byWhen ? (
                   <span className="document-meaning__item-due">
@@ -227,9 +228,9 @@ export function DocumentMeaningPanel({
         <section className="document-meaning__section">
           <h3 className="document-meaning__label">{translate('documentMeaning.deadlines')}</h3>
           <ul className="document-meaning__list" data-testid="document-meaning-deadlines">
-            {view.deadlines.map((frist) => (
+            {view.deadlines.map((frist, index) => (
               <li
-                key={frist.text}
+                key={`${frist.text}-${index}`}
                 className={`document-meaning__item document-meaning__item--${frist.isAction ? 'action' : 'info'}`}
               >
                 {frist.text}
@@ -248,8 +249,8 @@ export function DocumentMeaningPanel({
         <section className="document-meaning__section">
           <h3 className="document-meaning__label">{translate('documentMeaning.amounts')}</h3>
           <ul className="document-meaning__list" data-testid="document-meaning-amounts">
-            {view.amounts.map((betrag) => (
-              <li key={`${betrag.amount}-${betrag.explanation}`} className="document-meaning__item">
+            {view.amounts.map((betrag, index) => (
+              <li key={`${betrag.amount}-${betrag.explanation}-${index}`} className="document-meaning__item">
                 <span className="document-meaning__amount">{betrag.amount}</span>
                 <span className="document-meaning__candidate-reason">{betrag.explanation}</span>
               </li>

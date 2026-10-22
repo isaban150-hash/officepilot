@@ -668,7 +668,13 @@ const BETRAGS_REGELN: BetragsRegel[] = [
   { muster: /(gutschrift|erstattung|rückvergütung|rueckverguetung|verrechnet)/i, role: 'credit_amount', claim: false },
   { muster: /(mahngebühr|mahngebuehr|gebühr|gebuehr|säumnis|saeumnis|verzugs)/i, role: 'fee', claim: true },
   { muster: /(insgesamt|gesamtforderung|gesamtbetrag|zusammen)/i, role: 'total_claim', claim: true },
-  { muster: /(umsatzsteuer|mehrwertsteuer|ust\.?|mwst)/i, role: 'tax_amount', claim: false },
+  /*
+   * DOKUMENTE-01 / F8 — die Kürzel nur als eigenes Wort: „ust" steckt in
+   * „August", „Austausch" und „Musterstraße" und machte daneben stehende Beträge
+   * zur Steuer. Die ausgeschriebenen Begriffe gelten auch in Zusammensetzungen
+   * („Umsatzsteuerbetrag").
+   */
+  { muster: /(umsatzsteuer|mehrwertsteuer|\bust\b\.?|\bmwst\b\.?)/i, role: 'tax_amount', claim: false },
   { muster: /(nettobetrag|netto)/i, role: 'net_amount', claim: false },
   { muster: /(rechnungsbetrag|bruttobetrag|endbetrag|rechnungssumme|zahlbetrag)/i, role: 'invoice_total', claim: true },
   { muster: /(offener betrag|offenstehend|rückstand|rueckstand|noch offen)/i, role: 'outstanding_amount', claim: true },

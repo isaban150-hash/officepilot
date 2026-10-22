@@ -1,0 +1,46 @@
+BEGIN
+INSERT 0 3
+INSERT 0 2
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  OK  A1 -- Anlage: Scope, Kategorie, Aktiv-Kennzeichen und Ersteller stehen in der Zeile
+NOTICE:  OK  A2 -- inhaltsgleiche Wiederholung aendert nichts (replayed)
+DO
+NOTICE:  OK  A3 -- abweichender Inhalt mit Version 0 ist ein Konflikt
+NOTICE:  OK  B1/B2 -- Aendern und Deaktivieren mit bestaetigter Version
+DO
+NOTICE:  OK  B3 -- veraltete Version ist ein Konflikt, kein stilles Ueberschreiben
+DO
+NOTICE:  OK  C1-C7 -- fehlende Kennung, Scope, Schluessel, Wert, Anzeigetext, Aktiv-Kennzeichen und Groesse werden abgewiesen
+NOTICE:  OK  D1-D6 -- Grabstein bleibt stehen, reist mit, Replay erkannt, kein Wiederbeleben
+DO
+NOTICE:  OK  E1-E4 -- fremder Betrieb kann weder schreiben noch abziehen; gleiche Kennung bleibt getrennt
+DO
+NOTICE:  OK  F1-F3 -- Mitglied sieht, pflegt und legt Betriebswissen an (wie Vorgangsnotizen)
+NOTICE:  OK  F4 -- ohne Anmeldung kein Zugriff
+DO
+ 
+
+SET
+DO
+NOTICE:  OK  G1/G2 -- direkt: kein fremdes Lesen, kein Schreiben an der RPC vorbei
+RESET
+ 
+
+SET
+NOTICE:  OK  G3 -- Mitglied liest direkt das Wissen des eigenen Betriebs
+DO
+RESET
+DO
+NOTICE:  OK  H1-H4 -- unbekannter Typ, S1, S2 und alle Abzugsschluessel unveraendert
+NOTICE:  --------------------------------------------------
+NOTICE:  CLOUD-SYNC S3: alle Zusicherungen erfuellt.
+NOTICE:  --------------------------------------------------
+DO
+DO
+ROLLBACK

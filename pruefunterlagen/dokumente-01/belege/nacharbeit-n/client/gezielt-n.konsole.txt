@@ -1,0 +1,3 @@
+Dateien 63/64 ok, Tests 966 ok / 1 rot / 0 übersprungen; Schutzartefakte unverändert
+  ROT src/uxHome01.test.tsx > UX-HOME-01 ABSCHLUSSFIX Desktop-Schreibtisch zeigt Mobile-First Startseite
+exit=1

@@ -24,4 +24,6 @@ export interface DocumentReplyDraftHandoffPayload {
 
 export type DocumentReplyDraftHandoffLocationState = {
   readonly [DOCUMENT_REPLY_DRAFT_HANDOFF_STATE_KEY]?: DocumentReplyDraftHandoffPayload;
+  /** DOKUMENTE-01 N1 — Speicherbereich, in dem die Übergabe entstand (`NAVIGATION_STATE_SCOPE_KEY`). */
+  readonly officetaktStorageScope?: string;
 };

@@ -1,0 +1,3 @@
+src/services/sync/sendekontoR1Dokumente01.test.ts
+src/services/sync/altwarteschlangeR2Dokumente01.test.ts
+src/pages/syncHeldOrdersR2Dokumente01.test.tsx

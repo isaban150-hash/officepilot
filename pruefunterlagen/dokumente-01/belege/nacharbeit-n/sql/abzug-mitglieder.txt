@@ -1,0 +1,8 @@
+Pager usage is off.
+  rolle   | anzahl |           rollen            | eigenes_enthalten 
+----------+--------+-----------------------------+-------------------
+ inhaber  |      2 | member/active, owner/active | t
+ mitglied |      2 | member/active, owner/active | t
+(2 rows)
+
+ROLLBACK

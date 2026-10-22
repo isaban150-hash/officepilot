@@ -1,0 +1,299 @@
+{
+  "start": "2026-10-20T14:12:27.441Z",
+  "vorher": {
+    "exit": 0,
+    "gesamt": 23,
+    "rot": []
+  },
+  "mutationen": [
+    {
+      "id": "M1 Zustand ohne Kontotrennung (gemeinsamer Betriebsschlüssel wie vor N1)",
+      "datei": "src/services/storage/storageScopeService.ts",
+      "erkannt": true,
+      "gesamt": 19,
+      "rot": [
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G1 Inhaber → Abmelden → Mitglied → Abmelden → Inhaber: nichts Fremdes, Ungesendetes bleibt",
+          "grund": "AssertionError: fremdes Dokument im Archiv: expected <li class=\"business-list__row\" …(1)>…(1)</li> to be null"
+        },
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G2 direkter Kontowechsel ohne Abmelden: Firmensitzung und Bindung des Inhabers sind verworfen",
+          "grund": "AssertionError: expected <li class=\"business-list__row\" …(1)>…(1)</li> to be null"
+        },
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G3 Rollenentzug Admin → Mitglied: Admin-Bestand ruht unangetastet; mit der Rolle kehrt er zurück",
+          "grund": "AssertionError: Admin-Bestand nach Rollenentzug sichtbar: expected <li class=\"business-list__row\" …(1)>…(1)</li> to be null"
+        },
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G4 Abzug meldet die Mitgliedschaft als entfernt: kein Betriebsbestand, nichts Fremdes, kein Versand",
+          "grund": "AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string"
+        },
+        {
+          "test": "K1 — Schlüssel je Konto und Sicht K1a Zustand und Dateien: Kontoschlüssel, geerbtes aktives Konto, ausdrücklicher Altbestand",
+          "grund": "AssertionError: expected 'officepilot-state:workspace:ws-dok01-…' to be 'officepilot-state:workspace:ws-dok01-…' // Object.is equality"
+        },
+        {
+          "test": "K2 — Kontowechsel im selben Browser K2a Inhaber → Mitglied → Inhaber: nichts Fremdes sichtbar oder versandbereit, Ungesendetes bleibt",
+          "grund": "AssertionError: fremde Dokumente sichtbar: expected [ 'doc-inhaber-rechnung' ] to deeply equal []"
+        },
+        {
+          "test": "K2 — Kontowechsel im selben Browser K2b Dateien und Vorschauen: Bytes und Vorschau-Bindungen des Inhabers erreicht das Mitglied nicht",
+          "grund": "AssertionError: expected [ { …(3) } ] to deeply equal []"
+        },
+        {
+          "test": "K3 — Altbestand aus der Zeit vor der Kontotrennung K3a Mitglied übernimmt nie; der Inhaber (volle Sicht) einmal; danach beginnt ein Admin frisch",
+          "grund": "AssertionError: Mitglied sieht Altbestand: expected [ 'doc-alt-inhaber' ] to deeply equal []"
+        },
+        {
+          "test": "K3 — Altbestand aus der Zeit vor der Kontotrennung K3b scheitert das Schreiben, bleibt der Altbestand unberührt und wird beim nächsten Mal übernommen",
+          "grund": "AssertionError: expected { action: 'none' } to deeply equal { action: 'write_failed' }"
+        },
+        {
+          "test": "K3 — Altbestand aus der Zeit vor der Kontotrennung K3c globaler Altbestand des Betriebs: das Mitglied lässt ihn liegen (keine Quarantäne), der Inhaber übernimmt ihn",
+          "grund": "AssertionError: expected [] to deeply equal [ 'doc-global-alt' ]"
+        },
+        {
+          "test": "K3 — Altbestand aus der Zeit vor der Kontotrennung K3d Nutzerbereich mit Geschäftsdaten: nur der Inhaber bringt ihn mit; Admin und Mitglied lassen ihn liegen",
+          "grund": "AssertionError: expected [] to deeply equal [ Array(1) ]"
+        },
+        {
+          "test": "K4 — Rollenentzug und Aufstieg K4a Admin → Mitglied: eigener Mitgliedsbestand; zurück zu Admin: Ungesendetes läuft weiter",
+          "grund": "AssertionError: nach Rollenentzug noch Admin-Bestand sichtbar: expected [ 'doc-fremd-sichtbar-als-admin' ] to deeply equal []"
+        }
+      ]
+    },
+    {
+      "id": "M2 Dateien ohne Kontotrennung (gemeinsamer Blob-Bereich)",
+      "datei": "src/services/storage/documentBlobScopeService.ts",
+      "erkannt": true,
+      "gesamt": 14,
+      "rot": [
+        {
+          "test": "K1 — Schlüssel je Konto und Sicht K1a Zustand und Dateien: Kontoschlüssel, geerbtes aktives Konto, ausdrücklicher Altbestand",
+          "grund": "AssertionError: expected 'workspace:ws-dok01-n1' to be 'workspace:ws-dok01-n1:account:konto-i…' // Object.is equality"
+        },
+        {
+          "test": "K2 — Kontowechsel im selben Browser K2b Dateien und Vorschauen: Bytes und Vorschau-Bindungen des Inhabers erreicht das Mitglied nicht",
+          "grund": "AssertionError: expected { …(10) } to be null"
+        }
+      ]
+    },
+    {
+      "id": "M3 Sicht nicht im Schlüssel (Admin- und Mitgliedsbestand gemeinsam)",
+      "datei": "src/services/storage/storageScopeService.ts",
+      "erkannt": true,
+      "gesamt": 19,
+      "rot": [
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G3 Rollenentzug Admin → Mitglied: Admin-Bestand ruht unangetastet; mit der Rolle kehrt er zurück",
+          "grund": "AssertionError: Admin-Bestand nach Rollenentzug sichtbar: expected <li class=\"business-list__row\" …(1)>…(1)</li> to be null"
+        },
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G4 Abzug meldet die Mitgliedschaft als entfernt: kein Betriebsbestand, nichts Fremdes, kein Versand",
+          "grund": "AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string"
+        },
+        {
+          "test": "K1 — Schlüssel je Konto und Sicht K1a Zustand und Dateien: Kontoschlüssel, geerbtes aktives Konto, ausdrücklicher Altbestand",
+          "grund": "AssertionError: expected 'officepilot-state:workspace:ws-dok01-…' to be 'officepilot-state:workspace:ws-dok01-…' // Object.is equality"
+        },
+        {
+          "test": "K2 — Kontowechsel im selben Browser K2a Inhaber → Mitglied → Inhaber: nichts Fremdes sichtbar oder versandbereit, Ungesendetes bleibt",
+          "grund": "AssertionError: expected [] to deeply equal [ …(2) ]"
+        },
+        {
+          "test": "K3 — Altbestand aus der Zeit vor der Kontotrennung K3b scheitert das Schreiben, bleibt der Altbestand unberührt und wird beim nächsten Mal übernommen",
+          "grund": "AssertionError: expected null to be '{\"version\":6,\"syncClient\":{\"deviceId\"…' // Object.is equality"
+        },
+        {
+          "test": "K4 — Rollenentzug und Aufstieg K4a Admin → Mitglied: eigener Mitgliedsbestand; zurück zu Admin: Ungesendetes läuft weiter",
+          "grund": "AssertionError: nach Rollenentzug noch Admin-Bestand sichtbar: expected [ 'doc-fremd-sichtbar-als-admin' ] to deeply equal []"
+        }
+      ]
+    },
+    {
+      "id": "M4 Cloud-Bootstrap wechselt wie vor N1 mit der Inhaberkennung",
+      "datei": "src/services/workspace/workspaceCloudBootstrapService.ts",
+      "erkannt": true,
+      "gesamt": 5,
+      "rot": [
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G1 Inhaber → Abmelden → Mitglied → Abmelden → Inhaber: nichts Fremdes, Ungesendetes bleibt",
+          "grund": "AssertionError: expected null to deeply equal { userId: 'usr-admin', access: 'full' }"
+        },
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G2 direkter Kontowechsel ohne Abmelden: Firmensitzung und Bindung des Inhabers sind verworfen",
+          "grund": "AssertionError: expected { userId: 'usr-admin', …(2) } to deeply equal { userId: 'usr-admin', …(2) }"
+        },
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G3 Rollenentzug Admin → Mitglied: Admin-Bestand ruht unangetastet; mit der Rolle kehrt er zurück",
+          "grund": "AssertionError: expected null to deeply equal { …(2) }"
+        },
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G4 Abzug meldet die Mitgliedschaft als entfernt: kein Betriebsbestand, nichts Fremdes, kein Versand",
+          "grund": "AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string"
+        },
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G5 Nutzerbereich des Mitglieds mit Daten eines früheren eigenen Betriebs: bleibt liegen, kommt nicht in den Betrieb",
+          "grund": "AssertionError: expected null to deeply equal { …(2) }"
+        }
+      ]
+    },
+    {
+      "id": "M5 Mitgliedschaft im Abzug nicht geprüft (kein Sperren)",
+      "datei": "src/services/workspace/workspaceCloudBootstrapService.ts",
+      "erkannt": true,
+      "gesamt": 5,
+      "rot": [
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G4 Abzug meldet die Mitgliedschaft als entfernt: kein Betriebsbestand, nichts Fremdes, kein Versand",
+          "grund": "AssertionError: App nicht gesperrt: expected null not to be null"
+        }
+      ]
+    },
+    {
+      "id": "M6 Kein Aufräumen beim direkten Kontowechsel",
+      "datei": "src/components/system/BusinessStateGate.tsx",
+      "erkannt": true,
+      "gesamt": 5,
+      "rot": [
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G2 direkter Kontowechsel ohne Abmelden: Firmensitzung und Bindung des Inhabers sind verworfen",
+          "grund": "AssertionError: expected null to deeply equal { …(2) }"
+        }
+      ]
+    },
+    {
+      "id": "M7 Mitglied übernimmt den Altbestand des Betriebs",
+      "datei": "src/services/storage/workspaceAccountStorageService.ts",
+      "erkannt": true,
+      "gesamt": 14,
+      "rot": [
+        {
+          "test": "K3 — Altbestand aus der Zeit vor der Kontotrennung K3a Mitglied übernimmt nie; der Inhaber (volle Sicht) einmal; danach beginnt ein Admin frisch",
+          "grund": "AssertionError: Mitglied sieht Altbestand: expected [ 'doc-alt-inhaber' ] to deeply equal []"
+        }
+      ]
+    },
+    {
+      "id": "M8 Mitglied fasst den globalen Altbestand an (Quarantäne)",
+      "datei": "src/services/storage/legacyMigrationService.ts",
+      "erkannt": true,
+      "gesamt": 14,
+      "rot": [
+        {
+          "test": "K3 — Altbestand aus der Zeit vor der Kontotrennung K3c globaler Altbestand des Betriebs: das Mitglied lässt ihn liegen (keine Quarantäne), der Inhaber übernimmt ihn",
+          "grund": "AssertionError: globaler Altbestand angefasst: expected null to be '{\"version\":6,\"syncClient\":{\"deviceId\"…' // Object.is equality"
+        }
+      ]
+    },
+    {
+      "id": "M9 Nutzerbereich eines Nicht-Inhabers wird mit Geschäftsdaten übernommen",
+      "datei": "src/services/storage/legacyMigrationService.ts",
+      "erkannt": true,
+      "gesamt": 19,
+      "rot": [
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G5 Nutzerbereich des Mitglieds mit Daten eines früheren eigenen Betriebs: bleibt liegen, kommt nicht in den Betrieb",
+          "grund": "AssertionError: expected <li class=\"business-list__row\" …(1)>…(1)</li> to be null"
+        },
+        {
+          "test": "K3 — Altbestand aus der Zeit vor der Kontotrennung K3d Nutzerbereich mit Geschäftsdaten: nur der Inhaber bringt ihn mit; Admin und Mitglied lassen ihn liegen",
+          "grund": "AssertionError: member: Nutzerbereich in den Betrieb übernommen: expected [ Array(1) ] to deeply equal []"
+        }
+      ]
+    },
+    {
+      "id": "M10 Hinweis-Auswahl wieder gerätweit",
+      "datei": "src/services/homeHintDismissalService.ts",
+      "erkannt": true,
+      "gesamt": 14,
+      "rot": [
+        {
+          "test": "K6 — Hinweis-Auswahl je Konto K6a „erledigt\" des Inhabers verbirgt dem Mitglied nichts; der gemeinsame Schlüssel bleibt unangetastet",
+          "grund": "AssertionError: expected false to be true // Object.is equality"
+        }
+      ]
+    },
+    {
+      "id": "M11 Rolle member ergibt volle Sicht",
+      "datei": "src/services/storage/workspaceAccountStorageService.ts",
+      "erkannt": true,
+      "gesamt": 23,
+      "rot": [
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G1 Inhaber → Abmelden → Mitglied → Abmelden → Inhaber: nichts Fremdes, Ungesendetes bleibt",
+          "grund": "AssertionError: expected { …(2) } to deeply equal { …(2) }"
+        },
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G2 direkter Kontowechsel ohne Abmelden: Firmensitzung und Bindung des Inhabers sind verworfen",
+          "grund": "AssertionError: expected { …(2) } to deeply equal { …(2) }"
+        },
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G3 Rollenentzug Admin → Mitglied: Admin-Bestand ruht unangetastet; mit der Rolle kehrt er zurück",
+          "grund": "AssertionError: expected { …(2) } to deeply equal { …(2) }"
+        },
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G5 Nutzerbereich des Mitglieds mit Daten eines früheren eigenen Betriebs: bleibt liegen, kommt nicht in den Betrieb",
+          "grund": "AssertionError: expected { …(2) } to deeply equal { …(2) }"
+        },
+        {
+          "test": "FINANZ-CORE-01A — Mitarbeiter-Erstzugang (Clientvertrag zu 20261124) E-C1: das Mitglied erreicht beim ersten Login den Betrieb des Arbeitgebers ohne Assistenten",
+          "grund": "AssertionError: Zustand des Arbeitgeberbetriebs fehlt: expected null not to be null"
+        },
+        {
+          "test": "K7 — Sicht aus der Mitgliedschaft K7a nur aktive Mitgliedschaften; Inhaber und Admin voll, Mitglied eingeschränkt",
+          "grund": "AssertionError: expected 'full' to be 'member' // Object.is equality"
+        },
+        {
+          "test": "K7 — Sicht aus der Mitgliedschaft K7b das Konto muss genau einmal in der Liste stehen",
+          "grund": "AssertionError: expected { userId: 'konto-mitglied-n1', …(1) } to deeply equal { userId: 'konto-mitglied-n1', …(1) }"
+        }
+      ]
+    },
+    {
+      "id": "M12 Inaktive Mitgliedschaft gilt als Zugang",
+      "datei": "src/services/storage/workspaceAccountStorageService.ts",
+      "erkannt": true,
+      "gesamt": 19,
+      "rot": [
+        {
+          "test": "DOKUMENTE-01 N1 — Kontotrennung im Gate G4 Abzug meldet die Mitgliedschaft als entfernt: kein Betriebsbestand, nichts Fremdes, kein Versand",
+          "grund": "AssertionError: App nicht gesperrt: expected null not to be null"
+        },
+        {
+          "test": "K7 — Sicht aus der Mitgliedschaft K7a nur aktive Mitgliedschaften; Inhaber und Admin voll, Mitglied eingeschränkt",
+          "grund": "AssertionError: expected 'full' to be null"
+        }
+      ]
+    },
+    {
+      "id": "M13 Doppelte Mitgliedszeile wird akzeptiert",
+      "datei": "src/services/storage/workspaceAccountStorageService.ts",
+      "erkannt": true,
+      "gesamt": 14,
+      "rot": [
+        {
+          "test": "K7 — Sicht aus der Mitgliedschaft K7b das Konto muss genau einmal in der Liste stehen",
+          "grund": "AssertionError: expected { userId: 'konto-mitglied-n1', …(1) } to be null"
+        }
+      ]
+    },
+    {
+      "id": "M14 Notfall-Inventar erkennt Kontobestände nicht",
+      "datei": "src/services/storage/localScopeInventoryService.ts",
+      "erkannt": true,
+      "gesamt": 14,
+      "rot": [
+        {
+          "test": "K1 — Schlüssel je Konto und Sicht K1b Notfall-Inventar erkennt Kontobestände, Anhänge zählen weiter nicht",
+          "grund": "AssertionError: expected [] to deeply equal [ Array(1) ]"
+        }
+      ]
+    }
+  ],
+  "nachher": {
+    "exit": 0,
+    "gesamt": 23,
+    "rot": []
+  }
+}

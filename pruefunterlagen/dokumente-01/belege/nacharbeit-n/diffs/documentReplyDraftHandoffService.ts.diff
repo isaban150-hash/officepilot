@@ -1,0 +1,39 @@
+diff --git a/src/services/documentReplyDraftHandoffService.ts b/src/services/documentReplyDraftHandoffService.ts
+index 2514059..8cafa38 100644
+--- a/src/services/documentReplyDraftHandoffService.ts
++++ b/src/services/documentReplyDraftHandoffService.ts
+@@ -14,6 +14,10 @@ import {
+   type DocumentReplyDraftHandoffPayload,
+ } from '../types/documentReplyDraftHandoff';
+ import type { InboxItem } from '../types/models';
++import {
++  isNavigationStateFromActiveScope,
++  stampNavigationStateWithActiveScope,
++} from './storage/storageScopeService';
+ 
+ export function buildDocumentReplyDraftHandoffPayload(input: {
+   item: InboxItem;
+@@ -65,6 +69,8 @@ export function readDocumentReplyDraftHandoffFromLocationState(
+   state: unknown,
+ ): DocumentReplyDraftHandoffPayload | null {
+   if (!state || typeof state !== 'object') return null;
++  // DOKUMENTE-01 N1 — nur im Speicherbereich, in dem die Übergabe entstand.
++  if (!isNavigationStateFromActiveScope(state)) return null;
+   const payload = (state as DocumentReplyDraftHandoffLocationState)[
+     DOCUMENT_REPLY_DRAFT_HANDOFF_STATE_KEY
+   ];
+@@ -74,9 +80,11 @@ export function readDocumentReplyDraftHandoffFromLocationState(
+ export function createDocumentReplyDraftHandoffLocationState(
+   payload: DocumentReplyDraftHandoffPayload,
+ ): DocumentReplyDraftHandoffLocationState {
+-  return Object.freeze({
+-    [DOCUMENT_REPLY_DRAFT_HANDOFF_STATE_KEY]: payload,
+-  });
++  return Object.freeze(
++    stampNavigationStateWithActiveScope({
++      [DOCUMENT_REPLY_DRAFT_HANDOFF_STATE_KEY]: payload,
++    }),
++  );
+ }
+ 
+ /**

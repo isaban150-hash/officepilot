@@ -1,0 +1,74 @@
+[
+  {
+    "quelle": "dok01-n1n2-sdk.mjs",
+    "variante": "dok01-n1n2-sdk.beobachtet.mjs",
+    "ersetzungen": [
+      {
+        "alt": "await Promise.race([started,new Promise((_,reject)=>setTimeout(()=>reject(Error('Kein RPC')),15000))])",
+        "neu": "const vorDemWechsel=await Promise.race([started.then(()=>'erster_rpc'),run.then(()=>'lauf_beendet_ohne_rpc')])"
+      },
+      {
+        "alt": "wrongIdentity:calls[1]?.authorization==='Bearer synthetic-account-B'}",
+        "neu": "wrongIdentity:calls.some(x=>x.authorization==='Bearer synthetic-account-B'),identityChanged:result.identityChanged??false,identityChangeReason:result.identityChangeReason??null,vorDemWechsel}"
+      }
+    ]
+  },
+  {
+    "quelle": "dok01-n1n2-sdk.mjs",
+    "variante": "dok01-n1n2-sdk.jwt.mjs",
+    "ersetzungen": [
+      {
+        "alt": "let account='A',start,release",
+        "neu": "let account='A',start,release;const jwt=a=>[{alg:'HS256',typ:'JWT'},{sub:a,role:'authenticated',exp:4102444800}].map(x=>Buffer.from(JSON.stringify(x)).toString('base64url')).join('.')+'.synthetisch'"
+      },
+      {
+        "alt": "accessToken:async()=> 'synthetic-account-'+account",
+        "neu": "accessToken:async()=> jwt(account)"
+      },
+      {
+        "alt": "await Promise.race([started,new Promise((_,reject)=>setTimeout(()=>reject(Error('Kein RPC')),15000))])",
+        "neu": "const vorDemWechsel=await Promise.race([started.then(()=>'erster_rpc'),run.then(()=>'lauf_beendet_ohne_rpc')])"
+      },
+      {
+        "alt": "wrongIdentity:calls[1]?.authorization==='Bearer synthetic-account-B'}",
+        "neu": "wrongIdentity:calls.some(x=>x.authorization==='Bearer '+jwt('B')),zugangNurA:calls.every(x=>x.authorization==='Bearer '+jwt('A')),identityChanged:result.identityChanged??false,identityChangeReason:result.identityChangeReason??null,vorDemWechsel}"
+      }
+    ]
+  },
+  {
+    "quelle": "variante-nur-token.mjs",
+    "variante": "variante-nur-token.beobachtet.mjs",
+    "ersetzungen": [
+      {
+        "alt": "await Promise.race([started,new Promise((_,reject)=>setTimeout(()=>reject(Error('Kein RPC')),15000))])",
+        "neu": "const vorDemWechsel=await Promise.race([started.then(()=>'erster_rpc'),run.then(()=>'lauf_beendet_ohne_rpc')])"
+      },
+      {
+        "alt": "wrongIdentity:calls[1]?.authorization==='Bearer synthetic-account-B'}",
+        "neu": "wrongIdentity:calls.some(x=>x.authorization==='Bearer synthetic-account-B'),identityChanged:result.identityChanged??false,identityChangeReason:result.identityChangeReason??null,vorDemWechsel}"
+      }
+    ]
+  },
+  {
+    "quelle": "variante-nur-token.mjs",
+    "variante": "variante-nur-token.jwt.mjs",
+    "ersetzungen": [
+      {
+        "alt": "let account='A',start,release",
+        "neu": "let account='A',start,release;const jwt=a=>[{alg:'HS256',typ:'JWT'},{sub:a,role:'authenticated',exp:4102444800}].map(x=>Buffer.from(JSON.stringify(x)).toString('base64url')).join('.')+'.synthetisch'"
+      },
+      {
+        "alt": "accessToken:async()=> 'synthetic-account-'+account",
+        "neu": "accessToken:async()=> jwt(account)"
+      },
+      {
+        "alt": "await Promise.race([started,new Promise((_,reject)=>setTimeout(()=>reject(Error('Kein RPC')),15000))])",
+        "neu": "const vorDemWechsel=await Promise.race([started.then(()=>'erster_rpc'),run.then(()=>'lauf_beendet_ohne_rpc')])"
+      },
+      {
+        "alt": "wrongIdentity:calls[1]?.authorization==='Bearer synthetic-account-B'}",
+        "neu": "wrongIdentity:calls.some(x=>x.authorization==='Bearer '+jwt('B')),zugangNurA:calls.every(x=>x.authorization==='Bearer '+jwt('A')),identityChanged:result.identityChanged??false,identityChangeReason:result.identityChangeReason??null,vorDemWechsel}"
+      }
+    ]
+  }
+]

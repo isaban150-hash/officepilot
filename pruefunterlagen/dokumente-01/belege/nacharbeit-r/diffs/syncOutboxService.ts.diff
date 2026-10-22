@@ -1,0 +1,74 @@
+diff --git a/src/services/sync/syncOutboxService.ts b/src/services/sync/syncOutboxService.ts
+index ab650a4..ab8e577 100644
+--- a/src/services/sync/syncOutboxService.ts
++++ b/src/services/sync/syncOutboxService.ts
+@@ -3,12 +3,14 @@ import type {
+   SyncEntityType,
+   SyncOutboxEntry,
+   SyncOutboxOperation,
++  SyncOutboxOrigin,
+   SyncOutboxStatus,
+ } from '../../types/sync';
+ import { generateUuid } from './syncMetaService';
+ import { getSyncClient } from './syncClientService';
+ import { isClosureBusinessRejection, isFinallyDeniedOutboxEntry } from './syncRoleDenial';
+ import { newestOutboxEntriesByEntity, nextOutboxSequence, outboxEntityKey } from './syncOutboxOrder';
++import { resolveOutboxOriginFromActiveScope } from './syncOutboxOriginService';
+ 
+ let outbox: SyncOutboxEntry[] = [];
+ 
+@@ -53,6 +55,10 @@ function mergeOutboxEntry(
+ ): SyncOutboxEntry {
+   const affectedMonths = unionMonths(existing.affectedMonths, input.affectedMonths);
+   return {
++    /*
++     * DOKUMENTE-01 R2 — Ursprung, Sperre und Freigabespur bleiben erhalten: Eine neue Änderung an einem
++     * zurückgehaltenen Auftrag gibt dessen Anteil unbekannter Herkunft nicht still frei.
++     */
+     ...existing,
+     ...(affectedMonths ? { affectedMonths } : {}),
+     operation: input.operation,
+@@ -197,11 +203,43 @@ function enqueueOutboxEntry(input: EnqueueSyncOutboxInput): SyncOutboxEntry {
+     blockedReason: isBetaTestMode() ? 'beta_mode' : undefined,
+     ...(unionMonths(input.affectedMonths) ? { affectedMonths: unionMonths(input.affectedMonths) } : {}),
+   };
++  // DOKUMENTE-01 R2 — das einreihende Konto (aktiver Speicherbereich); nur dieses Konto sendet den Auftrag.
++  const origin = resolveOutboxOriginFromActiveScope();
++  if (origin) entry.origin = origin;
+   outbox = [entry, ...outbox];
+   notifyOutboxChanged();
+   return { ...entry };
+ }
+ 
++/**
++ * DOKUMENTE-01 R2 — bewusste Freigabe zurückgehaltener Aufträge durch das Konto dieses Bestands.
++ *
++ * Bewusst eng: nur die genannten Aufträge, nur solche mit Sperre. Status, Inhalt, Version und Reihenfolge bleiben
++ * unverändert — der Auftrag erhält nur sein Ursprungskonto und die Spur der Freigabe. Ein endgültig abgewiesener
++ * Auftrag wird nie zurückgehalten und wird deshalb auch hier nicht wiederbelebt.
++ */
++export function releaseHeldOutboxEntries(
++  entryIds: readonly string[],
++  origin: SyncOutboxOrigin,
++  at: string,
++): SyncOutboxEntry[] {
++  const ids = new Set(entryIds);
++  const released: SyncOutboxEntry[] = [];
++  outbox = outbox.map((entry) => {
++    if (!ids.has(entry.id) || !entry.hold) return entry;
++    const { hold, ...rest } = entry;
++    const next: SyncOutboxEntry = {
++      ...rest,
++      origin: { ...origin },
++      originAssignment: { by: origin.userId, at, previous: hold.reason, heldSince: hold.since },
++    };
++    released.push({ ...next });
++    return next;
++  });
++  if (released.length > 0) notifyOutboxChanged();
++  return released;
++}
++
+ /**
+  * OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — true, solange Firmendaten noch nicht in
+  * der Cloud liegen. Grundlage für den sichtbaren Hinweis „nur lokal gespeichert“.

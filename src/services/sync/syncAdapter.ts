@@ -5,6 +5,7 @@ import type {
   SyncState,
 } from '../../types/sync';
 import type { OrderAmendmentIntentClearKey } from '../orderAmendment/orderAmendmentCloudPullMergeService';
+import type { SyncRunIdentity, SyncRunIdentityChangeReason } from './syncRunIdentityService';
 
 export type SyncProviderKind = 'local' | 'supabase' | 'firebase' | 'node' | 'json';
 
@@ -13,6 +14,11 @@ export interface SyncPushInput {
   workspaceId: string;
   state: AppPersistedState;
   outbox: SyncOutboxEntry[];
+  /**
+   * DOKUMENTE-01 R1 — die Ursprungsidentität des Laufs (Konto, Betrieb, Sicht, Sitzung). Fehlt sie, hält der
+   * Adapter sie selbst beim Start fest. Jede Sendung des Laufs ist an sie gebunden.
+   */
+  runIdentity?: SyncRunIdentity;
 }
 
 export interface SyncPushFailure {
@@ -27,12 +33,25 @@ export interface SyncPushResult {
   completedOutboxIds: string[];
   failedOutbox: SyncPushFailure[];
   report: SyncSimulationReport;
+  /**
+   * DOKUMENTE-01 R1 — während des Laufs wechselte Konto, Betrieb oder Sicht. Ab dem ersten Unterschied wurde
+   * nichts mehr gesendet; noch offene Aufträge sind unverändert.
+   */
+  identityChanged?: boolean;
+  /** DOKUMENTE-01 R1 — woran der Wechsel erkannt wurde. */
+  identityChangeReason?: SyncRunIdentityChangeReason;
+  /** DOKUMENTE-01 R2 — zurückgehaltene Aufträge (Ursprung unbekannt oder fremd), unverändert und nicht gesendet. */
+  heldOutboxIds?: string[];
+  /** DOKUMENTE-01 R1 — die Identität, an die dieser Lauf gebunden war; der Abruf desselben Laufs nimmt sie mit. */
+  runIdentity?: SyncRunIdentity;
 }
 
 export interface SyncPullInput {
   deviceId: string;
   workspaceId: string;
   state: AppPersistedState;
+  /** DOKUMENTE-01 R1 — dieselbe Laufidentität wie beim Senden; jede Abfrage ist an sie gebunden. */
+  runIdentity?: SyncRunIdentity;
 }
 
 export interface SyncPullResult {
@@ -48,6 +67,10 @@ export interface SyncPullResult {
    * (e.g. global amendment-pull failure → keep pre-pull state).
    */
   skipPersist?: boolean;
+  /** DOKUMENTE-01 R1 — während des Abrufs wechselte Konto, Betrieb oder Sicht; nichts davon wird übernommen. */
+  identityChanged?: boolean;
+  /** DOKUMENTE-01 R1 — woran der Wechsel erkannt wurde (auch: Startidentität nicht bestätigt). */
+  identityChangeReason?: SyncRunIdentityChangeReason;
 }
 
 export interface SyncAcknowledgeInput {

@@ -1,0 +1,81 @@
+
+[1m[46m RUN [49m[22m [36mv3.2.6 [39m[90mC:/Users/Lenovo-ThinkPad-E590/Documents/OfficeTakt-Sicherungen/DOK01-GEGENPROBEN-20261020T021008Z/repo[39m
+
+[90mstderr[2m | src/services/document/vorschauCloudDubletteDokumente01.test.ts[2m > [22m[2mDOKUMENTE-01 — Vorschau auf einem zweiten Gerät (hashgleiche Cloud-Datei)[2m > [22m[2mV3 PDF-Vorschau: persisted statt unexpected_failure, Bindung auf die vorhandene Datei
+[22m[39m[OfficePilot:pdf-preview-encode] pdf_preview unexpected_failure
+
+[90mstderr[2m | src/services/document/vorschauCloudDubletteDokumente01.test.ts[2m > [22m[2mDOKUMENTE-01 — Vorschau auf einem zweiten Gerät (hashgleiche Cloud-Datei)[2m > [22m[2mV4 PDF-Vorschaubild ebenso
+[22m[39m[OfficePilot:pdf-thumbnail-encode] pdf_thumbnail unexpected_failure
+
+ [31m❯[39m [30m[42m default [49m[39m src/services/document/vorschauCloudDubletteDokumente01.test.ts [2m([22m[2m4 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[32m 87[2mms[22m[39m
+[31m   [31m×[31m DOKUMENTE-01 — Vorschau auf einem zweiten Gerät (hashgleiche Cloud-Datei)[2m > [22mV1 der Speicher übernimmt die hashgleichen Bytes unter der Cloud-Referenz, ohne Download[39m[32m 43[2mms[22m[39m
+[31m     → blob_read_failed[39m
+   [32m✓[39m DOKUMENTE-01 — Vorschau auf einem zweiten Gerät (hashgleiche Cloud-Datei)[2m > [22mV2 passt die Größe der Cloud-Zeile nicht, bleibt es bei blob_read_failed — nichts wird abgelegt[32m 8[2mms[22m[39m
+[31m   [31m×[31m DOKUMENTE-01 — Vorschau auf einem zweiten Gerät (hashgleiche Cloud-Datei)[2m > [22mV3 PDF-Vorschau: persisted statt unexpected_failure, Bindung auf die vorhandene Datei[39m[32m 24[2mms[22m[39m
+[31m     → expected { kind: 'error', …(1) } to match object { kind: 'persisted', …(3) }
+(1 matching property omitted from actual)[39m
+[31m   [31m×[31m DOKUMENTE-01 — Vorschau auf einem zweiten Gerät (hashgleiche Cloud-Datei)[2m > [22mV4 PDF-Vorschaubild ebenso[39m[32m 8[2mms[22m[39m
+[31m     → expected 'error' to be 'persisted' // Object.is equality[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m [30m[42m default [49m[39m src/services/document/vorschauCloudDubletteDokumente01.test.ts[2m > [22mDOKUMENTE-01 — Vorschau auf einem zweiten Gerät (hashgleiche Cloud-Datei)[2m > [22mV1 der Speicher übernimmt die hashgleichen Bytes unter der Cloud-Referenz, ohne Download
+[31m[1mDocumentBlobStorageError[22m: blob_read_failed[39m
+[36m [2m❯[22m storeDocumentFileFromCachedPayload src/services/documentFileStoreService.ts:[2m273:13[22m[39m
+    [90m271| [39m    const stored = await hasStoredOriginalDocumentFile(existing, [{ ty…
+    [90m272| [39m    [35mif[39m ([33m![39mstored) {
+    [90m273| [39m      [35mthrow[39m [35mnew[39m [33mDocumentBlobStorageError[39m([32m'blob_read_failed'[39m)[33m;[39m
+    [90m   | [39m            [31m^[39m
+    [90m274| [39m    }
+    [90m275| [39m    traceStep(saveTraceId, 'file_ref_created', { fileSize: existing.fi…
+[90m [2m❯[22m src/services/document/vorschauCloudDubletteDokumente01.test.ts:[2m128:22[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m [30m[42m default [49m[39m src/services/document/vorschauCloudDubletteDokumente01.test.ts[2m > [22mDOKUMENTE-01 — Vorschau auf einem zweiten Gerät (hashgleiche Cloud-Datei)[2m > [22mV3 PDF-Vorschau: persisted statt unexpected_failure, Bindung auf die vorhandene Datei
+[31m[1mAssertionError[22m: expected { kind: 'error', …(1) } to match object { kind: 'persisted', …(3) }
+(1 matching property omitted from actual)[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "createdPreviewFileRef": false,[39m
+[32m-   "kind": "persisted",[39m
+[32m-   "previewFileRefId": "file-ref-cloud-vorschau",[39m
+[32m-   "registration": "created",[39m
+[31m+   "kind": "error",[39m
+[2m  }[22m
+
+[36m [2m❯[22m src/services/document/vorschauCloudDubletteDokumente01.test.ts:[2m165:22[22m[39m
+    [90m163| [39m    const ergebnis = await orchestratePdfPreviewEncodeAfterImport({ do…
+    [90m164| [39m
+    [90m165| [39m    [34mexpect[39m(ergebnis)[33m.[39m[34mtoMatchObject[39m({
+    [90m   | [39m                     [31m^[39m
+    [90m166| [39m      kind[33m:[39m [32m'persisted'[39m[33m,[39m
+    [90m167| [39m      registration[33m:[39m [32m'created'[39m[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m [30m[42m default [49m[39m src/services/document/vorschauCloudDubletteDokumente01.test.ts[2m > [22mDOKUMENTE-01 — Vorschau auf einem zweiten Gerät (hashgleiche Cloud-Datei)[2m > [22mV4 PDF-Vorschaubild ebenso
+[31m[1mAssertionError[22m: expected 'error' to be 'persisted' // Object.is equality[39m
+
+Expected: [32m"persisted"[39m
+Received: [31m"error"[39m
+
+[36m [2m❯[22m src/services/document/vorschauCloudDubletteDokumente01.test.ts:[2m186:27[22m[39m
+    [90m184| [39m    const ergebnis = await orchestratePdfThumbnailEncodeAfterImport({ …
+    [90m185| [39m
+    [90m186| [39m    [34mexpect[39m(ergebnis[33m.[39mkind)[33m.[39m[34mtoBe[39m([32m'persisted'[39m)[33m;[39m
+    [90m   | [39m                          [31m^[39m
+    [90m187| [39m    expect(getDocumentFileRepresentationBindingStoreSnapshot()).toEqua…
+    [90m188| [39m      { documentId[33m:[39m [33mDOC[39m[33m,[39m kind[33m:[39m [32m'thumbnail'[39m[33m,[39m fileRefId[33m:[39m cloud[33m.[39mid }[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (4)[39m
+[2m   Start at [22m 13:33:33
+[2m   Duration [22m 16.87s[2m (transform 10.36s, setup 15.13s, collect 123ms, tests 87ms, environment 726ms, prepare 130ms)[22m
+

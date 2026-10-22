@@ -1,0 +1,124 @@
+BEGIN
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+DROP TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+INSERT 0 32
+NOTICE:  V  32 Regelvektoren wie im Client
+DO
+INSERT 0 3
+UPDATE 3
+INSERT 0 1
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 1
+CREATE FUNCTION
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+INSERT 0 1
+INSERT 0 2
+INSERT 0 2
+INSERT 0 3
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ als 
+-----
+ 
+(1 row)
+
+ erwarte_abweisung 
+-------------------
+ 
+(1 row)
+
+NOTICE:  ABGEWIESEN  WEISS Basisloeschschutz
+ERROR:  Keine Schreibberechtigung: Original eines Dokuments mit Aufbewahrungsfrist bis 31.12.2034
+CONTEXT:  PL/pgSQL function workspace_document_file_bindings_retention_guard() line 39 at RAISE
+SQL statement "update public.workspace_document_file_bindings
+      set client_file_ref_id = coalesce(nullif(trim(p_payload->>'client_file_ref_id'), ''), client_file_ref_id),
+          provenance = coalesce(nullif(trim(p_payload->>'provenance'), ''), provenance),
+          deleted = v_deleted,
+          deleted_at = case when v_deleted then coalesce(deleted_at, now()) else null end,
+          row_version = row_version + 1,
+          updated_by = v_user_id
+      where workspace_id = p_workspace_id
+        and client_document_id = p_payload->>'client_document_id'
+        and binding_kind = v_kind
+        and coalesce(part, '') = coalesce(p_payload->>'part', '')
+      returning to_jsonb(public.workspace_document_file_bindings.*)"
+PL/pgSQL function upsert_workspace_intake_entity(uuid,text,jsonb,bigint) line 121 at SQL statement

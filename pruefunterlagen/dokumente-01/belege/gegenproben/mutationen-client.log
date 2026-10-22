@@ -1,0 +1,41 @@
+Vorher (unmutiert): 51 Tests, rot 0
+M1 deleteDocument ohne Fristsperre: ERKANNT (1 rot von 10)
+    - DOKUMENTE-01 — Löschschutz während der Aufbewahrungsfrist R1: eine Eingangsrechnung ist ein Buchungsbeleg; weder Dienst noch direkter Weg löschen sie
+M2 Dienst ohne Fristsperre vor dem Cloud-Aufruf: ERKANNT (1 rot von 10)
+    - DOKUMENTE-01 — Löschschutz während der Aufbewahrungsfrist R1: eine Eingangsrechnung ist ein Buchungsbeleg; weder Dienst noch direkter Weg löschen sie
+M3 Dienst ohne Prüfbestätigung: ERKANNT (2 rot von 10)
+    - DOKUMENTE-01 — Löschschutz während der Aufbewahrungsfrist R2: ohne feste Frist löscht der Dienst nur mit ausdrücklicher Prüfbestätigung
+    - DOKUMENTE-01 — Löschschutz während der Aufbewahrungsfrist R3: rechnerisch abgelaufen heißt nicht „löschbar": nur nach Prüfbestätigung
+M4 Bearbeiten ohne Herabstufungsschutz: ERKANNT (1 rot von 10)
+    - DOKUMENTE-01 — keine Abschwächung während der Frist A1: die Kategorie „Ausgangsrechnung" lässt sich während der Frist nicht aufheben; Titel und Datum 
+M5 Serverabweisung „Aufbewahrung" nicht erkannt: ERKANNT (1 rot von 10)
+    - DOKUMENTE-01 — Löschschutz während der Aufbewahrungsfrist R4: kennt der Server eine Frist, die das Gerät nicht kennt, bleibt das Dokument mit diesem G
+M6 Sync-Grund „Aufbewahrung" fehlt: ERKANNT (1 rot von 10)
+    - DOKUMENTE-01 — Löschschutz während der Aufbewahrungsfrist R5: die Abweisung im Sync heißt „Aufbewahrung", nicht „keine Berechtigung"
+M7 Empfehlung: abgelegt heißt wieder „entsorgen": ERKANNT (3 rot von 48)
+    - DOKUMENTE-01 — Aufbewahrungsregel Papieroriginal: entsorgen nur bei Werbung, nie weil das Dokument abgelegt ist
+    - DOKUMENTE-01 / F10 — keine Entsorgungsempfehlung ohne Aufbewahrungsprüfung F10-1: eine abgelegte Rechnung „kann nicht entsorgt werden" — sie ist aufzu
+    - DOKUMENTE-01 / F10 — keine Entsorgungsempfehlung ohne Aufbewahrungsprüfung F10-2: ein abgelegtes Dokument ohne feste Regel bleibt „unsicher", nie „ent
+M8 Regel: Quittung kein Buchungsbeleg: ERKANNT (3 rot von 48)
+    - DOKUMENTE-01 — Aufbewahrungsregel Vektor quittung-2016-abgelaufen
+    - DOKUMENTE-01 — Aufbewahrungsregel Vektor schalttag-gilt
+    - DOKUMENTE-01 — Löschschutz während der Aufbewahrungsfrist R3: rechnerisch abgelaufen heißt nicht „löschbar": nur nach Prüfbestätigung
+M9 Regel: Frist 10 statt 8 Jahre: ERKANNT (20 rot von 38)
+    - DOKUMENTE-01 — Aufbewahrungsregel Vektor eingangsrechnung-2026
+    - DOKUMENTE-01 — Aufbewahrungsregel Vektor quittung-2016-abgelaufen
+    - DOKUMENTE-01 — Aufbewahrungsregel Vektor grenze-letzter-tag-berlin
+M10 Regel: Jahr in UTC statt Berliner Zeit: ERKANNT (3 rot von 38)
+    - DOKUMENTE-01 — Aufbewahrungsregel Vektor silvesterabend-zaehlt-berliner-jahr
+    - DOKUMENTE-01 — Aufbewahrungsregel Vektor zeitstempel-ohne-zone-gilt-als-utc
+    - DOKUMENTE-01 — Aufbewahrungsregel Jahr und Tag gelten in Berliner Zeit
+M11 Seite: „Löschen" trotz laufender Frist: ERKANNT (1 rot von 3)
+    - DOKUMENTE-01 — Aufbewahrung auf der Dokumentseite D1: Eingangsrechnung — Frist, Grund und Grundlage sichtbar, kein „Löschen"
+M12 Seite: Bestätigung ohne Prüftext: ERKANNT (2 rot von 3)
+    - DOKUMENTE-01 — Aufbewahrung auf der Dokumentseite D2: ohne feste Frist — „prüfen", Löschen nur über die Prüfbestätigung
+    - DOKUMENTE-01 — Aufbewahrung auf der Dokumentseite D3: rechnerisch abgelaufen — Hinweis auf die Ablaufhemmung, Löschen nur nach Prüfung
+M13 Seite: Löschen ohne Prüfbestätigung an den Dienst: ERKANNT (2 rot von 3)
+    - DOKUMENTE-01 — Aufbewahrung auf der Dokumentseite D2: ohne feste Frist — „prüfen", Löschen nur über die Prüfbestätigung
+    - DOKUMENTE-01 — Aufbewahrung auf der Dokumentseite D3: rechnerisch abgelaufen — Hinweis auf die Ablaufhemmung, Löschen nur nach Prüfung
+Nachher (wiederhergestellt): 51 Tests, rot 0
+Alle Mutationen erkannt.
+exit=0

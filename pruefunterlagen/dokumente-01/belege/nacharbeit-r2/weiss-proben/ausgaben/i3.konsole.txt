@@ -1,0 +1,20 @@
+{
+  calls: [
+    {
+      identity: 'A',
+      name: 'upsert_workspace_intake_entity',
+      id: 'doc-weiss-a1'
+    }
+  ],
+  completed: [ 'out-0' ],
+  failed: [],
+  wrongIdentity: false,
+  network: 'kein Netzwerk, expliziter Ersatzclient, echter gebundelter Produktadapter'
+}
+ALTWARTESCHLANGE {
+  adoption: { action: 'adopted_legacy' },
+  pendingAfterAdoption: 2,
+  accountOnOriginalOrders: [ null, null ],
+  calls: [],
+  completed: []
+}

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
 import { buildPersistedStateSnapshot, persistAll } from '../persistenceService';
 import { runAutomaticSyncWrite } from '../sync/syncOutboxService';
@@ -165,13 +166,17 @@ export async function pullAndMergeWorkspaceOrderAmendmentsInMemory(input: {
   workspaceId: string;
   vorgaenge: ReturnType<typeof getAllVorgaenge>;
   intents?: OrderAmendmentConfirmIntent[];
+  /** DOKUMENTE-01 R1 — der an den Synchronisationslauf gebundene Client; ohne ihn der Standardclient. */
+  client?: SupabaseClient | null;
 }): Promise<
   | { ok: true; merge: MergeCloudAmendmentsResult }
   | { ok: false; reason: OrderAmendmentCloudPullFailureReason; message?: string }
 > {
   let rawRows: unknown[];
   try {
-    rawRows = await rpcPullWorkspaceOrderAmendmentRows(input.workspaceId);
+    rawRows = input.client
+      ? await rpcPullWorkspaceOrderAmendmentRows(input.workspaceId, { client: input.client })
+      : await rpcPullWorkspaceOrderAmendmentRows(input.workspaceId);
   } catch (error) {
     if (error instanceof WorkspaceOrderAmendmentCloudError) {
       if (error.code === 'auth') {

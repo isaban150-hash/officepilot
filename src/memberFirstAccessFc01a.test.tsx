@@ -168,7 +168,9 @@ describe('FINANZ-CORE-01A — Mitarbeiter-Erstzugang (Clientvertrag zu 20261124)
 
     expect(getWorkspaceStoreSnapshot()?.id).toBe(WORKSPACE_ID);
     expect(getWorkspaceStoreSnapshot()?.ownerUserId).toBe(OWNER_ID);
-    const raw = localStorage.getItem(`officepilot-state:workspace:${WORKSPACE_ID}`);
+    // DOKUMENTE-01 N1 — der Bestand liegt je Konto und Sicht (hier: Mitglied), nie im gemeinsamen Betriebsschlüssel.
+    expect(localStorage.getItem(`officepilot-state:workspace:${WORKSPACE_ID}`)).toBeNull();
+    const raw = localStorage.getItem(`officepilot-state:workspace:${WORKSPACE_ID}:account:${userId}:member`);
     expect(raw, 'Zustand des Arbeitgeberbetriebs fehlt').not.toBeNull();
     const stored = JSON.parse(raw!) as { setup?: { companyName?: string; setupComplete?: boolean } };
     expect(stored.setup?.companyName).toBe(COMPANY_NAME);

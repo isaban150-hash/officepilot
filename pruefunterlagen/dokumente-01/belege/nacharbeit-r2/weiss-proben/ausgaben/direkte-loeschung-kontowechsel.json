@@ -1,0 +1,45 @@
+{
+  "mode": "echter direkter Dokument-Loeschdienst, Nachweis-Leseabfrage angehalten; nur isolierter Speicher, kein Netzwerk/keine reale Loeschung",
+  "result": {
+    "ok": false,
+    "errorKey": "document.delete.identityChanged"
+  },
+  "calls": [
+    {
+      "name": "is_workspace_document_payment_proof",
+      "id": "doc-weiss-direkt-eigenes-b"
+    }
+  ],
+  "activeAccount": "B/member",
+  "document": {
+    "id": "doc-weiss-direkt-eigenes-b",
+    "title": "WEISS eigener allgemeiner Brief von Mitglied B",
+    "category": "sonstiges",
+    "issuer": "WEISS",
+    "recognizedText": "Synthetische allgemeine Information ohne Zahlungsbezug",
+    "issueDate": null,
+    "validUntil": null,
+    "digitalFolder": {},
+    "paperFolder": {},
+    "tags": [],
+    "linkedCompany": "",
+    "linkedVorgang": null,
+    "archived": true,
+    "createdAt": "2026-10-20T12:00:00Z",
+    "sync": {
+      "version": 1,
+      "deleted": false,
+      "workspaceId": "ws-weiss-direkt",
+      "deviceId": "weiss",
+      "updatedAt": "2026-10-20T12:00:00Z"
+    },
+    "linkedInvoiceId": null,
+    "linkedLetterId": null,
+    "linkedOfferId": null
+  },
+  "outbox": [],
+  "controlDirectAsB": {
+    "ok": false,
+    "errorKey": "document.delete.forbidden"
+  }
+}

@@ -1,0 +1,76 @@
+Vorher (unmutiert): 23 Tests, rot 0
+M1 Zustand ohne Kontotrennung (gemeinsamer Betriebsschlüssel wie vor N1): ERKANNT (14 rot von 19)
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G1 Inhaber → Abmelden → Mitglied → Abmelden → Inhaber: nichts Fremdes, Ungesende
+        AssertionError: fremdes Dokument im Archiv: expected <li class="business-list__row" …(1)>…(1)</li> to be null
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G2 direkter Kontowechsel ohne Abmelden: Firmensitzung und Bindung des Inhabers s
+        AssertionError: expected <li class="business-list__row" …(1)>…(1)</li> to be null
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G3 Rollenentzug Admin → Mitglied: Admin-Bestand ruht unangetastet; mit der Rolle
+        AssertionError: Admin-Bestand nach Rollenentzug sichtbar: expected <li class="business-list__row" …(1)>…(1)</li> to be null
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G4 Abzug meldet die Mitgliedschaft als entfernt: kein Betriebsbestand, nichts Fr
+        AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string
+M2 Dateien ohne Kontotrennung (gemeinsamer Blob-Bereich): ERKANNT (2 rot von 14)
+    - K1 — Schlüssel je Konto und Sicht K1a Zustand und Dateien: Kontoschlüssel, geerbtes aktives Konto, ausdrücklicher Altbes
+        AssertionError: expected 'workspace:ws-dok01-n1' to be 'workspace:ws-dok01-n1:account:konto-i…' // Object.is equality
+    - K2 — Kontowechsel im selben Browser K2b Dateien und Vorschauen: Bytes und Vorschau-Bindungen des Inhabers erreicht das M
+        AssertionError: expected { …(10) } to be null
+M3 Sicht nicht im Schlüssel (Admin- und Mitgliedsbestand gemeinsam): ERKANNT (6 rot von 19)
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G3 Rollenentzug Admin → Mitglied: Admin-Bestand ruht unangetastet; mit der Rolle
+        AssertionError: Admin-Bestand nach Rollenentzug sichtbar: expected <li class="business-list__row" …(1)>…(1)</li> to be null
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G4 Abzug meldet die Mitgliedschaft als entfernt: kein Betriebsbestand, nichts Fr
+        AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string
+    - K1 — Schlüssel je Konto und Sicht K1a Zustand und Dateien: Kontoschlüssel, geerbtes aktives Konto, ausdrücklicher Altbes
+        AssertionError: expected 'officepilot-state:workspace:ws-dok01-…' to be 'officepilot-state:workspace:ws-dok01-…' // Object.is equality
+    - K2 — Kontowechsel im selben Browser K2a Inhaber → Mitglied → Inhaber: nichts Fremdes sichtbar oder versandbereit, Ungese
+        AssertionError: expected [] to deeply equal [ …(2) ]
+M4 Cloud-Bootstrap wechselt wie vor N1 mit der Inhaberkennung: ERKANNT (5 rot von 5)
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G1 Inhaber → Abmelden → Mitglied → Abmelden → Inhaber: nichts Fremdes, Ungesende
+        AssertionError: expected null to deeply equal { userId: 'usr-admin', access: 'full' }
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G2 direkter Kontowechsel ohne Abmelden: Firmensitzung und Bindung des Inhabers s
+        AssertionError: expected { userId: 'usr-admin', …(2) } to deeply equal { userId: 'usr-admin', …(2) }
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G3 Rollenentzug Admin → Mitglied: Admin-Bestand ruht unangetastet; mit der Rolle
+        AssertionError: expected null to deeply equal { …(2) }
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G4 Abzug meldet die Mitgliedschaft als entfernt: kein Betriebsbestand, nichts Fr
+        AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string
+M5 Mitgliedschaft im Abzug nicht geprüft (kein Sperren): ERKANNT (1 rot von 5)
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G4 Abzug meldet die Mitgliedschaft als entfernt: kein Betriebsbestand, nichts Fr
+        AssertionError: App nicht gesperrt: expected null not to be null
+M6 Kein Aufräumen beim direkten Kontowechsel: ERKANNT (1 rot von 5)
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G2 direkter Kontowechsel ohne Abmelden: Firmensitzung und Bindung des Inhabers s
+        AssertionError: expected null to deeply equal { …(2) }
+M7 Mitglied übernimmt den Altbestand des Betriebs: ERKANNT (1 rot von 14)
+    - K3 — Altbestand aus der Zeit vor der Kontotrennung K3a Mitglied übernimmt nie; der Inhaber (volle Sicht) einmal; danach 
+        AssertionError: Mitglied sieht Altbestand: expected [ 'doc-alt-inhaber' ] to deeply equal []
+M8 Mitglied fasst den globalen Altbestand an (Quarantäne): ERKANNT (1 rot von 14)
+    - K3 — Altbestand aus der Zeit vor der Kontotrennung K3c globaler Altbestand des Betriebs: das Mitglied lässt ihn liegen (
+        AssertionError: globaler Altbestand angefasst: expected null to be '{"version":6,"syncClient":{"deviceId"…' // Object.is equality
+M9 Nutzerbereich eines Nicht-Inhabers wird mit Geschäftsdaten übernommen: ERKANNT (2 rot von 19)
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G5 Nutzerbereich des Mitglieds mit Daten eines früheren eigenen Betriebs: bleibt
+        AssertionError: expected <li class="business-list__row" …(1)>…(1)</li> to be null
+    - K3 — Altbestand aus der Zeit vor der Kontotrennung K3d Nutzerbereich mit Geschäftsdaten: nur der Inhaber bringt ihn mit;
+        AssertionError: member: Nutzerbereich in den Betrieb übernommen: expected [ Array(1) ] to deeply equal []
+M10 Hinweis-Auswahl wieder gerätweit: ERKANNT (1 rot von 14)
+    - K6 — Hinweis-Auswahl je Konto K6a „erledigt" des Inhabers verbirgt dem Mitglied nichts; der gemeinsame Schlüssel bleibt 
+        AssertionError: expected false to be true // Object.is equality
+M11 Rolle member ergibt volle Sicht: ERKANNT (7 rot von 23)
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G1 Inhaber → Abmelden → Mitglied → Abmelden → Inhaber: nichts Fremdes, Ungesende
+        AssertionError: expected { …(2) } to deeply equal { …(2) }
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G2 direkter Kontowechsel ohne Abmelden: Firmensitzung und Bindung des Inhabers s
+        AssertionError: expected { …(2) } to deeply equal { …(2) }
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G3 Rollenentzug Admin → Mitglied: Admin-Bestand ruht unangetastet; mit der Rolle
+        AssertionError: expected { …(2) } to deeply equal { …(2) }
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G5 Nutzerbereich des Mitglieds mit Daten eines früheren eigenen Betriebs: bleibt
+        AssertionError: expected { …(2) } to deeply equal { …(2) }
+M12 Inaktive Mitgliedschaft gilt als Zugang: ERKANNT (2 rot von 19)
+    - DOKUMENTE-01 N1 — Kontotrennung im Gate G4 Abzug meldet die Mitgliedschaft als entfernt: kein Betriebsbestand, nichts Fr
+        AssertionError: App nicht gesperrt: expected null not to be null
+    - K7 — Sicht aus der Mitgliedschaft K7a nur aktive Mitgliedschaften; Inhaber und Admin voll, Mitglied eingeschränkt
+        AssertionError: expected 'full' to be null
+M13 Doppelte Mitgliedszeile wird akzeptiert: ERKANNT (1 rot von 14)
+    - K7 — Sicht aus der Mitgliedschaft K7b das Konto muss genau einmal in der Liste stehen
+        AssertionError: expected { userId: 'konto-mitglied-n1', …(1) } to be null
+M14 Notfall-Inventar erkennt Kontobestände nicht: ERKANNT (1 rot von 14)
+    - K1 — Schlüssel je Konto und Sicht K1b Notfall-Inventar erkennt Kontobestände, Anhänge zählen weiter nicht
+        AssertionError: expected [] to deeply equal [ Array(1) ]
+Nachher (wiederhergestellt): 23 Tests, rot 0
+Alle Mutationen erkannt.
+exit=0

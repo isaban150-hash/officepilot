@@ -1,0 +1,31 @@
+OK   [R1-vorbereitung] Inhaber im eigenen Kontobereich — {"wer":"inhaber","access":"full"}
+OK   [R1-zwei-tabs] drei Dokumente lokal angelegt — {"anzahl":3}
+OK   [R1-zwei-tabs] drei offene Aufträge mit Ursprung Inhaber — {"status":{"pending":3}}
+OK   [R1-zwei-tabs] erste Sendung angehalten (Tab 1, Zugang Inhaber) — {"sendungen":1}
+OK   [R1-zwei-tabs] Tab 2: Mitglied angemeldet (eigene Sicht) — {"wer":"mitglied","access":"member"}
+OK   [R1-zwei-tabs] genau eine Sendung der drei Dokumente — {"proTabKonto":{"1:inhaber":1}}
+OK   [R1-zwei-tabs] keine Sendung der Inhaberdokumente unter dem Mitglied
+OK   [R1-zwei-tabs] Tab 1 sendet nach dem Wechsel nichts mehr — {"tab1":1}
+OK   [R1-zwei-tabs] Aufträge beim Inhaber erhalten (keiner verloren, keiner fehlgeschlagen) — {"status":{"pending":3}}
+OK   [R1-zwei-tabs] Bestätigung im Journal des Inhabers — {"journal":1}
+OK   [R1-zwei-tabs] Mitgliedsbestand ohne Inhaberaufträge — {"auftraege":0}
+OK   [R1b-inhaber-erneut] genau die zwei übrigen gesendet — {"anzahl":2,"bereitsGesendetErneut":0}
+OK   [R1b-inhaber-erneut] mit dem Zugang des Inhabers
+OK   [R1b-inhaber-erneut] alle drei erledigt, Journal leer — {"status":{"completed":3},"journal":0}
+OK   [R1b-inhaber-erneut] über R1/R1b jedes Dokument genau einmal gesendet
+OK   [R2-uebernahme] Altbestand übernommen, Aufträge erhalten und gesperrt — [{"status":"pending","gesperrt":true,"quelle":"legacy_adoption"},{"status":"pending","gesperrt":true,"quelle":"legacy_adoption"}]
+OK   [R2-uebernahme] nach Anmeldung und Abgleich nichts davon gesendet — {"versuche":0}
+OK   [R2-uebernahme] Anzeige „Aktion erforderlich" — {"anzeige":"action"}
+OK   [R2-uebernahme] Prüfspur: Zurückhaltung bei Übernahme — [{"aktion":"held","quelle":"legacy_adoption","von":null,"anzahl":2}]
+OK   [R2-neustart] nach Neustart weiter gesperrt
+OK   [R2-neustart] nach Neustart nichts gesendet
+OK   [R2-freigabe] Sync-Seite: Abschnitt mit zwei zurückgehaltenen Aufträgen — {"zeilen":2}
+OK   [R2-freigabe] Status nennt die Zurückhaltung
+OK   [R2-freigabe] Freigabe ohne Auswahl gesperrt
+OK   [R2-freigabe] genau ein Auftrag freigegeben, mit Inhaber als Ursprung — [{"gesperrt":false,"ursprungInhaber":true},{"gesperrt":true,"ursprungInhaber":false}]
+OK   [R2-freigabe] genau der freigegebene Auftrag gesendet — {"anzahl":1,"erkannt":true}
+OK   [R2-freigabe] mit dem Zugang des Inhabers
+OK   [R2-freigabe] der andere bleibt gesperrt
+OK   [R2-freigabe] Prüfspur: Freigabe durch den Inhaber — [{"aktion":"held","quelle":"legacy_adoption","vonInhaber":false,"anzahl":2},{"aktion":"released","quelle":null,"vonInhaber":true,"anzahl":1}]
+OK   [Z-gesamt] über alle Phasen: keine Dokumentsendung unter dem Mitglied — {"R1-zwei-tabs:inhaber":1,"R1b-inhaber-erneut:inhaber":2,"R2-freigabe:inhaber":1}
+{"abbruch":false,"pruefungen":30,"ok":30,"rot":0,"blockiert":15,"sendungen":4,"widerruf":[204,204,204,204],"profileGeloescht":true}

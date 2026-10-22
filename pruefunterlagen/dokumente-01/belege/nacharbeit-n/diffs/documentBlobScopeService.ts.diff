@@ -1,0 +1,52 @@
+diff --git a/src/services/storage/documentBlobScopeService.ts b/src/services/storage/documentBlobScopeService.ts
+index 5984acb..1834740 100644
+--- a/src/services/storage/documentBlobScopeService.ts
++++ b/src/services/storage/documentBlobScopeService.ts
+@@ -1,13 +1,22 @@
+-import type { StorageScope } from './storageScopeService';
++import { resolveWorkspaceAccount, type StorageAccess, type StorageScope } from './storageScopeService';
+ 
++/**
++ * DOKUMENTE-01 N1 — Dateibytes liegen je Konto und Sicht wie der Zustand
++ * (`workspace:<id>:account:<nutzer>:<sicht>`); ohne Konto der Altbereich
++ * `workspace:<id>` aus der Zeit vor der Kontotrennung.
++ */
+ export function buildDocumentBlobScopeKey(scope: StorageScope): string {
+   switch (scope.type) {
+     case 'guest':
+       return 'guest';
+     case 'user':
+       return `user:${scope.userId}`;
+-    case 'workspace':
+-      return `workspace:${scope.workspaceId}`;
++    case 'workspace': {
++      const account = resolveWorkspaceAccount(scope);
++      return account
++        ? `workspace:${scope.workspaceId}:account:${account.userId}:${account.access}`
++        : `workspace:${scope.workspaceId}`;
++    }
+     default:
+       return 'guest';
+   }
+@@ -21,6 +30,7 @@ export function parseDocumentBlobScopeKey(scopeKey: string): {
+   type: 'guest' | 'user' | 'workspace';
+   userId?: string;
+   workspaceId?: string;
++  access?: StorageAccess;
+ } {
+   if (scopeKey === 'guest') {
+     return { type: 'guest' };
+@@ -29,7 +39,12 @@ export function parseDocumentBlobScopeKey(scopeKey: string): {
+     return { type: 'user', userId: scopeKey.slice('user:'.length) };
+   }
+   if (scopeKey.startsWith('workspace:')) {
+-    return { type: 'workspace', workspaceId: scopeKey.slice('workspace:'.length) };
++    const rest = scopeKey.slice('workspace:'.length);
++    const konto = rest.match(/^([^:]+):account:([^:]+):(full|member)$/);
++    if (konto) {
++      return { type: 'workspace', workspaceId: konto[1], userId: konto[2], access: konto[3] as StorageAccess };
++    }
++    return { type: 'workspace', workspaceId: rest };
+   }
+   return { type: 'guest' };
+ }

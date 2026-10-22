@@ -1,0 +1,48 @@
+diff --git a/src/types/sync.ts b/src/types/sync.ts
+index 51e06c3..6b22673 100644
+--- a/src/types/sync.ts
++++ b/src/types/sync.ts
+@@ -218,6 +218,43 @@ export interface SyncOutboxEntry {
+    * verlassen hat. Wird beim Zusammenführen vereinigt, nie verkleinert.
+    */
+   affectedMonths?: string[];
++  /**
++   * DOKUMENTE-01 R2 — das Konto, das diesen Auftrag eingereiht hat. Gesetzt beim Einreihen aus dem aktiven
++   * Speicherbereich; Statuswechsel und Zusammenführen behalten es. Fehlt bei Aufträgen aus der Zeit davor.
++   */
++  origin?: SyncOutboxOrigin;
++  /**
++   * DOKUMENTE-01 R2 — zurückgehalten, weil kein Ursprungskonto nachweisbar ist (alte gemeinsame Warteschlange).
++   * Ein solcher Auftrag wird nie automatisch gesendet, bis ein berechtigtes Konto ihn bewusst freigibt.
++   */
++  hold?: SyncOutboxHold;
++  /** DOKUMENTE-01 R2 — Prüfspur der bewussten Freigabe eines zurückgehaltenen Auftrags. */
++  originAssignment?: SyncOutboxOriginAssignment;
++}
++
++/** DOKUMENTE-01 R2 — Ursprungskonto eines Auftrags. */
++export interface SyncOutboxOrigin {
++  userId: string;
++  workspaceId?: string;
++  access?: 'full' | 'member';
++}
++
++/** DOKUMENTE-01 R2 — Sperre gegen automatischen Versand. */
++export interface SyncOutboxHold {
++  reason: 'origin_unknown';
++  /** Wann die Sperre gesetzt wurde. */
++  since: string;
++  /** Wo sie entstand: Übernahme eines gemeinsamen Altbestands oder Laden eines Bestands ohne Ursprungsangaben. */
++  source: 'legacy_adoption' | 'load';
++}
++
++/** DOKUMENTE-01 R2 — wer einen zurückgehaltenen Auftrag wann bewusst übernommen hat. */
++export interface SyncOutboxOriginAssignment {
++  by: string;
++  at: string;
++  previous: SyncOutboxHold['reason'];
++  /** Sperre, aus der der Auftrag freigegeben wurde. */
++  heldSince: string;
+ }
+ 
+ export interface SyncableEntity {

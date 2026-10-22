@@ -524,7 +524,13 @@ export function markInboxAsCompanyDocument(
 ): InboxItem | null {
   return patchInboxItem(inboxId, {
     markedAsCompanyDocument: true,
-    classifiedKind: category,
+    /*
+     * DOKUMENTE-01 — nur eine ausdrücklich gewählte Kategorie ersetzt die erkannte
+     * Art. Bisher stand die Auswahl ungefragt auf „Sonstiges": Eine erkannte
+     * Rechnung verlor beim Markieren ihre Art — und im Archiv damit ihre
+     * gesetzliche Aufbewahrung (D-017).
+     */
+    ...(category ? { classifiedKind: category } : {}),
     userModified: true,
     modifiedAt: new Date().toISOString(),
     status: 'geprueft',

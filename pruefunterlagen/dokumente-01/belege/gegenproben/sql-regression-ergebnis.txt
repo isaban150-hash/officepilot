@@ -1,0 +1,51 @@
+OK  account_block_enforcement_01.sql  ohne=0 mit=0
+OK  accounting_assignments_06a.sql  ohne=0 mit=0
+OK  accounting_period_closures_06b.sql  ohne=0 mit=0
+OK  communication_events_s2.sql  ohne=0 mit=0
+OK  document_archive_guard_baf01.sql  ohne=0 mit=0
+VORBESTEHEND ROT (lokale Daten)  document_delivery_bulk_list_b6.sql  ohne=3 mit=3  [ohne: ERROR:  Daten wurden veraendert]  [mit: ERROR:  Daten wurden veraendert]
+OK  document_delivery_context_07c.sql  ohne=0 mit=0
+OK  document_delivery_send_hardening_07b.sql  ohne=0 mit=0
+OK (Gegenprobe ohne Migration rot)  dokumente01_aufbewahrung.sql  ohne=3 mit=0  [ohne: ERROR:  function public.workspace_retention_rule(text, text, text, boolean, boolean, text[], integer, date) does not exist]
+OK (Gegenprobe ohne Migration rot)  dokumente01_papierregister.sql  ohne=3 mit=0  [ohne: ERROR:  P1 Eintrag gehört dem Dokument (created_by Mitglied), geschrieben vom Inhaber -- Zusicherung verletzt]
+OK  einvoice_binding_security_01.sql  ohne=0 mit=0
+OK  email_messages_07d.sql  ohne=0 mit=0
+OK  email_provider_events_07f01b.sql  ohne=0 mit=0
+OK  email_threads_07f01a.sql  ohne=0 mit=0
+OK  employee_payments_p1ma.sql  ohne=0 mit=0
+OK  employee_payments_privacy_p1ma.sql  ohne=0 mit=0
+OK  expense_money_integrity_05b2.sql  ohne=0 mit=0
+OK  fc01a_feiertage.sql  ohne=0 mit=0
+OK  fc01a_inventur_paket1.sql  ohne=0 mit=0
+OK  fc01a_inventur_paket2.sql  ohne=0 mit=0
+OK  fc01a_inventur_paket3.sql  ohne=0 mit=0
+OK  fc01a_mitglied_erstzugang.sql  ohne=0 mit=0
+OK  fc01a_nacharbeit.sql  ohne=0 mit=0
+OK  fc01a_p1_altformat.sql  ohne=0 mit=0
+OK  fc01a_p1_nacharbeit.sql  ohne=0 mit=0
+OK  fc01a_skontofrist.sql  ohne=0 mit=0
+OK  fc01a_sys_abschluss.sql  ohne=0 mit=0
+OK  financial_action_authorization_r1sec01.sql  ohne=0 mit=0
+OK  finanz_core_01a.sql  ohne=0 mit=0
+OK  go_live_security_01.sql  ohne=0 mit=0
+OK  go_live_security_01_completion.sql  ohne=0 mit=0
+OK  go_live_security_01_finalization.sql  ohne=0 mit=0
+VORBESTEHEND ROT (lokale Daten)  inbound_email_07e.sql  ohne=3 mit=3  [ohne: ERROR:  Anzahl: 15]  [mit: ERROR:  Anzahl: 15]
+OK  invoice_cancellation_correction_01b.sql  ohne=0 mit=0
+OK  invoice_closeout_03d.sql  ohne=0 mit=0
+OK  invoice_drafts_s5.sql  ohne=0 mit=0
+OK  invoice_integrity_03b.sql  ohne=0 mit=0
+OK  knowledge_facts_s3.sql  ohne=0 mit=0
+VORBESTEHEND ROT (lokale Daten)  mailbox_auto_sync_07eauto.sql  ohne=3 mit=3  [ohne: ERROR:  Kandidaten Anzahl 8]  [mit: ERROR:  Kandidaten Anzahl 8]
+OK  mailbox_folder_guard_07emsafix1.sql  ohne=0 mit=0
+OK  mailbox_oauth_07emsa.sql  ohne=0 mit=0
+OK  mailbox_provider_foundation_07epf.sql  ohne=0 mit=0
+OK  manual_invoice_integrity_03f.sql  ohne=0 mit=0
+OK  manual_invoice_replay_01b2b.sql  ohne=0 mit=0
+OK  manual_order_02c.sql  ohne=0 mit=0
+OK  offer_archive_invariant_01b.sql  ohne=0 mit=0
+OK  order_drafts_s6.sql  ohne=0 mit=0
+OK  order_from_offer_02b.sql  ohne=0 mit=0
+OK  paper_register_entries_s1.sql  ohne=0 mit=0
+OK  rebilled_position_contract_b7v1.sql  ohne=0 mit=0
+OK  teilrechnung_03c.sql  ohne=0 mit=0

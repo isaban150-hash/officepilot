@@ -1,5 +1,5 @@
 import type { AppPersistedState } from '../../types/models';
-import type { StorageScope } from './storageScopeService';
+import type { StorageAccount, StorageScope } from './storageScopeService';
 import {
   LEGACY_GLOBAL_STORAGE_KEY,
   buildLegacyQuarantineKey,
@@ -42,6 +42,12 @@ export function canAssignLegacyStateToScope(
   }
 
   if (scope.type === 'workspace') {
+    /*
+     * DOKUMENTE-01 N1 — der globale Altbestand stammt aus der Zeit vor jeder
+     * Trennung und kann alles enthalten, was der Betrieb lokal hatte. Ein Konto
+     * mit Mitgliedssicht bekommt ihn nie; er wandert in die Quarantäne.
+     */
+    if (scope.account?.access === 'member') return false;
     const workspaceId = scope.workspaceId;
     if (legacy.workspace?.id === workspaceId) return true;
     if (legacy.syncClient?.serverWorkspaceId === workspaceId) return true;
@@ -82,6 +88,15 @@ export function tryMigrateLegacyGlobalState(
   scope: StorageScope,
   userId?: string,
 ): LegacyMigrationOutcome {
+  /*
+   * DOKUMENTE-01 N1 — ein Konto mit Mitgliedssicht fasst den globalen Altbestand
+   * gar nicht an: Es übernimmt ihn nicht und schiebt ihn auch nicht in die
+   * Quarantäne. So bleibt er für ein Konto mit voller Sicht liegen.
+   */
+  if (scope.type === 'workspace' && scope.account?.access === 'member') {
+    return { action: 'none' };
+  }
+
   const targetKey = buildStorageKey(scope);
   if (readRawStorage(targetKey)) {
     if (legacyGlobalStateExists()) {
@@ -126,7 +141,9 @@ export type UserScopeMigrationResult =
   /** Beide Seiten tragen echte, unterschiedliche Firmendaten. */
   | { action: 'conflict' }
   /** Schreiben oder Rücklesen fehlgeschlagen — beide Kopien bleiben. */
-  | { action: 'write_failed' };
+  | { action: 'write_failed' }
+  /** DOKUMENTE-01 N1 — Konto ist nicht Inhaber und der User-Zustand trägt Geschäftsdaten: er bleibt liegen. */
+  | { action: 'kept_user' };
 
 function parseState(raw: string | null): AppPersistedState | null {
   if (!raw) return null;
@@ -151,6 +168,37 @@ function sameCompany(a: AppPersistedState, b: AppPersistedState): boolean {
   return nameA !== '' && nameA === nameB;
 }
 
+/** DOKUMENTE-01 N1 — trägt der Zustand Geschäftsdaten, nicht nur Einrichtung und Serveridentität? */
+function hasBusinessEntities(state: AppPersistedState): boolean {
+  const memory = state.officePilotMemory;
+  return [
+    state.documents,
+    state.inboxItems,
+    state.vorgaenge,
+    state.tasks,
+    state.invoiceEntries,
+    state.uploadedDocuments,
+    state.documentFileRefs,
+    state.documentWorkResults,
+    state.expenses,
+    state.customers,
+    state.vorgangNotes,
+    state.businessLetters,
+    state.offers,
+    state.orderDrafts,
+    state.invoiceDrafts,
+    state.bankTransactions,
+    state.communicationHistory,
+    state.knowledgeFacts,
+    state.employees,
+    state.employeePayments,
+    state.mailImports,
+    memory?.documentMemories,
+    memory?.proofMemories,
+    memory?.paperRegisterEntries,
+  ].some((list) => Array.isArray(list) && list.length > 0);
+}
+
 /**
  * OFFICEPILOT-SETUP-CLOUD-PERSIST-01B/01C — früher wurde die User-Kopie gelöscht,
  * sobald ein Workspace-Schlüssel existierte; ein leerer Workspace-Eintrag hat so
@@ -163,14 +211,39 @@ function sameCompany(a: AppPersistedState, b: AppPersistedState): boolean {
 export function migrateUserScopeToWorkspaceScope(
   userId: string,
   workspaceId: string,
+  /**
+   * DOKUMENTE-01 N1 — der Nutzerbereich gehört genau diesem Konto: Ziel ist sein
+   * Kontobestand, nicht der gemeinsame Betriebsschlüssel. Ohne Konto (alte Aufrufer,
+   * Tests) bleibt es beim bisherigen Ziel.
+   */
+  account?: StorageAccount,
+  /** DOKUMENTE-01 N1 — Inhaber des Betriebs laut Server; unbekannt heißt: nicht Inhaber. */
+  ownerUserId?: string,
 ): UserScopeMigrationResult {
   const userKey = buildStorageKey({ type: 'user', userId });
-  const workspaceKey = buildStorageKey({ type: 'workspace', workspaceId });
+  const workspaceKey = buildStorageKey(
+    account ? { type: 'workspace', workspaceId, account } : { type: 'workspace', workspaceId, account: null },
+  );
 
   const userRaw = readRawStorage(userKey);
   if (!userRaw) return { action: 'none' };
 
   const workspaceRaw = readRawStorage(workspaceKey);
+
+  /*
+   * DOKUMENTE-01 N1 — vor der Kontotrennung wanderte hier immer der Nutzerbereich
+   * des Inhabers. Ein anderes Konto (Admin, Mitglied) bringt nur seine
+   * Serveridentität aus der Provisionierung mit. Geschäftsdaten in seinem
+   * Nutzerbereich (etwa ein alter globaler Bestand dieses Geräts oder ein eigener
+   * früherer Betrieb) gehören nicht in diesen Betrieb. Sie bleiben unverändert
+   * liegen, und auch die Einrichtung des Kontobestands wird nicht überschrieben.
+   */
+  if (account && account.userId !== ownerUserId) {
+    const ownState = parseState(userRaw);
+    if (!ownState || hasBusinessEntities(ownState)) return { action: 'kept_user' };
+    if (workspaceRaw) return { action: 'kept_workspace' };
+  }
+
   if (!workspaceRaw) {
     if (!writeAndVerify(workspaceKey, userRaw)) return { action: 'write_failed' };
     removeRawStorage(userKey);

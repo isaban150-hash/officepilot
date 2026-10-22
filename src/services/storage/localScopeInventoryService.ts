@@ -70,7 +70,10 @@ function classify(key: string): { type: LocalScopeCopyType; id?: string } | null
   }
   if (key.startsWith(`${STORAGE_KEY_PREFIX}:workspace:`)) {
     const id = key.slice(`${STORAGE_KEY_PREFIX}:workspace:`.length);
-    return plainSegment(id) ? { type: 'workspace', id } : null;
+    if (plainSegment(id)) return { type: 'workspace', id };
+    // DOKUMENTE-01 N1 — Kontobestand `…:workspace:<id>:account:<nutzer>:<sicht>`; Anhänge zählen weiter nicht.
+    const konto = id.match(/^([^:]+):account:([^:]+):(full|member)$/);
+    return konto ? { type: 'workspace', id: konto[1] } : null;
   }
   return null;
 }

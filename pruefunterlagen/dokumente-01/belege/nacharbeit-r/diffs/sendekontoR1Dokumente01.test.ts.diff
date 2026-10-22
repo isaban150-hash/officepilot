@@ -1,0 +1,746 @@
+diff --git a/src/services/sync/sendekontoR1Dokumente01.test.ts b/src/services/sync/sendekontoR1Dokumente01.test.ts
+new file mode 100644
+index 0000000..5f44905
+--- /dev/null
++++ b/src/services/sync/sendekontoR1Dokumente01.test.ts
+@@ -0,0 +1,740 @@
++/**
++ * DOKUMENTE-01 R1 — ein Synchronisationslauf sendet nur unter dem Konto, dem er gehört.
++ *
++ * WEISS-Endrecheck vom 20.10.2026 (R1): Ein laufender Push schickte die restlichen
++ * Aufträge des ersten Kontos mit dem Zugang eines zweiten, das sich inzwischen (auch
++ * in einem zweiten Tab) angemeldet hatte.
++ *
++ *  S1  Inhaber → Mitglied während der ersten Sendung: genau eine Sendung, unter dem
++ *      Inhaber; der Rest bleibt unverändert offen; die Bestätigung steht im Journal des
++ *      Inhabers, nicht in dem des Mitglieds
++ *  S2  Gegenrichtung Mitglied → Inhaber
++ *  S3  Abmeldung während des Laufs
++ *  S4  nur die Sitzung wechselt (zweiter Tab), der Speicherbereich bleibt: ebenfalls Halt
++ *  S5  mehrstufiges Dokument: Archivzeile bestätigt, Wechsel vor der Originalbindung →
++ *      keine Bindung unter dem neuen Konto, der Auftrag bleibt offen und gilt nicht als erledigt
++ *  S6  kein doppelter Versand: der nächste Lauf des Ursprungskontos sendet nur den Rest;
++ *      nach einem Neustart wendet das Laden das Journal an und räumt es danach auf
++ *  S7  echtes SDK: Der Zugang einer Anfrage stammt aus genau der Prüfung davor, nicht aus
++ *      einer später gelesenen Sitzung (Gegenprobe ohne Bindung: dort trüge sie den fremden)
++ *  S8  echtes SDK, Datei: Bytes lesen → Hochladen → Registrieren. Wechsel während des
++ *      Lesens: nichts gesendet. Wechsel nach dem Hochladen: Upload unter dem Ursprungskonto,
++ *      keine Registrierung unter dem neuen
++ *  S9  Abruf: Wechsel zwischen Senden und Abruf oder mitten im Abruf → nichts übernommen,
++ *      kein weiterer Abruf, keine Fehlermeldung, kein Bericht mit fremden Aufträgen
++ *  S10 Lauf ohne Wechsel: alles gesendet, Ergebnis gespeichert, Journal danach leer
++ *  S11 normaler Kontowechsel Inhaber → Mitglied → Inhaber: jeder Lauf sendet nur eigene
++ *      Aufträge mit eigenem Zugang; Ungesendetes des Inhabers geht danach unter ihm hinaus
++ */
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import { createClient } from '@supabase/supabase-js';
++import { DEFAULT_SETUP } from '../../data/mockData';
++import type { AppPersistedState, CompanyDocument } from '../../types/models';
++import type { SyncOutboxEntry, SyncOutboxOrigin } from '../../types/sync';
++import type { DocumentFileRef } from '../../types/documentFileRef';
++import { STORAGE_VERSION } from './syncMigrationService';
++import { createSyncClient, resetSyncClientForTests } from './syncClientService';
++import { getSyncOutboxSnapshot, resetSyncOutboxForTests } from './syncOutboxService';
++import { SupabaseSyncAdapter } from './supabaseSyncAdapter';
++import { SyncCoordinator, SYNC_IDENTITY_CHANGED_REPORT_ID, getSyncCoordinator, resetSyncCoordinatorForTests } from './syncCoordinator';
++import { buildConfirmationJournalKey, listConfirmedOutboxRecords } from './syncConfirmationJournal';
++import { bindClientToSyncRun, captureSyncRunIdentity, createSyncRunGuard } from './syncRunIdentityService';
++import { pushPendingChangesFromUi } from './syncUiService';
++import {
++  buildStorageKey,
++  resetStorageScopeForTests,
++  setActiveStorageScope,
++  type StorageAccess,
++} from '../storage/storageScopeService';
++import { switchToWorkspaceScope } from '../storage/storageBootstrapService';
++import { applyStateToStores } from '../persistenceService';
++import * as supabaseLib from '../../lib/supabase';
++import * as dateiSpeicher from '../documentFileStoreService';
++import { resetDocumentFileStoreForTests, storeDocumentFileFromCachedPayload } from '../documentFileStoreService';
++import { useDocumentBlobDatabaseReset } from '../../test/documentBlobTestReset';
++
++const WS = 'ws-r1-dok01';
++const INHABER = 'konto-inhaber-r1';
++const MITGLIED = 'konto-mitglied-r1';
++const JETZT = '2026-10-20T12:00:00.000Z';
++
++useDocumentBlobDatabaseReset();
++
++beforeEach(() => {
++  localStorage.clear();
++  resetStorageScopeForTests();
++  resetSyncOutboxForTests([]);
++  resetSyncClientForTests({ ...createSyncClient(), serverWorkspaceId: WS, workspaceId: WS });
++  resetSyncCoordinatorForTests();
++  vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(true);
++});
++
++afterEach(() => {
++  vi.restoreAllMocks();
++  resetDocumentFileStoreForTests();
++  resetStorageScopeForTests();
++});
++
++/* ------------------------------------------------------------------ */
++/* Bausteine                                                           */
++/* ------------------------------------------------------------------ */
++
++function bereich(userId: string, access: StorageAccess): void {
++  setActiveStorageScope({ type: 'workspace', workspaceId: WS, account: { userId, access } });
++}
++
++function kontoSchluessel(userId: string, access: StorageAccess): string {
++  return buildStorageKey({ type: 'workspace', workspaceId: WS, account: { userId, access } });
++}
++
++function herkunft(userId: string, access: StorageAccess): SyncOutboxOrigin {
++  return { userId, workspaceId: WS, access };
++}
++
++function dokument(id: string, extra: Partial<CompanyDocument> = {}): CompanyDocument {
++  return {
++    id,
++    title: `R1 synthetisch ${id}`,
++    category: 'sonstiges',
++    issuer: 'R1 Prüfung',
++    recognizedText: 'synthetisch',
++    issueDate: null,
++    validUntil: null,
++    digitalFolder: { id: 'sonstiges', name: 'Sonstiges', path: '/sonstiges' },
++    paperFolder: { folderId: 'sonstiges', register: 'S', label: 'Sonstiges' },
++    tags: [],
++    linkedCompany: null,
++    linkedVorgang: null,
++    archived: false,
++    createdAt: JETZT,
++    sync: { version: 0, updatedAt: JETZT, deleted: false, deviceId: 'geraet-r1', workspaceId: WS },
++    ...extra,
++  } as unknown as CompanyDocument;
++}
++
++function auftrag(
++  id: string,
++  entityType: SyncOutboxEntry['entityType'],
++  entityId: string,
++  origin?: SyncOutboxOrigin,
++  sequence?: number,
++): SyncOutboxEntry {
++  return {
++    id,
++    entityType,
++    entityId,
++    operation: 'create',
++    version: 0,
++    queuedAt: JETZT,
++    ...(sequence !== undefined ? { sequence } : {}),
++    retryCount: 0,
++    status: 'pending',
++    ...(origin ? { origin } : {}),
++  };
++}
++
++function zustand(teil: Partial<AppPersistedState>): AppPersistedState {
++  return {
++    version: STORAGE_VERSION,
++    invoiceEntries: [],
++    syncClient: { ...createSyncClient(), serverWorkspaceId: WS, workspaceId: WS },
++    syncOutbox: [],
++    setup: DEFAULT_SETUP,
++    vorgaenge: [],
++    customers: [],
++    inboxItems: [],
++    tasks: [],
++    documents: [],
++    savedAt: JETZT,
++    ...teil,
++  } as AppPersistedState;
++}
++
++interface Sendung {
++  konto: string | null;
++  art: string;
++  id: string | undefined;
++}
++
++/** Ersatzclient wie in der WEISS-Reproduktion: sendet sofort beim Aufruf und merkt sich die Sitzung dabei. */
++function ersatzClient(sitzung: { konto: string | null }) {
++  const sendungen: Sendung[] = [];
++  let tor: { erreicht: () => void; frei: Promise<void> } | null = null;
++  let nachSendung: ((name: string) => void) | null = null;
++  const client = {
++    auth: {
++      getSession: async () => ({
++        data: {
++          session: sitzung.konto ? { user: { id: sitzung.konto }, access_token: `zugang-${sitzung.konto}` } : null,
++        },
++      }),
++    },
++    rpc: async (name: string, args: Record<string, unknown>) => {
++      const payload = (args.p_payload ?? {}) as Record<string, unknown>;
++      sendungen.push({
++        konto: sitzung.konto,
++        art: String(args.p_entity_type ?? name),
++        id: (payload.client_document_id ?? payload.document_id) as string | undefined,
++      });
++      if (tor) {
++        const offen = tor;
++        tor = null;
++        offen.erreicht();
++        await offen.frei;
++      }
++      nachSendung?.(name);
++      if (name === 'pull_workspace_sync_state') return { data: {}, error: null };
++      if (name === 'pull_workspace_order_amendments') return { data: [], error: null };
++      return { data: { row_version: 1, deleted: false, payload: args.p_payload }, error: null };
++    },
++  };
++  return {
++    client,
++    sendungen,
++    /** Hält die nächste Sendung an, bis `frei()` gerufen wird. */
++    halteNaechste(): { erreicht: Promise<void>; frei: () => void } {
++      let erreicht!: () => void;
++      let frei!: () => void;
++      const erreichtP = new Promise<void>((resolve) => (erreicht = resolve));
++      const freiP = new Promise<void>((resolve) => (frei = resolve));
++      tor = { erreicht, frei: freiP };
++      return { erreicht: erreichtP, frei };
++    },
++    nachJederSendung(hook: (name: string) => void): void {
++      nachSendung = hook;
++    },
++  };
++}
++
++function journal(userId: string, access: StorageAccess): string[] {
++  return listConfirmedOutboxRecords(kontoSchluessel(userId, access)).map((record) => record.outboxId);
++}
++
++/* ------------------------------------------------------------------ */
++/* S1–S6: Kontowechsel während des Sendens (Ersatzclient)              */
++/* ------------------------------------------------------------------ */
++
++describe('DOKUMENTE-01 R1 — Kontowechsel während eines laufenden Sendens', () => {
++  async function laufMitWechsel(input: {
++    von: { konto: string; access: StorageAccess };
++    wechsel: (sitzung: { konto: string | null }) => void;
++    dokumente?: CompanyDocument[];
++  }) {
++    const sitzung = { konto: input.von.konto as string | null };
++    bereich(input.von.konto, input.von.access);
++    const ersatz = ersatzClient(sitzung);
++    const docs = input.dokumente ?? ['doc-r1-1', 'doc-r1-2', 'doc-r1-3'].map((id) => dokument(id));
++    const outbox = docs.map((doc, index) =>
++      auftrag(`out-${index}`, 'document', doc.id, herkunft(input.von.konto, input.von.access), index + 1),
++    );
++    const halt = ersatz.halteNaechste();
++    const lauf = new SupabaseSyncAdapter(ersatz.client as never).pushChanges({
++      deviceId: 'geraet-r1',
++      workspaceId: WS,
++      state: zustand({ documents: docs, syncOutbox: outbox }),
++      outbox,
++    });
++    await halt.erreicht;
++    input.wechsel(sitzung);
++    halt.frei();
++    return { ergebnis: await lauf, ersatz, outbox };
++  }
++
++  it('S1 Inhaber → Mitglied während der ersten Sendung: genau eine Sendung, unter dem Inhaber; der Rest bleibt offen', async () => {
++    const { ergebnis, ersatz, outbox } = await laufMitWechsel({
++      von: { konto: INHABER, access: 'full' },
++      wechsel: (sitzung) => {
++        bereich(MITGLIED, 'member');
++        sitzung.konto = MITGLIED;
++      },
++    });
++
++    expect(ersatz.sendungen).toEqual([{ konto: INHABER, art: 'archived_document', id: 'doc-r1-1' }]);
++    expect(ergebnis.identityChanged).toBe(true);
++    expect(ergebnis.success).toBe(false);
++    expect(ergebnis.completedOutboxIds).toEqual(['out-0']);
++    expect(ergebnis.failedOutbox).toEqual([]);
++    // Der Rest bleibt unverändert offen — kein Fehlerstatus, kein Versuchszähler.
++    expect(ergebnis.state.syncOutbox!.filter((entry) => entry.id !== 'out-0')).toEqual(outbox.slice(1));
++    expect(journal(INHABER, 'full')).toEqual(['out-0']);
++    expect(journal(MITGLIED, 'member')).toEqual([]);
++    expect(localStorage.getItem(buildConfirmationJournalKey(kontoSchluessel(MITGLIED, 'member')))).toBeNull();
++    // Die Warteschlange im Arbeitsspeicher (jetzt die des Mitglieds) bleibt unberührt.
++    expect(getSyncOutboxSnapshot()).toEqual([]);
++  });
++
++  it('S2 Gegenrichtung Mitglied → Inhaber: nur die eigene Sendung des Mitglieds', async () => {
++    const { ergebnis, ersatz } = await laufMitWechsel({
++      von: { konto: MITGLIED, access: 'member' },
++      wechsel: (sitzung) => {
++        bereich(INHABER, 'full');
++        sitzung.konto = INHABER;
++      },
++    });
++
++    expect(ersatz.sendungen).toEqual([{ konto: MITGLIED, art: 'archived_document', id: 'doc-r1-1' }]);
++    expect(ergebnis.identityChanged).toBe(true);
++    expect(ergebnis.completedOutboxIds).toEqual(['out-0']);
++    expect(journal(MITGLIED, 'member')).toEqual(['out-0']);
++    expect(journal(INHABER, 'full')).toEqual([]);
++  });
++
++  it('S3 Abmeldung während des Laufs: danach geht nichts mehr hinaus', async () => {
++    const { ergebnis, ersatz } = await laufMitWechsel({
++      von: { konto: INHABER, access: 'full' },
++      wechsel: (sitzung) => {
++        setActiveStorageScope({ type: 'guest' });
++        sitzung.konto = null;
++      },
++    });
++
++    expect(ersatz.sendungen).toHaveLength(1);
++    expect(ersatz.sendungen[0].konto).toBe(INHABER);
++    expect(ergebnis.identityChanged).toBe(true);
++    expect(ergebnis.identityChangeReason).toBe('bereich');
++    expect(journal(INHABER, 'full')).toEqual(['out-0']);
++  });
++
++  it('S4 nur die Sitzung wechselt (zweiter Tab), der Speicherbereich bleibt: ebenfalls Halt', async () => {
++    const { ergebnis, ersatz } = await laufMitWechsel({
++      von: { konto: INHABER, access: 'full' },
++      wechsel: (sitzung) => {
++        sitzung.konto = MITGLIED;
++      },
++    });
++
++    expect(ersatz.sendungen).toEqual([{ konto: INHABER, art: 'archived_document', id: 'doc-r1-1' }]);
++    expect(ergebnis.identityChanged).toBe(true);
++    expect(ergebnis.identityChangeReason).toBe('sitzung');
++  });
++
++  it('S5 mehrstufiges Dokument: Wechsel nach der Archivzeile → keine Originalbindung unter dem neuen Konto, der Auftrag bleibt offen', async () => {
++    const mitOriginal = dokument('doc-r1-original', { fileRefId: 'datei-r1-original' } as Partial<CompanyDocument>);
++    const { ergebnis, ersatz, outbox } = await laufMitWechsel({
++      von: { konto: INHABER, access: 'full' },
++      dokumente: [mitOriginal],
++      wechsel: (sitzung) => {
++        bereich(MITGLIED, 'member');
++        sitzung.konto = MITGLIED;
++      },
++    });
++
++    // Gesendet ist nur der erste Teilschritt — unter dem Inhaber. Die Bindung ging nicht hinaus.
++    expect(ersatz.sendungen).toEqual([{ konto: INHABER, art: 'archived_document', id: 'doc-r1-original' }]);
++    expect(ergebnis.identityChanged).toBe(true);
++    expect(ergebnis.completedOutboxIds).toEqual([]);
++    expect(ergebnis.failedOutbox).toEqual([]);
++    expect(ergebnis.state.syncOutbox).toEqual(outbox);
++    expect(journal(INHABER, 'full')).toEqual([]);
++  });
++
++  it('S6 kein doppelter Versand: der nächste Lauf des Inhabers sendet nur den Rest; ein Neustart wendet das Journal an', async () => {
++    const { outbox } = await laufMitWechsel({
++      von: { konto: INHABER, access: 'full' },
++      wechsel: (sitzung) => {
++        bereich(MITGLIED, 'member');
++        sitzung.konto = MITGLIED;
++      },
++    });
++    expect(journal(INHABER, 'full')).toEqual(['out-0']);
++
++    // Der Inhaber meldet sich wieder an; sein gespeicherter Bestand ist der von vor dem Lauf.
++    const docs = ['doc-r1-1', 'doc-r1-2', 'doc-r1-3'].map((id) => dokument(id));
++    const sitzung = { konto: INHABER as string | null };
++    bereich(INHABER, 'full');
++    const ersatz = ersatzClient(sitzung);
++    const zweiter = await new SupabaseSyncAdapter(ersatz.client as never).pushChanges({
++      deviceId: 'geraet-r1',
++      workspaceId: WS,
++      state: zustand({ documents: docs, syncOutbox: outbox }),
++      outbox,
++    });
++
++    expect(ersatz.sendungen.map((sendung) => sendung.id)).toEqual(['doc-r1-2', 'doc-r1-3']);
++    expect(ersatz.sendungen.every((sendung) => sendung.konto === INHABER)).toBe(true);
++    expect(zweiter.completedOutboxIds.sort()).toEqual(['out-0', 'out-1', 'out-2']);
++    expect(zweiter.identityChanged).toBeUndefined();
++  });
++
++  it('S6b Neustart: Laden des Kontobestands wendet das Journal an und räumt es nach dem Speichern auf', async () => {
++    await laufMitWechsel({
++      von: { konto: INHABER, access: 'full' },
++      wechsel: (sitzung) => {
++        bereich(MITGLIED, 'member');
++        sitzung.konto = MITGLIED;
++      },
++    });
++    const docs = ['doc-r1-1', 'doc-r1-2', 'doc-r1-3'].map((id) => dokument(id));
++    const outbox = docs.map((doc, index) => auftrag(`out-${index}`, 'document', doc.id, herkunft(INHABER, 'full'), index + 1));
++    localStorage.setItem(kontoSchluessel(INHABER, 'full'), JSON.stringify(zustand({ documents: docs, syncOutbox: outbox })));
++
++    switchToWorkspaceScope(INHABER, WS, 'full', INHABER);
++
++    const geladen = getSyncOutboxSnapshot();
++    expect(geladen.find((entry) => entry.id === 'out-0')?.status).toBe('completed');
++    expect(geladen.filter((entry) => entry.status === 'pending').map((entry) => entry.id).sort()).toEqual(['out-1', 'out-2']);
++    // Ursprung nachgewiesen — nichts zurückgehalten.
++    expect(geladen.some((entry) => entry.hold)).toBe(false);
++    const gespeichert = JSON.parse(localStorage.getItem(kontoSchluessel(INHABER, 'full'))!) as AppPersistedState;
++    expect(gespeichert.syncOutbox!.find((entry) => entry.id === 'out-0')?.status).toBe('completed');
++    expect(journal(INHABER, 'full')).toEqual([]);
++  });
++});
++
++/* ------------------------------------------------------------------ */
++/* S7–S8: echtes Supabase-SDK, nur das Netz ersetzt                     */
++/* ------------------------------------------------------------------ */
++
++/** Feste, weit entfernte Ablaufzeit: Das synthetische Token ist je Konto immer dasselbe. */
++const ABLAUF = 4102444800;
++
++function synthetischesToken(konto: string): string {
++  const teil = (wert: object) => Buffer.from(JSON.stringify(wert)).toString('base64url');
++  return `${teil({ alg: 'HS256', typ: 'JWT' })}.${teil({ sub: konto, role: 'authenticated', exp: ABLAUF })}.synthetisch`;
++}
++
++function sitzungFuer(konto: string) {
++  return {
++    access_token: synthetischesToken(konto),
++    token_type: 'bearer',
++    expires_in: 3600,
++    expires_at: ABLAUF,
++    refresh_token: `synthetisch-erneuerung-${konto}`,
++    user: {
++      id: konto,
++      aud: 'authenticated',
++      role: 'authenticated',
++      app_metadata: {},
++      user_metadata: {},
++      created_at: '2026-10-20T00:00:00.000Z',
++    },
++  };
++}
++
++const SITZUNGSSCHLUESSEL = 'r1-sdk-sitzung';
++
++/** Realtime wird hier nie verbunden; die Testumgebung hat nur keinen WebSocket-Konstruktor. */
++class OhneVerbindung {
++  readonly readyState = 3;
++  close(): void {}
++  send(): void {}
++}
++
++interface NetzAnfrage {
++  pfad: string;
++  zugang: string | null;
++}
++
++function echterClient(ablage: Map<string, string>, beiAnfrage?: (pfad: string) => void) {
++  const anfragen: NetzAnfrage[] = [];
++  const netz = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
++    const pfad = new URL(String(input)).pathname;
++    anfragen.push({ pfad, zugang: new Headers(init?.headers).get('Authorization') });
++    beiAnfrage?.(pfad);
++    const body = pfad.startsWith('/storage/v1/object/')
++      ? { Key: 'workspace-files/r1', Id: 'r1' }
++      : { row_version: 1, deleted: false, payload: {} };
++    return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
++  };
++  const client = createClient('http://127.0.0.1:54321', 'synthetischer-anon-schluessel', {
++    realtime: { transport: OhneVerbindung as never },
++    auth: {
++      storage: {
++        getItem: (key: string) => ablage.get(key) ?? null,
++        setItem: (key: string, value: string) => void ablage.set(key, value),
++        removeItem: (key: string) => void ablage.delete(key),
++      },
++      storageKey: SITZUNGSSCHLUESSEL,
++      persistSession: true,
++      autoRefreshToken: false,
++      detectSessionInUrl: false,
++    },
++    global: { fetch: netz as typeof fetch },
++  });
++  return { client, anfragen };
++}
++
++function melde(ablage: Map<string, string>, konto: string): void {
++  ablage.set(SITZUNGSSCHLUESSEL, JSON.stringify(sitzungFuer(konto)));
++}
++
++describe('DOKUMENTE-01 R1 — echtes SDK: Zugang aus der Prüfung, Halt vor jedem weiteren Schritt', () => {
++  it('S7 der Zugang stammt aus genau der Prüfung davor — auch wenn die Sitzung unmittelbar danach wechselt', async () => {
++    const ablage = new Map<string, string>();
++    melde(ablage, INHABER);
++    bereich(INHABER, 'full');
++    const { client, anfragen } = echterClient(ablage);
++
++    // Zweiter Tab: Unmittelbar nach dem nächsten Lesen der Sitzung meldet sich das Mitglied an.
++    const echtesLesen = client.auth.getSession.bind(client.auth);
++    let wechselNachLesen = false;
++    client.auth.getSession = (async () => {
++      const ergebnis = await echtesLesen();
++      if (wechselNachLesen) {
++        wechselNachLesen = false;
++        melde(ablage, MITGLIED);
++      }
++      return ergebnis;
++    }) as typeof client.auth.getSession;
++
++    const waechter = createSyncRunGuard(await captureSyncRunIdentity(client, WS), client);
++    const gebunden = bindClientToSyncRun(client, waechter);
++    const args = { p_workspace_id: WS, p_entity_type: 'archived_document', p_payload: {}, p_row_version: 0 };
++
++    wechselNachLesen = true;
++    const { error } = await gebunden.rpc('upsert_workspace_intake_entity', args);
++    expect(error).toBeNull();
++    expect(anfragen).toEqual([
++      { pfad: '/rest/v1/rpc/upsert_workspace_intake_entity', zugang: `Bearer ${synthetischesToken(INHABER)}` },
++    ]);
++
++    // Jetzt ist das Mitglied angemeldet: Die nächste Anfrage dieses Laufs entsteht gar nicht erst.
++    await expect(gebunden.rpc('upsert_workspace_intake_entity', args)).rejects.toMatchObject({
++      code: 'sync_run_identity_changed',
++    });
++    expect(anfragen).toHaveLength(1);
++    expect(waechter.tripped).toBe('sitzung');
++
++    // Gegenprobe ohne Bindung: Prüfen und Senden lesen die Sitzung getrennt — gesendet würde mit fremdem Zugang.
++    melde(ablage, INHABER);
++    wechselNachLesen = true;
++    const geprueft = await client.auth.getSession();
++    expect(geprueft.data.session?.user.id).toBe(INHABER);
++    await client.rpc('upsert_workspace_intake_entity', args);
++    expect(anfragen[1].zugang).toBe(`Bearer ${synthetischesToken(MITGLIED)}`);
++  });
++
++  async function dateiAuftrag(): Promise<{ ref: DocumentFileRef; outbox: SyncOutboxEntry[]; state: AppPersistedState }> {
++    const bytes = new TextEncoder().encode('%PDF-1.4 R1 synthetischer Beleg');
++    const { fileRef } = await storeDocumentFileFromCachedPayload(
++      { fileName: 'r1-beleg.pdf', mimeType: 'application/pdf', fileSize: bytes.byteLength, bytes },
++      { lifecycleIntent: 'committed' },
++    );
++    const outbox = [auftrag('out-datei', 'document_file', fileRef.id, herkunft(INHABER, 'full'), 1)];
++    return { ref: fileRef, outbox, state: zustand({ documentFileRefs: [fileRef], syncOutbox: outbox } as Partial<AppPersistedState>) };
++  }
++
++  it('S8a Datei: Wechsel während des Lesens der Bytes → weder Upload noch Registrierung', async () => {
++    const ablage = new Map<string, string>();
++    melde(ablage, INHABER);
++    bereich(INHABER, 'full');
++    const { client, anfragen } = echterClient(ablage);
++    const { outbox, state } = await dateiAuftrag();
++
++    const echtesLesen = dateiSpeicher.getOriginalDocumentFileBytes;
++    vi.spyOn(dateiSpeicher, 'getOriginalDocumentFileBytes').mockImplementation(async (...args) => {
++      const bytes = await echtesLesen(...args);
++      melde(ablage, MITGLIED);
++      bereich(MITGLIED, 'member');
++      return bytes;
++    });
++
++    const ergebnis = await new SupabaseSyncAdapter(client).pushChanges({ deviceId: 'geraet-r1', workspaceId: WS, state, outbox });
++
++    expect(anfragen).toEqual([]);
++    expect(ergebnis.identityChanged).toBe(true);
++    expect(ergebnis.completedOutboxIds).toEqual([]);
++    expect(ergebnis.state.syncOutbox).toEqual(outbox);
++  });
++
++  it('S8b Datei: Wechsel nach dem Upload → Upload unter dem Inhaber, keine Registrierung unter dem Mitglied', async () => {
++    const ablage = new Map<string, string>();
++    melde(ablage, INHABER);
++    bereich(INHABER, 'full');
++    const { client, anfragen } = echterClient(ablage, (pfad) => {
++      if (pfad.startsWith('/storage/v1/object/')) {
++        melde(ablage, MITGLIED);
++        bereich(MITGLIED, 'member');
++      }
++    });
++    const { outbox, state } = await dateiAuftrag();
++
++    const ergebnis = await new SupabaseSyncAdapter(client).pushChanges({ deviceId: 'geraet-r1', workspaceId: WS, state, outbox });
++
++    expect(anfragen).toHaveLength(1);
++    expect(anfragen[0].pfad.startsWith('/storage/v1/object/')).toBe(true);
++    expect(anfragen[0].zugang).toBe(`Bearer ${synthetischesToken(INHABER)}`);
++    expect(ergebnis.identityChanged).toBe(true);
++    expect(ergebnis.completedOutboxIds).toEqual([]);
++    expect(ergebnis.state.syncOutbox).toEqual(outbox);
++    expect(journal(INHABER, 'full')).toEqual([]);
++  });
++
++  it('S12 eigener Token-Lieferant: Wechsel nur des Tokens (Bereich bleibt) → Halt; gesendet wird das geprüfte Token', async () => {
++    for (const art of ['jwt', 'undurchsichtig'] as const) {
++      bereich(INHABER, 'full');
++      const token = (konto: string) => (art === 'jwt' ? synthetischesToken(konto) : `synthetischer-zugang-${konto}`);
++      let angemeldet = INHABER;
++      const anfragen: NetzAnfrage[] = [];
++      let erreicht!: () => void;
++      let frei!: () => void;
++      const ersteErreicht = new Promise<void>((resolve) => (erreicht = resolve));
++      const freigabe = new Promise<void>((resolve) => (frei = resolve));
++      const client = createClient('http://127.0.0.1:54321', 'synthetischer-anon-schluessel', {
++        realtime: { transport: OhneVerbindung as never },
++        accessToken: async () => token(angemeldet),
++        global: {
++          fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
++            anfragen.push({ pfad: new URL(String(input)).pathname, zugang: new Headers(init?.headers).get('Authorization') });
++            if (anfragen.length === 1) {
++              erreicht();
++              await freigabe;
++            }
++            return new Response(JSON.stringify({ row_version: 1, deleted: false, payload: {} }), {
++              status: 200,
++              headers: { 'Content-Type': 'application/json' },
++            });
++          }) as typeof fetch,
++        },
++      });
++      const docs = [dokument(`doc-r1-lieferant-${art}-1`), dokument(`doc-r1-lieferant-${art}-2`)];
++      const outbox = docs.map((doc, index) => auftrag(`out-${art}-${index}`, 'document', doc.id, herkunft(INHABER, 'full'), index + 1));
++
++      const lauf = new SupabaseSyncAdapter(client).pushChanges({
++        deviceId: 'geraet-r1',
++        workspaceId: WS,
++        state: zustand({ documents: docs, syncOutbox: outbox }),
++        outbox,
++      });
++      await ersteErreicht;
++      // Nur das Token wechselt; der Speicherbereich bleibt der des Inhabers.
++      angemeldet = MITGLIED;
++      frei();
++      const ergebnis = await lauf;
++
++      expect(anfragen.map((anfrage) => anfrage.zugang), art).toEqual([`Bearer ${token(INHABER)}`]);
++      expect(ergebnis.identityChanged, art).toBe(true);
++      expect(ergebnis.identityChangeReason, art).toBe('sitzung');
++      expect(ergebnis.completedOutboxIds, art).toEqual([outbox[0].id]);
++    }
++  });
++
++  it('S8c Datei ohne Wechsel: Upload und Registrierung beide mit dem Zugang des Inhabers', async () => {
++    const ablage = new Map<string, string>();
++    melde(ablage, INHABER);
++    bereich(INHABER, 'full');
++    const { client, anfragen } = echterClient(ablage);
++    const { outbox, state } = await dateiAuftrag();
++
++    const ergebnis = await new SupabaseSyncAdapter(client).pushChanges({ deviceId: 'geraet-r1', workspaceId: WS, state, outbox });
++
++    expect(anfragen.map((anfrage) => anfrage.zugang)).toEqual([
++      `Bearer ${synthetischesToken(INHABER)}`,
++      `Bearer ${synthetischesToken(INHABER)}`,
++    ]);
++    expect(anfragen[1].pfad).toBe('/rest/v1/rpc/upsert_workspace_intake_entity');
++    expect(ergebnis.success).toBe(true);
++    expect(ergebnis.completedOutboxIds).toEqual(['out-datei']);
++  });
++});
++
++/* ------------------------------------------------------------------ */
++/* S9–S11: Abruf, Koordinator, normaler Ablauf                          */
++/* ------------------------------------------------------------------ */
++
++describe('DOKUMENTE-01 R1 — Abruf und Koordinator', () => {
++  it('S9a Wechsel zwischen Senden und Abruf (nur die Sitzung): kein Abruf, nichts übernommen, keine Fehlermeldung', async () => {
++    const sitzung = { konto: INHABER as string | null };
++    bereich(INHABER, 'full');
++    const ersatz = ersatzClient(sitzung);
++    ersatz.nachJederSendung((name) => {
++      if (name === 'upsert_workspace_intake_entity') sitzung.konto = MITGLIED;
++    });
++    const docs = [dokument('doc-r1-abruf')];
++    const outbox = [auftrag('out-abruf', 'document', 'doc-r1-abruf', herkunft(INHABER, 'full'), 1)];
++    const koordinator = new SyncCoordinator(new SupabaseSyncAdapter(ersatz.client as never));
++
++    const ergebnis = await koordinator.runSync(zustand({ documents: docs, syncOutbox: outbox }));
++
++    expect(ersatz.sendungen.map((sendung) => sendung.art)).toEqual(['archived_document']);
++    expect(ergebnis.skipPersist).toBe(true);
++    expect(ergebnis.success).toBe(false);
++    expect(ergebnis.report.errorCount).toBe(0);
++    expect(ergebnis.report.syncedEntities).toEqual([]);
++    expect(ergebnis.report.errors.map((fehler) => fehler.outboxId)).toEqual([SYNC_IDENTITY_CHANGED_REPORT_ID]);
++    expect(koordinator.getStatus().syncState).toBe('idle');
++    expect(koordinator.getStatus().lastError).toBeUndefined();
++    // Bestätigt ist bestätigt: Der Inhaber sendet den Auftrag nie ein zweites Mal.
++    expect(journal(INHABER, 'full')).toEqual(['out-abruf']);
++  });
++
++  it('S9b Wechsel mitten im Abruf: kein weiterer Abruf, nichts übernommen', async () => {
++    const sitzung = { konto: INHABER as string | null };
++    bereich(INHABER, 'full');
++    const ersatz = ersatzClient(sitzung);
++    ersatz.nachJederSendung((name) => {
++      if (name === 'pull_workspace_sync_state') {
++        bereich(MITGLIED, 'member');
++        sitzung.konto = MITGLIED;
++      }
++    });
++    const koordinator = new SyncCoordinator(new SupabaseSyncAdapter(ersatz.client as never));
++    const vorher = zustand({ documents: [dokument('doc-r1-bestand')] });
++
++    const ergebnis = await koordinator.runSync(vorher);
++
++    expect(ersatz.sendungen.map((sendung) => sendung.art)).toEqual(['pull_workspace_sync_state']);
++    expect(ersatz.sendungen[0].konto).toBe(INHABER);
++    expect(ergebnis.skipPersist).toBe(true);
++    expect(ergebnis.state).toBe(vorher);
++    expect(ergebnis.report.errorCount).toBe(0);
++  });
++
++  it('S10 Lauf ohne Wechsel: alles gesendet, Ergebnis gespeichert, Journal danach leer', async () => {
++    const sitzung = { konto: INHABER as string | null };
++    bereich(INHABER, 'full');
++    const ersatz = ersatzClient(sitzung);
++    const docs = ['doc-r1-n1', 'doc-r1-n2'].map((id) => dokument(id));
++    const outbox = docs.map((doc, index) => auftrag(`out-n${index}`, 'document', doc.id, herkunft(INHABER, 'full'), index + 1));
++    applyStateToStores(zustand({ documents: docs, syncOutbox: outbox }));
++    getSyncCoordinator().setAdapter(new SupabaseSyncAdapter(ersatz.client as never));
++
++    const { report } = await pushPendingChangesFromUi();
++
++    expect(report.errorCount).toBe(0);
++    expect(ersatz.sendungen.map((sendung) => [sendung.konto, sendung.id])).toEqual([
++      [INHABER, 'doc-r1-n1'],
++      [INHABER, 'doc-r1-n2'],
++    ]);
++    const gespeichert = JSON.parse(localStorage.getItem(kontoSchluessel(INHABER, 'full'))!) as AppPersistedState;
++    expect(gespeichert.syncOutbox!.every((entry) => entry.status === 'completed')).toBe(true);
++    expect(journal(INHABER, 'full')).toEqual([]);
++  });
++
++  it('S11 normaler Kontowechsel Inhaber → Mitglied → Inhaber: jeder sendet nur Eigenes mit eigenem Zugang', async () => {
++    const sitzung = { konto: INHABER as string | null };
++    const ersatz = ersatzClient(sitzung);
++    const adapter = new SupabaseSyncAdapter(ersatz.client as never);
++
++    // Inhaber: ein Auftrag geht hinaus, einer entsteht erst danach und bleibt beim Abmelden offen.
++    bereich(INHABER, 'full');
++    const inhaberDocs = [dokument('doc-inhaber-1'), dokument('doc-inhaber-2')];
++    const ersterLauf = [auftrag('in-1', 'document', 'doc-inhaber-1', herkunft(INHABER, 'full'), 1)];
++    await adapter.pushChanges({ deviceId: 'g', workspaceId: WS, state: zustand({ documents: inhaberDocs, syncOutbox: ersterLauf }), outbox: ersterLauf });
++
++    // Mitglied: nur seine eigenen Aufträge.
++    bereich(MITGLIED, 'member');
++    sitzung.konto = MITGLIED;
++    const mitgliedOutbox = [auftrag('mi-1', 'document', 'doc-mitglied-1', herkunft(MITGLIED, 'member'), 1)];
++    await adapter.pushChanges({
++      deviceId: 'g',
++      workspaceId: WS,
++      state: zustand({ documents: [dokument('doc-mitglied-1')], syncOutbox: mitgliedOutbox }),
++      outbox: mitgliedOutbox,
++    });
++
++    // Zurück zum Inhaber: sein offener Auftrag geht unter ihm hinaus.
++    bereich(INHABER, 'full');
++    sitzung.konto = INHABER;
++    const offen = [{ ...ersterLauf[0], status: 'completed' as const }, auftrag('in-2', 'document', 'doc-inhaber-2', herkunft(INHABER, 'full'), 2)];
++    const letzter = await adapter.pushChanges({ deviceId: 'g', workspaceId: WS, state: zustand({ documents: inhaberDocs, syncOutbox: offen }), outbox: offen });
++
++    expect(ersatz.sendungen.map((sendung) => [sendung.konto, sendung.id])).toEqual([
++      [INHABER, 'doc-inhaber-1'],
++      [MITGLIED, 'doc-mitglied-1'],
++      [INHABER, 'doc-inhaber-2'],
++    ]);
++    expect(letzter.success).toBe(true);
++    expect(letzter.completedOutboxIds).toEqual(['in-2']);
++  });
++});

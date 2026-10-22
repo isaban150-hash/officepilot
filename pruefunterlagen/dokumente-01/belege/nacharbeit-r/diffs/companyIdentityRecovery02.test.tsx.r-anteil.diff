@@ -1,0 +1,71 @@
+diff src/companyIdentityRecovery02.test.tsx (N1-Stand → R1/R2)
+index 6d6f1c3..af39b4a 100644
+--- a/src/companyIdentityRecovery02.test.tsx	(N1-Stand, belegt durch nacharbeit-n/pruefsummen.txt)
++++ b/src/companyIdentityRecovery02.test.tsx	(nach R1/R2)
+@@ -26,6 +26,8 @@ import {
+   buildCompanyProfileCloudPayload,
+   buildCompanySetupCloudPayload,
+ } from './services/workspace/workspaceCloudService';
++import { getSyncOutboxSnapshot } from './services/sync/syncOutboxService';
++import { releaseHeldOutboxEntriesFromUi, runSyncFromUi } from './services/sync/syncUiService';
+ import { DOCUMENT_WORK_RESULT_SCHEMA_VERSION } from './types/documentWorkResult';
+ import type { DocumentWorkResult } from './types/documentWorkResult';
+ import type { DocumentFileRef } from './types/documentFileRef';
+@@ -358,6 +360,15 @@ function storageKeys(): string[] {
+   return keys;
+ }
+ 
++/**
++ * DOKUMENTE-01 R2 — die Betriebsbestände selbst. Anhänge daneben sind kein eigener Bestand: Übernimmt der Inhaber
++ * den Altbestand, wird dessen offener Eingangsauftrag ohne nachweisbares Ursprungskonto zurückgehalten und in der
++ * Prüfspur `…:outbox-origin-log` neben seinem Kontobestand vermerkt.
++ */
++function workspaceStoreKeys(): string[] {
++  return storageKeys().filter((key) => /^officepilot-state:workspace:[^:]+(:account:[^:]+:(full|member))?$/.test(key));
++}
++
+ function snapshotStorage(): Record<string, string> {
+   const entries: Record<string, string> = {};
+   for (let index = 0; index < localStorage.length; index += 1) {
+@@ -792,7 +803,7 @@ describe('OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B', () => {
+     expect(container.querySelector('[data-testid="app-shell"]')).not.toBeNull();
+     expect(container.textContent).toContain(LOCAL_COMPANY);
+     expect(
+-      storageKeys().filter((key) => key.startsWith('officepilot-state:workspace:')),
++      workspaceStoreKeys(),
+       // DOKUMENTE-01 N1 — der Altbestand wurde beim Wechsel in den Kontobestand des Inhabers übernommen.
+     ).toEqual([accountWorkspaceKey()]);
+   });
+@@ -1115,11 +1126,31 @@ describe('OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B', () => {
+     expect(stored.companyProfile.companyName).toBe(LOCAL_COMPANY);
+     expect(container.textContent).toContain(LOCAL_COMPANY);
+     expect(
+-      storageKeys().filter((key) => key.startsWith('officepilot-state:workspace:')),
++      workspaceStoreKeys(),
+       // DOKUMENTE-01 N1 — der Altbestand wurde beim Wechsel in den Kontobestand des Inhabers übernommen.
+     ).toEqual([accountWorkspaceKey()]);
+     // Kein Payload des alten User-Scopes.
+     expect(rpcLog.filter((entry) => entry.companyName === CLOUD_COMPANY)).toEqual([]);
++    /*
++     * DOKUMENTE-01 R2 — die offenen Firmenaufträge stammen aus dem Altbestand (vor der Kontotrennung): Wer sie
++     * eingereiht hat, ist nicht nachweisbar. Sie gehen nicht automatisch hinaus, sondern erst nach der bewussten
++     * Freigabe durch den angemeldeten Inhaber.
++     */
++    for (const entity of ['company_setup', 'company_profile']) {
++      expect(successfulUpserts(entity), `${entity} ohne Freigabe gesendet`).toEqual([]);
++    }
++    const gesperrt = getSyncOutboxSnapshot().filter(
++      (entry) => entry.hold && (entry.entityType === 'company_setup' || entry.entityType === 'company_profile'),
++    );
++    expect(gesperrt.map((entry) => entry.id).sort()).toEqual(['ob-1', 'ob-2']);
++    await act(async () => {
++      await expect(releaseHeldOutboxEntriesFromUi(gesperrt.map((entry) => entry.id))).resolves.toEqual({
++        ok: true,
++        released: 2,
++      });
++      await runSyncFromUi();
++    });
++    await settle();
+     // Eindeutig: genau ein Upsert je Firmenentität, lokaler Name, positive Version.
+     for (const entity of ['company_setup', 'company_profile']) {
+       const sent = successfulUpserts(entity);

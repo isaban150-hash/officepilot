@@ -1,0 +1,102 @@
+diff --git a/src/components/system/BusinessStateGate.tsx b/src/components/system/BusinessStateGate.tsx
+index 63e61b3..f459a75 100644
+--- a/src/components/system/BusinessStateGate.tsx
++++ b/src/components/system/BusinessStateGate.tsx
+@@ -3,6 +3,8 @@ import type { CompanySetup } from '../../types/models';
+ import { useAuth } from '../../context/AuthContext';
+ import { AppProvider } from '../../context/AppContext';
+ import { bootstrapBusinessState, isolateBusinessStateOnLogout } from '../../services/storage/storageBootstrapService';
++import { getActiveStorageAccount } from '../../services/storage/storageScopeService';
++import { watchPageCacheAccount } from '../../services/auth/pageCacheAccountGuard';
+ import { clearUiSessionSnapshot } from '../../services/uiSession/uiSessionStore';
+ import { resetUiSessionLiveState } from '../../services/uiSession/uiSessionLiveState';
+ import {
+@@ -69,6 +71,13 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
+   /** Nur eine ausdrückliche Nutzeraktion öffnet den Assistenten. */
+   const continueSetupRef = useRef(false);
+ 
++  /*
++   * DOKUMENTE-01 N1 — kehrt die Seite aus dem Seiten-Cache zurück, während die
++   * gespeicherte Sitzung inzwischen einem anderen Konto gehört (oder keinem),
++   * lädt sie neu, statt den Bestand des früheren Kontos zu zeigen.
++   */
++  useEffect(() => watchPageCacheAccount(() => bootstrappedUserRef.current), []);
++
+   useEffect(() => {
+     if (!isAuthReady) return;
+ 
+@@ -93,6 +102,22 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
+         return;
+       }
+ 
++      /*
++       * DOKUMENTE-01 N1 — direkter Kontowechsel ohne abgemeldeten Zwischenstand
++       * (z. B. Anmeldung in einem anderen Tab): Alles Sitzungsgebundene des
++       * vorigen Kontos wird wie beim Abmelden verworfen, bevor das neue Konto
++       * lädt — Firmensitzung des Assistenten, Arbeitsstand „Weiterarbeiten“,
++       * Bootstrap-Bindung. Gespeicherte Bestände bleiben unberührt.
++       */
++      if (bootstrappedUserRef.current && nextUserId && bootstrappedUserRef.current !== nextUserId) {
++        isolateBusinessStateOnLogout();
++        resetCompanySession();
++        clearUiSessionSnapshot();
++        resetUiSessionLiveState();
++        prepareWorkspaceCloudBootstrapRetry();
++        setLastSuccessfulWorkspaceBootstrap(null);
++      }
++
+       // Freigabe erst nach optionalem Workspace-Bootstrap — kein AppProvider auf User-Default-Seed.
+       setSetup(null);
+       bootstrappedUserRef.current = nextUserId;
+@@ -116,7 +141,8 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
+       const result = bootstrapBusinessState(
+         nextUserId
+           ? preservedWorkspaceId
+-            ? { userId: nextUserId, workspaceId: preservedWorkspaceId }
++            ? // DOKUMENTE-01 N1 — derselbe Kontobestand wie bei der Freigabe (Sicht inklusive).
++              { userId: nextUserId, workspaceId: preservedWorkspaceId, access: lastBootstrap?.access }
+             : { userId: nextUserId }
+           : {},
+       );
+@@ -143,7 +169,7 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
+          * Fehler und gab den lokalen Default frei — der Nutzer landete still im
+          * leeren Einrichtungsassistenten und hätte Cloud-Daten überschreiben können.
+          */
+-        const result = await bootstrapWorkspaceCloudSyncIfNeeded().catch(
++        const result = await bootstrapWorkspaceCloudSyncIfNeeded({ sessionUserId: nextUserId }).catch(
+           (): WorkspaceCloudBootstrapResult => ({ status: 'failed', reason: 'unknown' }),
+         );
+         if (cancelled) return;
+@@ -210,8 +236,15 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
+          * gilt die Verknüpfung Nutzer ↔ Workspace. Ein gescheiterter oder
+          * abgebrochener Lauf hinterlässt sie nicht.
+          */
++        const account = getActiveStorageAccount();
+         setLastSuccessfulWorkspaceBootstrap(
+-          nextUserId && workspaceId ? { userId: nextUserId, workspaceId } : null,
++          nextUserId && workspaceId
++            ? {
++                userId: nextUserId,
++                workspaceId,
++                access: account?.userId === nextUserId ? account.access : undefined,
++              }
++            : null,
+         );
+         return;
+       }
+@@ -318,6 +351,7 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
+           setConflictError(null);
+           void applyConfirmedCloudCompany({
+             workspaceId: companyConflict.workspaceId,
++            account: companyConflict.account,
+             confirmedLocalCompanyName: companyConflict.localCompanyName,
+             confirmedCloudCompanyName: companyConflict.cloudCompanyName,
+             confirmedCloudSetupRowVersion: companyConflict.cloudSetupRowVersion,
+@@ -358,6 +392,7 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
+           setConflictError(null);
+           void applyConfirmedLocalCompany({
+             workspaceId: companyConflict.workspaceId,
++            account: companyConflict.account,
+             confirmedCompanyName: companyConflict.localCompanyName,
+             confirmedSavedAt: companyConflict.localSavedAt,
+             confirmedCloudSetupRowVersion: companyConflict.cloudSetupRowVersion,

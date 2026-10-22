@@ -1,0 +1,24 @@
+{
+  "start": "2026-10-20T11:46:27.347Z",
+  "dateien": 27,
+  "exit": 0,
+  "dateienOk": 27,
+  "dateienRot": 0,
+  "testsOk": 281,
+  "testsRot": 0,
+  "uebersprungen": 0,
+  "rot": [],
+  "schutzartefakte": {
+    "vorher": {
+      "test-world/reports/gold-pipeline-04b.json": "6e4b1c91f6ec5ea035930df37761b50c132834ccae631b7f454e9ea6361a5e68",
+      "test-world/reports/gold-pipeline-04b.md": "2db37b51d078bae8cb8f77eae4a06ba1240ee5bd1a6f38d5ac0fe530366db0c4",
+      "src/components/invoice/__snapshots__/InvoiceDocumentView.test.tsx.snap": "6cf194f4dc54f98ca89e3ed4a24af3030b03f232c1a4e6efbaccd2b10b7780d5"
+    },
+    "nachher": {
+      "test-world/reports/gold-pipeline-04b.json": "6e4b1c91f6ec5ea035930df37761b50c132834ccae631b7f454e9ea6361a5e68",
+      "test-world/reports/gold-pipeline-04b.md": "2db37b51d078bae8cb8f77eae4a06ba1240ee5bd1a6f38d5ac0fe530366db0c4",
+      "src/components/invoice/__snapshots__/InvoiceDocumentView.test.tsx.snap": "6cf194f4dc54f98ca89e3ed4a24af3030b03f232c1a4e6efbaccd2b10b7780d5"
+    },
+    "unveraendert": true
+  }
+}

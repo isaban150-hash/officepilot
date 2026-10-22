@@ -1,0 +1,49 @@
+BEGIN
+INSERT 0 3
+INSERT 0 2
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  OK  A1 -- Anlage: Kontext, Art, Ereigniszeit und Ersteller stehen in der Zeile
+DO
+NOTICE:  OK  A2/A3 -- Wiederholung gibt die Zeile unveraendert zurueck: kein Duplikat, kein Ueberschreiben
+NOTICE:  OK  B1-B6 -- fehlende Kennung, Loeschen, Kontext, Art, Zeit und Groesse werden abgewiesen
+DO
+NOTICE:  OK  C1 -- Abzug nach Ereigniszeit, bei Gleichstand nach Kennung
+DO
+NOTICE:  OK  D1-D4 -- fremder Betrieb kann weder schreiben noch abziehen; gleiche Kennung bleibt getrennt
+DO
+NOTICE:  OK  E1 -- Mitglied legt an und zieht nur eigene Ereignisse ab
+NOTICE:  OK  E2 -- ein Replay gibt einem Mitglied keine fremde Zeile zurueck
+NOTICE:  OK  E3 -- Inhaber sieht alle Ereignisse des Betriebs
+NOTICE:  OK  E4 -- ohne Anmeldung kein Zugriff
+DO
+ 
+
+SET
+DO
+NOTICE:  OK  F1/F2 -- direkt: kein fremdes Lesen, kein Schreiben an der RPC vorbei
+RESET
+ 
+
+SET
+NOTICE:  OK  F3 -- Mitglied liest direkt nur das eigene Ereignis
+DO
+RESET
+ 
+
+SET
+NOTICE:  OK  F4 -- Inhaber liest direkt alle Ereignisse des eigenen Betriebs
+DO
+RESET
+DO
+NOTICE:  OK  G1-G4 -- unbekannter Typ, Papierablage, Notiz und alle Abzugsschluessel unveraendert
+NOTICE:  --------------------------------------------------
+NOTICE:  CLOUD-SYNC S2: alle Zusicherungen erfuellt.
+NOTICE:  --------------------------------------------------
+DO
+ROLLBACK

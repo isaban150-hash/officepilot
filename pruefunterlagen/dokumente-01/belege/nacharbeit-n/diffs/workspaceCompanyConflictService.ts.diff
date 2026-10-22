@@ -1,0 +1,70 @@
+diff --git a/src/services/workspace/workspaceCompanyConflictService.ts b/src/services/workspace/workspaceCompanyConflictService.ts
+index c172251..c02a07c 100644
+--- a/src/services/workspace/workspaceCompanyConflictService.ts
++++ b/src/services/workspace/workspaceCompanyConflictService.ts
+@@ -6,7 +6,11 @@
+  * Hydrieren, kein Scope-Wechsel, kein persistAll, kein Netzwerk.
+  */
+ import type { AppPersistedState } from '../../types/models';
+-import { buildStorageKey } from '../storage/storageScopeService';
++import {
++  buildLegacyWorkspaceStorageKey,
++  buildStorageKey,
++  type StorageAccount,
++} from '../storage/storageScopeService';
+ 
+ export interface LocalCompanyCandidate {
+   storageKey: string;
+@@ -36,6 +40,11 @@ export interface CompanyConflictInfo {
+   /** Intern für den bestätigten Weg, nicht für die Oberfläche. */
+   workspaceId: string;
+   storageKey: string;
++  /**
++   * DOKUMENTE-01 N1 — das Konto, dessen lokaler Bestand verglichen wurde. Die
++   * Auflösung liest denselben Bestand; ohne Konto den Altbestand wie bisher.
++   */
++  account?: StorageAccount | null;
+ }
+ 
+ /** Robuster Namensvergleich: Rand, Groß-/Kleinschreibung und Unicode-Form. */
+@@ -52,12 +61,38 @@ function readRaw(storageKey: string): string | null {
+   }
+ }
+ 
++/**
++ * DOKUMENTE-01 N1 — welcher lokale Betriebsbestand für dieses Konto gilt: sein
++ * Kontobestand; fehlt er, mit voller Sicht der Altbestand bzw. der eigene
++ * Mitgliedsbestand — genau die, die der Bereichswechsel übernimmt
++ * (`prepareWorkspaceAccountStore`). Ohne Konto der Altbestand wie bisher.
++ */
++export function resolveLocalWorkspaceStorageKey(
++  workspaceId: string,
++  account?: StorageAccount | null,
++): string {
++  if (!account) return buildLegacyWorkspaceStorageKey(workspaceId);
++  const accountKey = buildStorageKey({ type: 'workspace', workspaceId, account });
++  if (readRaw(accountKey) !== null || account.access !== 'full') return accountKey;
++  const legacyKey = buildLegacyWorkspaceStorageKey(workspaceId);
++  if (readRaw(legacyKey) !== null) return legacyKey;
++  const memberKey = buildStorageKey({
++    type: 'workspace',
++    workspaceId,
++    account: { userId: account.userId, access: 'member' },
++  });
++  return readRaw(memberKey) !== null ? memberKey : accountKey;
++}
++
+ /**
+  * Liest den lokalen Workspace-Bestand direkt aus dem Speicher — ohne
+  * Normalisierung mit Seiteneffekten und ohne den aktiven Scope zu berühren.
+  */
+-export function readLocalCompanyCandidate(workspaceId: string): LocalCompanyCandidate | null {
+-  const storageKey = buildStorageKey({ type: 'workspace', workspaceId });
++export function readLocalCompanyCandidate(
++  workspaceId: string,
++  account?: StorageAccount | null,
++): LocalCompanyCandidate | null {
++  const storageKey = resolveLocalWorkspaceStorageKey(workspaceId, account);
+   const rawText = readRaw(storageKey);
+   if (!rawText) return null;
+ 

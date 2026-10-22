@@ -1,0 +1,292 @@
+BEGIN
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+DROP TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+INSERT 0 32
+NOTICE:  V  32 Regelvektoren wie im Client
+DO
+INSERT 0 3
+UPDATE 3
+INSERT 0 1
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 1
+CREATE FUNCTION
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+INSERT 0 1
+INSERT 0 2
+INSERT 0 2
+INSERT 0 3
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ 
+
+ 
+
+NOTICE:  ABGEWIESEN  A1 Inhaber: Eingangsrechnung während der Frist
+ 
+
+ 
+
+ 
+
+NOTICE:  ABGEWIESEN  A2 Admin: ebenso
+ 
+
+ 
+
+ 
+
+NOTICE:  ABGEWIESEN  A3 Mitglied: Rollenabweisung wie bisher
+ 
+
+NOTICE:  OK  A4 die Eingangsrechnung lebt unverändert
+ 
+
+ 
+
+ (7b19a152-9b91-48ed-9661-cdf8e8944f00,00000000-0000-0000-0000-0000000d01a1,doc-dok01-pruefen,archived_document,,,"{""id"": ""doc-dok01-pruefen"", ""title"": ""doc-dok01-pruefen"", ""category"": ""sonstiges"", ""classifiedKind"": ""sonstiges""}","2026-10-20 11:37:12.6975+00",00000000-0000-0000-0000-0000000d0101,"2026-10-20 11:37:12.6975+00",00000000-0000-0000-0000-0000000d0101,2,"2026-10-20 11:37:12.6975+00",00000000-0000-0000-0000-0000000d0101,t)
+
+ (ebc4be0a-23b2-4c03-bda0-d881efb92602,00000000-0000-0000-0000-0000000d01a1,doc-dok01-alt,archived_document,,,"{""id"": ""doc-dok01-alt"", ""title"": ""doc-dok01-alt"", ""createdAt"": ""2016-05-02T09:00:00.000Z"", ""documentDate"": ""2016-05-01"", ""classifiedKind"": ""quittung""}","2016-05-02 09:00:00+00",00000000-0000-0000-0000-0000000d0101,"2026-10-20 11:37:12.6975+00",00000000-0000-0000-0000-0000000d0101,2,"2026-10-20 11:37:12.6975+00",00000000-0000-0000-0000-0000000d0101,t)
+
+ (0f85be06-f1c4-490c-99c6-1969c0b52be4,00000000-0000-0000-0000-0000000d01a1,doc-dok01-g-entwurf,generated_invoice,inv-dok01-entwurf,,"{""id"": ""doc-dok01-g-entwurf"", ""category"": ""ausgangsrechnung"", ""classifiedKind"": ""ausgangsrechnung"", ""linkedInvoiceId"": ""inv-dok01-entwurf""}","2026-10-20 11:37:12.6975+00",00000000-0000-0000-0000-0000000d0101,"2026-10-20 11:37:12.6975+00",00000000-0000-0000-0000-0000000d0101,2,"2026-10-20 11:37:12.6975+00",00000000-0000-0000-0000-0000000d0101,f)
+
+ 
+
+ 
+
+NOTICE:  OK  A5 „prüfen", rechnerisch abgelaufen und Rechnungsentwurf: gelöscht
+ 
+
+NOTICE:  ABGEWIESEN  B1 Grabstein über den Eingangsweg während der Frist
+ 
+
+ 
+
+ 
+
+NOTICE:  OK  B2 das Dokument lebt, Version unverändert
+ 
+
+ {"deleted": false, "payload": {"id": "1418875e-f89b-4752-91f7-b639ff3c5fe0", "deleted": false, "payload": {"id": "doc-dok01-rechnung-b", "title": "Neuer Titel", "createdAt": "2026-03-16T08:00:00.000Z", "classifiedKind": "eingangsrechnung"}, "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": null, "deleted_by": null, "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "document_kind": "archived_document", "linked_invoice_id": null, "linked_vorgang_id": null, "client_document_id": "doc-dok01-rechnung-b"}, "entity_id": "doc-dok01-rechnung-b", "entity_type": "archived_document", "row_version": 2}
+
+ {"deleted": true, "payload": {"id": "cb90296a-6d40-4f64-871d-6e668e041700", "deleted": true, "payload": {"id": "doc-dok01-alt-b", "title": "doc-dok01-alt-b", "createdAt": "2016-05-02T09:00:00.000Z", "documentDate": "2016-05-01", "classifiedKind": "quittung"}, "created_at": "2016-05-02T09:00:00+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": "2026-10-20T11:37:12.6975+00:00", "deleted_by": "00000000-0000-0000-0000-0000000d0101", "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "document_kind": "archived_document", "linked_invoice_id": null, "linked_vorgang_id": null, "client_document_id": "doc-dok01-alt-b"}, "entity_id": "doc-dok01-alt-b", "entity_type": "archived_document", "row_version": 2}
+
+ {"deleted": true, "payload": {"id": "f87522af-2a11-4f44-a4ff-e34d375576a9", "deleted": true, "payload": {"id": "doc-dok01-pruefen-b", "title": "doc-dok01-pruefen-b", "category": "sonstiges", "classifiedKind": "sonstiges"}, "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": "2026-10-20T11:37:12.6975+00:00", "deleted_by": "00000000-0000-0000-0000-0000000d0101", "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "document_kind": "archived_document", "linked_invoice_id": null, "linked_vorgang_id": null, "client_document_id": "doc-dok01-pruefen-b"}, "entity_id": "doc-dok01-pruefen-b", "entity_type": "archived_document", "row_version": 2}
+
+ 
+
+NOTICE:  OK  B3 Bearbeitung bleibt möglich, abgelaufen und „prüfen" werden gelöscht
+ 
+
+ 
+
+NOTICE:  ABGEWIESEN  C1 Kategorie Ausgangsrechnung → Sonstiges
+ 
+
+ 
+
+NOTICE:  ABGEWIESEN  C2 Art Eingangsrechnung → Sonstiges
+ {"deleted": false, "payload": {"id": "0d951fce-9d6b-40a0-80dd-152f424f49fe", "deleted": false, "payload": {"id": "doc-dok01-auftrag", "title": "doc-dok01-auftrag", "classifiedKind": "rechnung"}, "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": null, "deleted_by": null, "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "document_kind": "archived_document", "linked_invoice_id": null, "linked_vorgang_id": null, "client_document_id": "doc-dok01-auftrag"}, "entity_id": "doc-dok01-auftrag", "entity_type": "archived_document", "row_version": 2}
+
+NOTICE:  ABGEWIESEN  C3 und zurück zum Geschäftsbrief: Abschwächung
+ 
+
+ {"deleted": false, "payload": {"id": "1418875e-f89b-4752-91f7-b639ff3c5fe0", "deleted": false, "payload": {"id": "doc-dok01-rechnung-b", "title": "Neuer Titel", "createdAt": "2010-01-01T00:00:00Z", "issueDate": "2010-01-01", "uploadedAt": "2010-01-01T00:00:00Z", "documentDate": "2010-01-01", "classifiedKind": "eingangsrechnung"}, "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": null, "deleted_by": null, "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 3, "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "document_kind": "archived_document", "linked_invoice_id": null, "linked_vorgang_id": null, "client_document_id": "doc-dok01-rechnung-b"}, "entity_id": "doc-dok01-rechnung-b", "entity_type": "archived_document", "row_version": 3}
+
+NOTICE:  ABGEWIESEN  C4 rückdatierte Nutzlast verkürzt die Frist nicht
+ 
+
+ 
+
+ 
+
+NOTICE:  OK  C5 Einstufungen unverändert, Aufwertung angekommen
+ 
+
+NOTICE:  ABGEWIESEN  D1 Beleg einer Ausgabe (eigene Verknüpfung), Art Foto
+ 
+
+NOTICE:  ABGEWIESEN  D2 Beleg einer Ausgabe (gemeinsamer Eingang)
+ 
+
+NOTICE:  ABGEWIESEN  D3 Korrekturbeleg, auch ohne festgeschriebene Rechnung
+ 
+
+ 
+
+NOTICE:  OK  D4 alle drei leben
+ 
+
+ 
+
+NOTICE:  ABGEWIESEN  E1 Original-Bindung eines geschützten Dokuments
+ 
+
+ {"deleted": true, "payload": {"id": "1b4444ff-de51-43d7-85f3-d380fa43889e", "part": null, "deleted": true, "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": "2026-10-20T11:37:12.6975+00:00", "provenance": "derived", "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "binding_kind": "preview", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "client_document_id": "doc-dok01-rechnung", "client_file_ref_id": "file-dok01-vorschau", "einvoice_untrusted_at": null, "einvoice_untrusted_reason": null}, "entity_id": "doc-dok01-rechnung|preview|", "entity_type": "document_file_binding", "row_version": 2}
+
+NOTICE:  ABGEWIESEN  E2 Datei eines geschützten Dokuments
+ 
+
+ {"deleted": true, "payload": {"id": "3f05a1e7-8cb5-4f16-8ac5-35d21ad65627", "part": null, "deleted": true, "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": "2026-10-20T11:37:12.6975+00:00", "provenance": "received", "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "binding_kind": "original", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "client_document_id": "doc-dok01-pruefen-b", "client_file_ref_id": "file-dok01-pruefen", "einvoice_untrusted_at": null, "einvoice_untrusted_reason": null}, "entity_id": "doc-dok01-pruefen-b|original|", "entity_type": "document_file_binding", "row_version": 2}
+
+ {"deleted": true, "payload": {"id": "19170195-614c-49d9-b85d-ffdcde327742", "deleted": true, "mime_type": "application/pdf", "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": "2026-10-20T11:37:12.6975+00:00", "size_bytes": 100, "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "uploaded_at": "2026-10-20T11:37:12.6975+00:00", "uploaded_by": null, "storage_path": "00000000-0000-0000-0000-0000000d01a1/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "client_file_ref_id": "file-dok01-pruefen", "original_file_name": "", "derived_from_client_file_ref_id": null}, "entity_id": "file-dok01-pruefen", "entity_type": "document_file", "row_version": 2}
+
+ 
+
+NOTICE:  OK  E3 Original und Datei leben, Vorschau und freie Datei gelöscht
+ 
+
+ 
+
+NOTICE:  ABGEWIESEN  F1 direktes UPDATE als postgres
+NOTICE:  ABGEWIESEN  F2 direktes Beerdigen der Original-Bindung als postgres
+ 
+
+ 
+
+ (1407d921-8da0-47cd-8995-6c684836313e,00000000-0000-0000-0000-0000000d01a1,doc-dok01-zurueck,archived_document,,,"{""id"": ""doc-dok01-zurueck"", ""title"": ""Zurück"", ""classifiedKind"": ""eingangsrechnung""}","2026-10-20 11:37:12.6975+00",00000000-0000-0000-0000-0000000d0101,"2026-10-20 11:37:12.6975+00",00000000-0000-0000-0000-0000000d0101,2,,,f)
+
+ 
+
+NOTICE:  ABGEWIESEN  F3 nach der Wiederherstellung gilt der Schutz wieder
+ 
+
+NOTICE:  OK  F4 wiederhergestellt und lebend
+ 
+
+CREATE FUNCTION
+CREATE FUNCTION
+ 
+
+NOTICE:  ABGEWIESEN  H1 Original auf die Vorschau-Datei umhängen (aktuelle Version, nicht beerdigt)
+ 
+
+NOTICE:  ABGEWIESEN  H2 danach die bisherige Originaldatei beerdigen
+ 
+
+ 
+
+ 
+
+ 
+
+NOTICE:  ABGEWIESEN  H3 Admin: Umhängen ebenso abgewiesen
+ 
+
+ 
+
+NOTICE:  OK  H4 Zuordnung, Versionen und Datei unverändert
+ 
+
+ {"deleted": false, "payload": {"id": "655f92a2-6787-43ed-9743-708a85d6c3fa", "part": null, "deleted": false, "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": null, "provenance": "received", "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "binding_kind": "original", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "client_document_id": "doc-dok01-rechnung", "client_file_ref_id": "file-dok01-rechnung", "einvoice_untrusted_at": null, "einvoice_untrusted_reason": null}, "entity_id": "doc-dok01-rechnung|original|", "entity_type": "document_file_binding", "row_version": 2}
+
+ {"deleted": false, "payload": {"id": "403fa47c-c938-4fe6-bdd0-d34fc38ecef1", "deleted": false, "mime_type": "application/pdf", "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": null, "size_bytes": 90, "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 1, "uploaded_at": "2026-10-20T11:37:12.6975+00:00", "uploaded_by": "00000000-0000-0000-0000-0000000d0101", "storage_path": "00000000-0000-0000-0000-0000000d01a1/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "content_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "client_file_ref_id": "file-dok01-archiv-1", "original_file_name": "", "derived_from_client_file_ref_id": null}, "entity_id": "file-dok01-archiv-1", "entity_type": "document_file", "row_version": 1}
+
+ {"deleted": false, "payload": {"id": "632376eb-f6f6-47f8-aa68-c19f9467d120", "deleted": false, "mime_type": "application/pdf", "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": null, "size_bytes": 91, "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 1, "uploaded_at": "2026-10-20T11:37:12.6975+00:00", "uploaded_by": "00000000-0000-0000-0000-0000000d0101", "storage_path": "00000000-0000-0000-0000-0000000d01a1/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "content_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "client_file_ref_id": "file-dok01-archiv-2", "original_file_name": "", "derived_from_client_file_ref_id": null}, "entity_id": "file-dok01-archiv-2", "entity_type": "document_file", "row_version": 1}
+
+ {"deleted": false, "payload": {"id": "ce64aba6-7145-4442-923c-1aa802222a7f", "part": null, "deleted": false, "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": null, "provenance": "derived", "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 1, "binding_kind": "archive", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "client_document_id": "doc-dok01-rechnung", "client_file_ref_id": "file-dok01-archiv-1", "einvoice_untrusted_at": null, "einvoice_untrusted_reason": null}, "entity_id": "doc-dok01-rechnung|archive|", "entity_type": "document_file_binding", "row_version": 1}
+
+ {"deleted": false, "payload": {"id": "ce64aba6-7145-4442-923c-1aa802222a7f", "part": null, "deleted": false, "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": null, "provenance": "derived", "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "binding_kind": "archive", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "client_document_id": "doc-dok01-rechnung", "client_file_ref_id": "file-dok01-archiv-2", "einvoice_untrusted_at": null, "einvoice_untrusted_reason": null}, "entity_id": "doc-dok01-rechnung|archive|", "entity_type": "document_file_binding", "row_version": 2}
+
+ {"deleted": false, "payload": {"id": "71ff6574-b559-412e-b629-63e945f0ca92", "deleted": false, "mime_type": "image/jpeg", "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": null, "size_bytes": 50, "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 1, "uploaded_at": "2026-10-20T11:37:12.6975+00:00", "uploaded_by": "00000000-0000-0000-0000-0000000d0101", "storage_path": "00000000-0000-0000-0000-0000000d01a1/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "content_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "client_file_ref_id": "file-dok01-vorschau-2", "original_file_name": "", "derived_from_client_file_ref_id": null}, "entity_id": "file-dok01-vorschau-2", "entity_type": "document_file", "row_version": 1}
+
+ {"deleted": false, "payload": {"id": "1b4444ff-de51-43d7-85f3-d380fa43889e", "part": null, "deleted": false, "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": null, "provenance": "derived", "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 3, "binding_kind": "preview", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "client_document_id": "doc-dok01-rechnung", "client_file_ref_id": "file-dok01-vorschau-2", "einvoice_untrusted_at": null, "einvoice_untrusted_reason": null}, "entity_id": "doc-dok01-rechnung|preview|", "entity_type": "document_file_binding", "row_version": 3}
+
+ {"deleted": true, "payload": {"id": "c1a560cf-84b0-4478-81ce-b97f02076910", "deleted": true, "mime_type": "application/pdf", "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": "2026-10-20T11:37:12.6975+00:00", "size_bytes": 100, "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "uploaded_at": "2026-10-20T11:37:12.6975+00:00", "uploaded_by": null, "storage_path": "00000000-0000-0000-0000-0000000d01a1/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "content_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "client_file_ref_id": "file-dok01-vorschau", "original_file_name": "", "derived_from_client_file_ref_id": null}, "entity_id": "file-dok01-vorschau", "entity_type": "document_file", "row_version": 2}
+
+ 
+
+NOTICE:  OK  H5 Wiederholung angenommen (Version 2, gleiche Datei); Archiv-PDF und Vorschau umgehängt; alte Vorschau-Datei gelöscht
+ 
+
+NOTICE:  ABGEWIESEN  H6a Datei der Originalbindung direkt tauschen
+ 
+
+ 
+
+NOTICE:  ABGEWIESEN  H6b anderem Dokument zuordnen
+ 
+
+NOTICE:  ABGEWIESEN  H6c anderem Betrieb zuordnen
+ 
+
+NOTICE:  ABGEWIESEN  H6d Art ändern
+ 
+
+NOTICE:  ABGEWIESEN  H6e Teil ändern
+NOTICE:  ABGEWIESEN  H7a Inhalt der Originaldatei direkt austauschen
+ 
+
+NOTICE:  ABGEWIESEN  H7b Ablageort der Originaldatei direkt ändern
+ 
+
+UPDATE 1
+ 
+
+NOTICE:  OK  H7c Metadaten der Originaldatei bleiben änderbar, Inhalt und Ort unverändert
+ 
+
+INSERT 0 2
+INSERT 0 1
+ 
+
+ {"deleted": false, "payload": {"id": "0fb29801-b7a3-422c-aed7-beaba5052b4a", "part": null, "deleted": false, "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": null, "provenance": "received", "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "binding_kind": "original", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "client_document_id": "doc-dok01-pruefen-h", "client_file_ref_id": "file-dok01-pruefen-h2", "einvoice_untrusted_at": null, "einvoice_untrusted_reason": null}, "entity_id": "doc-dok01-pruefen-h|original|", "entity_type": "document_file_binding", "row_version": 2}
+
+ {"deleted": true, "payload": {"id": "ac111c08-9e74-49f8-b218-df1c9e51c166", "deleted": true, "mime_type": "application/pdf", "created_at": "2026-10-20T11:37:12.6975+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": "2026-10-20T11:37:12.6975+00:00", "size_bytes": 10, "updated_at": "2026-10-20T11:37:12.6975+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "uploaded_at": "2026-10-20T11:37:12.6975+00:00", "uploaded_by": null, "storage_path": "00000000-0000-0000-0000-0000000d01a1/1111111111111111111111111111111111111111111111111111111111111111", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111", "client_file_ref_id": "file-dok01-pruefen-h1", "original_file_name": "", "derived_from_client_file_ref_id": null}, "entity_id": "file-dok01-pruefen-h1", "entity_type": "document_file", "row_version": 2}
+
+ 
+
+ 
+
+NOTICE:  OK  H8 „prüfen": Original umgehängt, frühere Datei gelöscht
+DO
+NOTICE:  OK  G neue Funktionen nur intern
+ROLLBACK

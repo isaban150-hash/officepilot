@@ -1,0 +1,20 @@
+diff --git a/src/i18n/locales/de/index.ts b/src/i18n/locales/de/index.ts
+index f2ed107..3c270a5 100644
+--- a/src/i18n/locales/de/index.ts
++++ b/src/i18n/locales/de/index.ts
+@@ -27,6 +27,8 @@ import { deOrderDraftCloud } from './orderDraftCloud';
+ import { deReplyNeed } from './replyNeed';
+ import { deEmployeePayments } from './employeePayments';
+ import { deWorkspaceRole } from './workspaceRole';
++import { deDocumentRetention } from './documentRetention';
++import { deSyncHeldOrders } from './syncHeldOrders';
+ 
+ export const deModules = {
+   ...deAuth,
+@@ -60,4 +62,6 @@ export const deModules = {
+   ...deReplyNeed,
+   ...deEmployeePayments,
+   ...deWorkspaceRole,
++  ...deDocumentRetention,
++  ...deSyncHeldOrders,
+ } as const;

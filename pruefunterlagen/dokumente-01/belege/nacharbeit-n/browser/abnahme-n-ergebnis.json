@@ -1,0 +1,802 @@
+{
+  "start": "2026-10-20T15:54:21.284Z",
+  "phasen": {
+    "A": {
+      "abzugRuhig": true,
+      "vorschauBilder": null,
+      "versandVersuchtUndBlockiert": 1,
+      "dokumente": 6,
+      "offeneAuftraege": {
+        "paper_register_entry": 1
+      },
+      "bereiche": [
+        "inhaber:full"
+      ]
+    },
+    "B": {
+      "karteSichtbar": true,
+      "karteUeberlapptEintrag": true,
+      "obenAufEintrag": true,
+      "obenstesElement": "button.dropdown-menu__item.dropdown-menu__item--danger",
+      "geklickt": true,
+      "abgemeldet": true,
+      "inhaberBestandVorhanden": true
+    },
+    "C": {
+      "abzugRuhig": true,
+      "server": {
+        "intakeHttp": 200,
+        "dokumenteHttp": 200,
+        "mitgliedSichtbar": 1,
+        "fremdeDokumente": 5
+      },
+      "bereiche": [
+        "inhaber:full",
+        "mitglied:member"
+      ],
+      "versucheNachTyp": {}
+    },
+    "C3": {
+      "schritte": [
+        {
+          "schritt": 1,
+          "pfad": "/dokumente",
+          "ausSeitenCache": false,
+          "fremdeTitelSofort": 0,
+          "fremdeTitelNach3s": 0,
+          "fremderBrief": false
+        },
+        {
+          "schritt": 2,
+          "pfad": "/",
+          "ausSeitenCache": false,
+          "fremdeTitelSofort": 0,
+          "fremdeTitelNach3s": 0,
+          "fremderBrief": false
+        },
+        {
+          "schritt": 3,
+          "pfad": "/login",
+          "ausSeitenCache": false,
+          "fremdeTitelSofort": 0,
+          "fremdeTitelNach3s": 0,
+          "fremderBrief": false
+        },
+        {
+          "schritt": 4,
+          "pfad": "/dokumente/doc-65fa2410…",
+          "ausSeitenCache": false,
+          "fremdeTitelSofort": 0,
+          "fremdeTitelNach3s": 0,
+          "fremderBrief": false
+        },
+        {
+          "schritt": 5,
+          "pfad": "/",
+          "ausSeitenCache": null,
+          "fremdeTitelSofort": null,
+          "fremdeTitelNach3s": 0,
+          "fremderBrief": false
+        },
+        {
+          "schritt": 6,
+          "pfad": "/schreiben/neu",
+          "ausSeitenCache": false,
+          "fremdeTitelSofort": 0,
+          "fremdeTitelNach3s": 0,
+          "fremderBrief": false
+        }
+      ]
+    },
+    "D": {
+      "abzugRuhig": true
+    },
+    "D2": {
+      "karteSichtbar": true,
+      "karteUeberlapptEintrag": true,
+      "obenAufEintrag": true,
+      "obenstesElement": "button.dropdown-menu__item.dropdown-menu__item--danger",
+      "geklickt": true,
+      "abgemeldet": true
+    },
+    "E1": {
+      "abzugRuhig": true
+    },
+    "E2": {
+      "abzugRuhig": true
+    },
+    "E3": {
+      "abzugRuhig": true
+    },
+    "E4": {
+      "abzugRuhig": true
+    },
+    "E": {
+      "umgeschrieben": 4,
+      "bereicheEnde": [
+        "inhaber:full",
+        "mitglied:full",
+        "mitglied:member"
+      ]
+    }
+  },
+  "pruefungen": [
+    {
+      "phase": "A-inhaber",
+      "name": "Inhaber in eigenem Kontobereich (volle Sicht)",
+      "ok": true,
+      "detail": {
+        "wer": "inhaber",
+        "access": "full"
+      }
+    },
+    {
+      "phase": "A-inhaber",
+      "name": "kein gemeinsamer Betriebsbestand",
+      "ok": true,
+      "detail": [
+        "inhaber:full"
+      ]
+    },
+    {
+      "phase": "A-inhaber",
+      "name": "Inhaber sieht Dokumente",
+      "ok": true,
+      "detail": {
+        "anzahl": 6
+      }
+    },
+    {
+      "phase": "A-inhaber",
+      "name": "Dokument mit Schaltfläche „abgeheftet\" gefunden",
+      "ok": true
+    },
+    {
+      "phase": "A-inhaber",
+      "name": "Haken gesetzt",
+      "ok": true
+    },
+    {
+      "phase": "A-inhaber",
+      "name": "ungesendete Aktion in der Warteschlange",
+      "ok": true,
+      "detail": {
+        "status": [
+          "error"
+        ]
+      }
+    },
+    {
+      "phase": "A-inhaber",
+      "name": "Gegenprobe: Editor übernimmt die eigene Vorbelegung",
+      "ok": true,
+      "detail": {
+        "betreffGleich": true
+      }
+    },
+    {
+      "phase": "B-n2-desktop",
+      "name": "Karte „Weiterarbeiten\" sichtbar",
+      "ok": true
+    },
+    {
+      "phase": "B-n2-desktop",
+      "name": "Menüeintrag „Abmelden\" liegt oben (nicht verdeckt)",
+      "ok": true,
+      "detail": {
+        "oben": "button.dropdown-menu__item.dropdown-menu__item--danger",
+        "ueberlappt": true
+      }
+    },
+    {
+      "phase": "B-n2-desktop",
+      "name": "echter Klick auf „Abmelden\" meldet ab",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "Mitglied in eigenem Kontobereich (Mitgliedssicht)",
+      "ok": true,
+      "detail": {
+        "wer": "mitglied",
+        "access": "member"
+      }
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "Server kennt fremde Dokumente (Prüfung aussagekräftig)",
+      "ok": true,
+      "detail": {
+        "fremd": 5
+      }
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "keine fremden Dokumente im Bestand",
+      "ok": true,
+      "detail": {
+        "imBestand": 1
+      }
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "keine fremden Dokumente im Archiv",
+      "ok": true,
+      "detail": {
+        "karten": 0
+      }
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "keine fremden Titel im Archivtext",
+      "ok": true,
+      "detail": {
+        "titel": 5,
+        "gefunden": 0
+      }
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "Dokumentdetail eines fremden Dokuments zeigt nichts",
+      "ok": true,
+      "detail": {
+        "seite": false,
+        "titel": false
+      }
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "fremde Dateien nicht lesbar (aktiver Bereich und Rückfallbereiche)",
+      "ok": true,
+      "detail": {
+        "geprueft": 4,
+        "lesbar": 0,
+        "quellen": 3
+      }
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "keine fremden Vorschau-Bindungen",
+      "ok": true,
+      "detail": {
+        "bindungen": 0
+      }
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "keine fremden Papierregister-Einträge",
+      "ok": true,
+      "detail": {
+        "eintraege": 1
+      }
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "keine fremden Aufträge in der Warteschlange",
+      "ok": true,
+      "detail": {
+        "auftraege": 0
+      }
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "kein Versand fremder Daten (auch kein Papierregister-Abgleich)",
+      "ok": true,
+      "detail": {
+        "versuche": 0,
+        "nachTyp": {}
+      }
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "Inhaberbestand seit seiner Abmeldung unverändert",
+      "ok": true
+    },
+    {
+      "phase": "C-mitglied",
+      "name": "kein gemeinsamer Betriebsbestand",
+      "ok": true,
+      "detail": [
+        "inhaber:full",
+        "mitglied:member"
+      ]
+    },
+    {
+      "phase": "C3-mitglied-zurueck",
+      "name": "„Zurück“ erreicht den Verlaufseintrag des Inhabers",
+      "ok": true,
+      "detail": {
+        "schritte": 6
+      }
+    },
+    {
+      "phase": "C3-mitglied-zurueck",
+      "name": "„Zurück“ nach dem Kontowechsel: keine fremde Briefvorbelegung",
+      "ok": true
+    },
+    {
+      "phase": "C3-mitglied-zurueck",
+      "name": "„Zurück“ nach dem Kontowechsel: nirgends fremde Dokumenttitel",
+      "ok": true,
+      "detail": {
+        "ausSeitenCache": 0
+      }
+    },
+    {
+      "phase": "C2-mitglied-abmelden",
+      "name": "Mitglied meldet sich über das Menü ab",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "phase": "D-inhaber-erneut",
+      "name": "Inhaber wieder im eigenen Kontobereich",
+      "ok": true,
+      "detail": {
+        "wer": "inhaber",
+        "access": "full"
+      }
+    },
+    {
+      "phase": "D-inhaber-erneut",
+      "name": "eigene Dokumente vollständig",
+      "ok": true,
+      "detail": {
+        "fehlend": 0,
+        "anzahl": 6
+      }
+    },
+    {
+      "phase": "D-inhaber-erneut",
+      "name": "Haken erhalten",
+      "ok": true
+    },
+    {
+      "phase": "D-inhaber-erneut",
+      "name": "ungesendete Aktion erhalten",
+      "ok": true,
+      "detail": {
+        "status": [
+          "error"
+        ]
+      }
+    },
+    {
+      "phase": "D-inhaber-erneut",
+      "name": "Aktion nie unter dem Mitgliedskonto versucht",
+      "ok": true,
+      "detail": {
+        "A-inhaber": 2,
+        "B-n2-desktop": 3,
+        "D-inhaber-erneut": 3
+      }
+    },
+    {
+      "phase": "D-inhaber-erneut",
+      "name": "alle ungesendeten Aufträge aus A noch offen",
+      "ok": true,
+      "detail": {
+        "a": 1,
+        "d": 1
+      }
+    },
+    {
+      "phase": "D2-n2-telefon",
+      "name": "Karte „Weiterarbeiten\" sichtbar (390 px)",
+      "ok": true
+    },
+    {
+      "phase": "D2-n2-telefon",
+      "name": "Menüeintrag „Abmelden\" liegt oben (390 px)",
+      "ok": true,
+      "detail": {
+        "oben": "button.dropdown-menu__item.dropdown-menu__item--danger",
+        "ueberlappt": true
+      }
+    },
+    {
+      "phase": "D2-n2-telefon",
+      "name": "echter Klick auf „Abmelden\" meldet ab (390 px)",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "phase": "E1-mitglied-als-admin",
+      "name": "Rolle admin → volle Sicht im eigenen Kontobereich",
+      "ok": true,
+      "detail": {
+        "wer": "mitglied",
+        "access": "full"
+      }
+    },
+    {
+      "phase": "E2-wieder-mitglied",
+      "name": "nach Rollenentzug Mitgliedssicht",
+      "ok": true,
+      "detail": {
+        "wer": "mitglied",
+        "access": "member"
+      }
+    },
+    {
+      "phase": "E2-wieder-mitglied",
+      "name": "Admin-Bestand ruht unverändert",
+      "ok": true
+    },
+    {
+      "phase": "E2-wieder-mitglied",
+      "name": "nach Rollenentzug nichts Fremdes im Bestand",
+      "ok": true
+    },
+    {
+      "phase": "E2-wieder-mitglied",
+      "name": "Inhaberbestand weiter unverändert",
+      "ok": true
+    },
+    {
+      "phase": "E3-entfernt",
+      "name": "entfernte Mitgliedschaft: App gesperrt",
+      "ok": true
+    },
+    {
+      "phase": "E3-entfernt",
+      "name": "entfernte Mitgliedschaft: kein Betriebsbereich aktiv",
+      "ok": true,
+      "detail": {
+        "scope": "user"
+      }
+    },
+    {
+      "phase": "E3-entfernt",
+      "name": "entfernte Mitgliedschaft: kein Versand",
+      "ok": true,
+      "detail": {
+        "versuche": 0
+      }
+    },
+    {
+      "phase": "E3-entfernt",
+      "name": "entfernte Mitgliedschaft: Bestände unverändert",
+      "ok": true
+    },
+    {
+      "phase": "E4-wieder-zugelassen",
+      "name": "nach erneuter Zulassung wieder Mitgliedssicht",
+      "ok": true,
+      "detail": {
+        "wer": "mitglied",
+        "access": "member"
+      }
+    },
+    {
+      "phase": "Z-gesamt",
+      "name": "über alle Mitgliedsphasen: kein Versand von Inhaberdaten",
+      "ok": true,
+      "detail": {
+        "versucheMitglied": 0,
+        "nachTyp": {}
+      }
+    }
+  ],
+  "blockiert": [
+    {
+      "phase": "A-inhaber",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…"
+    },
+    {
+      "phase": "A-inhaber",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…"
+    },
+    {
+      "phase": "B-n2-desktop",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…"
+    },
+    {
+      "phase": "B-n2-desktop",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…"
+    },
+    {
+      "phase": "B-n2-desktop",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…"
+    },
+    {
+      "phase": "B-n2-desktop",
+      "art": "auth-logout",
+      "scope": "global"
+    },
+    {
+      "phase": "C2-mitglied-abmelden",
+      "art": "auth-logout",
+      "scope": "global"
+    },
+    {
+      "phase": "D-inhaber-erneut",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…"
+    },
+    {
+      "phase": "D-inhaber-erneut",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…"
+    },
+    {
+      "phase": "D-inhaber-erneut",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…"
+    },
+    {
+      "phase": "D2-n2-telefon",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…"
+    },
+    {
+      "phase": "D2-n2-telefon",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…"
+    },
+    {
+      "phase": "D2-n2-telefon",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…"
+    },
+    {
+      "phase": "D2-n2-telefon",
+      "art": "auth-logout",
+      "scope": "global"
+    }
+  ],
+  "konsole": [
+    {
+      "t": "2026-10-20T15:55:49.367Z",
+      "phase": "A-inhaber",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T15:55:55.269Z",
+      "phase": "A-inhaber",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T15:56:40.297Z",
+      "phase": "B-n2-desktop",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T15:56:45.598Z",
+      "phase": "B-n2-desktop",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T15:57:08.278Z",
+      "phase": "B-n2-desktop",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T15:58:10.056Z",
+      "phase": "C-mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T15:58:10.138Z",
+      "phase": "C-mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T15:58:10.202Z",
+      "phase": "C-mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T15:59:53.095Z",
+      "phase": "C3-mitglied-zurueck",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T15:59:53.220Z",
+      "phase": "C3-mitglied-zurueck",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T15:59:53.307Z",
+      "phase": "C3-mitglied-zurueck",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:00:12.631Z",
+      "phase": "C3-mitglied-zurueck",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:00:12.752Z",
+      "phase": "C3-mitglied-zurueck",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:00:12.877Z",
+      "phase": "C3-mitglied-zurueck",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:00:52.975Z",
+      "phase": "C3-mitglied-zurueck",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:00:53.119Z",
+      "phase": "C3-mitglied-zurueck",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:00:53.278Z",
+      "phase": "C3-mitglied-zurueck",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:01:19.627Z",
+      "phase": "C2-mitglied-abmelden",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:01:19.727Z",
+      "phase": "C2-mitglied-abmelden",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:01:19.843Z",
+      "phase": "C2-mitglied-abmelden",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:02:20.992Z",
+      "phase": "D-inhaber-erneut",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T16:02:25.129Z",
+      "phase": "D-inhaber-erneut",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T16:02:30.235Z",
+      "phase": "D-inhaber-erneut",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T16:03:13.455Z",
+      "phase": "D2-n2-telefon",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T16:03:18.742Z",
+      "phase": "D2-n2-telefon",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T16:03:42.110Z",
+      "phase": "D2-n2-telefon",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T16:04:37.889Z",
+      "phase": "E1-mitglied-als-admin",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:04:37.933Z",
+      "phase": "E1-mitglied-als-admin",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:04:37.983Z",
+      "phase": "E1-mitglied-als-admin",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:05:23.855Z",
+      "phase": "E2-wieder-mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:05:23.929Z",
+      "phase": "E2-wieder-mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:05:24.019Z",
+      "phase": "E2-wieder-mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:06:53.658Z",
+      "phase": "E4-wieder-zugelassen",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:06:53.777Z",
+      "phase": "E4-wieder-zugelassen",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T16:06:53.922Z",
+      "phase": "E4-wieder-zugelassen",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    }
+  ],
+  "widerruf": [
+    204,
+    204,
+    204,
+    204
+  ],
+  "profilGeloescht": true,
+  "ende": "2026-10-20T16:07:11.545Z",
+  "summe": {
+    "pruefungen": 47,
+    "ok": 47,
+    "rot": 0,
+    "blockiert": 14
+  }
+}

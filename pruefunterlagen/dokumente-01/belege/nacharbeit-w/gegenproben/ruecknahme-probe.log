@@ -1,0 +1,28 @@
+BEGIN
+INSERT 0 2
+INSERT 0 1
+INSERT 0 2
+INSERT 0 1
+INSERT 0 1
+NOTICE:  OK  R0 vor der Rücknahme: Eintrag gehört dem Mitglied (Nachzug), Prüfspur vorhanden: 1
+DO
+DO
+NOTICE:  trigger "workspace_documents_paper_register_owner" for relation "public.workspace_documents" does not exist, skipping
+DROP TRIGGER
+DROP TRIGGER
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP TABLE
+DROP TRIGGER
+DROP TRIGGER
+DROP TRIGGER
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+NOTICE:  OK  R1 früherer Anleger (Inhaber) wiederhergestellt; R2 Version 4 und Inhalt unverändert; R3 alle Trigger, Funktionen und die Prüfspur entfernt
+DO
+ROLLBACK

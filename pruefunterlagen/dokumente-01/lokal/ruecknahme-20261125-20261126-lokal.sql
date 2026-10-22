@@ -1,0 +1,60 @@
+-- DOKUMENTE-01 — Rücknahme der lokal eingespielten Migrationen 20261125120000 und 20261126120000
+-- (Fassung nach der WEISS-Nacharbeit W1/W2).
+--
+-- Nur für die LOKALE Instanz (Docker, 127.0.0.1:54321), niemals --linked oder remote.
+-- Erst eingespielt am 2026-10-20T02:23:58Z, die überarbeitete Fassung danach erneut (siehe
+-- 05-nacharbeit-weiss.md); jeweils per psql in einer Transaktion (die lokale
+-- Migrationshistorie wird wie seit 20261023 nicht geführt).
+--
+--   docker exec -i supabase_db_officepilot psql -U postgres -d postgres -v ON_ERROR_STOP=1 -1 \
+--     < pruefunterlagen/dokumente-01/lokal/ruecknahme-20261125-20261126-lokal.sql
+--
+-- Seit W2 ist jede Zuordnungsänderung an Papierregister-Einträgen in der Prüfspur
+-- `workspace_paper_register_owner_changes` vermerkt. Die Rücknahme stellt deshalb zuerst
+-- für jeden betroffenen Eintrag den Anleger vor seinem ersten Wechsel wieder her —
+-- Inhalt, Version, Grabstein und Schreiber bleiben unangetastet —, dann entfernt sie
+-- Trigger, Funktionen und die Prüfspur. Eine vor W2 (02:23:58Z) ohne Prüfspur
+-- vorgenommene Umstellung gab es lokal nicht (0 Zeilen).
+
+/* 1 — frühere Anleger der Papierregister-Einträge wiederherstellen */
+do $r$
+begin
+  if to_regclass('public.workspace_paper_register_owner_changes') is not null then
+    -- Während der Rückschreibung darf der Nachzug nicht erneut zuordnen.
+    if exists (select 1 from pg_trigger where tgname = 'workspace_documents_paper_register_owner') then
+      execute 'drop trigger workspace_documents_paper_register_owner on public.workspace_documents';
+    end if;
+    update public.workspace_paper_register_entries e
+    set created_by = erste.previous_created_by
+    from (
+      select distinct on (c.workspace_id, c.client_entry_id)
+             c.workspace_id, c.client_entry_id, c.previous_created_by
+      from public.workspace_paper_register_owner_changes c
+      order by c.workspace_id, c.client_entry_id, c.id
+    ) as erste
+    where e.workspace_id = erste.workspace_id
+      and e.client_entry_id = erste.client_entry_id
+      and erste.previous_created_by is not null
+      and e.created_by is distinct from erste.previous_created_by;
+  end if;
+end;
+$r$;
+
+/* 2 — 20261126: Papierregister */
+drop trigger if exists workspace_documents_paper_register_owner on public.workspace_documents;
+drop trigger if exists workspace_paper_register_entries_document_owner on public.workspace_paper_register_entries;
+drop function if exists public.workspace_documents_paper_register_owner();
+drop function if exists public.workspace_paper_register_entries_document_owner();
+drop function if exists public.workspace_paper_register_entries_assign_document_owner();
+drop table if exists public.workspace_paper_register_owner_changes;
+
+/* 3 — 20261125: Aufbewahrung */
+drop trigger if exists workspace_files_retention_guard on public.workspace_files;
+drop trigger if exists workspace_document_file_bindings_retention_guard on public.workspace_document_file_bindings;
+drop trigger if exists workspace_documents_retention_guard on public.workspace_documents;
+drop function if exists public.workspace_files_retention_guard();
+drop function if exists public.workspace_document_file_bindings_retention_guard();
+drop function if exists public.workspace_documents_retention_guard();
+drop function if exists public.workspace_document_retention(public.workspace_documents);
+drop function if exists public.workspace_retention_rule(text, text, text, boolean, boolean, text[], integer, date);
+drop function if exists public.workspace_retention_year(text);

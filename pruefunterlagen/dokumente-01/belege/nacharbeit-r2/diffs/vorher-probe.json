@@ -1,0 +1,93 @@
+{
+ "alleOk": true,
+ "ergebnis": [
+  {
+   "datei": "src/services/sync/syncRunIdentityService.ts",
+   "art": "geändert",
+   "ok": true,
+   "gleichUebersicht": true,
+   "gleichRStand": true,
+   "jetztGleichUebersicht": true
+  },
+  {
+   "datei": "src/services/sync/supabaseSyncAdapter.ts",
+   "art": "geändert",
+   "ok": true,
+   "gleichUebersicht": true,
+   "gleichRStand": true,
+   "jetztGleichUebersicht": true
+  },
+  {
+   "datei": "src/services/sync/syncAdapter.ts",
+   "art": "geändert",
+   "ok": true,
+   "gleichUebersicht": true,
+   "gleichRStand": true,
+   "jetztGleichUebersicht": true
+  },
+  {
+   "datei": "src/services/sync/syncCoordinator.ts",
+   "art": "geändert",
+   "ok": true,
+   "gleichUebersicht": true,
+   "gleichRStand": true,
+   "jetztGleichUebersicht": true
+  },
+  {
+   "datei": "src/pages/SyncPage.tsx",
+   "art": "geändert",
+   "ok": true,
+   "gleichUebersicht": true,
+   "gleichRStand": true,
+   "jetztGleichUebersicht": true
+  },
+  {
+   "datei": "src/i18n/locales/de/vorgangsbindung.ts",
+   "art": "neu in dieser Runde",
+   "ok": true,
+   "rueckwaertsLeer": true
+  },
+  {
+   "datei": "src/i18n/locales/de/index.ts",
+   "art": "geändert",
+   "ok": true,
+   "gleichUebersicht": true,
+   "gleichRStand": true,
+   "jetztGleichUebersicht": true
+  },
+  {
+   "datei": "src/services/document/generatedInvoiceDocumentDeleteService.ts",
+   "art": "geändert",
+   "ok": true,
+   "gleichUebersicht": true,
+   "gleichRStand": null,
+   "jetztGleichUebersicht": true
+  },
+  {
+   "datei": "src/services/sync/sendekontoR1Dokumente01.test.ts",
+   "art": "geändert",
+   "ok": true,
+   "gleichUebersicht": true,
+   "gleichRStand": true,
+   "jetztGleichUebersicht": true
+  },
+  {
+   "datei": "src/services/sync/startidentitaetR1Dokumente01.test.ts",
+   "art": "neu in dieser Runde",
+   "ok": true,
+   "rueckwaertsLeer": true
+  },
+  {
+   "datei": "src/services/document/loeschvorgangBindungDokumente01.test.ts",
+   "art": "neu in dieser Runde",
+   "ok": true,
+   "rueckwaertsLeer": true
+  },
+  {
+   "datei": "src/pages/syncHaltMeldungR1Dokumente01.test.tsx",
+   "art": "neu in dieser Runde",
+   "ok": true,
+   "rueckwaertsLeer": true
+  }
+ ]
+}

@@ -18,6 +18,15 @@ import type {
 import { isSupabaseSyncAllowed } from './cloudSyncAllowlist';
 import { enqueueBackfillSyncOutbox } from './syncOutboxService';
 import {
+  bindClientToSyncRun,
+  captureSyncRunIdentity,
+  createSyncRunGuard,
+  describeSyncRunIdentityChange,
+  type SyncRunGuard,
+} from './syncRunIdentityService';
+import { openConfirmationJournal } from './syncConfirmationJournal';
+import { heldOutboxReason } from './syncOutboxOriginService';
+import {
   EMPLOYEE_PUSH_ORDER,
   applyEmployeePullToState,
   applyEmployeePushResultToState,
@@ -1016,6 +1025,20 @@ export function buildInvoiceEntriesAfterPull(
   return entries;
 }
 
+/** DOKUMENTE-01 R1 — so viele Bestätigungen sammelt ein Lauf höchstens, bevor er sie ins Journal schreibt. */
+const CONFIRMATION_JOURNAL_FLUSH_EVERY = 25;
+
+/** DOKUMENTE-01 R1 — gehört der Arbeitsspeicher noch diesem Lauf? Synchron, also ohne Lücke bis zur Verwendung. */
+function syncRunScopeStillActive(runGuard: SyncRunGuard | null): boolean {
+  if (!runGuard) return true;
+  try {
+    runGuard.assertScopeNow();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export class SupabaseSyncAdapter implements SyncAdapter {
   readonly providerKind = 'supabase' as const;
 
@@ -1086,6 +1109,76 @@ export class SupabaseSyncAdapter implements SyncAdapter {
     const completedOutboxIds: string[] = [];
     const failedOutbox: SyncPushFailure[] = [];
 
+    /*
+     * DOKUMENTE-01 R1 — dieser Lauf gehört dem Konto, dem Betrieb und der Sicht, die beim Start aktiv waren.
+     * Jede Anfrage geht über den gebundenen Client: Er prüft unmittelbar davor, dass beides unverändert ist,
+     * und trägt den Zugang, den genau diese Prüfung für das Ursprungskonto gelesen hat. Vor jedem Auftrag prüft
+     * die Schleife zusätzlich selbst.
+     */
+    const runIdentity = input.runIdentity ?? (await captureSyncRunIdentity(this.client, workspaceId));
+    const runGuard = createSyncRunGuard(runIdentity, this.client);
+    if (runGuard.tripped) {
+      /*
+       * DOKUMENTE-01 R1-WEISS-START — ohne nachweisbare Startidentität sendet der Lauf nichts: keine Anfrage, keine
+       * Änderung an Warteschlange oder Status, kein Erfolg. Offene Aufträge bleiben unverändert beim Bereich; erst
+       * ein neuer Lauf mit bestätigter Identität setzt fort.
+       */
+      this.syncState = 'idle';
+      return {
+        success: false,
+        state: input.state,
+        completedOutboxIds: [],
+        failedOutbox: [],
+        report: finalizeSyncSimulationReport(report, new Date().toISOString()),
+        identityChanged: true,
+        identityChangeReason: runGuard.tripped,
+        runIdentity,
+      };
+    }
+    const client = bindClientToSyncRun(this.client, runGuard);
+    const journal = openConfirmationJournal(runIdentity.storageKey);
+    let identityChanged = false;
+    let journalBlocked = false;
+    const heldOutboxIds: string[] = [];
+    /*
+     * Der Auftrag, der gerade bearbeitet wird, mit dem Stand davor. Abgeschlossen wird er zu Beginn der
+     * nächsten Runde und nach der Schleife: Stieß einer seiner Teilschritte auf einen Wechsel, wird alles zu
+     * ihm zurückgenommen (er bleibt offen und unverändert); hat der Server ihn bestätigt, kommt die Bestätigung
+     * ins Journal des Ursprungsbereichs, damit er nie doppelt hinausgeht.
+     */
+    let laufend: {
+      entry: SyncOutboxEntry;
+      state: AppPersistedState;
+      outbox: SyncOutboxEntry[];
+      completed: number;
+      failed: number;
+      // Der Bericht wächst in der Schleife nur an: Zähler und Listenlängen genügen zum Zurücknehmen.
+      zaehler: Pick<typeof report, 'completedOutboxCount' | 'errorCount' | 'conflictCount'>;
+      listen: { synced: number; conflicts: number; errors: number };
+    } | null = null;
+    const laufendenAbschliessen = (): void => {
+      if (!laufend) return;
+      const vorher = laufend;
+      laufend = null;
+      if (runGuard.tripped) {
+        currentState = vorher.state;
+        outbox = vorher.outbox;
+        completedOutboxIds.length = vorher.completed;
+        failedOutbox.length = vorher.failed;
+        Object.assign(report, vorher.zaehler);
+        report.syncedEntities.length = vorher.listen.synced;
+        report.conflicts.length = vorher.listen.conflicts;
+        report.errors.length = vorher.listen.errors;
+        identityChanged = true;
+        return;
+      }
+      if (completedOutboxIds.length > vorher.completed && completedOutboxIds.includes(vorher.entry.id)) {
+        journal.add(vorher.entry);
+        // In festen Abständen festhalten; ohne festgehaltene Bestätigung sendet der Lauf nichts weiter (wie 01G6).
+        if (journal.unsaved >= CONFIRMATION_JOURNAL_FLUSH_EVERY && !journal.flush()) journalBlocked = true;
+      }
+    };
+
     const pendingEntries = outbox
       .filter((entry) => entry.status === 'pending' || entry.status === 'error')
       // 01B — Datei vor Dokument vor Binding vor Eingang vor WorkResult; alles andere behaelt seine Reihenfolge.
@@ -1098,6 +1191,44 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       );
 
     for (const entry of pendingEntries) {
+      laufendenAbschliessen();
+      if (identityChanged || journalBlocked) break;
+      // DOKUMENTE-01 R1 — vor jedem Auftrag: noch dasselbe Konto, derselbe Betrieb, dieselbe Sicht?
+      if (!(await runGuard.check())) {
+        identityChanged = true;
+        break;
+      }
+      // DOKUMENTE-01 R2 — Ursprung unbekannt oder fremd: unverändert lassen, nie automatisch senden.
+      if (heldOutboxReason(entry, runIdentity)) {
+        heldOutboxIds.push(entry.id);
+        continue;
+      }
+      // DOKUMENTE-01 R1 — unter diesem Konto bereits bestätigt (abgebrochener Vorlauf): nicht erneut senden.
+      if (journal.has(entry)) {
+        completedOutboxIds.push(entry.id);
+        outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
+        report.completedOutboxCount += 1;
+        report.syncedEntities.push({ entityType: entry.entityType, entityId: entry.entityId, resolution: 'noop' });
+        continue;
+      }
+      laufend = {
+        entry,
+        state: currentState,
+        outbox,
+        completed: completedOutboxIds.length,
+        failed: failedOutbox.length,
+        zaehler: {
+          completedOutboxCount: report.completedOutboxCount,
+          errorCount: report.errorCount,
+          conflictCount: report.conflictCount,
+        },
+        listen: {
+          synced: report.syncedEntities.length,
+          conflicts: report.conflicts.length,
+          errors: report.errors.length,
+        },
+      };
+
       if (!isSupabaseSyncAllowed(entry.entityType)) {
         /*
          * REAL-PRODUCT-TEST-01D — nur-lokale Entitäten (Gedächtnis, Papierregister,
@@ -1181,14 +1312,14 @@ export class SupabaseSyncAdapter implements SyncAdapter {
                   entry.operation,
                   extracted.rowVersion,
                   workspaceId,
-                  this.client,
+                  client,
                 )
               : extracted.entityType === 'accounting_period_closure'
                 ? await pushAccountingPeriodClosure(
                     extracted.entity,
                     extracted.rowVersion,
                     workspaceId,
-                    this.client,
+                    client,
                   )
                 : ({ kind: 'skipped', reason: 'unsupported' } as const);
 
@@ -1279,7 +1410,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       if (isEmployeeSyncEntityType(entry.entityType)) {
         try {
           this.assertClient();
-          const outcome = await pushEmployeeEntity(extracted as EmployeeSyncExtracted, entry.operation, workspaceId, this.client);
+          const outcome = await pushEmployeeEntity(extracted as EmployeeSyncExtracted, entry.operation, workspaceId, client);
           if (outcome.kind === 'pushed') {
             currentState = applyPushResultToState(
               currentState,
@@ -1314,8 +1445,8 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           this.assertClient();
           const outcome =
             extracted.entityType === 'expense' || extracted.entityType === 'expense_payment'
-              ? await pushExpenseEntity(extracted, entry.operation, workspaceId, this.client)
-              : await pushIntakeEntity(extracted, entry.operation, workspaceId, this.client);
+              ? await pushExpenseEntity(extracted, entry.operation, workspaceId, client)
+              : await pushIntakeEntity(extracted, entry.operation, workspaceId, client);
           if (outcome.kind === 'pushed') {
             currentState = applyPushResultToState(
               currentState,
@@ -1388,7 +1519,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           entry.entityType,
           buildPushPayload(extracted, entry.operation),
           extracted.rowVersion,
-          this.client,
+          client,
         );
         /*
          * CLOUD-DURABILITY-CORE-01B — der Grabstein muss auch lokal als solcher
@@ -1545,6 +1676,14 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         }
       }
     }
+    laufendenAbschliessen();
+    // Unmittelbar nach dem Ende — auch nach einem erkannten Wechsel, ohne Warten dazwischen.
+    if (!journal.flush()) journalBlocked = true;
+    if (journalBlocked && !identityChanged) {
+      const message = 'Bestätigung konnte lokal nicht festgehalten werden – Synchronisation vorerst angehalten.';
+      report.errorCount += 1;
+      report.errors.push({ outboxId: 'sync-confirmation-journal', message });
+    }
 
     currentState = {
       ...currentState,
@@ -1555,6 +1694,27 @@ export class SupabaseSyncAdapter implements SyncAdapter {
      * sie nicht hat, verliert ihre Wirkung schon hier und nicht erst mit dem nächsten gelungenen Abzug.
      */
     currentState = applyProvenExpensePaymentRejections(currentState);
+
+    if (identityChanged) {
+      /*
+       * DOKUMENTE-01 R1 — der Lauf gehört nicht mehr zum aktiven Konto. Sein Ergebnis wird nirgends übernommen:
+       * nicht in die Warteschlange im Arbeitsspeicher (sie gehört womöglich schon einem anderen Konto) und nicht in
+       * den Status. Was der Server bis zum Wechsel bestätigt hat, steht im Journal des Ursprungsbereichs; alles
+       * andere bleibt dort unverändert offen und läuft beim nächsten Lauf dieses Kontos.
+       */
+      this.syncState = 'idle';
+      return {
+        success: false,
+        state: currentState,
+        completedOutboxIds,
+        failedOutbox,
+        report: finalizeSyncSimulationReport(report, new Date().toISOString()),
+        identityChanged: true,
+        identityChangeReason: runGuard.tripped ?? 'bereich',
+        heldOutboxIds,
+        runIdentity,
+      };
+    }
 
     markOutboxEntriesCompleted(completedOutboxIds);
     if (failedOutbox.length > 0) {
@@ -1583,23 +1743,68 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       );
     }
 
-    this.pendingChanges = outbox.filter((entry) => entry.status === 'pending' || entry.status === 'error').length;
-    this.syncState = failedOutbox.length > 0 ? 'error' : 'synced';
-    this.lastError = failedOutbox[0]?.message;
-    if (failedOutbox.length === 0) {
+    // DOKUMENTE-01 R2 — zurückgehaltene Aufträge warten auf eine bewusste Freigabe, nicht auf diesen Lauf.
+    this.pendingChanges = outbox.filter(
+      (entry) => (entry.status === 'pending' || entry.status === 'error') && !heldOutboxReason(entry, runIdentity),
+    ).length;
+    this.syncState = failedOutbox.length > 0 || journalBlocked ? 'error' : 'synced';
+    this.lastError = failedOutbox[0]?.message ?? (journalBlocked ? report.errors.at(-1)?.message : undefined);
+    if (failedOutbox.length === 0 && !journalBlocked) {
       this.lastSyncedAt = new Date().toISOString();
     }
 
     return {
-      success: failedOutbox.length === 0,
+      success: failedOutbox.length === 0 && !journalBlocked,
       state: currentState,
       completedOutboxIds,
       failedOutbox,
       report: finalizeSyncSimulationReport(report, new Date().toISOString()),
+      ...(heldOutboxIds.length > 0 ? { heldOutboxIds } : {}),
+      runIdentity,
     };
   }
 
+  /**
+   * DOKUMENTE-01 R1 — der Abruf gehört demselben Konto wie das Senden dieses Laufs (ohne Senden dem, das beim Start
+   * aktiv ist). Jede Abfrage geht über den gebundenen Client. Ein Abruf, der einen Wechsel erlebt, brächte die Sicht
+   * eines anderen Kontos in diesen Bestand: Er wird ganz verworfen, nichts davon wird übernommen.
+   */
   async pullChanges(input: SyncPullInput): Promise<SyncPullResult> {
+    const workspaceId = input.state.syncClient?.serverWorkspaceId ?? resolveCloudWorkspaceId(input.state);
+    if (!workspaceId || !isSupabaseConfigured()) return this.pullChangesWith(input, this.client, null);
+    const runIdentity = input.runIdentity ?? (await captureSyncRunIdentity(this.client, workspaceId));
+    const runGuard = createSyncRunGuard(runIdentity, this.client);
+    if (!(await runGuard.check())) return this.discardPullAfterIdentityChange(input, runGuard);
+    const result = await this.pullChangesWith(input, bindClientToSyncRun(this.client, runGuard), runGuard);
+    if (runGuard.tripped || !(await runGuard.check())) return this.discardPullAfterIdentityChange(input, runGuard);
+    return result;
+  }
+
+  private discardPullAfterIdentityChange(input: SyncPullInput, runGuard: SyncRunGuard): SyncPullResult {
+    const now = new Date().toISOString();
+    const report = createEmptySyncSimulationReport(now);
+    report.pullCount = 1;
+    report.errors.push({
+      outboxId: 'sync-identity-changed',
+      message: describeSyncRunIdentityChange(runGuard.tripped ?? 'bereich'),
+    });
+    this.syncState = 'idle';
+    this.lastError = undefined;
+    return {
+      success: false,
+      state: input.state,
+      report: finalizeSyncSimulationReport(report, now),
+      skipPersist: true,
+      identityChanged: true,
+      identityChangeReason: runGuard.tripped ?? 'bereich',
+    };
+  }
+
+  private async pullChangesWith(
+    input: SyncPullInput,
+    client: SupabaseClient | null,
+    runGuard: SyncRunGuard | null,
+  ): Promise<SyncPullResult> {
     this.syncState = 'downloading';
     const startedAt = new Date().toISOString();
     const report = createEmptySyncSimulationReport(startedAt);
@@ -1616,7 +1821,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
 
     try {
       this.assertClient();
-      const remote = await rpcPullWorkspaceSyncState(workspaceId, this.client);
+      const remote = await rpcPullWorkspaceSyncState(workspaceId, client);
       const merged = mergeRemoteWorkspacePullIntoState(input.state, remote);
       const vorgangMerge = mergeVorgaengeFromPull(
         merged.state.vorgaenge,
@@ -1650,6 +1855,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         workspaceId,
         vorgaenge: vorgangMerge.vorgaenge,
         intents: amendmentIntents,
+        client,
       });
 
       if (!amendmentPull.ok) {
@@ -1681,7 +1887,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           merged.state.invoiceEntries,
         ),
         report,
-        client: this.client,
+        client,
         alignForMember: await this.isKnownMember(),
       });
 
@@ -1703,7 +1909,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
            ihren Archiv-Link aus den Cloud-Dokumenten zurück. */
         manualInvoices: invoicePull.merge?.manualInvoices ?? [],
         report,
-        client: this.client,
+        client,
       });
 
       /*
@@ -1732,7 +1938,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       let intakeDocuments = documentPull.documents;
       let intakeState: AppPersistedState = merged.state;
       try {
-        const intake = await rpcPullWorkspaceIntakeState(workspaceId, this.client);
+        const intake = await rpcPullWorkspaceIntakeState(workspaceId, client);
         const applied = applyIntakePullToState(
           { ...merged.state, documents: documentPull.documents },
           intake,
@@ -1758,7 +1964,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
        * Pulls, sondern die Rollenregel; es wird still uebersprungen.
        */
       try {
-        const expensePull = await rpcPullWorkspaceExpenses(workspaceId, this.client);
+        const expensePull = await rpcPullWorkspaceExpenses(workspaceId, client);
         const appliedExpenses = applyExpensePullToState(intakeState, expensePull, {
           deviceId: input.state.syncClient!.deviceId,
           workspaceId,
@@ -1791,7 +1997,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
        */
       if (isSupabaseSyncAllowed('employee') && isSupabaseSyncAllowed('employee_payment')) {
         try {
-          const employeePull = await rpcPullWorkspaceEmployeeData(workspaceId, this.client);
+          const employeePull = await rpcPullWorkspaceEmployeeData(workspaceId, client);
           const appliedEmployees = applyEmployeePullToState(intakeState, employeePull, {
             deviceId: input.state.syncClient!.deviceId,
             workspaceId,
@@ -1809,7 +2015,9 @@ export class SupabaseSyncAdapter implements SyncAdapter {
             });
           }
           // KONTOSPERRE: endgueltig abgewiesene Mitarbeiterdaten reiht der Backfill nicht erneut ein.
-          for (const nachtrag of appliedEmployees.backfill) {
+          // DOKUMENTE-01 R1 — eingereiht wird in die Warteschlange im Arbeitsspeicher, also nur, solange sie noch
+          // diesem Lauf gehört (synchron unmittelbar davor geprüft); sonst gehört der Lauf ohnehin verworfen.
+          for (const nachtrag of syncRunScopeStillActive(runGuard) ? appliedEmployees.backfill : []) {
             enqueueBackfillSyncOutbox({
               entityType: nachtrag.entityType,
               entityId: nachtrag.entityId,
@@ -1841,7 +2049,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
        * uebersprungen.
        */
       try {
-        const accountingPull = await pullWorkspaceAccountingFromCloud(workspaceId, this.client);
+        const accountingPull = await pullWorkspaceAccountingFromCloud(workspaceId, client);
         const appliedAccounting = applyAccountingPullToState(intakeState, accountingPull, {
           deviceId: input.state.syncClient!.deviceId,
           workspaceId,
@@ -1875,7 +2083,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
        * hier verwirft nichts.
        */
       try {
-        const numberFormat = await rpcReadWorkspaceInvoiceNumberFormat(workspaceId, this.client!);
+        const numberFormat = await rpcReadWorkspaceInvoiceNumberFormat(workspaceId, client!);
         intakeState = {
           ...intakeState,
           invoiceNumberSequence: withInvoiceNumberFormat(intakeState.invoiceNumberSequence, numberFormat.format, numberFormat.currentYear, numberFormat.currentYearLockedFormat),

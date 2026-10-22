@@ -1,0 +1,203 @@
+/**
+ * DOKUMENTE-01 R2 — Ursprung der Sendeaufträge und Zurückhaltung von Aufträgen unbekannter Herkunft.
+ *
+ * WEISS-Befund (Endrecheck N1/N2, R2): Eine alte gemeinsame Warteschlange (aus
+ * der Zeit vor der Kontotrennung, ein Bestand für alle Konten des Geräts) ging
+ * nach der Übernahme durch ein Konto automatisch unter dessen Zugang hinaus —
+ * obwohl niemand nachweisen kann, wer diese Aufträge eingereiht hat.
+ *
+ * Jetzt gilt:
+ *   - Jeder neue Auftrag trägt beim Einreihen sein Ursprungskonto (Konto,
+ *     Betrieb, Sicht des aktiven Speicherbereichs).
+ *   - Offene Aufträge ohne Ursprung werden beim Übernehmen eines Altbestands und
+ *     beim Laden eines Kontobestands zurückgehalten: unverändert erhalten, aber
+ *     nie automatisch gesendet. Endgültig abgewiesene und erledigte Aufträge
+ *     bleiben, wie sie sind — sie werden ohnehin nie automatisch gesendet.
+ *   - Ein Lauf sendet nur Aufträge seines eigenen Kontos und Betriebs.
+ *   - Freigeben kann nur das Konto dieses Bestands, bewusst und einzeln geprüft
+ *     (Sync-Seite); jede Zurückhaltung und jede Freigabe steht in einer Prüfspur
+ *     neben dem Bestand.
+ */
+import type {
+  SyncOutboxEntry,
+  SyncOutboxHold,
+  SyncOutboxOrigin,
+} from '../../types/sync';
+import type { AppPersistedState } from '../../types/models';
+import { getActiveStorageScope } from '../storage/storageScopeService';
+import { isSupabaseSyncAllowed } from './cloudSyncAllowlist';
+import { applyConfirmationJournal } from './syncConfirmationJournal';
+import type { SyncRunIdentity } from './syncRunIdentityService';
+
+export type HeldOutboxReason =
+  /** Kein nachweisbares Ursprungskonto (alte gemeinsame Warteschlange). */
+  | 'origin_unknown'
+  /** Von einem anderen Konto eingereiht. */
+  | 'foreign_origin'
+  /** Für einen anderen Betrieb eingereiht. */
+  | 'foreign_workspace'
+  /** Mit voller Sicht eingereiht, der Lauf hat nur Mitgliedssicht. */
+  | 'foreign_access';
+
+/** Das Konto, das gerade einreiht — aus dem aktiven Speicherbereich; außerhalb eines Kontobereichs keines. */
+export function resolveOutboxOriginFromActiveScope(): SyncOutboxOrigin | undefined {
+  const scope = getActiveStorageScope();
+  if (scope.type === 'workspace' && scope.account) {
+    return { userId: scope.account.userId, workspaceId: scope.workspaceId, access: scope.account.access };
+  }
+  if (scope.type === 'user') return { userId: scope.userId };
+  return undefined;
+}
+
+export function isOutboxEntryHeld(entry: Pick<SyncOutboxEntry, 'hold'>): boolean {
+  return entry.hold !== undefined;
+}
+
+/**
+ * Warum ein Lauf diesen Auftrag nicht senden darf; `null` heißt: er darf. Ein Auftrag, der sein Konto nennt, geht
+ * nur in einem Lauf hinaus, der nachweislich diesem Konto gehört. Aufträge ohne Ursprung und ohne Sperre (außerhalb
+ * eines Kontobestands, etwa in Testgerüsten) bleiben beim bisherigen Weg.
+ */
+export function heldOutboxReason(
+  entry: Pick<SyncOutboxEntry, 'hold' | 'origin'>,
+  identity: Pick<SyncRunIdentity, 'accountUserId' | 'sessionUserId' | 'scopeWorkspaceId' | 'access'>,
+): HeldOutboxReason | null {
+  if (entry.hold) return 'origin_unknown';
+  const origin = entry.origin;
+  if (!origin) return null;
+  const runUserId = identity.accountUserId ?? (typeof identity.sessionUserId === 'string' ? identity.sessionUserId : null);
+  if (runUserId === null || origin.userId !== runUserId) return 'foreign_origin';
+  if (origin.workspaceId && origin.workspaceId !== identity.scopeWorkspaceId) return 'foreign_workspace';
+  if (origin.access === 'full' && identity.access === 'member') return 'foreign_access';
+  return null;
+}
+
+/** Offene Aufträge: Nur sie können noch gesendet werden. */
+const HOLDABLE_STATUSES: ReadonlySet<SyncOutboxEntry['status']> = new Set(['pending', 'error', 'blocked']);
+
+/**
+ * Hält offene Aufträge ohne Ursprung zurück. Reine Umformung: Inhalt, Status, Version und Reihenfolge bleiben
+ * unverändert; dazu kommt nur die Sperre. Nur-lokale Entitäten verlassen das Gerät nie und brauchen keine.
+ */
+export function holdOutboxEntriesWithoutOrigin(
+  outbox: SyncOutboxEntry[] | undefined,
+  source: SyncOutboxHold['source'],
+  now: string,
+): { outbox: SyncOutboxEntry[]; heldIds: string[] } {
+  const list = outbox ?? [];
+  const heldIds: string[] = [];
+  const next = list.map((entry) => {
+    if (entry.origin || entry.hold || !HOLDABLE_STATUSES.has(entry.status)) return entry;
+    if (!isSupabaseSyncAllowed(entry.entityType)) return entry;
+    heldIds.push(entry.id);
+    return { ...entry, hold: { reason: 'origin_unknown' as const, since: now, source } };
+  });
+  return { outbox: heldIds.length > 0 ? next : list, heldIds };
+}
+
+/**
+ * Übernahme eines Altbestands: dieselbe Zurückhaltung am Rohwert, bevor er in den Kontobestand wandert. Ist er nicht
+ * lesbar, bleibt er unverändert (das Laden meldet ihn dann als nicht lesbar und wendet nichts an).
+ */
+export function holdOutboxEntriesInRawState(
+  raw: string,
+  source: SyncOutboxHold['source'],
+  now: string,
+): { raw: string; held: SyncOutboxEntry[] } {
+  let state: AppPersistedState;
+  try {
+    state = JSON.parse(raw) as AppPersistedState;
+  } catch {
+    return { raw, held: [] };
+  }
+  if (!state || typeof state !== 'object' || !Array.isArray(state.syncOutbox)) return { raw, held: [] };
+  const { outbox, heldIds } = holdOutboxEntriesWithoutOrigin(state.syncOutbox, source, now);
+  if (heldIds.length === 0) return { raw, held: [] };
+  const ids = new Set(heldIds);
+  return { raw: JSON.stringify({ ...state, syncOutbox: outbox }), held: outbox.filter((entry) => ids.has(entry.id)) };
+}
+
+/**
+ * Laden eines Kontobestands: zuerst die Bestätigungen abgebrochener Läufe dieses Kontos anwenden (nie doppelt
+ * senden), dann offene Aufträge ohne Ursprung zurückhalten.
+ */
+export function prepareAccountOutboxOnLoad(
+  storageKey: string,
+  state: AppPersistedState,
+  now: string,
+): { state: AppPersistedState; changed: boolean; held: SyncOutboxEntry[]; completedIds: string[] } {
+  const journal = applyConfirmationJournal(storageKey, state.syncOutbox ?? []);
+  const { outbox, heldIds } = holdOutboxEntriesWithoutOrigin(journal.outbox, 'load', now);
+  const changed = journal.completedIds.length > 0 || heldIds.length > 0;
+  if (!changed) return { state, changed: false, held: [], completedIds: [] };
+  const ids = new Set(heldIds);
+  return {
+    state: { ...state, syncOutbox: outbox },
+    changed: true,
+    held: outbox.filter((entry) => ids.has(entry.id)),
+    completedIds: journal.completedIds,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Prüfspur                                                                    */
+/* -------------------------------------------------------------------------- */
+
+const ORIGIN_LOG_SUFFIX = ':outbox-origin-log';
+const MAX_ORIGIN_LOG_EVENTS = 200;
+
+export interface OutboxOriginLogEntity {
+  outboxId: string;
+  entityType: SyncOutboxEntry['entityType'];
+  entityId: string;
+  operation: SyncOutboxEntry['operation'];
+  status: SyncOutboxEntry['status'];
+  queuedAt: string;
+}
+
+export interface OutboxOriginLogEvent {
+  at: string;
+  action: 'held' | 'released' | 'confirmed_on_load';
+  /** Zurückgehalten: wo; freigegeben: durch welches Konto. */
+  source?: SyncOutboxHold['source'];
+  by?: string;
+  entries: OutboxOriginLogEntity[];
+}
+
+export function buildOutboxOriginLogKey(storageKey: string): string {
+  return `${storageKey}${ORIGIN_LOG_SUFFIX}`;
+}
+
+export function toOutboxOriginLogEntity(entry: SyncOutboxEntry): OutboxOriginLogEntity {
+  return {
+    outboxId: entry.id,
+    entityType: entry.entityType,
+    entityId: entry.entityId,
+    operation: entry.operation,
+    status: entry.status,
+    queuedAt: entry.queuedAt,
+  };
+}
+
+export function readOutboxOriginLog(storageKey: string): OutboxOriginLogEvent[] {
+  try {
+    const raw = localStorage.getItem(buildOutboxOriginLogKey(storageKey));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as OutboxOriginLogEvent[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Hängt ein Ereignis an die Prüfspur des Bestands. Scheitert das Schreiben, bleibt der Bestand selbst gültig. */
+export function appendOutboxOriginLog(storageKey: string, event: OutboxOriginLogEvent): boolean {
+  if (event.entries.length === 0) return true;
+  try {
+    const events = [...readOutboxOriginLog(storageKey), event].slice(-MAX_ORIGIN_LOG_EVENTS);
+    localStorage.setItem(buildOutboxOriginLogKey(storageKey), JSON.stringify(events));
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -388,8 +388,9 @@ describe('DOCUMENT-ARCHIVE-TRUTH-03A1 Fill-Confirm DWR overlay', () => {
     // die Bestaetigung selbst darf die Allowlist trotzdem nicht veraendern.
     expect(SUPABASE_SYNC_ALLOWLIST.has('document' as SyncEntityType)).toBe(true);
     expect((SUPABASE_SYNC_ALLOWLIST as ReadonlySet<string>).has('document_work_result')).toBe(true);
-    // 01C — Ausgaben sind Cloud-Entitaeten; Aufgaben bleiben lokal.
-    expect(SUPABASE_SYNC_ALLOWLIST.has('task' as SyncEntityType)).toBe(false);
+    // 01C — Ausgaben sind Cloud-Entitaeten; seit CLOUD-DURABILITY-01C auch Aufgaben
+    // (DOKUMENTE-01: die alte Erwartung „Aufgaben bleiben lokal" war ueberholt).
+    expect(SUPABASE_SYNC_ALLOWLIST.has('task' as SyncEntityType)).toBe(true);
 
     const rows = confirmRow(buildDocumentFieldFillConfirmViewModel(item).rows, 'Betrag');
     expect(

@@ -1,0 +1,210 @@
+diff --git a/src/services/sync/syncConfirmationJournal.ts b/src/services/sync/syncConfirmationJournal.ts
+new file mode 100644
+index 0000000..0a8f8ea
+--- /dev/null
++++ b/src/services/sync/syncConfirmationJournal.ts
+@@ -0,0 +1,204 @@
++/**
++ * DOKUMENTE-01 R1 — Bestätigungsjournal je Speicherbereich.
++ *
++ * Bricht ein Lauf ab, weil Konto, Betrieb oder Sicht gewechselt hat, wird sein
++ * Ergebnis nicht angewendet (Abschnitt N1: kein fremder Bestand im neuen
++ * Bereich). Was der Server bis dahin unter der Ursprungsidentität bereits
++ * bestätigt hat, darf deshalb nicht verloren gehen — sonst schickte das
++ * Ursprungskonto es beim nächsten Mal ein zweites Mal.
++ *
++ * Darum hält der Lauf jede Bestätigung sofort im Bereich des Ursprungskontos
++ * fest, unter einem eigenen Schlüssel neben dessen Bestand (nie im gerade
++ * aktiven, womöglich fremden Bereich). Der nächste Lauf dieses Kontos und das
++ * nächste Laden erkennen einen so bestätigten Auftrag und senden ihn nicht
++ * erneut. Zugeordnet wird genau über Kennung, Vorgang, Version und
++ * Einreihungsnummer: Hat das Konto die Entität danach erneut geändert, ist das
++ * ein neuer Auftrag und geht normal hinaus.
++ *
++ * Ist ein Ergebnis gespeichert, braucht das Journal dessen Bestätigungen nicht
++ * mehr; es wird dann auf die noch offenen Aufträge zurückgeschnitten. So bleibt
++ * es klein und lebt nur zwischen Bestätigung und Speicherung.
++ */
++import type { SyncOutboxEntry } from '../../types/sync';
++
++const JOURNAL_SUFFIX = ':sync-confirmed';
++/**
++ * Obergrenze für einen einzelnen sehr großen Lauf. Ein Eintrag ist ein kurzes Tupel; zwischen zwei Speicherungen
++ * stehen nur die Bestätigungen des laufenden Laufs darin.
++ */
++const MAX_RECORDS = 5000;
++
++/** Kompakt: Auftragskennung, Vorgang, Version, Einreihungsnummer (`null` bei Altbestand). */
++type JournalRecord = [outboxId: string, operation: string, version: number, sequence: number | null];
++
++export interface ConfirmedOutboxRecord {
++  outboxId: string;
++  operation: string;
++  version: number;
++  sequence: number | null;
++}
++
++export function buildConfirmationJournalKey(storageKey: string): string {
++  return `${storageKey}${JOURNAL_SUFFIX}`;
++}
++
++function isJournalRecord(value: unknown): value is JournalRecord {
++  return (
++    Array.isArray(value) &&
++    value.length === 4 &&
++    typeof value[0] === 'string' &&
++    typeof value[1] === 'string' &&
++    typeof value[2] === 'number' &&
++    (value[3] === null || typeof value[3] === 'number')
++  );
++}
++
++function readRecords(storageKey: string): JournalRecord[] {
++  try {
++    const raw = localStorage.getItem(buildConfirmationJournalKey(storageKey));
++    if (!raw) return [];
++    const parsed = JSON.parse(raw) as unknown;
++    return Array.isArray(parsed) ? parsed.filter(isJournalRecord) : [];
++  } catch {
++    return [];
++  }
++}
++
++function toRecord(entry: Pick<SyncOutboxEntry, 'id' | 'operation' | 'version' | 'sequence'>): JournalRecord {
++  return [entry.id, entry.operation, entry.version, entry.sequence ?? null];
++}
++
++function sameRecord(a: JournalRecord, b: JournalRecord): boolean {
++  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
++}
++
++function writeRecords(storageKey: string, records: readonly JournalRecord[]): boolean {
++  try {
++    const key = buildConfirmationJournalKey(storageKey);
++    if (records.length === 0) {
++      localStorage.removeItem(key);
++      return localStorage.getItem(key) === null;
++    }
++    const raw = JSON.stringify(records);
++    localStorage.setItem(key, raw);
++    return localStorage.getItem(key) === raw;
++  } catch {
++    return false;
++  }
++}
++
++/**
++ * Hält eine Serverbestätigung im Bereich des Ursprungskontos fest. `false`: nicht festgehalten (Speicher voll oder
++ * gesperrt) — dann darf der Lauf nichts weiter senden, sonst ginge diese Bestätigung bei einem Abbruch verloren.
++ */
++export function recordConfirmedOutboxEntry(storageKey: string, entry: SyncOutboxEntry): boolean {
++  const journal = openConfirmationJournal(storageKey);
++  journal.add(entry);
++  return journal.flush();
++}
++
++/** Das Journal eines Laufs: einmal gelesen, im Speicher ergänzt, gebündelt geschrieben. */
++export interface ConfirmationJournalHandle {
++  /** Bestätigt — beim Laufstart im Journal oder in diesem Lauf ergänzt? */
++  has(entry: SyncOutboxEntry): boolean;
++  add(entry: SyncOutboxEntry): void;
++  /** Noch nicht geschriebene Ergänzungen. */
++  readonly unsaved: number;
++  /** Schreibt die Ergänzungen; `false`: nicht festgehalten. */
++  flush(): boolean;
++}
++
++/**
++ * Öffnet das Journal für einen Lauf. Gelesen wird einmal beim Start; ein Lauf sieht jeden Auftrag nur einmal, also
++ * genügt dieser Stand für `has`. Geschrieben wird gebündelt (`flush`) — der Lauf tut das, bevor er abbricht, in
++ * festen Abständen und an seinem Ende.
++ */
++export function openConfirmationJournal(storageKey: string): ConfirmationJournalHandle {
++  const known = new Set(readRecords(storageKey).map((record) => JSON.stringify(record)));
++  let added: JournalRecord[] = [];
++  return {
++    has(entry) {
++      return known.has(JSON.stringify(toRecord(entry)));
++    },
++    add(entry) {
++      const record = toRecord(entry);
++      const key = JSON.stringify(record);
++      if (known.has(key)) return;
++      known.add(key);
++      added.push(record);
++    },
++    get unsaved() {
++      return added.length;
++    },
++    flush() {
++      if (added.length === 0) return true;
++      // Nur die Ergänzungen dieses Laufs; was inzwischen gespeichert oder bereinigt wurde, bleibt, wie es ist.
++      const merged = readRecords(storageKey);
++      const present = new Set(merged.map((record) => JSON.stringify(record)));
++      for (const record of added) {
++        if (!present.has(JSON.stringify(record))) merged.push(record);
++      }
++      if (merged.length > MAX_RECORDS || !writeRecords(storageKey, merged)) return false;
++      added = [];
++      return true;
++    },
++  };
++}
++
++/** Wurde genau dieser Auftrag (gleiche Fassung) schon bestätigt? */
++export function isOutboxEntryConfirmed(storageKey: string, entry: SyncOutboxEntry): boolean {
++  const record = toRecord(entry);
++  return readRecords(storageKey).some((existing) => sameRecord(existing, record));
++}
++
++export function listConfirmedOutboxRecords(storageKey: string): ConfirmedOutboxRecord[] {
++  return readRecords(storageKey).map(([outboxId, operation, version, sequence]) => ({
++    outboxId,
++    operation,
++    version,
++    sequence,
++  }));
++}
++
++/**
++ * Wendet das Journal auf eine Warteschlange an: Bestätigte, noch offene Aufträge gelten als erledigt. Reine
++ * Umformung; das Journal selbst bleibt, bis das Ergebnis gespeichert ist (`pruneConfirmationJournal`).
++ */
++export function applyConfirmationJournal(
++  storageKey: string,
++  outbox: SyncOutboxEntry[],
++): { outbox: SyncOutboxEntry[]; completedIds: string[] } {
++  const records = readRecords(storageKey);
++  if (records.length === 0) return { outbox, completedIds: [] };
++  const completedIds: string[] = [];
++  const next = outbox.map((entry) => {
++    if (entry.status === 'completed' || entry.status === 'failed') return entry;
++    const record = toRecord(entry);
++    if (!records.some((existing) => sameRecord(existing, record))) return entry;
++    completedIds.push(entry.id);
++    return { ...entry, status: 'completed' as const };
++  });
++  return { outbox: completedIds.length > 0 ? next : outbox, completedIds };
++}
++
++/**
++ * Nach einer Speicherung: behält nur Bestätigungen, deren Auftrag in der gespeicherten Warteschlange noch offen ist
++ * (etwa aus einem abgebrochenen Lauf, dessen Ergebnis nicht übernommen wurde). Alles andere ist angewendet.
++ */
++export function pruneConfirmationJournal(storageKey: string, outbox: readonly SyncOutboxEntry[]): void {
++  try {
++    const records = readRecords(storageKey);
++    if (records.length === 0) return;
++    const open = new Set(
++      outbox
++        .filter((entry) => entry.status !== 'completed' && entry.status !== 'failed')
++        .map((entry) => JSON.stringify(toRecord(entry))),
++    );
++    const keep = records.filter((record) => open.has(JSON.stringify(record)));
++    if (keep.length === records.length) return;
++    if (keep.length === 0) localStorage.removeItem(buildConfirmationJournalKey(storageKey));
++    else localStorage.setItem(buildConfirmationJournalKey(storageKey), JSON.stringify(keep));
++  } catch {
++    // Ein nicht bereinigtes Journal schadet nicht: Es passt nur auf genau dieselbe Fassung.
++  }
++}

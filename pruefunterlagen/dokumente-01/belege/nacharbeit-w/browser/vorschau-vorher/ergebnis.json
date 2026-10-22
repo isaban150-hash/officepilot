@@ -1,0 +1,128 @@
+{
+  "start": "2026-10-20T11:21:34.955Z",
+  "phasen": {
+    "inhaberAnmeldung": {
+      "abzugRuhig": true,
+      "abzuege": 13
+    },
+    "kopieVorher": {
+      "panel": false
+    },
+    "kopieOrchestrierung": {
+      "vorschaubild": {
+        "kind": "error",
+        "errorCode": "unexpected_failure"
+      },
+      "vorschau": {
+        "kind": "error",
+        "errorCode": "unexpected_failure"
+      },
+      "original": {
+        "storageType": "indexeddb",
+        "lifecycle": "committed"
+      },
+      "kodierplan": {
+        "art": "page_1_preview_jpeg_encode",
+        "seite": 1,
+        "kante": 1280
+      },
+      "s1_bytes": {
+        "ok": true,
+        "laenge": 2202
+      },
+      "s2_kodieren": {
+        "ok": true,
+        "laenge": 38757
+      },
+      "s3_gleicheDatei": {
+        "storageType": "cloud",
+        "lifecycle": "committed"
+      },
+      "s4_speichern": {
+        "ok": false,
+        "name": "DocumentBlobStorageError",
+        "code": "blob_read_failed",
+        "message": "blob_read_failed"
+      }
+    },
+    "kopieOrchestrierungKonsole": [
+      "[OfficePilot:pdf-thumbnail-encode] pdf_thumbnail unexpected_failure",
+      "[OfficePilot:pdf-preview-encode] pdf_preview unexpected_failure"
+    ],
+    "originalOrchestrierung": {
+      "vorschaubild": {
+        "kind": "error",
+        "errorCode": "unexpected_failure"
+      },
+      "vorschau": {
+        "kind": "error",
+        "errorCode": "unexpected_failure"
+      },
+      "original": {
+        "storageType": "indexeddb",
+        "lifecycle": "committed"
+      },
+      "kodierplan": {
+        "art": "page_1_preview_jpeg_encode",
+        "seite": 1,
+        "kante": 1280
+      },
+      "s1_bytes": {
+        "ok": true,
+        "laenge": 2202
+      },
+      "s2_kodieren": {
+        "ok": true,
+        "laenge": 38757
+      },
+      "s3_gleicheDatei": {
+        "storageType": "cloud",
+        "lifecycle": "committed"
+      },
+      "s4_speichern": {
+        "ok": false,
+        "name": "DocumentBlobStorageError",
+        "code": "blob_read_failed",
+        "message": "blob_read_failed"
+      }
+    },
+    "originalOrchestrierungKonsole": [
+      "[OfficePilot:pdf-thumbnail-encode] pdf_thumbnail unexpected_failure",
+      "[OfficePilot:pdf-preview-encode] pdf_preview unexpected_failure"
+    ],
+    "kopieNachher": {
+      "panel": false
+    },
+    "widerrufInhaber": 204
+  },
+  "blockiert": [],
+  "konsole": [
+    {
+      "t": "2026-10-20T11:22:44.226Z",
+      "phase": "inhaber",
+      "typ": "error",
+      "text": "[OfficePilot:pdf-thumbnail-encode] pdf_thumbnail unexpected_failure"
+    },
+    {
+      "t": "2026-10-20T11:22:45.517Z",
+      "phase": "inhaber",
+      "typ": "error",
+      "text": "[OfficePilot:pdf-preview-encode] pdf_preview unexpected_failure"
+    },
+    {
+      "t": "2026-10-20T11:22:46.609Z",
+      "phase": "inhaber",
+      "typ": "error",
+      "text": "[OfficePilot:pdf-thumbnail-encode] pdf_thumbnail unexpected_failure"
+    },
+    {
+      "t": "2026-10-20T11:22:47.298Z",
+      "phase": "inhaber",
+      "typ": "error",
+      "text": "[OfficePilot:pdf-preview-encode] pdf_preview unexpected_failure"
+    }
+  ],
+  "abbruch": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('login-page') to be visible\u001b[22m\n\n    at C:\\Users\\LENOVO~1\\AppData\\Local\\Temp\\claude\\c--Users-Lenovo-ThinkPad-E590-Desktop-officepilot\\70985f23…\\scratchpad\\dok01\\w\\nachstellung.mjs:309:40",
+  "profilGeloescht": true,
+  "ende": "2026-10-20T11:24:13.059Z"
+}

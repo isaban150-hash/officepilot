@@ -1,0 +1,935 @@
+
+ RUN  v3.2.6 C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot
+
+ ❯ |default| src/uxHome01.test.tsx (10 tests | 1 failed) 1169ms
+   × UX-HOME-01 ABSCHLUSSFIX > Desktop-Schreibtisch zeigt Mobile-First Startseite 356ms
+     → expected '<div class="page heute-page heute-04b…' to contain 'data-testid="home-card-orders"'
+   ✓ UX-HOME-01 ABSCHLUSSFIX > Mobile Bottom-Nav hat maximal 5 Punkte ohne Steuerberater 17ms
+   ✓ UX-HOME-01 ABSCHLUSSFIX > Desktop-Sidebar hat 6 Arbeitsbereiche; Steuerberater liegt unter Finanzen 22ms
+   ✓ UX-HOME-01 ABSCHLUSSFIX > Steuerberater über Startseite, Kunden nur über Mehr 66ms
+   ✓ UX-HOME-01 ABSCHLUSSFIX > Steuerberater ohne echten Versand-Button  599ms
+   ✓ UX-HOME-01 ABSCHLUSSFIX > Vormonat am 2./3. des Monats als Standard 11ms
+   ✓ UX-HOME-01 ABSCHLUSSFIX > Snooze morgen / 3 Tage / nächste Woche 3ms
+   ✓ UX-HOME-01 ABSCHLUSSFIX > Hinweisleiste unterstützt Ausblenden ohne Wiederholung 14ms
+   ✓ UX-HOME-01 ABSCHLUSSFIX > Dokumente-Seite zeigt alle Aufnahmewege 73ms
+   ✓ UX-HOME-01 ABSCHLUSSFIX > DE/TR vollständig für neue Texte 3ms
+ ✓ |default| src/services/sync/syncMultiTabBusinessRevision01afix3.test.ts (7 tests) 67435ms
+   ✓ SYNC-AUTOMATIK-01A-FIX3 — nur die fachliche Revision sperrt einen Tab > TEST A (Browserbefund): Tab B öffnet → technischer Write, fachliche Revision gleich, separater Schlüssel unverändert → Tab A speichert  15163ms
+   ✓ SYNC-AUTOMATIK-01A-FIX3 — nur die fachliche Revision sperrt einen Tab > TEST B: Tab B lädt neu ohne Änderung → fachliche Revision bleibt, Tab A speichert  10482ms
+   ✓ SYNC-AUTOMATIK-01A-FIX3 — nur die fachliche Revision sperrt einen Tab > TEST C: mehrere rein technische Writes in Tab B → fachliche Revision bleibt, Tab A schreibfähig  9587ms
+   ✓ SYNC-AUTOMATIK-01A-FIX3 — nur die fachliche Revision sperrt einen Tab > TEST D: echter fachlicher Save in Tab B → N+1, Tab A wird blockiert, nichts überschrieben  6696ms
+   ✓ SYNC-AUTOMATIK-01A-FIX3 — nur die fachliche Revision sperrt einen Tab > TEST E: Tab B übernimmt echten neuen Cloud-Inhalt → fachliche Revision steigt, Tab A blockiert  9533ms
+   ✓ SYNC-AUTOMATIK-01A-FIX3 — nur die fachliche Revision sperrt einen Tab > TEST F: nur Sync-Metadaten ändern sich → Tab A wird nicht blockiert  11453ms
+   ✓ SYNC-AUTOMATIK-01A-FIX3 — nur die fachliche Revision sperrt einen Tab > TEST G: nur savedAt/writeGeneration ändern sich → Tab A wird nicht blockiert  4513ms
+ ✓ |default| src/services/sync/syncMultiTabVorgaengeDemo01afix4.test.ts (6 tests) 55596ms
+   ✓ SYNC-AUTOMATIK-01A-FIX4 — Demo-Vorgänge der Cloud erhöhen keine fachliche Revision > A–E: Tab B öffnet (vollständiger Anmelde-Start, Demo-Zeilen in der Cloud) → Revision bleibt, Tab A speichert  9930ms
+   ✓ SYNC-AUTOMATIK-01A-FIX4 — Demo-Vorgänge der Cloud erhöhen keine fachliche Revision > F: Reload von Tab B mit unverändertem Cloud-Stand → Revision bleibt, Tab A speichert  11629ms
+   ✓ SYNC-AUTOMATIK-01A-FIX4 — Demo-Vorgänge der Cloud erhöhen keine fachliche Revision > G: mehrfacher Bootstrap und regelmässiger vollständiger Abgleich → keine Revision, keine Demo-Vorgänge  9077ms
+   ✓ SYNC-AUTOMATIK-01A-FIX4 — Demo-Vorgänge der Cloud erhöhen keine fachliche Revision > H: echter geänderter Cloud-Vorgang → Revision +1 (Bereich vorgaenge), Tab A geschützt  11758ms
+   ✓ SYNC-AUTOMATIK-01A-FIX4 — Demo-Vorgänge der Cloud erhöhen keine fachliche Revision > I: echter lokaler Vorgangs-Save in Tab B → Revision +1, Tab A geschützt  6619ms
+   ✓ SYNC-AUTOMATIK-01A-FIX4 — Demo-Vorgänge der Cloud erhöhen keine fachliche Revision > J: nur Sync-Metadaten eines Vorgangs ändern sich → keine fachliche Revision  6577ms
+ ✓ |default| src/services/sync/syncMultiTabOpenReload01afix1.test.ts (8 tests) 30886ms
+   ✓ SYNC-AUTOMATIK-01A-FIX1 — Öffnen/Neuladen sperrt keinen anderen Tab > 1–4: Tab B öffnet denselben Workspace ohne Änderung → Tab A speichert weiter  4034ms
+   ✓ SYNC-AUTOMATIK-01A-FIX1 — Öffnen/Neuladen sperrt keinen anderen Tab > 5–6: Tab B lädt neu ohne Änderung → Tab A speichert weiter  3843ms
+   ✓ SYNC-AUTOMATIK-01A-FIX1 — Öffnen/Neuladen sperrt keinen anderen Tab > das storage-Ereignis eines bloss geöffneten Tabs meldet keinen veralteten Stand  3948ms
+   ✓ SYNC-AUTOMATIK-01A-FIX1 — Öffnen/Neuladen sperrt keinen anderen Tab > 7–9: echter Save in Tab B → Tab A wird sicher blockiert, nichts überschrieben  4589ms
+   ✓ SYNC-AUTOMATIK-01A-FIX1 — Öffnen/Neuladen sperrt keinen anderen Tab > 10: reiner Bootstrap (gleicher Zustand angewendet) invalidiert keinen anderen Tab  3179ms
+   ✓ SYNC-AUTOMATIK-01A-FIX1 — Öffnen/Neuladen sperrt keinen anderen Tab > 11: reines Sync-Metadaten-Update (Serverversion, Sendeauftrag) invalidiert keinen Tab  4573ms
+   ✓ SYNC-AUTOMATIK-01A-FIX1 — Öffnen/Neuladen sperrt keinen anderen Tab > 12: ein echter fachlicher Cloud-Stand in Tab B bleibt gegen Tab A geschützt  3237ms
+   ✓ SYNC-AUTOMATIK-01A-FIX1 — Öffnen/Neuladen sperrt keinen anderen Tab > Neuladen von Tab A selbst macht Tab B nicht veraltet  3477ms
+ ✓ |default| src/services/sync/syncMultiTabCloudOpen01afix2.test.ts (7 tests) 49660ms
+   ✓ SYNC-AUTOMATIK-01A-FIX2 — Anmelde-Start eines Tabs sperrt keinen anderen > 1–5: Tab A geladen (Generation N), Tab B öffnet ohne Speichern → N bleibt, Tab A speichert  6669ms
+   ✓ SYNC-AUTOMATIK-01A-FIX2 — Anmelde-Start eines Tabs sperrt keinen anderen > 6–8: Tab B lädt neu (zweimal) ohne Änderung → N bleibt, Tab A speichert  12165ms
+   ✓ SYNC-AUTOMATIK-01A-FIX2 — Anmelde-Start eines Tabs sperrt keinen anderen > 9–10: Bootstrap mit identischem fachlichem Inhalt (Profil in Cloud-Form) → N bleibt  5025ms
+   ✓ SYNC-AUTOMATIK-01A-FIX2 — Anmelde-Start eines Tabs sperrt keinen anderen > 11–12: vollständiger Abgleich, der nur Serverversionen ändert → N bleibt  5922ms
+   ✓ SYNC-AUTOMATIK-01A-FIX2 — Anmelde-Start eines Tabs sperrt keinen anderen > 13–14: Vorgabewerte beim Laden gelten nicht als fachliche Änderung  2097ms
+   ✓ SYNC-AUTOMATIK-01A-FIX2 — Anmelde-Start eines Tabs sperrt keinen anderen > 15–17: echter Save in Tab B → N+1, Tab A wird sicher blockiert  7842ms
+   ✓ SYNC-AUTOMATIK-01A-FIX2 — Anmelde-Start eines Tabs sperrt keinen anderen > 18–19: echter fachlicher Cloud-Inhalt wird übernommen → Generation steigt, Tab A blockiert  9935ms
+ ✓ |default| src/companyIdentityRecovery02.test.tsx (36 tests) 67430ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > C1: abweichende Firmendaten führen zur Konfliktansicht ohne jeden Upsert  588ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > C2: Abbrechen meldet ab, ohne gespeicherte Daten oder die Cloud zu verändern  1111ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > C2a: nach dem Abbrechen erscheint derselbe Konflikt bei erneuter Anmeldung  1384ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > C2b: die Sperrfläche nennt den Rettungsweg, ohne etwas zu senden  492ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > C2c: ein ungelöster Konflikt gibt den Merge-/Sync-Pfad nicht frei  918ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > C3: erst der zweite Klick überträgt genau je einen Upsert mit aktueller Serverversion  2285ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > C4: ändert sich die Cloud zwischen Anzeige und Bestätigung, wird nicht gesendet  1948ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > C5: Teilfehler — erfolgreiches setup wird beim Retry nicht erneut gesendet  2508ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > C6: nach Erfolg zeigt ein Neustart keinen Konflikt und sendet keine Firmendaten  2666ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > C7: gleiche Firma lokal und in der Cloud startet ohne Konflikt  553ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > C8: ohne Workspace-Kopie bleibt der bisherige sichere Weg bestehen  584ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K1: eine lokale Änderung nach dem ersten Klick verhindert jeden Upsert  1832ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K2: row_version 0 führt zu null Upserts und sichtbarem Fehler  1839ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K3: der alte User-Eintrag bleibt pending und wird nie gesendet  1699ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K4: Profil erfolgreich, Setup fehlgeschlagen — Retry sendet nur das Setup  2611ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K5: fehlender Workspace-Eigentümer blockiert jeden Push  448ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K6: Dokumentdaten und IndexedDB bleiben unverändert  1615ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K7: geänderter Cloud-Stand verlangt erneut zwei Schritte  3905ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K8: scheitert die lokale Verbuchung, bleibt die Ansicht stehen und sendet nichts weiter  2635ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K9: leere Cloud-Firmendaten erzeugen keinen Konflikt  741ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K10: ein Netzwerkfehler beim Pull überschreibt nichts  520ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K11: erst verbuchen, dann die nächste Entität senden  3096ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K12: lokale Änderung nach Teilerfolg startet einen neuen Vergleich  4134ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > K13: eine ungültige Serverantwort gilt nicht als Erfolg  1614ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > A1: geändertes lokales Setup nach Teilerfolg wird nicht übersprungen  4086ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > A2: ein Fehler bereits beim Provisioning sperrt die App  489ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > A3: scheitert der Kontroll-Pull, bleibt der zuletzt bestätigte Cloud-Name stehen  1969ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > A4: ungültige Profilantwort hält den Setup-Fortschritt und sperrt die App  3064ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > L1: erster Klick allein überträgt nichts und ersetzt den Knopf nicht  1026ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > L2: ein direktes zweites Klickereignis überträgt nichts  1579ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > L3: die Checkbox allein überträgt nichts  1379ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > L4: ein Sichtbarkeitswechsel verwirft die Bestätigungsstufe  1912ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > L5: pagehide und pageshow verwerfen die Bestätigungsstufe  2352ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > L6: erst die vollständige getrennte Folge überträgt genau einmal je Entität  2165ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > L7: schnelles Doppelauslösen des Endknopfes überträgt trotzdem nur einmal  2076ms
+   ✓ OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B > M2: kein weiterer Firmen-Upsert nach der bestätigten Übernahme  3598ms
+ ✓ |default| src/localScopeEmergencyQuarantineUi03.test.tsx (66 tests) 73236ms
+   ✓ 02P3/Route — exakte providerfreie Erkennung > U2: /local-recovery/import zeigt die Importvorbereitungsseite  318ms
+   ✓ 02P3/Route — exakte providerfreie Erkennung > U4: ähnliche Pfade sind keine Recovery-Routen  380ms
+   ✓ 02P3/Route — exakte providerfreie Erkennung > U5: kein Gate, kein Provider, kein RPC, kein Schreibzugriff beim Mount  384ms
+   ✓ 02P3/Route — exakte providerfreie Erkennung > U6: /local-recovery enthält einen ausdrücklichen Link, aber keine Umleitung  321ms
+   ✓ 02P3/Auswahl — ausdrückliche Workspace-Wahl > U7: nur gültige Workspace-Kopien sind auswählbar  356ms
+   ✓ 02P3/Auswahl — ausdrückliche Workspace-Wahl > U8: auch ein einzelner Workspace wird nicht automatisch ausgewählt  305ms
+   ✓ 02P3/Auswahl — ausdrückliche Workspace-Wahl > U9: bei mehreren Workspaces entscheidet der Klick, nicht Name oder Datum  625ms
+   ✓ 02P3/Auswahl — ausdrückliche Workspace-Wahl > U10: die Inventurzeile nennt die Unterscheidungsmerkmale  316ms
+   ✓ 02P3/Vorbereitung und Download > U11: die Vorbereitung schreibt nichts und verwendet genau den gewählten Schlüssel  764ms
+   ✓ 02P3/Vorbereitung und Download > U12: kein automatischer Download und Dateiauswahl erst danach  1190ms
+   ✓ 02P3/Vorbereitung und Download > U13: zwei Download-Klicks im selben Tick lösen nur einen Vorgang aus  1278ms
+   ✓ 02P3/Vorbereitung und Download > U14: zwei Vorbereitungs-Klicks im selben Tick erzeugen nur eine Sitzung  806ms
+   ✓ 02P3/Wiederauswahl > U15: ohne Datei bleibt die Quarantäne gesperrt  949ms
+   ✓ 02P3/Wiederauswahl > U16: gleicher Dateiname mit anderen Bytes wird abgelehnt  1172ms
+   ✓ 02P3/Wiederauswahl > U17: eine andere synthetische Notfall-ZIP wird abgelehnt und niemals importiert  2334ms
+   ✓ 02P3/Wiederauswahl > U18: exakt die heruntergeladene Zielsicherung wird angenommen  1292ms
+   ✓ 02P3/Wiederauswahl > U19: zwei change-Ereignisse lösen nur eine Prüfung aus  1292ms
+   ✓ 02P3/Generationsschutz > U20: ein storage-Ereignis entwertet die vorbereitete Sitzung  1316ms
+   ✓ 02P3/Generationsschutz > U21: ein Zielwechsel entwertet die vorbereitete Sitzung  1503ms
+   ✓ 02P3/Generationsschutz > U22: nach einem Remount existiert keine alte Sitzung  1396ms
+   ✓ 02P3/Quarantäne > U23: vor dem Startklick null Quarantäneschreibzugriffe  1149ms
+   ✓ 02P3/Quarantäne > U24: die Quarantäne läuft nur nach eigenem Startklick und nur einmal  1792ms
+   ✓ 02P3/Quarantäne > U25: der Bericht zeigt alle gebundenen Prüfdaten  1868ms
+   ✓ 02P3/Quarantäne > U26: ein staging-Marker desselben Ziels blockiert und bietet keine Bereinigung an  577ms
+   ✓ 02P3/storage-Ereignis während der Quarantäne > U28: eine erkannte Zieländerung führt zum blockierten Abschlussbericht  1692ms
+   ✓ 02P3/storage-Ereignis während der Quarantäne > U29: eine echte Zieländerung während der Quarantäne verhindert complete  1840ms
+   ✓ 02P3B/A — kein Wiederauswahlweg vor dem Download > V1: ein change-Ereignis vor dem Download löst keine Prüfung aus  1105ms
+   ✓ 02P3B/B — verspätete Promise-Ergebnisse > V2: ein storage-Ereignis während prepare verwirft dessen spätes ok  774ms
+   ✓ 02P3B/B — verspätete Promise-Ergebnisse > V3: ein storage-Ereignis während verify verwirft dessen spätes ok  1201ms
+   ✓ 02P3B/B — verspätete Promise-Ergebnisse > V4: ein Zielwechsel während prepare verwirft dessen spätes Ergebnis  892ms
+   ✓ 02P3B/B — verspätete Promise-Ergebnisse > V5: ein Unmount während verify verwirft dessen spätes Ergebnis  1494ms
+   ✓ 02P3B/C — tatsächliche Dienstaufrufzahlen > V6: doppelter Prepare-Klick ruft den Dienst genau einmal  819ms
+   ✓ 02P3B/C — tatsächliche Dienstaufrufzahlen > V7: zwei change-Ereignisse rufen die Prüfung genau einmal  1452ms
+   ✓ 02P3B/C — tatsächliche Dienstaufrufzahlen > V8: doppelter Quarantäneklick ruft den Kern genau einmal  1736ms
+   ✓ 02P3B/D — Auswahl während laufender Quarantäne > V9: ein Zielwechsel während der Quarantäne bleibt wirkungslos  1900ms
+   ✓ 02P3B/E — complete ist ein Endzustand > V10: nach complete gibt es keine Auswahl und keinen neuen Ablauf  1966ms
+   ✓ 02P3B/F — storage-Ereignis nach complete > V11: der Bericht bleibt vollständig und erhält eine Warnung  1996ms
+   ✓ 02P3B/G — storage-Ereignis vor dem Quarantänestart > V12: der Bereich muss danach erneut ausdrücklich gewählt werden  2221ms
+   ✓ 02P3B/H — Downloadfehler > V13: ein fehlgeschlagener Download bleibt wiederholbar  1771ms
+   ✓ 02P3B/I — gebundene Resultatschlüssel > V14: der Bericht verwendet markerKey, stateKey und Blob-Bereich der Rückgabe  1819ms
+   ✓ 02P3B/J — Markeränderung eines anderen Tabs > V15: ein neuer staging-Marker blockiert das vorbereitete Ziel ohne Bereinigung  1363ms
+   ✓ 02P3C/A — Dateiereignis nach Verifikation und nach complete > W1: nach erfolgreicher Wiederauswahl gibt es keinen Auswahlknopf und keine zweite Prüfung  1673ms
+   ✓ 02P3C/A — Dateiereignis nach Verifikation und nach complete > W2: nach complete bleibt ein Dateiereignis vollständig wirkungslos  1943ms
+   ✓ 02P3C/B — Dateiereignis während der Quarantäne > W3: ein Dateiereignis während quarantining verändert nichts  1985ms
+   ✓ 02P3C/C — Markerereignis nach complete > W4: ein fremder staging-Marker beschädigt den Abschlussbericht nicht  2029ms
+   ✓ 02P3E — mobil lesbare Zielauswahl > X1: der Zielknopf trägt die eigene Klasse und behält alle Bindungen  680ms
+   ✓ 02P3E — mobil lesbare Zielauswahl > X2: der Knopf enthält genau sechs fachliche Zeilen  320ms
+   ✓ 02P3E — mobil lesbare Zielauswahl > X3: jede Zeile trägt die richtige Beschriftung und den richtigen Wert  329ms
+   ✓ 02P3E — mobil lesbare Zielauswahl > X5: technische Werte tragen die Monospace-Klasse und bleiben vollständig  304ms
+   ✓ 02P3E — mobil lesbare Zielauswahl > X6: je Workspace genau ein Knopf ohne verschachtelte Bedienelemente  302ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y1: das Vorbereitungsergebnis besteht aus beschrifteten Zeilen  798ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y2: die vollständigen Werte bleiben unverändert im DOM  861ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y3: gewählter Bereich und Markerliste tragen die Umbruchklasse  617ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y4: der blockierende staging-Marker ist strukturiert  577ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y5: der Abschlussbericht verwendet die Umbruchklasse lückenlos  1638ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y6: jeder Dateieintrag zeigt getrennte, vollständige Werte  1589ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y7: system.css erfüllt den scoped Umbruchvertrag  336ms
+   ✓ 02P3D/W5 — Markerereignis während laufender Quarantäne > W5: ein fremder staging-Marker entwertet die laufende Quarantäne nicht  2057ms
+   ✓ 02P3B/K — fremde ZIP verändert wirklich nichts > V16: localStorage und Zielblobs bleiben byteidentisch  1430ms
+   ✓ 02P3B/K — fremde ZIP verändert wirklich nichts > U-Resume: nach Download und Remount kehrt der Ablauf sicher zurück  1552ms
+   ✓ 02P3B/K — fremde ZIP verändert wirklich nichts > U-Resume-Changed: ein veränderter Zielbestand verwirft den Wiederaufsetzpunkt  1429ms
+ ✓ |default| src/setupCloudPersist01.test.tsx (27 tests) 4058ms
+   ✓ OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — Assistent sichert in die Cloud > P1: Firmendaten werden ohne Neustart und ohne Sync-Seite hochgeladen  380ms
+   ✓ OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — Assistent sichert in die Cloud > P7: ein sichtbarer Hinweis meldet die ausstehende Cloud-Sicherung  329ms
+   ✓ OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — Assistent sichert in die Cloud > P8: ein Retry überträgt genau einmal je Entität, ohne zweiten Workspace  393ms
+   ✓ OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — Assistent sichert in die Cloud > P9: lokal vollständig, Cloud leer, keine Outbox → Migration meldet beide Entitäten nach  422ms
+   ✓ OFFICEPILOT-SETUP-CLOUD-PERSIST-01C > P14: scheitert das lokale Speichern, startet kein Cloud-Sync und der Assistent bleibt  322ms
+   ✓ OFFICEPILOT-SETUP-CLOUD-PERSIST-01C > W1: was erfolgreich hochgeladen wurde, liefert der nächste Pull zurück  301ms
+ ✓ |default| src/pages/settings/invoiceSettingsPage01b4.test.tsx (12 tests) 6044ms
+   ✓ SETTINGS-01B4 — Rechnungen & Zahlungen > T1–T5: Hub-Eintrag, kanonische Route, Legacy-Hashes → neue Seite ohne Loop, #datensicherung → Betrieb  1674ms
+   ✓ SETTINGS-01B4 — Rechnungen & Zahlungen > T6–T9: vorhandene Werte, Dirty, Speichern mit genau einem Profil-Update, danach sauber  346ms
+   ✓ SETTINGS-01B4 — Rechnungen & Zahlungen > T10/T11: Entwurf überlebt den Neuaufbau (eigener Namensraum); Speichern entfernt ihn  532ms
+   ✓ SETTINGS-01B4 — Rechnungen & Zahlungen > T12: member sieht die Werte nur lesend, ohne Speichern  372ms
+   ✓ SETTINGS-01B4 — Rechnungen & Zahlungen > T13–T15: 14 Tage → konkretes Fälligkeitsdatum; Standardsatz folgt der Tageszahl; Skontofrist über Zahlungsziel blockiert  507ms
+   ✓ SETTINGS-01B4 — Rechnungen & Zahlungen > T16–T18: Standardsatz ohne eigenen Text; eigener Text gewinnt und wird durch Skonto/Zahlungsziel nicht still ersetzt  543ms
+   ✓ SETTINGS-01B4 — Rechnungen & Zahlungen > T19–T23: Skonto aus/an, Prozent, Tage, generierter Satz aus buildSkontoText — neue Rechnung erhält ihn  622ms
+   ✓ SETTINGS-01B4 — Rechnungen & Zahlungen > T25–T28: Profil-Default gewinnt; Legacy-Fallback aus Setup; kein Backfill beim Öffnen; §13b bleibt unbestätigt  421ms
+   ✓ SETTINGS-01B4 — Rechnungen & Zahlungen > T29–T33: Intro/Closing landen in manueller und Vorgangsrechnung; ein bestehender Entwurf bleibt unverändert  326ms
+   ✓ SETTINGS-01B4 — Rechnungen & Zahlungen > T34/T35: finalisierte Rechnung und Snapshots bleiben unverändert; keine Drift durch Default-Änderungen  464ms
+stdout | src/services/memory/officePilotMemoryProjectionS4.test.ts > S4 — Laufzeit > 300 Dokumente, davon 50 Verträge an Vorgängen: Ableitung in vertretbarer Zeit
+[S4] Ableitung 300 Dokumente (50 Verträge): 175 ms
+
+ ✓ |default| src/services/memory/officePilotMemoryProjectionS4.test.ts (21 tests) 7636ms
+   ✓ S4-A/B — Dokumentgedächtnis: deterministisch und auf frischem Gerät > A — dieselben Felder wie die bisherige Archivierung (Freistellung, BG BAU, Vertrag am Vorgang)  483ms
+   ✓ S4-R2 — zwei Tabs mit Gedächtnis > R2 — Öffnen und Neuladen eines zweiten Tabs: gleiches Gedächtnis, keine Revision, keine Sperre  5036ms
+ ✓ |default| src/multiOriginSetupRestore01.test.tsx (13 tests) 1551ms
+   ✓ OFFICEPILOT-MULTI-ORIGIN-SETUP-01B2/01B3 > F1: bestehender Cloud-Workspace stellt die Firmendaten ohne Assistenten her  360ms
+ ✓ |default| src/businessContextFlash01b.test.tsx (11 tests) 1830ms
+ ✓ |default| src/orderDraftCloudS6Ui.test.tsx (19 tests) 1625ms
+   ✓ S6-UI — Auftragseditor > UI-E1 — Konflikt: sichtbar, Eingaben gesperrt, Speichern/Anlegen gesperrt; „Cloud-Fassung übernehmen" erst nach Rückfrage  327ms
+ ✓ |default| src/services/intakeFinanceTruth01d1Nacharbeit.test.ts (18 tests) 3962ms
+   ✓ Nacharbeit 5 — Timer-Absicherung des verzögerten Analysis-Commits > G: requestAnimationFrame feuert nie (verdeckter Tab) → Commit startet trotzdem  1197ms
+   ✓ Nacharbeit 6/7/8 — Recovery nach Reload > verlorener Callback → Reload → Recovery schreibt fest → Zweitgerät erhält das Ergebnis ohne Volltext  2245ms
+ ✓ |default| src/kontoTrennungGateDokumente01.test.tsx (5 tests) 1830ms
+   ✓ DOKUMENTE-01 N1 — Kontotrennung im Gate > G1 Inhaber → Abmelden → Mitglied → Abmelden → Inhaber: nichts Fremdes, Ungesendetes bleibt  837ms
+   ✓ DOKUMENTE-01 N1 — Kontotrennung im Gate > G2 direkter Kontowechsel ohne Abmelden: Firmensitzung und Bindung des Inhabers sind verworfen  320ms
+   ✓ DOKUMENTE-01 N1 — Kontotrennung im Gate > G3 Rollenentzug Admin → Mitglied: Admin-Bestand ruht unangetastet; mit der Rolle kehrt er zurück  418ms
+ ✓ |default| src/services/workspace/backfillSperreGls01.test.ts (14 tests) 1806ms
+   ✓ V — Vertrag: automatische Wege nehmen nur den gesperrten Einreihungsweg > V1 ungesperrtes enqueueSyncOutbox( nur an den bewussten Aufrufstellen  1637ms
+ ✓ |default| src/localScopeBlobRecovery01.test.tsx (11 tests) 2943ms
+   ✓ OFFICEPILOT-LOCAL-SCOPE-BLOB-RECOVERY-01B > B2: die Dateisicherung exportiert genau die Blobs des gewählten Scopes  548ms
+   ✓ OFFICEPILOT-LOCAL-SCOPE-BLOB-RECOVERY-01B > B3: eine fehlende Datei verhindert die ZIP nicht und wird gemeldet  523ms
+   ✓ OFFICEPILOT-LOCAL-SCOPE-BLOB-RECOVERY-01B > B4: ungültige Refs und Legacy-Refs werden ehrlich gekennzeichnet  527ms
+   ✓ OFFICEPILOT-LOCAL-SCOPE-BLOB-RECOVERY-01B > B10: beschädigtes blobData wird als read_error gemeldet, ZIP entsteht trotzdem  520ms
+   ✓ OFFICEPILOT-LOCAL-SCOPE-BLOB-RECOVERY-01B > B11: widersprüchliche Record-Identität wird nicht exportiert  543ms
+ ✓ |default| src/services/intakeFinanceTruth01d1Nacharbeit3.test.ts (23 tests) 1248ms
+ ✓ |default| src/services/storage/localScopeEmergencyQuarantine02.test.ts (70 tests) 899ms
+stdout | src/services/archiveTruthOrphanGuardR02.test.ts > ARCHIVE-TRUTH-ORPHAN-GUARD-R02 > A: verwaistes Archivdokument blockiert die Inbox-Loeschung
+Warning: Please use the `legacy` build in Node.js environments.
+
+ ✓ |default| src/services/archiveTruthOrphanGuardR02.test.ts (6 tests) 676ms
+   ✓ ARCHIVE-TRUTH-ORPHAN-GUARD-R02 > A: verwaistes Archivdokument blockiert die Inbox-Loeschung  327ms
+ ✓ |default| src/appDesignHome01c.test.tsx (12 tests) 844ms
+ ✓ |default| src/services/orderAmendment/orderAmendmentDraftCloudS6.test.ts (26 tests) 427ms
+ ✓ |default| src/services/intakeFinanceTruth01d1Nacharbeit2.test.ts (17 tests) 910ms
+   ✓ P1-B — automatische Buchung nur mit sicherem Gesamtbetrag > A: eindeutige Rechnung Netto 200 / USt 38 / Gesamtbetrag 238 → automatisch +238  353ms
+ ✓ |default| src/mobileFirst01.test.tsx (7 tests) 864ms
+   ✓ MOBILE-FIRST-01 > Startseite: Dokument hochladen als klarer, sekundärer Weg  395ms
+ ✓ |default| src/services/invoice/invoiceFinalizationPreflight01.test.ts (32 tests) 712ms
+ ✓ |default| src/services/knowledge/knowledgeFactCloudSyncS3.test.ts (44 tests) 311ms
+ ✓ |default| src/loadFailedUxGate01.test.tsx (4 tests) 1648ms
+   ✓ LOAD_FAILED-UX-GUARD-01B — sichtbare Blockade > R8: ein Ladefehler zeigt die Schutzansicht statt der normalen Oberfläche  476ms
+   ✓ LOAD_FAILED-UX-GUARD-01B — sichtbare Blockade > R8b: die Ansicht erklärt, dass nichts überschrieben wurde  366ms
+   ✓ LOAD_FAILED-UX-GUARD-01B — sichtbare Blockade > R9: ein gültiger Bestand gibt die normale Oberfläche frei  426ms
+   ✓ LOAD_FAILED-UX-GUARD-01B — sichtbare Blockade > R10: ein echter Erststart bleibt unverändert  378ms
+ ✓ |default| src/services/storage/localScopeEmergencyImportValidate02.test.ts (49 tests) 371ms
+ ✓ |default| src/services/memory/paperRegisterCloudSyncS1.test.ts (37 tests) 260ms
+ ✓ |default| src/invoiceCustomerIdentity01.test.ts (3 tests) 146ms
+ ✓ |default| src/pages/coreAreas01e.test.tsx (8 tests) 658ms
+ ✓ |default| src/memberFirstAccessFc01a.test.tsx (4 tests) 977ms
+   ✓ FINANZ-CORE-01A — Mitarbeiter-Erstzugang (Clientvertrag zu 20261124) > E-C1: das Mitglied erreicht beim ersten Login den Betrieb des Arbeitgebers ohne Assistenten  415ms
+ ✓ |default| src/appDesignFoundation01b.test.tsx (8 tests) 1409ms
+ ✓ |default| src/mailImportLegacyS7.test.tsx (10 tests) 2193ms
+   ✓ S7 — Einstieg, Adresse und kanonische Wege > B/D — die alte Adresse /mail-import landet bei den Nachrichten, ohne altes Formular  1219ms
+   ✓ S7 — Einstieg, Adresse und kanonische Wege > C — der normale Eingang mit dem Upload-Einstieg bleibt erreichbar  483ms
+ ✓ |default| src/services/company/companyProfileSettings01b1.test.tsx (14 tests) 1016ms
+   ✓ SETTINGS-01B1 — Datenmodell und Persistenz > M1: Kontoinhaber erscheint nur mit Wert; ohne Wert bleibt das Markup unverändert; Vorlage classic  660ms
+ ✓ |default| src/aiDesk01.test.tsx (13 tests) 954ms
+   ✓ AI-DESK-01 > maximal 3 Prioritäten  351ms
+ ✓ |default| src/services/order/orderDraftCloudS6.test.ts (30 tests) 448ms
+ ✓ |default| src/pages/HeutePage.test.tsx (5 tests) 483ms
+ ✓ |default| src/services/customerDecisionHandoff01.test.ts (12 tests) 265ms
+ ✓ |default| src/coreGoldenPathPersistence01.test.ts (1 test) 156ms
+ ✓ |default| src/services/documentReplyNeedP1.test.ts (13 tests) 260ms
+ ✓ |default| src/localScopeRecovery01.test.tsx (15 tests) 452ms
+ ✓ |default| src/dataClean01.test.ts (16 tests) 164ms
+ ✓ |default| src/services/persistenceLoadFailureGuard01.test.ts (15 tests) 272ms
+ ✓ |default| src/services/customerIdentityDriftGuard01.test.ts (10 tests) 246ms
+ ✓ |default| src/services/customerStorePersistence01.test.ts (9 tests) 186ms
+ ✓ |default| src/services/vorgangCustomerIdLocalGuard01.test.ts (8 tests) 229ms
+ ✓ |default| src/services/sync/syncSaveDuringRun01a.test.ts (6 tests) 375ms
+ ✓ |default| src/services/heuteDocumentDeadlines02.test.ts (27 tests) 726ms
+ ✓ |default| src/services/invoice/invoiceStoreLifecycle01.test.ts (11 tests) 214ms
+ ✓ |default| src/services/sync/syncMultiTabGuard01a.test.ts (11 tests) 128ms
+ ✓ |default| src/invoiceStoreMigrationV5ToV6.test.ts (14 tests) 630ms
+ ✓ |default| src/services/sync/syncPushOnly01afix1.test.ts (10 tests) 385ms
+ ✓ |default| src/services/orderAmendment/orderAmendment01b3bSync.test.ts (16 tests) 337ms
+ ✓ |default| src/services/deskIntelligenceToday01a.test.ts (6 tests) 268ms
+ ✓ |default| src/services/loadFailedUxGuard01.test.ts (10 tests) 205ms
+ ✓ |default| src/services/sync/outboxPreserveOnPull01.test.ts (3 tests) 94ms
+ ✓ |default| src/services/workspace/cloudCompanyAdoption02bf2.test.ts (6 tests) 127ms
+ ✓ |default| src/setupBootstrapOrder01.test.tsx (2 tests) 225ms
+ ✓ |default| src/services/storage/documentBlobIndexedDb.test.ts (6 tests) 51ms
+ ✓ |default| src/services/storage/kontoTrennungDokumente01.test.ts (14 tests) 224ms
+ ✓ |default| src/services/document/vorschauCloudDubletteDokumente01.test.ts (4 tests) 153ms
+ ✓ |default| src/services/storage/localRecoveryCheckpoint01.test.ts (6 tests) 34ms
+ ✓ |default| src/abmeldeMenueN2Dokumente01.test.ts (3 tests) 25ms
+
+ Test Files  1 failed | 63 passed (64)
+      Tests  1 failed | 966 passed (967)
+   Start at  16:26:59
+   Duration  489.71s (transform 46.67s, setup 318.77s, collect 104.92s, tests 402.58s, environment 84.06s, prepare 18.15s)
+
+JSON report written to C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/pruefunterlagen/dokumente-01/belege/nacharbeit-n/client/gezielt-n.vitest.json
+
+stderr | src/setupCloudPersist01.test.tsx > OFFICEPILOT-SETUP-CLOUD-PERSIST-01C > P14: scheitert das lokale Speichern, startet kein Cloud-Sync und der Assistent bleibt
+[OfficePilot] Speichern fehlgeschlagen: Error: QuotaExceeded
+    at Object.setItem (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\setupCloudPersist01.test.tsx:838:15)
+    at savePersistedStateToKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1333:18)
+    at persistAll (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1784:22)
+    at completeSetupWizard (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\setupCompletionService.ts:90:21)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\context\AppContext.tsx:113:20
+    at onComplete (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\pages\SetupPage.tsx:64:26)
+    at handleNext (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\components\setup\FirstRunWizard.tsx:124:22)
+    at onSubmit (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\components\setup\FirstRunWizard.tsx:487:11)
+    at executeDispatch (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\node_modules\react-dom\cjs\react-dom-client.development.js:19116:9)
+    at runWithFiberInDEV (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\node_modules\react-dom\cjs\react-dom-client.development.js:874:13)
+
+stderr | src/setupCloudPersist01.test.tsx > OFFICEPILOT-SETUP-CLOUD-PERSIST-01C > P16: paralleler Fehlerfall — ein Versuch je Entität, Promise wird auch nach Fehler frei
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/setupCloudPersist01.test.tsx > OFFICEPILOT-SETUP-CLOUD-PERSIST-01C > P16: paralleler Fehlerfall — ein Versuch je Entität, Promise wird auch nach Fehler frei
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CloudBackupPendingBanner inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CloudBackupPendingBanner inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/setupCloudPersist01.test.tsx > OFFICEPILOT-SETUP-CLOUD-PERSIST-01C > P15: zwei gleichzeitige Aufrufe erzeugen genau einen erfolgreichen Upsert je Entität
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/setupCloudPersist01.test.tsx > OFFICEPILOT-SETUP-CLOUD-PERSIST-01C > P15: zwei gleichzeitige Aufrufe erzeugen genau einen erfolgreichen Upsert je Entität
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CloudBackupPendingBanner inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CloudBackupPendingBanner inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/setupCloudPersist01.test.tsx > OFFICEPILOT-SETUP-CLOUD-PERSIST-01C > P15: zwei gleichzeitige Aufrufe erzeugen genau einen erfolgreichen Upsert je Entität
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/setupCloudPersist01.test.tsx > OFFICEPILOT-SETUP-CLOUD-PERSIST-01C > W1: was erfolgreich hochgeladen wurde, liefert der nächste Pull zurück
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/setupCloudPersist01.test.tsx > OFFICEPILOT-SETUP-CLOUD-PERSIST-01C > W1: was erfolgreich hochgeladen wurde, liefert der nächste Pull zurück
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CloudBackupPendingBanner inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CloudBackupPendingBanner inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/setupCloudPersist01.test.tsx > OFFICEPILOT-SETUP-CLOUD-PERSIST-01C > W2: ein gescheiterter Upload hinterlässt in der Cloud nichts
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/setupCloudPersist01.test.tsx > OFFICEPILOT-SETUP-CLOUD-PERSIST-01C > W2: ein gescheiterter Upload hinterlässt in der Cloud nichts
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CloudBackupPendingBanner inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to SyncStatusIndicator inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CloudBackupPendingBanner inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/orderDraftCloudS6Ui.test.tsx > S6-UI — Auftragsseite > UI-V1 — ein erst später abgezogener Auftrag erscheint ohne Neuladen
+An update to AuthProvider inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/orderDraftCloudS6Ui.test.tsx > S6-UI — Auftragsseite > UI-V1 — ein erst später abgezogener Auftrag erscheint ohne Neuladen
+An update to CommunicationHistorySection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/services/orderAmendment/orderAmendmentDraftCloudS6.test.ts > S6-AD-Z/AA — ehrliche Speicherfehler > Z1 — Speicher voll: Anlegen und Verwerfen melden den Fehler; nichts bleibt halb
+[OfficePilot] Speichern fehlgeschlagen: DOMException [QuotaExceededError]: voll
+    at Proxy.<anonymous> (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\orderAmendment\orderAmendmentDraftCloudS6.test.ts:508:13)
+    at Proxy.mockCall (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/spy/dist/index.js:96:15)
+    at Proxy.setItem (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/tinyspy/dist/index.js:47:80)
+    at savePersistedStateToKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1333:18)
+    at persistAll (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1784:22)
+    at updateVorgangInStoreChecked (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\vorgangService.ts:573:8)
+    at saveVorgangOrderAmendments (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\vorgangService.ts:1174:18)
+    at persistAmendments (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\orderAmendmentService.ts:242:17)
+    at createOrderAmendmentDraft (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\orderAmendmentService.ts:285:10)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\orderAmendment\orderAmendmentDraftCloudS6.test.ts:510:12
+[OfficePilot] Speichern fehlgeschlagen: DOMException [QuotaExceededError]: voll
+    at Proxy.<anonymous> (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\orderAmendment\orderAmendmentDraftCloudS6.test.ts:508:13)
+    at Proxy.mockCall (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/spy/dist/index.js:96:15)
+    at Proxy.setItem (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/tinyspy/dist/index.js:47:80)
+    at savePersistedStateToKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1333:18)
+    at persistAll (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1784:22)
+    at updateVorgangInStoreChecked (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\vorgangService.ts:573:8)
+    at saveVorgangOrderAmendments (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\vorgangService.ts:1174:18)
+    at commitAmendmentDrafts (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\orderAmendmentService.ts:115:17)
+    at deleteOrderAmendmentDraft (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\orderAmendmentService.ts:361:10)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\orderAmendment\orderAmendmentDraftCloudS6.test.ts:511:12
+
+stderr | src/services/orderAmendment/orderAmendmentDraftCloudS6.test.ts > S6-AD-AJ — kein Nachtragsentwurf und kein Grabstein gerät in einen fremden Workspace > AJ1 — Bereichswechsel: aus A ist in B nichts sichtbar und nichts sendbar; zurück in A ist der Grabstein wieder da
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\orderAmendment\orderAmendmentDraftCloudS6.test.ts:736:15
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+stderr | src/loadFailedUxGate01.test.tsx > LOAD_FAILED-UX-GUARD-01B — sichtbare Blockade > R8: ein Ladefehler zeigt die Schutzansicht statt der normalen Oberfläche
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\components\system\BusinessStateGate.tsx:133:22
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\components\system\BusinessStateGate.tsx:247:5
+    at Object.react_stack_bottom_frame (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\node_modules\react-dom\cjs\react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\node_modules\react-dom\cjs\react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\node_modules\react-dom\cjs\react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\node_modules\react-dom\cjs\react-dom-client.development.js:13336:11)
+
+stderr | src/loadFailedUxGate01.test.tsx > LOAD_FAILED-UX-GUARD-01B — sichtbare Blockade > R8b: die Ansicht erklärt, dass nichts überschrieben wurde
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\components\system\BusinessStateGate.tsx:133:22
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\components\system\BusinessStateGate.tsx:247:5
+    at Object.react_stack_bottom_frame (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\node_modules\react-dom\cjs\react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\node_modules\react-dom\cjs\react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\node_modules\react-dom\cjs\react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\node_modules\react-dom\cjs\react-dom-client.development.js:13336:11)
+
+stderr | src/pages/coreAreas01e.test.tsx > UIUX-FOUNDATION-01E — Aufträge (D/J) > Filterwechsel zeigt abgeschlossene Aufträge
+An update to AuthProvider inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/services/order/orderDraftCloudS6.test.ts > S6-OD-K — Verwerfen meldet nie Erfolg, wenn das Speichern scheitert > K1 — Speicher voll: Fehler, der Entwurf bleibt vollständig erhalten, die Warteschlange unverändert
+[OfficePilot] Speichern fehlgeschlagen: DOMException [QuotaExceededError]: voll
+    at Proxy.<anonymous> (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\order\orderDraftCloudS6.test.ts:527:13)
+    at Proxy.mockCall (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/spy/dist/index.js:96:15)
+    at Proxy.setItem (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/tinyspy/dist/index.js:47:80)
+    at savePersistedStateToKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1333:18)
+    at persistAll (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1784:22)
+    at commit (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\order\orderDraftService.ts:143:21)
+    at deleteOrderDraft (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\order\orderDraftService.ts:306:14)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\order\orderDraftCloudS6.test.ts:529:12
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+stderr | src/services/order/orderDraftCloudS6.test.ts > S6-OD-I/J — kein Entwurf gerät in einen fremden Workspace > J1 — Bereichswechsel leert den Speicher; ein Ladefehler in B behält keinen Entwurf aus A; zurück in A ist er wieder da
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\order\orderDraftCloudS6.test.ts:630:15
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+
+stderr | src/services/customerDecisionHandoff01.test.ts > CUSTOMER-FACHOBJEKT-03B2 > Fall H — Persistenzfehler rollt alle vier Stores zurück
+[OfficePilot] Speichern fehlgeschlagen: Error: quota exceeded
+    at Proxy.<anonymous> (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\customerDecisionHandoff01.test.ts:292:13)
+    at Proxy.mockCall (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/spy/dist/index.js:96:15)
+    at Proxy.setItem (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/tinyspy/dist/index.js:47:80)
+    at savePersistedStateToKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1333:18)
+    at persistAll (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1784:22)
+    at createVorgangFromInbox (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\vorgangService.ts:1007:21)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\customerDecisionHandoff01.test.ts:295:20
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+
+stderr | src/services/persistenceLoadFailureGuard01.test.ts > PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — die drei Ladezustände > R2: ungültiges JSON meldet `failed`, nicht `absent`
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceLoadFailureGuard01.test.ts:87:20
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+stderr | src/services/persistenceLoadFailureGuard01.test.ts > PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — die drei Ladezustände > R3: eine unlesbare Struktur meldet `failed`, nicht `absent`
+[OfficePilot] Gespeicherter Zustand wurde nicht erkannt.
+
+stderr | src/services/persistenceLoadFailureGuard01.test.ts > PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — der Bestand bleibt > R5: ein Kaltstart auf beschädigtem Bestand schreibt keine Seed-Daten
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Unexpected token 'B', "BESCHÄDIGT{" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceLoadFailureGuard01.test.ts:111:20
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+
+stderr | src/services/persistenceLoadFailureGuard01.test.ts > PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — der Bestand bleibt > R5b: dasselbe über hydrateStoresFromStorage
+[OfficePilot] Gespeicherter Zustand wurde nicht erkannt.
+
+stderr | src/services/persistenceLoadFailureGuard01.test.ts > PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — der Bestand bleibt > R6: bei einem Ladefehler wird der Speicher überhaupt nicht beschrieben
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceLoadFailureGuard01.test.ts:135:5
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+
+stderr | src/services/persistenceLoadFailureGuard01.test.ts > PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — der Bestand bleibt > R7: ein anderer Storage-Bereich bleibt unberührt
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceLoadFailureGuard01.test.ts:150:5
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+
+stderr | src/services/persistenceLoadFailureGuard01.test.ts > PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — der Bestand bleibt > R8: der Rohwert bleibt zeichengenau erhalten
+[OfficePilot] Gespeicherter Zustand wurde nicht erkannt.
+
+stderr | src/services/persistenceLoadFailureGuard01.test.ts > PERSISTENCE-MIGRATION-FAILURE-GUARD-01B2 — Fehler nach der Migration > R9: eine nach der Migration scheiternde Ladekette lässt den Rohwert unberührt
+[OfficePilot] Gespeicherter Zustand konnte nicht aufbereitet werden: TypeError: Cannot read properties of null (reading 'map')
+    at cloneVorgang (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:778:28)
+    at Array.map (<anonymous>)
+    at finalizeLoadedPersistedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1062:37)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1170:13)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceLoadFailureGuard01.test.ts:215:20
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+
+stderr | src/services/persistenceLoadFailureGuard01.test.ts > PERSISTENCE-MIGRATION-FAILURE-GUARD-01B2 — Fehler nach der Migration > R10: dabei wird der Speicher überhaupt nicht beschrieben
+[OfficePilot] Gespeicherter Zustand konnte nicht aufbereitet werden: TypeError: Cannot read properties of null (reading 'map')
+    at cloneVorgang (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:778:28)
+    at Array.map (<anonymous>)
+    at finalizeLoadedPersistedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1062:37)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1170:13)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceLoadFailureGuard01.test.ts:228:5
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+
+stderr | src/services/persistenceLoadFailureGuard01.test.ts > PERSISTENCE-MIGRATION-FAILURE-GUARD-01B2 — Fehler nach der Migration > R11: der Sync-Zustand bleibt bei einem Ladefehler unverändert
+[OfficePilot] Gespeicherter Zustand konnte nicht aufbereitet werden: TypeError: Cannot read properties of null (reading 'map')
+    at cloneVorgang (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:778:28)
+    at Array.map (<anonymous>)
+    at finalizeLoadedPersistedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1062:37)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1170:13)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceLoadFailureGuard01.test.ts:242:20
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+
+stderr | src/services/persistenceLoadFailureGuard01.test.ts > PERSISTENCE-MIGRATION-FAILURE-GUARD-01B2 — Fehler nach der Migration > R11b: auch die Outbox bleibt unverändert
+[OfficePilot] Gespeicherter Zustand konnte nicht aufbereitet werden: TypeError: Cannot read properties of null (reading 'map')
+    at cloneVorgang (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:778:28)
+    at Array.map (<anonymous>)
+    at finalizeLoadedPersistedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1062:37)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1170:13)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceLoadFailureGuard01.test.ts:261:5
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+
+stderr | src/services/customerStorePersistence01.test.ts > CUSTOMER-FACHOBJEKT-02A > Fall E — Persistenzfehler rollt vollständig zurück
+[OfficePilot] Speichern fehlgeschlagen: Error: quota exceeded
+    at Proxy.<anonymous> (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\customerStorePersistence01.test.ts:157:13)
+    at Proxy.mockCall (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/spy/dist/index.js:96:15)
+    at Proxy.setItem (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/tinyspy/dist/index.js:47:80)
+    at savePersistedStateToKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1333:18)
+    at persistAll (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1784:22)
+    at createCustomer (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\customerService.ts:210:21)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\customerStorePersistence01.test.ts:160:21
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+[OfficePilot] Speichern fehlgeschlagen: Error: quota exceeded
+    at Proxy.<anonymous> (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\customerStorePersistence01.test.ts:157:13)
+    at Proxy.mockCall (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/spy/dist/index.js:96:15)
+    at Proxy.setItem (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/tinyspy/dist/index.js:47:80)
+    at savePersistedStateToKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1333:18)
+    at persistAll (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1784:22)
+    at updateCustomer (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\customerService.ts:298:21)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\customerStorePersistence01.test.ts:166:21
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+
+stderr | src/services/invoice/invoiceStoreLifecycle01.test.ts > FIRST-CLASS-LOCAL-INVOICE-STORE-01B2 — kein Übersprechen zwischen Bereichen > L3: ein Ladefehler lässt keine alten Rechnungen sichtbar
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\invoice\invoiceStoreLifecycle01.test.ts:95:20
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+
+stderr | src/invoiceStoreMigrationV5ToV6.test.ts > FIRST-CLASS-LOCAL-INVOICE-STORE-01B — doppelte Kennung sperrt > R12/R13: der Umzug scheitert kontrolliert und lässt den Bestand unberührt
+[OfficePilot] Gespeicherter Zustand konnte nicht aufbereitet werden: Error: invoice_id_duplicate:inv-doppelt
+    at migratePersistedStateV5ToV6 (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\sync\syncMigrationService.ts:255:15)
+    at normalizeLoadedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1006:22)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1159:18)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\invoiceStoreMigrationV5ToV6.test.ts:226:20
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+
+stderr | src/invoiceStoreMigrationV5ToV6.test.ts > FIRST-CLASS-LOCAL-INVOICE-STORE-01B — doppelte Kennung sperrt > R38: danach greifen die bestehenden Schutzmechanismen
+[OfficePilot] Gespeicherter Zustand konnte nicht aufbereitet werden: Error: invoice_id_duplicate:inv-doppelt
+    at migratePersistedStateV5ToV6 (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\sync\syncMigrationService.ts:255:15)
+    at normalizeLoadedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1006:22)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1159:18)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\invoiceStoreMigrationV5ToV6.test.ts:245:23
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+
+stderr | src/services/loadFailedUxGuard01.test.ts > LOAD_FAILED-UX-GUARD-01B — Schreibsperre je Speicherbereich > R1: nach einem Ladefehler überschreibt persistAll den Bestand nicht
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at makeLoadFailed (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:61:18)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:78:23
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+
+stderr | src/services/loadFailedUxGuard01.test.ts > LOAD_FAILED-UX-GUARD-01B — Schreibsperre je Speicherbereich > R2: auch ein direkter Business-Save schreibt nicht
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at makeLoadFailed (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:61:18)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:87:23
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+
+stderr | src/services/loadFailedUxGuard01.test.ts > LOAD_FAILED-UX-GUARD-01B — Schreibsperre je Speicherbereich > R2b: dabei wird der Speicher überhaupt nicht beschrieben
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at makeLoadFailed (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:61:18)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:95:5
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+
+stderr | src/services/loadFailedUxGuard01.test.ts > LOAD_FAILED-UX-GUARD-01B — Schreibsperre je Speicherbereich > R3: ein gesunder anderer Bereich bleibt beschreibbar
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at makeLoadFailed (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:61:18)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:105:18
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+
+stderr | src/services/loadFailedUxGuard01.test.ts > LOAD_FAILED-UX-GUARD-01B — Schreibsperre je Speicherbereich > R4: ein erfolgreicher Load desselben Bereichs hebt die Sperre auf
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at makeLoadFailed (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:61:18)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:115:5
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+
+stderr | src/services/loadFailedUxGuard01.test.ts > LOAD_FAILED-UX-GUARD-01B — Schreibsperre je Speicherbereich > R5: ein erfolgreicher Load eines anderen Bereichs hebt die Sperre nicht auf
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at makeLoadFailed (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:61:18)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:129:18
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+
+stderr | src/services/loadFailedUxGuard01.test.ts > LOAD_FAILED-UX-GUARD-01B — Schreibsperre je Speicherbereich > R8: ein Schreibversuch hebt die Sperre nicht auf
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at makeLoadFailed (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:61:18)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:164:23
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+
+stderr | src/services/loadFailedUxGuard01.test.ts > LOAD_FAILED-UX-GUARD-01B — Schreibsperre je Speicherbereich > R9: eine vollständige Übernahme in die Speicher gibt den Bereich frei
+[OfficePilot] Gespeicherter Zustand ist nicht lesbar: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at loadPersistedStateResultFromKey (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1150:19)
+    at loadOrSeedScopedState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:123:18)
+    at bootstrapBusinessState (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\storage\storageBootstrapService.ts:238:10)
+    at makeLoadFailed (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:61:18)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\loadFailedUxGuard01.test.ts:181:5
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |default| src/uxHome01.test.tsx > UX-HOME-01 ABSCHLUSSFIX > Desktop-Schreibtisch zeigt Mobile-First Startseite
+AssertionError: expected '<div class="page heute-page heute-04b…' to contain 'data-testid="home-card-orders"'
+
+Expected: "data-testid="home-card-orders""
+Received: "<div class="page heute-page heute-04b mobile-first-page" data-testid="heute-page"><div class="heute-04b__flow" data-testid="mobile-first-home"><p class="heute-04b__date">Dienstag, 20. Oktober 2026</p><header class="heute-04b__greet" data-testid="desk-greeting-header"><h1>Guten Tag.</h1><p>Ich habe Ihr Büro durchgesehen. <b data-testid="heute-summary">3 Dinge brauchen Ihre Entscheidung.</b></p></header><section class="heute-04b__work" aria-label="Jetzt wichtig"><section class="heute-focus" data-testid="heute-section-attention" aria-label="Heute kümmere ich mich um Folgendes:" data-hint-id="hints.documentDeadlineOverdue::title=Zahlungserinnerung Bauzentrum"><span class="heute-focus__kicker"><i aria-hidden="true"></i> Jetzt wichtig</span><h2 class="heute-focus__title">Frist überschritten: Zahlungserinnerung Bauzentrum. Bitte heute ansehen.</h2><p class="heute-focus__sub">Das sollten Sie heute noch ansehen.</p><div class="heute-focus__actions" data-testid="home-current-task"><a class="heute-focus__go" data-testid="home-current-task-go" href="/ablage/inbox-002" data-discover="true"><button class="btn btn--primary">Jetzt ansehen<svg class="ui-icon ui-icon--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="arrow-right"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button></a><div class="dropdown-menu" data-testid="home-current-task-later"><button type="button" class="dropdown-menu__trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="_R_kb_" aria-label="Später" data-testid="home-current-task-later-trigger"><span class="heute-focus__quiet">Später</span></button></div><button type="button" class="heute-focus__quiet" data-testid="home-current-task-done">Erledigt</button></div><div class="heute-focus__stack" aria-hidden="true"><span style="--r:-8deg"></span><span style="--r:-2deg"></span><span style="--r:5deg"></span></div></section><div class="heute-04b__aside"><div class="heute-next" data-testid="home-next-tasks"><h3 class="heute-next__label">Danach</h3><a class="heute-next__row" href="/ablage/inbox-001" data-discover="true"><span class="heute-next__txt">Frist überschritten: Neuer Auftrag Müller. Bitte heute ansehen.</span><span class="heute-next__arrow"><svg class="ui-icon ui-icon--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="chevron-right"><path d="m9 6 6 6-6 6"></path></svg></span></a><a class="heute-next__row" href="/ablage/inbox-004" data-discover="true"><span class="heute-next__txt">Frist überschritten: BG BAU Schreiben. Bitte heute ansehen.</span><span class="heute-next__arrow"><svg class="ui-icon ui-icon--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="chevron-right"><path d="m9 6 6 6-6 6"></path></svg></span></a></div><a class="heute-drop" data-testid="home-card-add-document" href="/dokumente/hinzufuegen" data-discover="true"><span class="heute-drop__icon" aria-hidden="true"><svg class="ui-icon ui-icon--md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="upload"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"></path></svg></span><b>Dokument hochladen</b><span>Foto oder Datei auswählen</span></a></div></section><section class="heute-command" data-testid="heute-section-assistant"><div class="heute-command__head"><h2>Was kann ich für Sie erledigen?</h2><span class="heute-command__hint">Antworten kommen aus Ihren eigenen Daten.</span></div><section class="home-assistant assistant-prompt" data-testid="home-card-officepilot" aria-label="Was möchten Sie erledigen?"><div class="assistant-prompt__head"><span class="assistant-prompt__mark" aria-hidden="true"><svg class="ui-icon ui-icon--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="assistant"><rect x="5" y="8" width="14" height="11" rx="2"></rect><circle cx="9.5" cy="13" r="1" fill="currentColor" stroke="none"></circle><circle cx="14.5" cy="13" r="1" fill="currentColor" stroke="none"></circle><path d="M9 17h6M12 4v3"></path><circle cx="12" cy="3" r="1.25"></circle></svg></span><span class="assistant-prompt__title">OfficeTakt</span><span class="assistant-prompt__role">Ihr Büroassistent</span></div><form class="assistant-prompt__form"><input type="text" class="input assistant-prompt__input" placeholder="Zum Beispiel: Was ist heute wichtig?" aria-label="Was möchten Sie erledigen?" data-testid="home-assistant-input" value=""/><button type="submit" class="assistant-prompt__send" data-testid="home-assistant-send" aria-label="Frag OfficeTakt…" disabled=""><span class="assistant-prompt__send-label">Senden</span><svg class="ui-icon ui-icon--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="arrow-right"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button></form><div class="assistant-prompt__suggestions"><button type="button" class="assistant-prompt__chip" data-testid="home-assistant-suggestion-heute.work.ask1">Was ist heute wichtig?</button><button type="button" class="assistant-prompt__chip" data-testid="home-assistant-suggestion-heute.work.ask2">Welche Rechnungen sind überfällig?</button><button type="button" class="assistant-prompt__chip" data-testid="home-assistant-suggestion-heute.work.ask3">Welche Aufgaben sind offen?</button><button type="button" class="assistant-prompt__chip" data-testid="home-assistant-suggestion-heute.work.ask4">Wo liegt die Freistellungsbescheinigung?</button></div></section></section><section class="heute-04b__status"><section class="heute-panel heute-panel--inbox" data-testid="heute-section-new"><div class="heute-panel__head"><h3>Neu im Eingang</h3><a data-testid="home-new-intake-all" href="/ablage" data-discover="true">Alle 8 ansehen</a></div><ul class="heute-doclist" data-testid="home-new-intake"><li><a class="heute-doclist__row" href="/ablage/inbox-007" data-discover="true"><span class="heute-doclist__ic" aria-hidden="true"><svg class="ui-icon ui-icon--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="file"><path d="M7 3h7l4 4v14H7V3Z"></path><path d="M14 3v4h4M9.5 12h5M9.5 16h5"></path></svg></span><span class="heute-doclist__body"><b>Finanzamt – Umsatzsteuervoranmeldung</b><span>Finanzamt für Körperschaften III · 28. März</span></span><span class="heute-tag" data-testid="home-new-intake-hint-inbox-007">Vorschlag: Für Steuerberater vorbereiten</span></a></li><li><a class="heute-doclist__row" href="/ablage/inbox-008" data-discover="true"><span class="heute-doclist__ic" aria-hidden="true"><svg class="ui-icon ui-icon--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="file"><path d="M7 3h7l4 4v14H7V3Z"></path><path d="M14 3v4h4M9.5 12h5M9.5 16h5"></path></svg></span><span class="heute-doclist__body"><b>Handwerksinnung – Termin Mitgliederversammlung</b><span>Handwerksinnung Berlin · 28. März</span></span><span class="heute-tag" data-testid="home-new-intake-hint-inbox-008">Vorschlag: Original abheften</span></a></li><li><a class="heute-doclist__row" href="/ablage/inbox-001" data-discover="true"><span class="heute-doclist__ic" aria-hidden="true"><svg class="ui-icon ui-icon--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="file"><path d="M7 3h7l4 4v14H7V3Z"></path><path d="M14 3v4h4M9.5 12h5M9.5 16h5"></path></svg></span><span class="heute-doclist__body"><b>Neuer Auftrag Müller</b><span>Familie Müller · 27. März</span></span><span class="heute-tag" data-testid="home-new-intake-hint-inbox-001">Vorschlag: Auftrag annehmen / Rückfrage</span></a></li><li><a class="heute-doclist__row" href="/ablage/inbox-006" data-discover="true"><span class="heute-doclist__ic" aria-hidden="true"><svg class="ui-icon ui-icon--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="file"><path d="M7 3h7l4 4v14H7V3Z"></path><path d="M14 3v4h4M9.5 12h5M9.5 16h5"></path></svg></span><span class="heute-doclist__body"><b>Kontoauszug Juni</b><span>Sparkasse Berlin · 27. März</span></span><span class="heute-tag" data-testid="home-new-intake-hint-inbox-006">Vorschlag: Für Steuerberater vorbereiten</span></a></li></ul></section><section class="heute-panel heute-panel--folder" data-testid="home-monatsmappe"><div class="heute-panel__head"><h3>Monatsmappe Oktober 2026</h3><a data-testid="home-monatsmappe-action" href="/steuerberater" data-discover="true">Monatsmappe öffnen</a></div><div class="heute-ring"><svg viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30" class="heute-ring__track"></circle><circle cx="36" cy="36" r="30" class="heute-ring__value" stroke-dasharray="188.49555921538757" stroke-dashoffset="188.49555921538757" transform="rotate(-90 36 36)"></circle><text x="36" y="41" text-anchor="middle" class="heute-ring__num">–</text></svg><div><b>Für diesen Monat liegt noch nichts zur Übergabe vor.</b><span>Mappe für den Steuerberater</span></div></div></section></section></div></div>"
+
+ ❯ src/uxHome01.test.tsx:58:18
+     56|     expect(html).toContain('data-testid="mobile-first-home"');
+     57|     expect(html).toContain('data-testid="home-card-add-document"');
+     58|     expect(html).toContain('data-testid="home-card-orders"');
+       |                  ^
+     59|     expect(html).toContain('data-testid="home-card-officepilot"');
+     60|     expect(html).toContain('data-testid="home-card-steuerberater"');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

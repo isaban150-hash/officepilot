@@ -1,0 +1,93 @@
+diff --git a/src/services/storage/storageBootstrapService.ts b/src/services/storage/storageBootstrapService.ts
+index 4cc8800..ba514f9 100644
+--- a/src/services/storage/storageBootstrapService.ts
++++ b/src/services/storage/storageBootstrapService.ts
+@@ -24,8 +24,10 @@ import {
+ import {
+   buildStorageKey,
+   getActiveStorageScope,
++  type StorageAccess,
+   type StorageScope,
+ } from './storageScopeService';
++import { prepareWorkspaceAccountStore } from './workspaceAccountStorageService';
+ import {
+   backfillMissingFileRefHashes,
+   buildBlobFallbackScopes,
+@@ -40,6 +42,17 @@ import {
+ export interface BusinessBootstrapInput {
+   userId?: string;
+   workspaceId?: string;
++  /**
++   * DOKUMENTE-01 N1 — Sicht des angemeldeten Kontos im Betrieb (vom Server). Mit
++   * `userId` und `workspaceId` entsteht der Kontobestand; ohne sie der bisherige
++   * Betriebsschlüssel (Altbestand, Tests).
++   */
++  access?: StorageAccess;
++  /**
++   * DOKUMENTE-01 N1 — Inhaber des Betriebs laut Server. Nur sein Nutzerbereich
++   * darf Geschäftsdaten in den Kontobestand mitbringen.
++   */
++  ownerUserId?: string;
+ }
+ 
+ export interface BusinessBootstrapResult {
+@@ -61,7 +74,13 @@ export interface BusinessBootstrapResult {
+ 
+ function resolveScope(input: BusinessBootstrapInput): StorageScope {
+   if (input.workspaceId) {
+-    return { type: 'workspace', workspaceId: input.workspaceId };
++    return input.userId && input.access
++      ? {
++          type: 'workspace',
++          workspaceId: input.workspaceId,
++          account: { userId: input.userId, access: input.access },
++        }
++      : { type: 'workspace', workspaceId: input.workspaceId, account: null };
+   }
+   if (input.userId) {
+     return { type: 'user', userId: input.userId };
+@@ -164,12 +183,20 @@ export function bootstrapBusinessState(input: BusinessBootstrapInput = {}): Busi
+   cancelIntakeAnalysisRecovery();
+   clearInMemoryBusinessState();
+ 
++  const scope = resolveScope(input);
++  const account = scope.type === 'workspace' && scope.account ? scope.account : undefined;
++
+   if (input.userId && input.workspaceId) {
+-    migrateUserScopeToWorkspaceScope(input.userId, input.workspaceId);
++    /*
++     * DOKUMENTE-01 N1 — zuerst den Kontobestand vorbereiten (Altbestand oder
++     * Mitgliedsbestand bei Aufstieg übernehmen), danach den Nutzerbereich
++     * dieses Kontos hineinführen. Umgekehrt fände die Übernahme einen
++     * Zielbestand vor und ließe den Altbestand liegen.
++     */
++    if (account) prepareWorkspaceAccountStore(input.workspaceId, account);
++    migrateUserScopeToWorkspaceScope(input.userId, input.workspaceId, account, input.ownerUserId);
+   }
+ 
+-  const scope = resolveScope(input);
+-
+   if (isBetaTestMode() && !input.userId) {
+     setActiveStorageScope(scope);
+     const betaResult = loadPersistedStateResultFromKey(buildStorageKey(scope));
+@@ -211,12 +238,18 @@ export function bootstrapBusinessState(input: BusinessBootstrapInput = {}): Busi
+   return loadOrSeedScopedState(scope, input.userId);
+ }
+ 
++/**
++ * DOKUMENTE-01 N1 — `userId` ist das angemeldete Konto (nicht der Betriebsinhaber),
++ * `access` seine Sicht laut Server. Die Übernahme des Nutzerbereichs geschieht in
++ * `bootstrapBusinessState`, in der richtigen Reihenfolge.
++ */
+ export function switchToWorkspaceScope(
+   userId: string,
+   workspaceId: string,
++  access?: StorageAccess,
++  ownerUserId?: string,
+ ): BusinessBootstrapResult {
+-  migrateUserScopeToWorkspaceScope(userId, workspaceId);
+-  return bootstrapBusinessState({ userId, workspaceId });
++  return bootstrapBusinessState({ userId, workspaceId, access, ownerUserId });
+ }
+ 
+ export function isolateBusinessStateOnLogout(): void {

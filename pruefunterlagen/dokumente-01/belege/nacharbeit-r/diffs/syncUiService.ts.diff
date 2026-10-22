@@ -1,0 +1,321 @@
+diff --git a/src/services/sync/syncUiService.ts b/src/services/sync/syncUiService.ts
+index 87eba2b..087fa5d 100644
+--- a/src/services/sync/syncUiService.ts
++++ b/src/services/sync/syncUiService.ts
+@@ -1,8 +1,23 @@
+-import type { SyncCoordinatorReport, SyncOutboxEntry, SyncState } from '../../types/sync';
++import type { SyncCoordinatorReport, SyncOutboxEntry, SyncOutboxHold, SyncState } from '../../types/sync';
++import type { AppPersistedState } from '../../types/models';
+ import type { SyncAdapterStatus } from './syncAdapter';
+ import { buildPersistedStateSnapshot, persistAll } from '../persistenceService';
+ import { getSyncClient } from './syncClientService';
+-import { getSyncOutboxSnapshot, hasPendingCompanyCloudBackup, resendFinallyDeniedOutboxEntry } from './syncOutboxService';
++import {
++  getSyncOutboxSnapshot,
++  hasPendingCompanyCloudBackup,
++  hydrateSyncOutbox,
++  releaseHeldOutboxEntries,
++  resendFinallyDeniedOutboxEntry,
++} from './syncOutboxService';
++import {
++  appendOutboxOriginLog,
++  isOutboxEntryHeld,
++  resolveOutboxOriginFromActiveScope,
++  toOutboxOriginLogEntity,
++} from './syncOutboxOriginService';
++import { getActiveStorageKey } from '../storage/storageScopeService';
++import { getSupabaseClient } from '../../lib/supabase';
+ import { getSyncCoordinator } from './syncCoordinator';
+ import { applySyncPullCandidateSafely, captureSyncRunBase } from './syncPullPersistService';
+ import { runQueuedSyncOperation } from './syncOperationQueue';
+@@ -11,7 +26,11 @@ import { isSupabaseConfigured } from '../../lib/supabase';
+ import { bootstrapWorkspaceCloudSyncIfNeeded } from '../workspace/workspaceCloudBootstrapService';
+ import { isSupabaseSyncAllowed } from './cloudSyncAllowlist';
+ import { isFinallyDeniedOutboxEntry } from './syncRoleDenial';
+-import { describeSyncOutboxEntry, type SyncOutboxDescription } from './syncOutboxDescriptionService';
++import {
++  describeSyncEntity,
++  describeSyncOutboxEntry,
++  type SyncOutboxDescription,
++} from './syncOutboxDescriptionService';
+ import {
+   getPendingWorkspaceSettingsConflict,
+   resolveWorkspaceSettingsConflict,
+@@ -51,6 +70,82 @@ export interface SyncOutboxCounts {
+   pending: number;
+   completed: number;
+   error: number;
++  /** DOKUMENTE-01 R2 — zurückgehaltene Aufträge (nicht in `pending`/`error` enthalten); fehlt bei null. */
++  held?: number;
++}
++
++/** DOKUMENTE-01 R2 — ein zurückgehaltener Auftrag, so beschrieben, dass er sich vor der Freigabe prüfen lässt. */
++export interface HeldOutboxDescription {
++  readonly id: string;
++  readonly entityType: SyncOutboxEntry['entityType'];
++  readonly entityId: string;
++  readonly operation: SyncOutboxEntry['operation'];
++  readonly status: SyncOutboxEntry['status'];
++  /** Woran der Nutzer den Datensatz wiedererkennt; `null`, wenn er lokal nicht (mehr) vorliegt. */
++  readonly label: string | null;
++  readonly queuedAt: string;
++  readonly heldSince: string;
++  readonly source: SyncOutboxHold['source'];
++}
++
++const OPEN_STATUSES: ReadonlySet<SyncOutboxEntry['status']> = new Set(['pending', 'error', 'blocked']);
++
++function isOpenHeldEntry(entry: SyncOutboxEntry): boolean {
++  return isOutboxEntryHeld(entry) && OPEN_STATUSES.has(entry.status);
++}
++
++/** Wo der Datensatz eines zurückgehaltenen Auftrags im Bestand liegt — für eine erkennbare Bezeichnung. */
++const HELD_ENTITY_COLLECTIONS: Partial<Record<SyncOutboxEntry['entityType'], keyof AppPersistedState>> = {
++  document: 'documents',
++  document_file: 'documentFileRefs',
++  document_work_result: 'documentWorkResults',
++  inbox_item: 'inboxItems',
++  customer: 'customers',
++  vorgang: 'vorgaenge',
++  vorgang_note: 'vorgangNotes',
++  task: 'tasks',
++  business_letter: 'businessLetters',
++  offer: 'offers',
++  invoice_draft: 'invoiceDrafts',
++  order_draft: 'orderDrafts',
++  knowledge_fact: 'knowledgeFacts',
++  bank_transaction: 'bankTransactions',
++};
++
++const HELD_LABEL_FIELDS = ['title', 'name', 'originalFileName', 'subject', 'displayText', 'number', 'invoiceNumber'];
++
++function heldEntityLabel(entry: SyncOutboxEntry, state: AppPersistedState | null): string | null {
++  const bekannt = describeSyncEntity(entry.entityType, entry.entityId);
++  if (bekannt || !state) return bekannt;
++  const sammlung = HELD_ENTITY_COLLECTIONS[entry.entityType];
++  const liste = sammlung ? (state[sammlung] as unknown) : undefined;
++  if (!Array.isArray(liste)) return null;
++  const datensatz = liste.find((item) => (item as { id?: unknown })?.id === entry.entityId) as
++    | Record<string, unknown>
++    | undefined;
++  if (!datensatz) return null;
++  for (const feld of HELD_LABEL_FIELDS) {
++    const wert = datensatz[feld];
++    if (typeof wert === 'string' && wert.trim()) {
++      const text = wert.trim();
++      return text.length > 80 ? `${text.slice(0, 79)}…` : text;
++    }
++  }
++  return null;
++}
++
++function describeHeldOutboxEntry(entry: SyncOutboxEntry, state: AppPersistedState | null): HeldOutboxDescription {
++  return {
++    id: entry.id,
++    entityType: entry.entityType,
++    entityId: entry.entityId,
++    operation: entry.operation,
++    status: entry.status,
++    label: heldEntityLabel(entry, state),
++    queuedAt: entry.queuedAt,
++    heldSince: entry.hold?.since ?? entry.queuedAt,
++    source: entry.hold?.source ?? 'load',
++  };
+ }
+ 
+ export interface SyncUiSnapshot {
+@@ -84,15 +179,24 @@ export interface SyncUiSnapshot {
+   offerConflicts: OfferConflict[];
+   /** FINANZ-CORE-01A (WEISS-Nacharbeit N04) — offene Kundenkonflikte mit Entscheidung; genau eine Zeile je Auftrag. */
+   customerConflicts: CustomerConflict[];
++  /**
++   * DOKUMENTE-01 R2 — Aufträge ohne nachweisbares Ursprungskonto, gegen automatischen Versand gesperrt. Sie stehen
++   * nur hier und nicht zusätzlich als „Wartet", „Nicht übertragen" oder Konflikt — ein Auftrag, eine Zeile.
++   */
++  heldOutboxEntries?: HeldOutboxDescription[];
+   isOffline: boolean;
+   hasRetryableErrors: boolean;
+ }
+ 
+ function countOutbox(outbox: SyncOutboxEntry[]): SyncOutboxCounts {
++  const held = outbox.filter(isOpenHeldEntry).length;
+   return {
+-    pending: outbox.filter((entry) => entry.status === 'pending').length,
++    pending: outbox.filter((entry) => entry.status === 'pending' && !isOutboxEntryHeld(entry)).length,
+     completed: outbox.filter((entry) => entry.status === 'completed').length,
+-    error: outbox.filter((entry) => entry.status === 'error' || entry.status === 'failed').length,
++    error: outbox.filter(
++      (entry) => (entry.status === 'error' || entry.status === 'failed') && !isOutboxEntryHeld(entry),
++    ).length,
++    ...(held > 0 ? { held } : {}),
+   };
+ }
+ 
+@@ -112,19 +216,24 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
+   const coordinator = getSyncCoordinator();
+   const status = coordinator.getStatus();
+   const isOffline = syncClient.syncPolicy === 'disabled' || status.syncState === 'offline';
+-  const documentConflicts = listArchivedDocumentConflicts(outbox);
+-  const employeeConflicts = listEmployeeConflicts(outbox);
+-  const offerConflicts = listOfferConflicts(outbox);
+-  const customerConflicts = listCustomerConflicts(outbox);
++  // DOKUMENTE-01 R2 — zurückgehaltene Aufträge erscheinen nur in ihrer eigenen Liste.
++  const heldOpen = outbox.filter(isOpenHeldEntry);
++  const heldState = heldOpen.length > 0 ? buildPersistedStateSnapshot() : null;
++  const heldOutboxEntries = heldOpen.map((entry) => describeHeldOutboxEntry(entry, heldState));
++  const sendable = outbox.filter((entry) => !isOutboxEntryHeld(entry));
++  const documentConflicts = listArchivedDocumentConflicts(sendable);
++  const employeeConflicts = listEmployeeConflicts(sendable);
++  const offerConflicts = listOfferConflicts(sendable);
++  const customerConflicts = listCustomerConflicts(sendable);
+   const decidable = new Set(
+     [...documentConflicts, ...employeeConflicts, ...offerConflicts, ...customerConflicts].map(
+       (conflict) => conflict.outboxId,
+     ),
+   );
+-  const pendingOutboxEntries = outbox.filter(
++  const pendingOutboxEntries = sendable.filter(
+     (entry) => (entry.status === 'pending' || entry.status === 'blocked') && !decidable.has(entry.id),
+   );
+-  const failedOutboxEntries = outbox
++  const failedOutboxEntries = sendable
+     .filter(
+       (entry) =>
+         (entry.status === 'error' || entry.status === 'failed' || entry.status === 'blocked') &&
+@@ -147,18 +256,71 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
+     employeeConflicts,
+     offerConflicts,
+     customerConflicts,
++    ...(heldOutboxEntries.length > 0 ? { heldOutboxEntries } : {}),
+     isOffline,
+     /*
+      * KONTOSPERRE — ein endgültig abgewiesener Auftrag ist nichts, was ein neuer Versuch
+      * ändert; „Erneut versuchen" belebt ihn auch nicht. Den Knopf deshalb nur, wenn ein
+-     * wiederholbarer Fehler da ist.
++     * wiederholbarer Fehler da ist. DOKUMENTE-01 R2 — ein zurückgehaltener auch nicht.
+      */
+-    hasRetryableErrors: outbox.some(
++    hasRetryableErrors: sendable.some(
+       (entry) => entry.status === 'error' || (entry.status === 'failed' && !isFinallyDeniedOutboxEntry(entry)),
+     ),
+   };
+ }
+ 
++export type HeldOutboxReleaseResult =
++  | { ok: true; released: number }
++  | { ok: false; reason: 'no_account' | 'session_mismatch' | 'nothing_held' | 'persist_failed' };
++
++/**
++ * DOKUMENTE-01 R2 — die bewusste Freigabe zurückgehaltener Aufträge.
++ *
++ * Berechtigt ist allein das Konto dieses Bestands — und nur, wenn die Anmeldung dieses Konto nachweislich meldet:
++ * Der aktive Speicherbereich muss ein Kontobestand sein, die Sitzung lesbar und dasselbe Konto. Freigegeben werden
++ * genau die geprüften Aufträge; sie erhalten dieses Konto als Ursprung und eine Freigabespur. Erst speichern, dann
++ * melden; gesendet wird danach über den normalen Abgleich, nichts geschieht heimlich sofort.
++ */
++export async function releaseHeldOutboxEntriesFromUi(entryIds: readonly string[]): Promise<HeldOutboxReleaseResult> {
++  const origin = resolveOutboxOriginFromActiveScope();
++  if (!origin?.workspaceId || !origin.access) return { ok: false, reason: 'no_account' };
++  const storageKey = getActiveStorageKey();
++
++  let sessionUserId: string | null = null;
++  try {
++    const client = getSupabaseClient();
++    const { data } = (await client?.auth.getSession()) ?? { data: { session: null } };
++    sessionUserId = data.session?.user?.id ?? null;
++  } catch {
++    sessionUserId = null;
++  }
++  // Nach dem Warten: noch derselbe Bestand, und die Anmeldung gehört genau diesem Konto.
++  if (sessionUserId !== origin.userId || getActiveStorageKey() !== storageKey) {
++    return { ok: false, reason: 'session_mismatch' };
++  }
++
++  const heldIds = new Set(getSyncOutboxSnapshot().filter(isOpenHeldEntry).map((entry) => entry.id));
++  const ids = entryIds.filter((id) => heldIds.has(id));
++  if (ids.length === 0) return { ok: false, reason: 'nothing_held' };
++
++  const before = getSyncOutboxSnapshot();
++  const at = new Date().toISOString();
++  const released = releaseHeldOutboxEntries(ids, origin, at);
++  if (released.length === 0) return { ok: false, reason: 'nothing_held' };
++  if (!persistAll().success) {
++    // Ohne gespeicherte Freigabe keine Freigabe: die Warteschlange wie vorher.
++    hydrateSyncOutbox(before);
++    return { ok: false, reason: 'persist_failed' };
++  }
++  appendOutboxOriginLog(storageKey, {
++    at,
++    action: 'released',
++    by: origin.userId,
++    entries: released.map(toOutboxOriginLogEntity),
++  });
++  return { ok: true, released: released.length };
++}
++
+ export async function runSyncFromUi(): Promise<SyncCoordinatorReport> {
+   // 01P4C: Netzwerk und anschließende Persistenz sind ein Queue-Lauf; der
+   // Snapshot entsteht erst beim tatsächlichen Start.
+@@ -290,6 +452,8 @@ export type SyncStatusKind =
+   | 'failed'
+   /** 01G — es steht eine Entscheidung aus; das ist kein Fehler. */
+   | 'conflict'
++  /** DOKUMENTE-01 R2 — zurückgehaltene Aufträge warten auf eine bewusste Prüfung und Freigabe. */
++  | 'held'
+   | 'waiting'
+   | 'synced'
+   | 'idle';
+@@ -304,6 +468,8 @@ export interface SyncStatusSummary {
+   failedCount: number;
+   /** Im letzten Lauf automatisch behandelte Konflikte. */
+   mergedCount: number;
++  /** DOKUMENTE-01 R2 — zurückgehaltene Aufträge; fehlt bei null. */
++  heldCount?: number;
+ }
+ 
+ const SYNCING: SyncState[] = ['checking', 'uploading', 'downloading', 'merging'];
+@@ -335,15 +501,18 @@ export function summarizeSyncStatus(
+     ),
+   );
+   /* Nur-lokale Entitäten (z. B. Papierregister, Gedächtnis) warten auf nichts — sie werden nie gesendet. */
++  /* DOKUMENTE-01 R2 — zurückgehaltene Aufträge warten nicht auf den Abgleich, sondern auf eine Freigabe. */
+   const waitingCount = snapshot.outbox.filter(
+     (entry) =>
+       (entry.status === 'pending' || entry.status === 'blocked') &&
+       isSupabaseSyncAllowed(entry.entityType) &&
+-      !decidable.has(entry.id),
++      !decidable.has(entry.id) &&
++      !isOutboxEntryHeld(entry),
+   ).length;
+   const failedCount = snapshot.outbox.filter(
+-    (entry) => entry.status === 'error' || entry.status === 'failed',
++    (entry) => (entry.status === 'error' || entry.status === 'failed') && !isOutboxEntryHeld(entry),
+   ).length;
++  const heldCount = snapshot.outbox.filter(isOpenHeldEntry).length;
+   /*
+    * FINANZ-SYNC-BLOCKER-01G — ein Konflikt ist kein technischer Fehler.
+    *
+@@ -360,7 +529,8 @@ export function summarizeSyncStatus(
+   const conflictCount =
+     ((snapshot.settingsConflict?.length ?? 0) > 0
+       ? snapshot.outbox.filter(
+-          (entry) => entry.status === 'blocked' && entry.entityType === 'workspace_settings',
++          (entry) =>
++            entry.status === 'blocked' && entry.entityType === 'workspace_settings' && !isOutboxEntryHeld(entry),
+         ).length
+       : 0) +
+     documentConflicts.length +
+@@ -385,11 +555,12 @@ export function summarizeSyncStatus(
+   else if (SYNCING.includes(state)) kind = 'syncing';
+   else if (failedCount > 0 || (state === 'error' && conflictCount === 0)) kind = 'failed';
+   else if (conflictCount > 0) kind = 'conflict';
++  else if (heldCount > 0) kind = 'held';
+   else if (state === 'error') kind = 'failed';
+   else if (state === 'synced') kind = waitingCount > 0 ? 'waiting' : 'synced';
+   else kind = 'idle';
+ 
+-  return { kind, waitingCount, failedCount, mergedCount, conflictCount };
++  return { kind, waitingCount, failedCount, mergedCount, conflictCount, ...(heldCount > 0 ? { heldCount } : {}) };
+ }
+ 
+ /**

@@ -1,0 +1,166 @@
+diff --git a/src/companyIdentityRecovery02.test.tsx b/src/companyIdentityRecovery02.test.tsx
+index 7f75db8..6d6f1c3 100644
+--- a/src/companyIdentityRecovery02.test.tsx
++++ b/src/companyIdentityRecovery02.test.tsx
+@@ -41,6 +41,20 @@ const TAX_NUMBER = '123/456/78901';
+ 
+ const WORKSPACE_KEY = `officepilot-state:workspace:${WORKSPACE_ID}`;
+ 
++/**
++ * DOKUMENTE-01 N1 — der Betriebsbestand liegt je Konto und Sicht. Beim ersten
++ * Bereichswechsel übernimmt der Inhaber den Altbestand (`WORKSPACE_KEY`); danach
++ * lebt der Zustand unter seinem Kontoschlüssel.
++ */
++function accountWorkspaceKey(): string {
++  return `${WORKSPACE_KEY}:account:${userId}:full`;
++}
++
++/** Wo der Betriebsbestand gerade liegt: nach dem Wechsel im Kontobestand, davor im Altbestand. */
++function liveWorkspaceKey(): string {
++  return localStorage.getItem(accountWorkspaceKey()) !== null ? accountWorkspaceKey() : WORKSPACE_KEY;
++}
++
+ let userId = '';
+ 
+ type RpcCall = {
+@@ -103,7 +117,17 @@ function registerHandlers(): void {
+     onPullCalled?.();
+     return {
+       workspace: workspaceRow(),
+-      members: [],
++      // DOKUMENTE-01 N1 — wie der Server: Die eigene Mitgliedschaft steht immer in der Liste.
++      members: [
++        {
++          workspace_id: WORKSPACE_ID,
++          user_id: userId,
++          role: 'owner',
++          status: 'active',
++          created_at: '2026-01-05T08:00:00.000Z',
++          updated_at: '2026-01-05T08:00:00.000Z',
++        },
++      ],
+       settings: null,
+       vorgaenge: [],
+       setup: {
+@@ -427,6 +451,12 @@ const BLOB_STORE_NAME = 'document_blobs';
+ const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]);
+ const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+ const idbWriteCalls: string[] = [];
++/**
++ * DOKUMENTE-01 N1 — Kopien in den neuen Kontobereich des Betriebs (Übernahme des
++ * Altbestands) sind additiv: Sie legen neue Einträge an und verändern keinen
++ * vorhandenen. Sie werden getrennt erfasst und eigens geprüft.
++ */
++const idbAccountCopies: string[] = [];
+ let restoreIdbGuards: (() => void) | null = null;
+ 
+ function openBlobDb(): Promise<IDBDatabase> {
+@@ -483,7 +513,14 @@ function installIndexedDbGuards(): void {
+   const originalDelete = IDBObjectStore.prototype.delete;
+   const originalClear = IDBObjectStore.prototype.clear;
+   IDBObjectStore.prototype.put = function guarded(this: IDBObjectStore, ...args: unknown[]) {
+-    if (this.name === BLOB_STORE_NAME) idbWriteCalls.push('put');
++    if (this.name === BLOB_STORE_NAME) {
++      const record = args[0] as { scopeKey?: string; fileRefId?: string } | undefined;
++      if (record?.scopeKey?.startsWith(`workspace:${WORKSPACE_ID}:account:`)) {
++        idbAccountCopies.push(record.fileRefId ?? '?');
++      } else {
++        idbWriteCalls.push('put');
++      }
++    }
+     return (originalPut as (...a: unknown[]) => IDBRequest).apply(this, args);
+   } as IDBObjectStore['put'];
+   IDBObjectStore.prototype.add = function guarded(this: IDBObjectStore, ...args: unknown[]) {
+@@ -509,7 +546,7 @@ function installIndexedDbGuards(): void {
+ 
+ /** Fachliche Bestände des Workspace-Zustands, ohne Sync-Felder. */
+ function readWorkspaceParts(): Record<string, unknown> {
+-  const raw = localStorage.getItem(WORKSPACE_KEY);
++  const raw = localStorage.getItem(liveWorkspaceKey());
+   if (!raw) return {};
+   const state = JSON.parse(raw) as Record<string, unknown>;
+   return {
+@@ -527,7 +564,7 @@ function installStorageFailureHook(): () => void {
+   const patched = {
+     getItem: (key: string) => realStorage.getItem(key),
+     setItem: (key: string, value: string) => {
+-      if (key === WORKSPACE_KEY) {
++      if (key === WORKSPACE_KEY || key === accountWorkspaceKey()) {
+         if (failPersist) {
+           eventLog.push('persist-failed');
+           throw new Error('QuotaExceeded');
+@@ -579,6 +616,7 @@ describe('OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B', () => {
+     localStorage.setItem(WORKSPACE_KEY, workspaceStateRaw());
+     localStorage.setItem(userKey(), userStateRaw());
+     idbWriteCalls.length = 0;
++    idbAccountCopies.length = 0;
+     restoreStorageHook = installStorageFailureHook();
+   });
+ 
+@@ -755,7 +793,8 @@ describe('OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B', () => {
+     expect(container.textContent).toContain(LOCAL_COMPANY);
+     expect(
+       storageKeys().filter((key) => key.startsWith('officepilot-state:workspace:')),
+-    ).toEqual([WORKSPACE_KEY]);
++      // DOKUMENTE-01 N1 — der Altbestand wurde beim Wechsel in den Kontobestand des Inhabers übernommen.
++    ).toEqual([accountWorkspaceKey()]);
+   });
+ 
+   it('C4: ändert sich die Cloud zwischen Anzeige und Bestätigung, wird nicht gesendet', async () => {
+@@ -1010,6 +1049,8 @@ describe('OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B', () => {
+     expect(containsAllFields(before.documents, after.documents), 'documents').toBeNull();
+     expect(after.documentFileBlobs ?? {}).toEqual(before.documentFileBlobs ?? {});
+     expect(idbWriteCalls, 'IndexedDB-Schreibzugriff').toEqual([]);
++    // DOKUMENTE-01 N1 — genau die referenzierten Dateien, additiv in den Kontobereich des Inhabers.
++    expect([...new Set(idbAccountCopies)].sort(), 'Kopien in den Kontobereich').toEqual(['ref-1', 'ref-2']);
+ 
+     const pdf = await readSeededBlob('ref-1');
+     const png = await readSeededBlob('ref-2');
+@@ -1064,7 +1105,8 @@ describe('OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B', () => {
+ 
+     expect(container.querySelector('[data-testid="workspace-company-conflict"]')).toBeNull();
+     // Der leere Cloud-Stand überschreibt den echten lokalen Bestand nicht.
+-    const stored = JSON.parse(localStorage.getItem(WORKSPACE_KEY)!) as {
++    // DOKUMENTE-01 N1 — nach dem Wechsel liegt er im Kontobestand des Inhabers.
++    const stored = JSON.parse(localStorage.getItem(liveWorkspaceKey())!) as {
+       setup: { companyName: string; setupComplete: boolean };
+       companyProfile: { companyName: string };
+     };
+@@ -1074,7 +1116,8 @@ describe('OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B', () => {
+     expect(container.textContent).toContain(LOCAL_COMPANY);
+     expect(
+       storageKeys().filter((key) => key.startsWith('officepilot-state:workspace:')),
+-    ).toEqual([WORKSPACE_KEY]);
++      // DOKUMENTE-01 N1 — der Altbestand wurde beim Wechsel in den Kontobestand des Inhabers übernommen.
++    ).toEqual([accountWorkspaceKey()]);
+     // Kein Payload des alten User-Scopes.
+     expect(rpcLog.filter((entry) => entry.companyName === CLOUD_COMPANY)).toEqual([]);
+     // Eindeutig: genau ein Upsert je Firmenentität, lokaler Name, positive Version.
+@@ -1503,7 +1546,17 @@ describe('OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B', () => {
+       rpcLog.push({ name: 'pull_workspace_sync_state' });
+       return {
+         workspace: workspaceRow(),
+-        members: [],
++        // DOKUMENTE-01 N1 — wie der Server: Die eigene Mitgliedschaft steht immer in der Liste.
++        members: [
++          {
++            workspace_id: WORKSPACE_ID,
++            user_id: userId,
++            role: 'owner',
++            status: 'active',
++            created_at: '2026-01-05T08:00:00.000Z',
++            updated_at: '2026-01-05T08:00:00.000Z',
++          },
++        ],
+         settings: null,
+         vorgaenge: [],
+         setup: {
+@@ -1574,7 +1627,7 @@ describe('OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B', () => {
+     const profileRpcs = () =>
+       rpcLog.filter((e) => e.name === 'upsert_workspace_sync_entity' && e.entity === 'company_profile');
+     const storedState = () =>
+-      JSON.parse(localStorage.getItem(WORKSPACE_KEY) ?? '{}') as {
++      JSON.parse(localStorage.getItem(liveWorkspaceKey()) ?? '{}') as {
+         setup?: { companyName?: string };
+         companyProfile?: { companyName?: string };
+         setupSync?: { version?: number };

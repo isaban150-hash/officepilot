@@ -1,0 +1,6 @@
+044dcd10fec1d9c2b6c8e60271cadbb12684f19d73746d92be3414b155cb873a *dok01-r1r2-direktaktion.mjs
+ea6c252e6b47dfb56e0a3bf2c8b9e52fbe1b1bf10290d3163f221a41429c43ca *WEISS-DOK01-R1R2-2026-10-20/unlesbare-startsitzung.mjs
+40e54e5848fbfbf261b7a6c7df50167c661d192167bf40d4d533c6d685535aac *WEISS-DOK01-R1R2-2026-10-20/originalproben/dok01-n1n2-sdk.mjs
+c72ee3e1cb35898b4e1cea3a739f0c80f49af8e3668556d8f507b1aeba5dea38 *WEISS-DOK01-R1R2-2026-10-20/originalproben/dok01-n1n2-sendekonto-und-altbestand.mjs
+ab09115df87bed0b8899ab1a8115ed7af26fb5068a99ced0d8e61c5ea2adaa30 *WEISS-DOK01-R1R2-2026-10-20/originalproben/dok01-n1n2-sendekonto.mjs
+7b16ac2c9c7c167721a9b6881448ad69650f808baa560b9c8934b3c056488f10 *WEISS-DOK01-R1R2-2026-10-20/originalproben/variante-nur-token.mjs

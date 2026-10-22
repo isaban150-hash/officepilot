@@ -1,0 +1,100 @@
+diff --git a/src/services/sync/sendekontoR1Dokumente01.test.ts b/src/services/sync/sendekontoR1Dokumente01.test.ts
+index 5f44905..9673764 100644
+--- a/src/services/sync/sendekontoR1Dokumente01.test.ts
++++ b/src/services/sync/sendekontoR1Dokumente01.test.ts
+@@ -36,7 +36,13 @@ import { STORAGE_VERSION } from './syncMigrationService';
+ import { createSyncClient, resetSyncClientForTests } from './syncClientService';
+ import { getSyncOutboxSnapshot, resetSyncOutboxForTests } from './syncOutboxService';
+ import { SupabaseSyncAdapter } from './supabaseSyncAdapter';
+-import { SyncCoordinator, SYNC_IDENTITY_CHANGED_REPORT_ID, getSyncCoordinator, resetSyncCoordinatorForTests } from './syncCoordinator';
++import {
++  SyncCoordinator,
++  SYNC_IDENTITY_CHANGED_REPORT_ID,
++  getSyncCoordinator,
++  isSyncIdentityHaltReport,
++  resetSyncCoordinatorForTests,
++} from './syncCoordinator';
+ import { buildConfirmationJournalKey, listConfirmedOutboxRecords } from './syncConfirmationJournal';
+ import { bindClientToSyncRun, captureSyncRunIdentity, createSyncRunGuard } from './syncRunIdentityService';
+ import { pushPendingChangesFromUi } from './syncUiService';
+@@ -560,10 +566,10 @@ describe('DOKUMENTE-01 R1 — echtes SDK: Zugang aus der Prüfung, Halt vor jede
+     expect(journal(INHABER, 'full')).toEqual([]);
+   });
+ 
+-  it('S12 eigener Token-Lieferant: Wechsel nur des Tokens (Bereich bleibt) → Halt; gesendet wird das geprüfte Token', async () => {
+-    for (const art of ['jwt', 'undurchsichtig'] as const) {
++  it('S12 eigener Token-Lieferant (JWT mit Konto): Wechsel nur des Tokens (Bereich bleibt) → Halt; gesendet wird das geprüfte Token', async () => {
++    for (const art of ['jwt'] as const) {
+       bereich(INHABER, 'full');
+-      const token = (konto: string) => (art === 'jwt' ? synthetischesToken(konto) : `synthetischer-zugang-${konto}`);
++      const token = (konto: string) => synthetischesToken(konto);
+       let angemeldet = INHABER;
+       const anfragen: NetzAnfrage[] = [];
+       let erreicht!: () => void;
+@@ -609,6 +615,34 @@ describe('DOKUMENTE-01 R1 — echtes SDK: Zugang aus der Prüfung, Halt vor jede
+     }
+   });
+ 
++  it('S12b eigener Token-Lieferant mit undurchsichtigem Token: nennt kein Konto → Halt schon beim Start, keine Anfrage', async () => {
++    bereich(INHABER, 'full');
++    const anfragen: NetzAnfrage[] = [];
++    const client = createClient('http://127.0.0.1:54321', 'synthetischer-anon-schluessel', {
++      realtime: { transport: OhneVerbindung as never },
++      accessToken: async () => `synthetischer-zugang-${INHABER}`,
++      global: {
++        fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
++          anfragen.push({ pfad: new URL(String(input)).pathname, zugang: new Headers(init?.headers).get('Authorization') });
++          return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
++        }) as typeof fetch,
++      },
++    });
++    const docs = [dokument('doc-r1-undurchsichtig')];
++    const outbox = [auftrag('out-undurchsichtig', 'document', 'doc-r1-undurchsichtig', herkunft(INHABER, 'full'), 1)];
++
++    const ergebnis = await new SupabaseSyncAdapter(client).pushChanges({
++      deviceId: 'geraet-r1',
++      workspaceId: WS,
++      state: zustand({ documents: docs, syncOutbox: outbox }),
++      outbox,
++    });
++
++    expect(anfragen).toEqual([]);
++    expect(ergebnis.identityChangeReason).toBe('start_unbestaetigt');
++    expect(ergebnis.state.syncOutbox).toEqual(outbox);
++  });
++
+   it('S8c Datei ohne Wechsel: Upload und Registrierung beide mit dem Zugang des Inhabers', async () => {
+     const ablage = new Map<string, string>();
+     melde(ablage, INHABER);
+@@ -633,7 +667,7 @@ describe('DOKUMENTE-01 R1 — echtes SDK: Zugang aus der Prüfung, Halt vor jede
+ /* ------------------------------------------------------------------ */
+ 
+ describe('DOKUMENTE-01 R1 — Abruf und Koordinator', () => {
+-  it('S9a Wechsel zwischen Senden und Abruf (nur die Sitzung): kein Abruf, nichts übernommen, keine Fehlermeldung', async () => {
++  it('S9a Wechsel zwischen Senden und Abruf (nur die Sitzung): kein Abruf, nichts übernommen, kein Erfolg, keine fremde Fehlermeldung', async () => {
+     const sitzung = { konto: INHABER as string | null };
+     bereich(INHABER, 'full');
+     const ersatz = ersatzClient(sitzung);
+@@ -649,9 +683,12 @@ describe('DOKUMENTE-01 R1 — Abruf und Koordinator', () => {
+     expect(ersatz.sendungen.map((sendung) => sendung.art)).toEqual(['archived_document']);
+     expect(ergebnis.skipPersist).toBe(true);
+     expect(ergebnis.success).toBe(false);
+-    expect(ergebnis.report.errorCount).toBe(0);
++    // R1-WEISS-START — angehalten ist kein Erfolg: Der Bericht zählt den Halt, nennt aber keine Aufträge.
++    expect(ergebnis.report.errorCount).toBe(1);
++    expect(isSyncIdentityHaltReport(ergebnis.report)).toBe(true);
+     expect(ergebnis.report.syncedEntities).toEqual([]);
+     expect(ergebnis.report.errors.map((fehler) => fehler.outboxId)).toEqual([SYNC_IDENTITY_CHANGED_REPORT_ID]);
++    // Wechsel mitten im Lauf: das jetzt aktive Konto bekommt keinen fremden Fehlerzustand.
+     expect(koordinator.getStatus().syncState).toBe('idle');
+     expect(koordinator.getStatus().lastError).toBeUndefined();
+     // Bestätigt ist bestätigt: Der Inhaber sendet den Auftrag nie ein zweites Mal.
+@@ -677,7 +714,7 @@ describe('DOKUMENTE-01 R1 — Abruf und Koordinator', () => {
+     expect(ersatz.sendungen[0].konto).toBe(INHABER);
+     expect(ergebnis.skipPersist).toBe(true);
+     expect(ergebnis.state).toBe(vorher);
+-    expect(ergebnis.report.errorCount).toBe(0);
++    expect(isSyncIdentityHaltReport(ergebnis.report)).toBe(true);
+   });
+ 
+   it('S10 Lauf ohne Wechsel: alles gesendet, Ergebnis gespeichert, Journal danach leer', async () => {

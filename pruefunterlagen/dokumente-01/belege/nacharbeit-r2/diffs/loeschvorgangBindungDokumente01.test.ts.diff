@@ -1,0 +1,707 @@
+diff --git a/src/services/document/loeschvorgangBindungDokumente01.test.ts b/src/services/document/loeschvorgangBindungDokumente01.test.ts
+index e69de29..b87f629 100644
+--- a/src/services/document/loeschvorgangBindungDokumente01.test.ts
++++ b/src/services/document/loeschvorgangBindungDokumente01.test.ts
+@@ -0,0 +1,702 @@
++/**
++ * DOKUMENTE-01 DOK-WEISS-DIREKT — eine direkte Dokumentlöschung gehört Konto, Betrieb und Sicht ihres Aufrufs.
++ *
++ * WEISS-Sicherheitsrecheck vom 21.10.2026: Die Löschung fragte den Server, ob das Dokument ein Zahlungsnachweis ist.
++ * Wechselte währenddessen das Konto, löschte sie danach im Bestand des neuen Kontos — mit Erfolgsmeldung und einem
++ * Löschauftrag unter dessen Herkunft.
++ *
++ *  L1  WEISS-Reproduktion (echtes SDK, keine Sitzung): Wechsel zu B während der Nachweisrückfrage → Abbruch ohne
++ *      Erfolg; B behält sein Dokument, kein Löschauftrag; die Gegenprobe als B bleibt „nicht berechtigt“;
++ *      L1b ohne Sitzung beim Aufruf meldet sich B im zweiten Tab an (Bereich bleibt) → ebenfalls Abbruch
++ *  L2  dasselbe mit bestätigter Anmeldung, Sitzung und Bereich wechseln über den echten Kontowechsel der App
++ *  L3  nur die Sitzung wechselt (zweiter Tab), der Bereich bleibt → Abbruch, A behält das Dokument
++ *  L4  A ohne Wechsel → gelöscht, Löschauftrag mit Herkunft A (mit und ohne bestätigte Anmeldung: lokal im eigenen
++ *      Bereich)
++ *  L5  Abmeldung während der Rückfrage → Abbruch; nach erneuter Anmeldung von A ist das Dokument unverändert da
++ *  L6  Rückkehr zum Ursprungskonto nach dem Abbruch: Bestand von A unverändert, eine neue Löschung gelingt; A → B → A
++ *      innerhalb der Rückfrage trifft nur den Bestand von A
++ *  L7  Rechnungsdokument mit bestätigter Anmeldung: Rückfrage und Grabstein mit dem geprüften Zugang von A, an den
++ *      Betrieb des Aufrufs (echtes SDK); L7b meldet sich B genau beim Senden an, trägt die Anfrage trotzdem den
++ *      geprüften Zugang von A, und der Vorgang bricht danach ab
++ *  L8  Rechnungsdokument ohne bestätigte Anmeldung im Kontobereich: kein Grabstein, eigener Hinweis
++ *  L9  Wechsel während des Grabsteins: kein lokales Löschen im neuen Bestand, kein Auftrag, kein Erfolg
++ *  L10 veraltete Oberfläche: Der Handelnde ist nicht das Konto des Bereichs → kein Vorgang, keine Rückfrage
++ *  L11 Sperren unverändert: laufende Aufbewahrung und Zahlungsnachweis in der Cloud blockieren wie bisher
++ */
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import { createClient } from '@supabase/supabase-js';
++import { resetTestStores } from '../../test/resetStores';
++import { createOrderPosition, createTestVorgang } from '../../test/fixtures';
++import {
++  DOCUMENT_DELETE_FORBIDDEN_KEY,
++  DOCUMENT_DELETE_IDENTITY_CHANGED_KEY,
++  DOCUMENT_DELETE_IDENTITY_UNCONFIRMED_KEY,
++  deleteGeneratedInvoiceDocumentWithCloud,
++} from './generatedInvoiceDocumentDeleteService';
++import { buildGeneratedInvoiceDocumentPayload } from './documentCloudPullOrchestrator';
++import { getDocumentStoreSnapshot, hydrateDocumentStore } from '../documentService';
++import { hydrateVorgangStore } from '../vorgangService';
++import { hydrateWorkspaceStore } from '../workspace/workspaceStore';
++import { persistAll } from '../persistenceService';
++import { getSyncOutboxSnapshot, resetSyncOutboxForTests } from '../sync/syncOutboxService';
++import { createSyncClient, resetSyncClientForTests } from '../sync/syncClientService';
++import {
++  buildStorageKey,
++  getActiveStorageKey,
++  setActiveStorageScope,
++  type StorageAccess,
++} from '../storage/storageScopeService';
++import { isolateBusinessStateOnLogout, switchToWorkspaceScope } from '../storage/storageBootstrapService';
++import * as supabaseLib from '../../lib/supabase';
++import type { AppPersistedState, CompanyDocument, Vorgang, VorgangInvoice } from '../../types/models';
++import type { SyncOutboxEntry } from '../../types/sync';
++
++const WS = 'ws-loeschbindung-dok01';
++const INHABER = 'konto-inhaber-loesch';
++const MITGLIED = 'konto-mitglied-loesch';
++const JETZT = '2026-10-21T12:00:00.000Z';
++const GEPRUEFT = { aufbewahrungGeprueft: true } as const;
++const ALS_INHABER = { userId: INHABER, cloudConfigured: true };
++const ALS_MITGLIED = { userId: MITGLIED, cloudConfigured: true };
++
++const BRIEF = 'doc-loesch-brief';
++const RECHNUNG_DOK = 'doc-loesch-rechnung';
++const VORGANG_ID = 'v-loeschbindung';
++const INVOICE_ID = 'inv-loeschbindung';
++
++beforeEach(() => {
++  localStorage.clear();
++  resetTestStores();
++  resetSyncClientForTests({ ...createSyncClient(), workspaceId: WS, serverWorkspaceId: WS });
++  vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(true);
++});
++
++afterEach(() => {
++  vi.restoreAllMocks();
++  resetTestStores();
++  localStorage.clear();
++});
++
++/* ------------------------------------------------------------------ */
++/* Bausteine                                                           */
++/* ------------------------------------------------------------------ */
++
++function kontoSchluessel(userId: string, access: StorageAccess): string {
++  return buildStorageKey({ type: 'workspace', workspaceId: WS, account: { userId, access } });
++}
++
++function betrieb(): void {
++  hydrateWorkspaceStore({
++    workspace: { id: WS, ownerUserId: INHABER, name: 'Löschbindung synthetisch', version: 1, createdAt: JETZT, updatedAt: JETZT },
++    workspaceMembers: [
++      { workspaceId: WS, userId: INHABER, role: 'owner', status: 'active', createdAt: JETZT, updatedAt: JETZT },
++      { workspaceId: WS, userId: MITGLIED, role: 'member', status: 'active', createdAt: JETZT, updatedAt: JETZT },
++    ],
++  } as never);
++}
++
++function brief(id = BRIEF): CompanyDocument {
++  return {
++    id,
++    title: 'Allgemeiner Brief synthetisch',
++    category: 'sonstiges',
++    issuer: 'Löschprüfung',
++    recognizedText: 'Synthetische allgemeine Information ohne Zahlungsbezug',
++    issueDate: null,
++    validUntil: null,
++    digitalFolder: { id: 'sonstiges', name: 'Sonstiges', path: '/sonstiges' },
++    paperFolder: { folderId: 'sonstiges', register: 'S', label: 'Sonstiges' },
++    tags: [],
++    linkedCompany: '',
++    linkedVorgang: null,
++    archived: true,
++    createdAt: JETZT,
++    sync: { version: 1, deleted: false, workspaceId: WS, deviceId: 'geraet-loesch', updatedAt: JETZT },
++  } as unknown as CompanyDocument;
++}
++
++function entwurfsRechnung(): VorgangInvoice {
++  return {
++    id: INVOICE_ID,
++    number: '2026-0042',
++    invoiceSequenceNumber: 42,
++    type: 'rechnung',
++    positions: [
++      { id: 'line-1', orderPositionId: 'op-1', description: 'Prüfleistung', quantity: 1, unit: 'Stk', unitPrice: 100, lineTotal: 100 },
++    ],
++    subtotal: 100,
++    taxStatus: 'null_13b',
++    amount: 100,
++    status: 'entwurf',
++    date: '2026-10-20',
++    issueDate: '2026-10-20',
++    createdAt: '2026-10-20T10:00:00.000Z',
++    paymentDueDate: '2099-12-31',
++    paymentStatus: 'offen',
++    payments: [],
++    legalNotices: [],
++    previousAbschlagDeductions: [],
++  } as unknown as VorgangInvoice;
++}
++
++function vorgang(): Vorgang {
++  return {
++    ...createTestVorgang({
++      id: VORGANG_ID,
++      title: 'Löschbindung Prüfvorgang',
++      status: 'beauftragt',
++      customer: 'Beispiel Prüfkunde GmbH',
++      orderPositions: [createOrderPosition({ id: 'op-1', unit: 'Stk', plannedQuantity: 1, unitPrice: 100 })],
++    }),
++    invoices: [entwurfsRechnung()],
++  } as Vorgang;
++}
++
++function rechnungsDokument(): CompanyDocument {
++  return {
++    id: RECHNUNG_DOK,
++    title: '2026-0042 – Rechnung',
++    category: 'ausgangsrechnung',
++    classifiedKind: 'ausgangsrechnung',
++    issuer: 'Test GmbH',
++    recognizedText: `Rechnungsnummer: 2026-0042\nInvoice-ID: ${INVOICE_ID}`,
++    issueDate: '2026-10-20',
++    validUntil: null,
++    digitalFolder: { id: `dig-inv-${INVOICE_ID}`, name: 'Ausgangsrechnungen', path: '/Vorgänge/Löschbindung/Ausgangsrechnungen/' },
++    paperFolder: { folderId: 'folder-3', register: 'A', label: 'Rechnungen' },
++    tags: ['Ausgangsrechnung', '2026-0042'],
++    linkedCompany: 'Test GmbH',
++    linkedVorgang: { vorgangId: VORGANG_ID, vorgangTitle: 'Löschbindung Prüfvorgang' },
++    linkedInvoiceId: INVOICE_ID,
++    archived: true,
++    createdAt: '2026-10-20T10:00:00.000Z',
++  } as CompanyDocument;
++}
++
++/** Die Grabstein-Antwort des Servers für das Rechnungsdokument. */
++function grabsteinZeile(): Record<string, unknown> {
++  return {
++    id: `row-${RECHNUNG_DOK}`,
++    workspace_id: WS,
++    client_document_id: RECHNUNG_DOK,
++    document_kind: 'generated_invoice',
++    linked_invoice_id: INVOICE_ID,
++    linked_vorgang_id: VORGANG_ID,
++    payload: buildGeneratedInvoiceDocumentPayload(rechnungsDokument()),
++    created_at: '2026-10-20T10:00:00.000Z',
++    updated_at: JETZT,
++    row_version: 2,
++    deleted_at: JETZT,
++  };
++}
++
++/** Legt den gespeicherten Bestand eines Kontos an (Betrieb, Dokumente, leere Warteschlange). */
++function bestandAnlegen(userId: string, access: StorageAccess, docs: CompanyDocument[], vorgaenge: Vorgang[] = []): void {
++  setActiveStorageScope({ type: 'workspace', workspaceId: WS, account: { userId, access } });
++  betrieb();
++  hydrateVorgangStore(vorgaenge);
++  hydrateDocumentStore(docs);
++  resetSyncOutboxForTests([]);
++  persistAll();
++}
++
++/** Zwei Konten desselben Betriebs mit je eigenem Bestand; aktiv ist der Inhaber. */
++function ausgangslage(docs: () => CompanyDocument[] = () => [brief()], vorgaenge: () => Vorgang[] = () => []): void {
++  bestandAnlegen(MITGLIED, 'member', docs(), vorgaenge());
++  bestandAnlegen(INHABER, 'full', docs(), vorgaenge());
++  for (const doc of docs()) {
++    expect(gespeicherteAuftraege(INHABER, 'full', doc.id)).toEqual([]);
++    expect(gespeicherteAuftraege(MITGLIED, 'member', doc.id)).toEqual([]);
++  }
++}
++
++function gespeichert(userId: string, access: StorageAccess): AppPersistedState | null {
++  const raw = localStorage.getItem(kontoSchluessel(userId, access));
++  return raw ? (JSON.parse(raw) as AppPersistedState) : null;
++}
++
++function gespeichertAktiv(userId: string, access: StorageAccess, id: string): boolean {
++  const doc = gespeichert(userId, access)?.documents.find((d) => d.id === id);
++  return Boolean(doc) && !doc!.sync?.deleted;
++}
++
++function gespeicherteAuftraege(userId: string, access: StorageAccess, id: string): SyncOutboxEntry[] {
++  return (gespeichert(userId, access)?.syncOutbox ?? []).filter((entry) => entry.entityId === id);
++}
++
++function aktiv(id: string): boolean {
++  const doc = getDocumentStoreSnapshot().find((d) => d.id === id);
++  return Boolean(doc) && !doc!.sync?.deleted;
++}
++
++function auftraege(id: string): SyncOutboxEntry[] {
++  return getSyncOutboxSnapshot().filter((entry) => entry.entityId === id);
++}
++
++interface Rueckfrage {
++  name: string;
++  konto: string | null;
++  betrieb: unknown;
++}
++
++/** Ersatzclient: Sitzung zum Ablesen, jede Rückfrage mit dem Konto, das gerade angemeldet ist. */
++function ersatzClient(sitzung: { konto: string | null }, antwort: (name: string) => unknown = () => false) {
++  const rueckfragen: Rueckfrage[] = [];
++  let tor: { name: string; erreicht: () => void; frei: Promise<void> } | null = null;
++  const client = {
++    auth: {
++      getSession: async () => ({
++        data: { session: sitzung.konto ? { user: { id: sitzung.konto }, access_token: `zugang-${sitzung.konto}` } : null },
++      }),
++    },
++    rpc: async (name: string, args: Record<string, unknown>) => {
++      rueckfragen.push({ name, konto: sitzung.konto, betrieb: args.p_workspace_id });
++      if (tor?.name === name) {
++        const offen = tor;
++        tor = null;
++        offen.erreicht();
++        await offen.frei;
++      }
++      return { data: antwort(name), error: null };
++    },
++  };
++  vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue(client as never);
++  return {
++    rueckfragen,
++    /** Hält die nächste Rückfrage `name` an, bis `frei()` gerufen wird. */
++    halte(name: string): { erreicht: Promise<void>; frei: () => void } {
++      let erreicht!: () => void;
++      let frei!: () => void;
++      const erreichtP = new Promise<void>((resolve) => (erreicht = resolve));
++      const freiP = new Promise<void>((resolve) => (frei = resolve));
++      tor = { name, erreicht, frei: freiP };
++      return { erreicht: erreichtP, frei };
++    },
++  };
++}
++
++/** Feste, weit entfernte Ablaufzeit: Das synthetische Token ist je Konto immer dasselbe. */
++const ABLAUF = 4102444800;
++
++function synthetischesToken(konto: string): string {
++  const teil = (wert: object) => Buffer.from(JSON.stringify(wert)).toString('base64url');
++  return `${teil({ alg: 'HS256', typ: 'JWT' })}.${teil({ sub: konto, role: 'authenticated', exp: ABLAUF })}.synthetisch`;
++}
++
++const SITZUNGSSCHLUESSEL = 'loeschbindung-sdk-sitzung';
++
++class OhneVerbindung {
++  readonly readyState = 3;
++  close(): void {}
++  send(): void {}
++}
++
++interface NetzAnfrage {
++  pfad: string;
++  zugang: string | null;
++  betrieb: unknown;
++}
++
++/** Echtes Supabase-SDK; ersetzt sind nur die Sitzungsablage und das Netz. */
++function echterClient(ablage: Map<string, string>, antwort: (pfad: string) => unknown = () => false) {
++  const anfragen: NetzAnfrage[] = [];
++  const netz = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
++    const pfad = new URL(String(input)).pathname;
++    const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : {};
++    anfragen.push({ pfad, zugang: new Headers(init?.headers).get('Authorization'), betrieb: body.p_workspace_id });
++    return new Response(JSON.stringify(antwort(pfad)), { status: 200, headers: { 'Content-Type': 'application/json' } });
++  };
++  const client = createClient('http://127.0.0.1:54321', 'synthetischer-anon-schluessel', {
++    realtime: { transport: OhneVerbindung as never },
++    auth: {
++      storage: {
++        getItem: (key: string) => ablage.get(key) ?? null,
++        setItem: (key: string, value: string) => void ablage.set(key, value),
++        removeItem: (key: string) => void ablage.delete(key),
++      },
++      storageKey: SITZUNGSSCHLUESSEL,
++      persistSession: true,
++      autoRefreshToken: false,
++      detectSessionInUrl: false,
++    },
++    global: { fetch: netz as typeof fetch },
++  });
++  vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue(client);
++  return { client, anfragen };
++}
++
++function melde(ablage: Map<string, string>, konto: string): void {
++  ablage.set(
++    SITZUNGSSCHLUESSEL,
++    JSON.stringify({
++      access_token: synthetischesToken(konto),
++      token_type: 'bearer',
++      expires_in: 3600,
++      expires_at: ABLAUF,
++      refresh_token: `synthetisch-erneuerung-${konto}`,
++      user: { id: konto, aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: JETZT },
++    }),
++  );
++}
++
++/** Der echte Kontowechsel der App: Bestand des Zielkontos laden. */
++function wechsleZu(userId: string, access: StorageAccess): void {
++  switchToWorkspaceScope(userId, WS, access, INHABER);
++}
++
++/* ------------------------------------------------------------------ */
++/* L1–L3: Kontowechsel während der Nachweisrückfrage                    */
++/* ------------------------------------------------------------------ */
++
++describe('DOKUMENTE-01 DOK-WEISS-DIREKT — Kontowechsel während der Rückfrage', () => {
++  it('L1 WEISS-Reproduktion (echtes SDK, keine Sitzung): kein Erfolg, B behält sein Dokument, kein Löschauftrag', async () => {
++    ausgangslage();
++    const { client } = echterClient(new Map());
++    let erreicht!: () => void;
++    let frei!: () => void;
++    const rueckfrageErreicht = new Promise<void>((resolve) => (erreicht = resolve));
++    const freigabe = new Promise<void>((resolve) => (frei = resolve));
++    const rueckfragen: string[] = [];
++    client.rpc = (async (name: string) => {
++      rueckfragen.push(name);
++      erreicht();
++      await freigabe;
++      return { data: false, error: null };
++    }) as never;
++
++    const loeschung = deleteGeneratedInvoiceDocumentWithCloud(BRIEF, ALS_INHABER, GEPRUEFT);
++    await rueckfrageErreicht;
++    // Wie WEISS: Bereich und Bestand von B während der angehaltenen Rückfrage.
++    setActiveStorageScope({ type: 'workspace', workspaceId: WS, account: { userId: MITGLIED, access: 'member' } });
++    hydrateDocumentStore([brief()]);
++    resetSyncOutboxForTests([]);
++    persistAll();
++    frei();
++    const ergebnis = await loeschung;
++
++    expect(ergebnis).toEqual({ ok: false, errorKey: DOCUMENT_DELETE_IDENTITY_CHANGED_KEY });
++    expect(rueckfragen).toEqual(['is_workspace_document_payment_proof']);
++    expect(aktiv(BRIEF)).toBe(true);
++    expect(auftraege(BRIEF)).toEqual([]);
++    expect(gespeichertAktiv(MITGLIED, 'member', BRIEF)).toBe(true);
++    expect(gespeicherteAuftraege(MITGLIED, 'member', BRIEF)).toEqual([]);
++    expect(gespeichertAktiv(INHABER, 'full', BRIEF)).toBe(true);
++    expect(gespeicherteAuftraege(INHABER, 'full', BRIEF)).toEqual([]);
++    // Gegenprobe wie bei WEISS: B selbst darf direkt nicht löschen.
++    await expect(deleteGeneratedInvoiceDocumentWithCloud(BRIEF, ALS_MITGLIED, GEPRUEFT)).resolves.toEqual({
++      ok: false,
++      errorKey: DOCUMENT_DELETE_FORBIDDEN_KEY,
++    });
++    expect(aktiv(BRIEF)).toBe(true);
++  });
++
++  it('L1b keine Sitzung beim Aufruf, B meldet sich während der Rückfrage im zweiten Tab an (Bereich bleibt): Abbruch', async () => {
++    ausgangslage();
++    const sitzung = { konto: null as string | null };
++    const ersatz = ersatzClient(sitzung);
++    const halt = ersatz.halte('is_workspace_document_payment_proof');
++
++    const loeschung = deleteGeneratedInvoiceDocumentWithCloud(BRIEF, ALS_INHABER, GEPRUEFT);
++    await halt.erreicht;
++    sitzung.konto = MITGLIED;
++    halt.frei();
++    const ergebnis = await loeschung;
++
++    expect(ergebnis).toEqual({ ok: false, errorKey: DOCUMENT_DELETE_IDENTITY_CHANGED_KEY });
++    expect(getActiveStorageKey()).toBe(kontoSchluessel(INHABER, 'full'));
++    expect(aktiv(BRIEF)).toBe(true);
++    expect(auftraege(BRIEF)).toEqual([]);
++    expect(gespeichertAktiv(INHABER, 'full', BRIEF)).toBe(true);
++  });
++
++  it('L2 bestätigte Anmeldung A, echter Kontowechsel zu B während der Rückfrage: kein Erfolg, nichts bei B', async () => {
++    ausgangslage();
++    const sitzung = { konto: INHABER as string | null };
++    const ersatz = ersatzClient(sitzung);
++    const halt = ersatz.halte('is_workspace_document_payment_proof');
++
++    const loeschung = deleteGeneratedInvoiceDocumentWithCloud(BRIEF, ALS_INHABER, GEPRUEFT);
++    await halt.erreicht;
++    sitzung.konto = MITGLIED;
++    wechsleZu(MITGLIED, 'member');
++    halt.frei();
++    const ergebnis = await loeschung;
++
++    expect(ergebnis).toEqual({ ok: false, errorKey: DOCUMENT_DELETE_IDENTITY_CHANGED_KEY });
++    expect(ersatz.rueckfragen).toEqual([{ name: 'is_workspace_document_payment_proof', konto: INHABER, betrieb: WS }]);
++    expect(getActiveStorageKey()).toBe(kontoSchluessel(MITGLIED, 'member'));
++    expect(aktiv(BRIEF)).toBe(true);
++    expect(auftraege(BRIEF)).toEqual([]);
++    expect(gespeichertAktiv(MITGLIED, 'member', BRIEF)).toBe(true);
++    expect(gespeicherteAuftraege(MITGLIED, 'member', BRIEF)).toEqual([]);
++    expect(gespeichertAktiv(INHABER, 'full', BRIEF)).toBe(true);
++    expect(gespeicherteAuftraege(INHABER, 'full', BRIEF)).toEqual([]);
++  });
++
++  it('L3 nur die Sitzung wechselt (zweiter Tab), der Bereich bleibt: Abbruch, A behält das Dokument', async () => {
++    ausgangslage();
++    const sitzung = { konto: INHABER as string | null };
++    const ersatz = ersatzClient(sitzung);
++    const halt = ersatz.halte('is_workspace_document_payment_proof');
++
++    const loeschung = deleteGeneratedInvoiceDocumentWithCloud(BRIEF, ALS_INHABER, GEPRUEFT);
++    await halt.erreicht;
++    sitzung.konto = MITGLIED;
++    halt.frei();
++    const ergebnis = await loeschung;
++
++    expect(ergebnis).toEqual({ ok: false, errorKey: DOCUMENT_DELETE_IDENTITY_CHANGED_KEY });
++    expect(getActiveStorageKey()).toBe(kontoSchluessel(INHABER, 'full'));
++    expect(aktiv(BRIEF)).toBe(true);
++    expect(auftraege(BRIEF)).toEqual([]);
++    expect(gespeichertAktiv(INHABER, 'full', BRIEF)).toBe(true);
++  });
++});
++
++/* ------------------------------------------------------------------ */
++/* L4–L6: ohne Wechsel, Abmeldung, Rückkehr                              */
++/* ------------------------------------------------------------------ */
++
++describe('DOKUMENTE-01 DOK-WEISS-DIREKT — ohne Wechsel, Abmeldung und Rückkehr zum Ursprungskonto', () => {
++  it.each([
++    ['mit bestätigter Anmeldung', INHABER],
++    ['ohne bestätigte Anmeldung (nur lokal im eigenen Bereich)', null],
++  ] as const)('L4 A ohne Wechsel, %s: gelöscht, Löschauftrag mit Herkunft A', async (_fall, konto) => {
++    ausgangslage();
++    const ersatz = ersatzClient({ konto });
++
++    const ergebnis = await deleteGeneratedInvoiceDocumentWithCloud(BRIEF, ALS_INHABER, GEPRUEFT);
++
++    expect(ergebnis.ok).toBe(true);
++    expect(ersatz.rueckfragen.map((frage) => frage.name)).toEqual(['is_workspace_document_payment_proof']);
++    expect(aktiv(BRIEF)).toBe(false);
++    expect(auftraege(BRIEF).map((entry) => [entry.operation, entry.origin])).toEqual([
++      ['delete', { userId: INHABER, workspaceId: WS, access: 'full' }],
++    ]);
++    expect(gespeichertAktiv(INHABER, 'full', BRIEF)).toBe(false);
++    // Der Bestand von B bleibt, wie er war.
++    expect(gespeichertAktiv(MITGLIED, 'member', BRIEF)).toBe(true);
++    expect(gespeicherteAuftraege(MITGLIED, 'member', BRIEF)).toEqual([]);
++  });
++
++  it('L5 Abmeldung während der Rückfrage: Abbruch; nach erneuter Anmeldung von A ist das Dokument unverändert da', async () => {
++    ausgangslage();
++    const sitzung = { konto: INHABER as string | null };
++    const ersatz = ersatzClient(sitzung);
++    const halt = ersatz.halte('is_workspace_document_payment_proof');
++
++    const loeschung = deleteGeneratedInvoiceDocumentWithCloud(BRIEF, ALS_INHABER, GEPRUEFT);
++    await halt.erreicht;
++    sitzung.konto = null;
++    isolateBusinessStateOnLogout();
++    halt.frei();
++    const ergebnis = await loeschung;
++
++    expect(ergebnis).toEqual({ ok: false, errorKey: DOCUMENT_DELETE_IDENTITY_CHANGED_KEY });
++    expect(getDocumentStoreSnapshot().some((doc) => doc.id === BRIEF)).toBe(false);
++    expect(auftraege(BRIEF)).toEqual([]);
++
++    sitzung.konto = INHABER;
++    wechsleZu(INHABER, 'full');
++    expect(aktiv(BRIEF)).toBe(true);
++    expect(auftraege(BRIEF)).toEqual([]);
++    expect(gespeichertAktiv(INHABER, 'full', BRIEF)).toBe(true);
++  });
++
++  it('L6a Rückkehr zu A nach dem Abbruch: Bestand unverändert, eine neue Löschung gelingt unter A', async () => {
++    ausgangslage();
++    const sitzung = { konto: INHABER as string | null };
++    const ersatz = ersatzClient(sitzung);
++    const halt = ersatz.halte('is_workspace_document_payment_proof');
++
++    const abgebrochen = deleteGeneratedInvoiceDocumentWithCloud(BRIEF, ALS_INHABER, GEPRUEFT);
++    await halt.erreicht;
++    sitzung.konto = MITGLIED;
++    wechsleZu(MITGLIED, 'member');
++    halt.frei();
++    expect(await abgebrochen).toEqual({ ok: false, errorKey: DOCUMENT_DELETE_IDENTITY_CHANGED_KEY });
++
++    sitzung.konto = INHABER;
++    wechsleZu(INHABER, 'full');
++    expect(aktiv(BRIEF)).toBe(true);
++    expect(auftraege(BRIEF)).toEqual([]);
++
++    const erneut = await deleteGeneratedInvoiceDocumentWithCloud(BRIEF, ALS_INHABER, GEPRUEFT);
++
++    expect(erneut.ok).toBe(true);
++    expect(aktiv(BRIEF)).toBe(false);
++    expect(auftraege(BRIEF).map((entry) => entry.origin?.userId)).toEqual([INHABER]);
++    expect(gespeichertAktiv(MITGLIED, 'member', BRIEF)).toBe(true);
++    expect(gespeicherteAuftraege(MITGLIED, 'member', BRIEF)).toEqual([]);
++  });
++
++  it('L6b A → B → A innerhalb der Rückfrage: Die Löschung trifft nur den Bestand von A', async () => {
++    ausgangslage();
++    const sitzung = { konto: INHABER as string | null };
++    const ersatz = ersatzClient(sitzung);
++    const halt = ersatz.halte('is_workspace_document_payment_proof');
++
++    const loeschung = deleteGeneratedInvoiceDocumentWithCloud(BRIEF, ALS_INHABER, GEPRUEFT);
++    await halt.erreicht;
++    sitzung.konto = MITGLIED;
++    wechsleZu(MITGLIED, 'member');
++    sitzung.konto = INHABER;
++    wechsleZu(INHABER, 'full');
++    halt.frei();
++    const ergebnis = await loeschung;
++
++    // Beim Weitergehen gilt wieder die Identität des Aufrufs: Bereich A, angemeldet A.
++    expect(ergebnis.ok).toBe(true);
++    expect(gespeichertAktiv(INHABER, 'full', BRIEF)).toBe(false);
++    expect(auftraege(BRIEF).map((entry) => entry.origin?.userId)).toEqual([INHABER]);
++    expect(gespeichertAktiv(MITGLIED, 'member', BRIEF)).toBe(true);
++    expect(gespeicherteAuftraege(MITGLIED, 'member', BRIEF)).toEqual([]);
++  });
++});
++
++/* ------------------------------------------------------------------ */
++/* L7–L9: Rechnungsdokument mit Cloud-Grabstein                         */
++/* ------------------------------------------------------------------ */
++
++describe('DOKUMENTE-01 DOK-WEISS-DIREKT — Rechnungsdokument mit Cloud-Grabstein', () => {
++  const mitRechnung = () => ausgangslage(() => [rechnungsDokument()], () => [vorgang()]);
++
++  it('L7 bestätigte Anmeldung: Rückfrage und Grabstein mit dem geprüften Zugang von A, an den Betrieb des Aufrufs', async () => {
++    mitRechnung();
++    const ablage = new Map<string, string>();
++    melde(ablage, INHABER);
++    const { anfragen } = echterClient(ablage, (pfad) =>
++      pfad.endsWith('/tombstone_workspace_document') ? grabsteinZeile() : false,
++    );
++
++    const ergebnis = await deleteGeneratedInvoiceDocumentWithCloud(RECHNUNG_DOK, ALS_INHABER, GEPRUEFT);
++
++    expect(ergebnis.ok).toBe(true);
++    expect(anfragen).toEqual([
++      { pfad: '/rest/v1/rpc/is_workspace_document_payment_proof', zugang: `Bearer ${synthetischesToken(INHABER)}`, betrieb: WS },
++      { pfad: '/rest/v1/rpc/tombstone_workspace_document', zugang: `Bearer ${synthetischesToken(INHABER)}`, betrieb: WS },
++    ]);
++    expect(aktiv(RECHNUNG_DOK)).toBe(false);
++    expect(auftraege(RECHNUNG_DOK).every((entry) => entry.origin?.userId === INHABER)).toBe(true);
++  });
++
++  it('L7b B meldet sich genau beim Senden des Grabsteins an: die Anfrage trägt den geprüften Zugang von A, danach Abbruch', async () => {
++    mitRechnung();
++    const ablage = new Map<string, string>();
++    melde(ablage, INHABER);
++    let nachweisGesendet = false;
++    const { client, anfragen } = echterClient(ablage, (pfad) => {
++      if (pfad.endsWith('/is_workspace_document_payment_proof')) nachweisGesendet = true;
++      return pfad.endsWith('/tombstone_workspace_document') ? grabsteinZeile() : false;
++    });
++    // Zweiter Tab: Unmittelbar nach der Prüfung vor dem Grabstein meldet sich B an. Das SDK liest danach selbst nach.
++    const echtesLesen = client.auth.getSession.bind(client.auth);
++    let pruefungenNachNachweis = 0;
++    client.auth.getSession = (async () => {
++      const vomSdk = Boolean(new Error().stack?.includes('_getAccessToken'));
++      const ergebnis = await echtesLesen();
++      if (nachweisGesendet && !vomSdk) {
++        pruefungenNachNachweis += 1;
++        // 1: Prüfung nach der Rückfrage · 2: Prüfung unmittelbar vor dem Grabstein.
++        if (pruefungenNachNachweis === 2) melde(ablage, MITGLIED);
++      }
++      return ergebnis;
++    }) as typeof client.auth.getSession;
++
++    const ergebnis = await deleteGeneratedInvoiceDocumentWithCloud(RECHNUNG_DOK, ALS_INHABER, GEPRUEFT);
++
++    expect(ergebnis).toEqual({ ok: false, errorKey: DOCUMENT_DELETE_IDENTITY_CHANGED_KEY });
++    expect(anfragen.map((anfrage) => [anfrage.pfad, anfrage.zugang])).toEqual([
++      ['/rest/v1/rpc/is_workspace_document_payment_proof', `Bearer ${synthetischesToken(INHABER)}`],
++      ['/rest/v1/rpc/tombstone_workspace_document', `Bearer ${synthetischesToken(INHABER)}`],
++    ]);
++    // Kein lokales Löschen, kein Auftrag; der Grabstein von A wirkt erst mit dessen nächstem Abgleich (Grenze wie L9).
++    expect(aktiv(RECHNUNG_DOK)).toBe(true);
++    expect(auftraege(RECHNUNG_DOK)).toEqual([]);
++  });
++
++  it('L8 ohne bestätigte Anmeldung im Kontobereich: kein Grabstein, eigener Hinweis, nichts gelöscht', async () => {
++    mitRechnung();
++    const ersatz = ersatzClient({ konto: null }, (name) => (name === 'tombstone_workspace_document' ? grabsteinZeile() : false));
++
++    const ergebnis = await deleteGeneratedInvoiceDocumentWithCloud(RECHNUNG_DOK, ALS_INHABER, GEPRUEFT);
++
++    expect(ergebnis).toEqual({ ok: false, errorKey: DOCUMENT_DELETE_IDENTITY_UNCONFIRMED_KEY });
++    expect(ersatz.rueckfragen.map((frage) => frage.name)).toEqual(['is_workspace_document_payment_proof']);
++    expect(aktiv(RECHNUNG_DOK)).toBe(true);
++    expect(auftraege(RECHNUNG_DOK)).toEqual([]);
++    expect(gespeichertAktiv(INHABER, 'full', RECHNUNG_DOK)).toBe(true);
++  });
++
++  it('L9 Wechsel während des Grabsteins: kein lokales Löschen bei B, kein Auftrag, kein Erfolg', async () => {
++    mitRechnung();
++    const sitzung = { konto: INHABER as string | null };
++    const ersatz = ersatzClient(sitzung, (name) => (name === 'tombstone_workspace_document' ? grabsteinZeile() : false));
++    const halt = ersatz.halte('tombstone_workspace_document');
++
++    const loeschung = deleteGeneratedInvoiceDocumentWithCloud(RECHNUNG_DOK, ALS_INHABER, GEPRUEFT);
++    await halt.erreicht;
++    sitzung.konto = MITGLIED;
++    wechsleZu(MITGLIED, 'member');
++    halt.frei();
++    const ergebnis = await loeschung;
++
++    expect(ergebnis).toEqual({ ok: false, errorKey: DOCUMENT_DELETE_IDENTITY_CHANGED_KEY });
++    // Beide Rückfragen gingen vor dem Wechsel unter A hinaus; danach nichts mehr (auch kein Nachweis-Abruf).
++    expect(ersatz.rueckfragen).toEqual([
++      { name: 'is_workspace_document_payment_proof', konto: INHABER, betrieb: WS },
++      { name: 'tombstone_workspace_document', konto: INHABER, betrieb: WS },
++    ]);
++    expect(aktiv(RECHNUNG_DOK)).toBe(true);
++    expect(auftraege(RECHNUNG_DOK)).toEqual([]);
++    expect(gespeichertAktiv(MITGLIED, 'member', RECHNUNG_DOK)).toBe(true);
++    expect(gespeicherteAuftraege(MITGLIED, 'member', RECHNUNG_DOK)).toEqual([]);
++    // Grenze: Der Grabstein von A steht in der Cloud; die lokale Kopie von A entfernt erst dessen nächster Abgleich.
++    expect(gespeichertAktiv(INHABER, 'full', RECHNUNG_DOK)).toBe(true);
++    expect(gespeicherteAuftraege(INHABER, 'full', RECHNUNG_DOK)).toEqual([]);
++  });
++});
++
++/* ------------------------------------------------------------------ */
++/* L10–L11: veraltete Oberfläche, Sperren                               */
++/* ------------------------------------------------------------------ */
++
++describe('DOKUMENTE-01 DOK-WEISS-DIREKT — veraltete Oberfläche und unveränderte Sperren', () => {
++  it('L10 Handelnder ist nicht das Konto des Bereichs: kein Vorgang, keine Rückfrage, nichts gelöscht', async () => {
++    ausgangslage();
++    const ersatz = ersatzClient({ konto: INHABER });
++
++    const ergebnis = await deleteGeneratedInvoiceDocumentWithCloud(BRIEF, ALS_MITGLIED, GEPRUEFT);
++
++    expect(ergebnis).toEqual({ ok: false, errorKey: DOCUMENT_DELETE_IDENTITY_CHANGED_KEY });
++    expect(ersatz.rueckfragen).toEqual([]);
++    expect(aktiv(BRIEF)).toBe(true);
++    expect(auftraege(BRIEF)).toEqual([]);
++  });
++
++  it('L11a laufende Aufbewahrung: blockiert wie bisher, ohne jede Rückfrage', async () => {
++    const beleg = () => [
++      { ...brief('doc-loesch-eingangsrechnung'), classifiedKind: 'eingangsrechnung', issueDate: '2026-03-15' } as CompanyDocument,
++    ];
++    ausgangslage(beleg);
++    const ersatz = ersatzClient({ konto: INHABER });
++
++    const ergebnis = await deleteGeneratedInvoiceDocumentWithCloud('doc-loesch-eingangsrechnung', ALS_INHABER, GEPRUEFT);
++
++    expect(ergebnis).toEqual({ ok: false, errorKey: 'document.delete.blocked.retention' });
++    expect(ersatz.rueckfragen).toEqual([]);
++    expect(aktiv('doc-loesch-eingangsrechnung')).toBe(true);
++  });
++
++  it('L11b Zahlungsnachweis in der Cloud: blockiert wie bisher, nichts gelöscht', async () => {
++    ausgangslage();
++    const ersatz = ersatzClient({ konto: INHABER }, (name) => name === 'is_workspace_document_payment_proof');
++
++    const ergebnis = await deleteGeneratedInvoiceDocumentWithCloud(BRIEF, ALS_INHABER, GEPRUEFT);
++
++    expect(ergebnis).toEqual({ ok: false, errorKey: 'document.delete.blocked.paymentProof' });
++    expect(ersatz.rueckfragen.map((frage) => frage.name)).toEqual(['is_workspace_document_payment_proof']);
++    expect(aktiv(BRIEF)).toBe(true);
++    expect(auftraege(BRIEF)).toEqual([]);
++  });
++});

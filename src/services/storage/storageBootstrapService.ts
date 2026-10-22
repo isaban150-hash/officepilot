@@ -11,8 +11,10 @@ import {
   recordPersistedStateLoadOutcome,
   rememberLoadedContentBaseline,
   savePersistedStateToKey,
+  seedSyncChangeTrackerFromCurrentStores,
   setActiveStorageScope,
 } from '../persistenceService';
+import { runAutomaticSyncWrite } from '../sync/syncOutboxService';
 import {
   inventoryDefinitelyMockData,
   stripDefinitelyMockDataFromState,
@@ -24,8 +26,15 @@ import {
 import {
   buildStorageKey,
   getActiveStorageScope,
+  type StorageAccess,
   type StorageScope,
 } from './storageScopeService';
+import { prepareWorkspaceAccountStore } from './workspaceAccountStorageService';
+import {
+  appendOutboxOriginLog,
+  prepareAccountOutboxOnLoad,
+  toOutboxOriginLogEntity,
+} from '../sync/syncOutboxOriginService';
 import {
   backfillMissingFileRefHashes,
   buildBlobFallbackScopes,
@@ -40,6 +49,17 @@ import {
 export interface BusinessBootstrapInput {
   userId?: string;
   workspaceId?: string;
+  /**
+   * DOKUMENTE-01 N1 — Sicht des angemeldeten Kontos im Betrieb (vom Server). Mit
+   * `userId` und `workspaceId` entsteht der Kontobestand; ohne sie der bisherige
+   * Betriebsschlüssel (Altbestand, Tests).
+   */
+  access?: StorageAccess;
+  /**
+   * DOKUMENTE-01 N1 — Inhaber des Betriebs laut Server. Nur sein Nutzerbereich
+   * darf Geschäftsdaten in den Kontobestand mitbringen.
+   */
+  ownerUserId?: string;
 }
 
 export interface BusinessBootstrapResult {
@@ -61,7 +81,13 @@ export interface BusinessBootstrapResult {
 
 function resolveScope(input: BusinessBootstrapInput): StorageScope {
   if (input.workspaceId) {
-    return { type: 'workspace', workspaceId: input.workspaceId };
+    return input.userId && input.access
+      ? {
+          type: 'workspace',
+          workspaceId: input.workspaceId,
+          account: { userId: input.userId, access: input.access },
+        }
+      : { type: 'workspace', workspaceId: input.workspaceId, account: null };
   }
   if (input.userId) {
     return { type: 'user', userId: input.userId };
@@ -90,7 +116,11 @@ function scheduleDocumentFileMaintenance(scope: StorageScope, userId?: string): 
   const sourceScopes = buildBlobFallbackScopes(scope, userId);
   void ensureDocumentBlobsForActiveScope(fileRefIds, sourceScopes)
     .then(() => backfillMissingFileRefHashes())
-    .then(() => persistAll());
+    /*
+     * DOKUMENTE-01 R2 — Wartung nach dem Laden, keine Nutzeraktion: Was sie ändert, reiht der Verfolger über den
+     * gesperrten Weg ein. Eine endgültige Abweisung (etwa aus einem übernommenen Altbestand) löst sie nie ab.
+     */
+    .then(() => runAutomaticSyncWrite(() => persistAll()));
 }
 
 function loadOrSeedScopedState(scope: StorageScope, userId?: string): BusinessBootstrapResult {
@@ -101,17 +131,52 @@ function loadOrSeedScopedState(scope: StorageScope, userId?: string): BusinessBo
   if (legacyResult.action === 'migrated') legacyMigration = 'migrated';
   if (legacyResult.action === 'quarantined') legacyMigration = 'quarantined';
 
-  const result = loadPersistedStateResultFromKey(buildStorageKey(scope));
+  const storageKey = buildStorageKey(scope);
+  const result = loadPersistedStateResultFromKey(storageKey);
   recordPersistedStateLoadOutcome(result);
   if (result.status === 'loaded') {
     const stored = result.state;
     const stripped = stripDefinitelyMockDataFromState(stored);
     const strippedMockData = JSON.stringify(stripped) !== JSON.stringify(stored);
-    applyStateToStores(stripped);
+    /*
+     * DOKUMENTE-01 R1/R2 — ein Kontobestand: Bestätigungen abgebrochener Läufe dieses Kontos anwenden (nie doppelt
+     * senden) und offene Aufträge ohne nachweisbares Ursprungskonto zurückhalten (nie automatisch senden).
+     */
+    const now = new Date().toISOString();
+    const konto =
+      scope.type === 'workspace' && scope.account
+        ? prepareAccountOutboxOnLoad(storageKey, stripped, now)
+        : { state: stripped, changed: false, held: [], completedIds: [] };
+    applyStateToStores(konto.state);
     // 01A-FIX1 — Öffnen ist keine Änderung: Grundlinie ist der eingelesene Zustand.
     rememberLoadedContentBaseline();
-    if (strippedMockData) {
-      savePersistedStateToKey(scope, stripped);
+    if (scope.type === 'workspace' && scope.account) {
+      /*
+       * DOKUMENTE-01 R2 — auch für den Änderungsverfolger: Seine Grundlinie ist der aufbereitete Speicherstand, nicht
+       * der rohe gespeicherte. Sonst meldete das erste Speichern nach dem Laden bloße Formunterschiede (etwa eines
+       * übernommenen Altbestands) als neue Aufträge dieses Kontos — über den bewussten Weg, der eine endgültige
+       * Abweisung ablöst und die Sperre unbekannter Herkunft umginge.
+       */
+      seedSyncChangeTrackerFromCurrentStores();
+    }
+    if (strippedMockData || konto.changed) {
+      // Erst das gespeicherte Ergebnis räumt das Journal auf (beim Speichern) und kommt in die Prüfspur.
+      const saved = savePersistedStateToKey(scope, konto.state);
+      if (saved.success && konto.changed) {
+        appendOutboxOriginLog(storageKey, {
+          at: now,
+          action: 'held',
+          source: 'load',
+          entries: konto.held.map(toOutboxOriginLogEntity),
+        });
+        appendOutboxOriginLog(storageKey, {
+          at: now,
+          action: 'confirmed_on_load',
+          entries: (konto.state.syncOutbox ?? [])
+            .filter((entry) => konto.completedIds.includes(entry.id))
+            .map(toOutboxOriginLogEntity),
+        });
+      }
     }
     scheduleDocumentFileMaintenance(scope, userId);
     // EINGANG-01D-1 — verlorene Intake-Analysen aus dem lokalen Volltext nachholen.
@@ -164,11 +229,19 @@ export function bootstrapBusinessState(input: BusinessBootstrapInput = {}): Busi
   cancelIntakeAnalysisRecovery();
   clearInMemoryBusinessState();
 
-  if (input.userId && input.workspaceId) {
-    migrateUserScopeToWorkspaceScope(input.userId, input.workspaceId);
-  }
-
   const scope = resolveScope(input);
+  const account = scope.type === 'workspace' && scope.account ? scope.account : undefined;
+
+  if (input.userId && input.workspaceId) {
+    /*
+     * DOKUMENTE-01 N1 — zuerst den Kontobestand vorbereiten (Altbestand oder
+     * Mitgliedsbestand bei Aufstieg übernehmen), danach den Nutzerbereich
+     * dieses Kontos hineinführen. Umgekehrt fände die Übernahme einen
+     * Zielbestand vor und ließe den Altbestand liegen.
+     */
+    if (account) prepareWorkspaceAccountStore(input.workspaceId, account);
+    migrateUserScopeToWorkspaceScope(input.userId, input.workspaceId, account, input.ownerUserId);
+  }
 
   if (isBetaTestMode() && !input.userId) {
     setActiveStorageScope(scope);
@@ -211,12 +284,18 @@ export function bootstrapBusinessState(input: BusinessBootstrapInput = {}): Busi
   return loadOrSeedScopedState(scope, input.userId);
 }
 
+/**
+ * DOKUMENTE-01 N1 — `userId` ist das angemeldete Konto (nicht der Betriebsinhaber),
+ * `access` seine Sicht laut Server. Die Übernahme des Nutzerbereichs geschieht in
+ * `bootstrapBusinessState`, in der richtigen Reihenfolge.
+ */
 export function switchToWorkspaceScope(
   userId: string,
   workspaceId: string,
+  access?: StorageAccess,
+  ownerUserId?: string,
 ): BusinessBootstrapResult {
-  migrateUserScopeToWorkspaceScope(userId, workspaceId);
-  return bootstrapBusinessState({ userId, workspaceId });
+  return bootstrapBusinessState({ userId, workspaceId, access, ownerUserId });
 }
 
 export function isolateBusinessStateOnLogout(): void {

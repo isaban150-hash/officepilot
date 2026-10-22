@@ -102,6 +102,8 @@ export function mapSyncErrorReason(
   if (message.includes('nicht gefunden')) return 'sync.failure.reason.missingLocal';
   if (message.includes('Versionskonflikt')) return 'sync.failure.reason.conflict';
   if (message.includes('Nicht angemeldet')) return 'sync.failure.reason.auth';
+  // DOKUMENTE-01 / D-017 — trägt „Keine Schreibberechtigung", ist aber die gesetzliche Aufbewahrung.
+  if (message.includes('Aufbewahrungs')) return 'sync.failure.reason.retention';
   // KONTOSPERRE — auch Rollen- und Sperrabweisungen sind „keine Berechtigung", nicht „unbekannt".
   if (
     message.includes('Kein Zugriff') ||

@@ -1,0 +1,153 @@
+## Ausgangsbasis vor DOKUMENTE-01 (153 Dokumentdateien)
+Testdateien 153 · Tests 2031 · bestanden 2024 · rot 7 · übersprungen 0
+- ROT src/pages/eingangCustomerAssignmentResume01.test.tsx (5)
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip A/H: Auswahl und Adresse überstehen die echte Rücknavigation :: Error: STACK_TRACE_ERROR
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip J/K: ein gelöschter Entwurf kommt beim erneuten Öffnen nicht zurück :: AssertionError: Kundenentscheidung nicht sichtbar: expected null not to be null
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip I: ein fehlgeschlagener Abschluss behält den Entwurf :: AssertionError: Kundenentscheidung nicht sichtbar: expected null not to be null
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip E: ein gewählter bestehender Kunde bleibt nach dem Roundtrip gewählt :: AssertionError: Auswahl „Bestehender Kunde" nicht sichtbar: expected null not to be null
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip F: ein zwischenzeitlich gelöschter Kunde wird durch keinen anderen ersetzt :: AssertionError: Auswahl „Bestehender Kunde" nicht sichtbar: expected null not to be null
+- ROT src/services/documentArchiveTruth03a1.test.ts (1)
+    - DOCUMENT-ARCHIVE-TRUTH-03A1 Fill-Confirm DWR overlay H — keine Cloud-Nebenwirkung / Allowlist unverändert :: AssertionError: expected true to be false // Object.is equality
+- ROT src/services/intakeFinanceTruth01d1.test.ts (1)
+    - 01D-1 — Fristart 8: response_due wird kein Zahlungsziel und kein Belegdatum :: AssertionError: expected '2026-10-20' not to be '2026-10-20' // Object.is equality
+
+## Regression nach AP3 unter Volllast (320 Dateien)
+Testdateien 320 · Tests 4135 · bestanden 4044 · rot 89 · übersprungen 2
+- ROT src/assignCustomerToVorgang01.test.tsx (1)
+    - CUSTOMER-FACHOBJEKT-04D-U4 Fall I — 05C: Vorgangswechsel im selben Root verwirft Eingaben und Fehler :: Error: STACK_TRACE_ERROR
+- ROT src/contractAcceptCustomerChoice01.test.tsx (3)
+    - CUSTOMER-FACHOBJEKT-04C Fall I-UI — bestehender Vorgang zeigt keine Customer-Auswahl :: Error: STACK_TRACE_ERROR
+    - CUSTOMER-FACHOBJEKT-04C Fall O — 05C: vollständige Neuanlage über die Oberfläche :: Error: STACK_TRACE_ERROR
+    - CUSTOMER-FACHOBJEKT-04C Fall P — 05C: zwei unmittelbare Klicks lösen genau einen Accept-Aufruf aus :: Error: STACK_TRACE_ERROR
+- ROT src/documentExperience02a.test.tsx (1)
+    - DOCUMENT-EXPERIENCE-02A EingangDetail: Archiv erst unter Weitere Optionen; Experience vor Assistant :: Error: STACK_TRACE_ERROR
+- ROT src/docWf02bSingleOpenAction.test.tsx (1)
+    - DOC-WF-02B Single Open Action on DokumentDetailPage reply_open + file_original: Antwort ist Primary, Papier nicht Primary :: Error: STACK_TRACE_ERROR
+- ROT src/dokumentUnlinkVorgangUi01.test.tsx (1)
+    - OFFICEPILOT-DOKUMENT-UNLINK-VORGANG-UI-01G A: mit Vorgangsbezug und Herkunft ist die Aktion sichtbar :: Error: STACK_TRACE_ERROR
+- ROT src/generatedInvoiceDetailUi02d.test.tsx (1)
+    - OFFICEPILOT-GENERATED-INVOICE-DETAIL-UI-02D A: die eigene Ausgangsrechnung verlangt kein Papieroriginal :: Error: STACK_TRACE_ERROR
+- ROT src/intakeAssessment01d2.test.tsx (13)
+    - Einschätzung im Detail — sichtbar und aus vorhandener Wahrheit B: Lieferantengutschrift → Gutschrift, keine Zahlungsaufforderung, eigene Nummer, „Ausgabe erfass :: Error: STACK_TRACE_ERROR
+    - Einschätzung im Detail — sichtbar und aus vorhandener Wahrheit D: eigene Kundengutschrift → Prüfen, kein „Ausgabe erfassen" :: AssertionError: expected null to be 'Gutschrift Ihres Betriebs' // Object.is equality
+    - Einschätzung im Detail — sichtbar und aus vorhandener Wahrheit E: Rechnungskorrektur → sichtbar als Prüffall, keine Ausgabe :: AssertionError: expected null to be 'Rechnungskorrektur' // Object.is equality
+    - Einschätzung im Detail — sichtbar und aus vorhandener Wahrheit F: Abrechnungsgutschrift → sichtbar als Prüffall, keine Ausgabe :: AssertionError: expected null to be 'Abrechnungsgutschrift' // Object.is equality
+    - Einschätzung im Detail — sichtbar und aus vorhandener Wahrheit G: response_due → „Antwort bis", Antworten :: AssertionError: expected null to be 'Antwort bis 20.10.2026' // Object.is equality
+    - Einschätzung im Detail — sichtbar und aus vorhandener Wahrheit H: document_submission_due → „Unterlagen bis", Unterlagen einreichen :: AssertionError: expected null to be 'Unterlagen bis 25.10.2026' // Object.is equality
+    - Einschätzung im Detail — sichtbar und aus vorhandener Wahrheit J: bestätigt verknüpfter Vorgang mit VG-Nummer → Zugeordnet, Sicher :: AssertionError: expected null to be 'Zugeordnet: VG-2026-0007' // Object.is equality
+    - Einschätzung im Detail — sichtbar und aus vorhandener Wahrheit L: bereits erfasste Gutschrift → keine zweite Ausgabe, vorhandene Ausgabe öffnen :: AssertionError: expected null to be 'Erfasste Ausgabe öffnen' // Object.is equality
+- ROT src/intakeComplaint02c.test.ts (1)
+    - EINGANG-02C Beschwerde / Reklamation / Mängel F/R: Forderungsformen und relative Fristen ohne erfundenes Datum :: Error: STACK_TRACE_ERROR
+- ROT src/intakeObligations02a2c.test.ts (1)
+    - 02A-2C — M1 drei Pflichten mit Unterlagenliste drei Pflichten, Liste, Hauptfrist 20.10., drei Aufgaben mit je eigenem Datum :: Error: STACK_TRACE_ERROR
+- ROT src/invoiceCustomerAddress05b.test.tsx (1)
+    - CUSTOMER-FACHOBJEKT-05B Fall A — Quelle, Vorschau und Bestätigung ohne jede Änderung :: Error: STACK_TRACE_ERROR
+- ROT src/vorgangCustomerMasterUpdate06b.test.tsx (1)
+    - CUSTOMER-FACHOBJEKT-06B Fall A — bestätigte Übernahme aktualisiert nur Name und Billing :: Error: STACK_TRACE_ERROR
+- ROT src/pages/dokumentDetailMitarbeiterquittungP1ma.test.tsx (1)
+    - P1MA WEISS-FINAL — eine Antwort, keine scheinbare Löschaktion keine Löschaktion an Quittung und Nachweis — auch bei stornierter Zahlung; stattdessen der Grund :: Error: STACK_TRACE_ERROR
+- ROT src/pages/eingangContractAlreadyLinked01.test.tsx (5)
+    - CONTRACT-ORDER-ALREADY-LINKED-UX-01D R1: ein unverknüpfter Werkvertrag bietet die Erfassung weiterhin an :: Error: STACK_TRACE_ERROR
+    - CONTRACT-ORDER-ALREADY-LINKED-UX-01D R2: ein nur inhaltlich passender, aber nicht verknüpfter Vorgang lässt die Erfassung stehen :: Error: STACK_TRACE_ERROR
+    - CONTRACT-ORDER-ALREADY-LINKED-UX-01D R3/R4: ein verknüpfter, unbestätigter Auftrag zeigt auf der ganzen Seite keine Erfassung :: AssertionError: expected '' to contain 'verknüpft'
+    - CONTRACT-ORDER-ALREADY-LINKED-UX-01D R5/R6: die Aktion öffnet genau den verknüpften Vorgang, ohne Erfassung :: TypeError: Cannot read properties of undefined (reading 'click')
+    - CONTRACT-ORDER-ALREADY-LINKED-UX-01D R8: Eingang → „Dokument öffnen" → Detailseite zeigt keine Erfassung :: AssertionError: expected '' to be '/ablage' // Object.is equality
+- ROT src/pages/eingangContractSecondUpload01b.test.tsx (6)
+    - INBOX-CONTRACT-SECOND-UPLOAD-01B — Fall B: Namens-/Baustellentreffer auf bestätigten Vertragsvorgang B1: contractConfirmation vorhanden → „Vorgang prüfen" mit b :: Error: STACK_TRACE_ERROR
+    - INBOX-CONTRACT-SECOND-UPLOAD-01B — Fall B: Namens-/Baustellentreffer auf bestätigten Vertragsvorgang B3: Vorgang aus derselben Vertragsannahme entstanden → eben :: TypeError: Cannot read properties of null (reading 'getAttribute')
+    - INBOX-CONTRACT-SECOND-UPLOAD-01B — Zustandsgrenzen bleiben C: nur ähnlicher, unbestätigter Vorgang ohne Vertragsherkunft → Erfassung bleibt (confirm-first) :: AssertionError: Fall C wurde wie Fall B behandelt: expected 0 to be greater than 0
+    - INBOX-CONTRACT-SECOND-UPLOAD-01B — Zustandsgrenzen bleiben C2: Vorgang mit fremder Herkunft (anderes Dokument, kein Vertrag) → Erfassung bleibt :: AssertionError: expected 0 to be greater than 0
+    - INBOX-CONTRACT-SECOND-UPLOAD-01B — Zustandsgrenzen bleiben D: kein passender Vorgang → Erfassung bleibt :: AssertionError: expected 0 to be greater than 0
+    - INBOX-CONTRACT-SECOND-UPLOAD-01B — Zustandsgrenzen bleiben A: persistent verknüpftes Item verhält sich weiterhin wie 01D :: AssertionError: expected 0 to be greater than 0
+- ROT src/pages/eingangCustomerAssignmentResume01.test.tsx (6)
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip A/H: Auswahl und Adresse überstehen die echte Rücknavigation :: Error: STACK_TRACE_ERROR
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip G: ohne Auswahl wird nichts abgelegt :: AssertionError: expected { …(13) } to be null
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip J/K: ein gelöschter Entwurf kommt beim erneuten Öffnen nicht zurück :: AssertionError: Kundenentscheidung nicht sichtbar: expected null not to be null
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip I: ein fehlgeschlagener Abschluss behält den Entwurf :: AssertionError: Kundenentscheidung nicht sichtbar: expected null not to be null
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip E: ein gewählter bestehender Kunde bleibt nach dem Roundtrip gewählt :: AssertionError: Auswahl „Bestehender Kunde" nicht sichtbar: expected null not to be null
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip F: ein zwischenzeitlich gelöschter Kunde wird durch keinen anderen ersetzt :: AssertionError: Auswahl „Bestehender Kunde" nicht sichtbar: expected null not to be null
+- ROT src/pages/invoiceFullSafeResume01b.test.tsx (6)
+    - INVOICE-WIZARD-FULL-SAFE-RESUME-01B R1: die komplette sichere Rechnungsseite kommt nach dem Neuaufbau zurück :: Error: STACK_TRACE_ERROR
+    - INVOICE-WIZARD-FULL-SAFE-RESUME-01B R2: eine bewusste Ablehnung bleibt nach dem Neuaufbau eine Ablehnung :: TypeError: Cannot read properties of null (reading 'click')
+    - INVOICE-WIZARD-FULL-SAFE-RESUME-01B R3: eine erteilte §13b-Bestätigung übersteht den Neuaufbau und wirkt :: TypeError: Cannot read properties of null (reading 'click')
+    - INVOICE-WIZARD-FULL-SAFE-RESUME-01B R3b: ohne erteilte Bestätigung entsteht durch den Neuaufbau keine :: TypeError: Cannot read properties of null (reading 'click')
+    - INVOICE-WIZARD-FULL-SAFE-RESUME-01B R4: ein gespeichertes Ja wird bei zu kurzem Zahlungsziel nicht wiederhergestellt :: TypeError: Cannot read properties of null (reading 'click')
+    - INVOICE-WIZARD-FULL-SAFE-RESUME-01B R5: die Scrollposition wird nach dem Neuaufbau wiederhergestellt :: Error: STACK_TRACE_ERROR
+- ROT src/pages/invoiceSkontoContract01.test.tsx (11)
+    - SKONTO-INVOICE-TEXT-01B — Vertragsskonto und Firmenstandard R11: abgelehntes Vertragsskonto fällt auf den Firmenstandard zurück :: Error: STACK_TRACE_ERROR
+    - SKONTO-INVOICE-TEXT-01B — Vertragsskonto und Firmenstandard R11b: ohne Auswahl steht der Firmenstandard im Entwurf :: TypeError: Cannot read properties of null (reading 'click')
+    - SKONTO-INVOICE-TEXT-01B — Vertragsskonto und Firmenstandard R12: ein von Hand geänderter Skontotext wird nicht überschrieben :: TypeError: Cannot read properties of null (reading 'click')
+    - CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B — Frist gegen Zahlungsziel T1/T12: 7 Tage Zahlungsziel nimmt 14 Tage Vertragsskonto nicht an :: TypeError: Cannot read properties of null (reading 'click')
+    - CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B — Frist gegen Zahlungsziel T1b: der Hinweis benennt Frist, Zahlungsziel und die Nichtübernahme :: TypeError: Cannot read properties of null (reading 'click')
+    - CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B — Frist gegen Zahlungsziel T1c: die Auswahl kehrt sichtbar auf Nein zurück :: TypeError: Cannot read properties of null (reading 'click')
+    - CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B — Frist gegen Zahlungsziel T2: 20 Tage Zahlungsziel nimmt das Vertragsskonto an :: TypeError: Cannot read properties of null (reading 'click')
+    - CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B — Frist gegen Zahlungsziel T3: 14 Tage Zahlungsziel und 14 Tage Vertragsskonto sind zulässig :: TypeError: Cannot read properties of null (reading 'click')
+- ROT src/pages/invoiceSkontoContractPaymentTerms01b2.test.tsx (3)
+    - SKONTO-TERMS-01B2 — Vertragsskonto und Zahlungsbedingungen K6: angenommenes Vertragsskonto lässt keinen widersprüchlichen Basissatz stehen :: Error: STACK_TRACE_ERROR
+    - SKONTO-TERMS-01B2 — Vertragsskonto und Zahlungsbedingungen K6b: ohne angenommenes Skonto bleibt „ohne Abzug" stehen :: TypeError: Cannot read properties of null (reading 'click')
+    - SKONTO-TERMS-01B2 — Vertragsskonto und Zahlungsbedingungen K6c: ein abgelehntes Vertragsskonto stellt den abzugsfreien Satz wieder her :: TypeError: Cannot read properties of null (reading 'click')
+- ROT src/pages/mitarbeiterzahlungenPageP1ma.test.tsx (7)
+    - Finanzen → Mitarbeiterzahlungen WEISS: Zahlungsgrund und Zahlungsweg statt „Art" neben „Zahlungsart"; gleiche Zahlung ein zweites Mal — Hinweis, keine Sperre :: Error: STACK_TRACE_ERROR
+    - Finanzen → Mitarbeiterzahlungen Storno nur mit Grund; danach bleibt die Zahlung sichtbar und trägt Datum und Grund :: AssertionError: expected null not to be null
+    - Finanzen → Mitarbeiterzahlungen das Nachweis-Hochladen steht in der Adresse und übersteht ein Neuladen :: AssertionError: employee-add: expected null not to be null
+    - Finanzen → Mitarbeiterzahlungen ein Mitglied ohne Finanzrecht sieht nur den Hinweis — keine Daten, keine Erfassung :: AssertionError: expected null not to be null
+    - Angrenzende Oberflächen Ausgabenformular: Kategorie Personal zeigt einen nicht blockierenden Hinweis :: AssertionError: expense-category-select: expected null not to be null
+    - Angrenzende Oberflächen /ausgaben/neu?inboxId=<Lohnabrechnung> zeigt den Hinweis mit Weg zu den Mitarbeiterzahlungen :: AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an obj
+    - Angrenzende Oberflächen Nachweisauswahl: nur aktive Dokumente, keine erzeugte Auszahlungsquittung, kein Rechnungsdokument :: TypeError: Cannot read properties of null (reading 'options')
+- ROT src/pages/rechnungTypwechselEntwurfFc01a.test.tsx (3)
+    - E — echte RechnungPage E1 Wechsel rechnung → abschlag ohne Bearbeitung: der Ausgangsentwurf wird verworfen, nur der Abschlag bleibt :: Error: STACK_TRACE_ERROR
+    - E — echte RechnungPage E2 Wechsel nach einer Bearbeitung: beide Entwürfe bleiben (nichts geht still verloren) :: AssertionError: expected null not to be null
+    - E — echte RechnungPage E3 der neue Entwurf bleibt nach dem Wechsel bearbeitbar :: TypeError: Cannot read properties of null (reading 'click')
+- ROT src/services/archiveTruthOrphanGuardR02.test.ts (1)
+    - ARCHIVE-TRUTH-ORPHAN-GUARD-R02 D: getombstonetes Archivdokument blockiert nicht mehr :: AssertionError: expected false to be true // Object.is equality
+- ROT src/services/documentSaveMainThreadFix01.test.ts (1)
+    - CONTRACT-DOCUMENT-SAVE-MAIN-THREAD-FIX-01 Vertragsanalyse auf Detailpfad erst nach Save möglich ohne OrderPositions :: Error: STACK_TRACE_ERROR
+- ROT src/components/communication/emailCommunicationUi07c.test.tsx (3)
+    - E-MAIL-07C — Einstellungen P: Signatur und Vorlagen sichtbar, speichern, nach Reload erhalten, im Cloud-Payload :: Error: STACK_TRACE_ERROR
+    - E-MAIL-07C — Kommunikationshistorie G/E: eine Zeile je Versandkette, Status in Alltagssprache, Versuche als Verlauf, keine technischen Begriffe :: AssertionError: expected "spy" to be called with arguments: [ { customerId: 'c-07c' } ][90m
+    - E-MAIL-07C — Kommunikationshistorie leer und ohne Cloud verständlich :: AssertionError: expected undefined to be 'Noch keine E-Mails über OfficeTakt ve…' // Object.is equality
+- ROT src/components/documents/letterSyncFix07b2.test.tsx (2)
+    - 07B-FIX2 — Brief-PDF-Nachrüstung ändert die Dokumentzeile nicht A/H: alter Brief, lokale = Cloud-Version — PDF als Archiv-Bindung, Dokument (Inhalt und Version) :: Error: STACK_TRACE_ERROR
+    - 07B-FIX2 — Brief-PDF-Nachrüstung ändert die Dokumentzeile nicht E: Briefseite und Dokumentseite gleichzeitig geöffnet — eine Datei, eine Bindung, Dokument unver :: Error: STACK_TRACE_ERROR
+- ROT src/services/delivery/documentDeliveryCloudService01b1.test.ts (1)
+    - EMAIL-01B1 — Cloud-Service A1: Anhang der Vorgangsrechnung ist byteidentisch mit dem Detail-/Download-PDF; Hash und Name passen :: Error: STACK_TRACE_ERROR
+- ROT src/services/delivery/sendDocumentClient01b3.test.ts (1)
+    - EMAIL-01B3 — Orchestrator, Resume, client_delivery_id O2: kompletter Lauf — PDF, Upload, Create, Send, Refresh; Rechnung wird aus der Serverwahrheit versendet/o :: Error: STACK_TRACE_ERROR
+- ROT src/services/einvoice/einvoiceFachabschlussFc01a.test.ts (1)
+    - FINANZ-CORE-01A — E-Rechnung im Fachabschluss N02a mit Skonto beglichen: BT-113 nur gezahlt, Skonto als Nachlass — PDF und XML stimmen, ZUGFeRD entsteht :: Error: STACK_TRACE_ERROR
+- ROT src/services/memory/officePilotMemoryNacharbeit1S4.test.ts (2)
+    - S4-N1-B1 — Firmenidentität ausdrücklich, kein globaler Zustand, kein verunreinigter Zwischenspeicher B1-4 — Zwischenspeicher kalt oder vorgewärmt: gleiches Erge :: Error: STACK_TRACE_ERROR
+    - S4-N1-C1 — eine auf Dokumentebene gelöste Zuordnung bleibt gelöst C1-7 — der Grabstein verhält sich unverändert :: AssertionError: expected false to be true // Object.is equality
+- ROT src/services/payment/paymentProofDeleteGuard01.test.tsx (4)
+    - NACHTRAG-1 Löschschutz für Zahlungsnachweise A1 — ein unreferenziertes Dokument bleibt löschbar :: AssertionError: expected false to be true // Object.is equality
+    - NACHTRAG-1 Löschschutz für Zahlungsnachweise A5 — ein anderes Dokument bleibt davon unberührt löschbar :: AssertionError: expected false to be true // Object.is equality
+    - NACHTRAG-1 Löschschutz für Zahlungsnachweise A6 — nach dem Lösen des Nachweises ist das Dokument wieder löschbar :: AssertionError: expected false to be true // Object.is equality
+    - NACHTRAG-1 Löschschutz für Zahlungsnachweise A8 — ohne Zahlungsnachweis bleibt das bisherige Verhalten :: AssertionError: expected false to be true // Object.is equality
+
+## Rote Dateien mit 2 Workern wiederholt (29 Dateien)
+Testdateien 29 · Tests 327 · bestanden 313 · rot 12 · übersprungen 2
+- ROT src/intakeComplaint02c.test.ts (1)
+    - EINGANG-02C Beschwerde / Reklamation / Mängel C1 einfache Beschwerde ohne Frist: Beschwerde prüfen, Meldung als Angabe des Absenders :: Error: STACK_TRACE_ERROR
+- ROT src/pages/eingangCustomerAssignmentResume01.test.tsx (5)
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip A/H: Auswahl und Adresse überstehen die echte Rücknavigation :: Error: STACK_TRACE_ERROR
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip J/K: ein gelöschter Entwurf kommt beim erneuten Öffnen nicht zurück :: AssertionError: Kundenentscheidung nicht sichtbar: expected null not to be null
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip I: ein fehlgeschlagener Abschluss behält den Entwurf :: AssertionError: Kundenentscheidung nicht sichtbar: expected null not to be null
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip E: ein gewählter bestehender Kunde bleibt nach dem Roundtrip gewählt :: AssertionError: Auswahl „Bestehender Kunde" nicht sichtbar: expected null not to be null
+    - CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — echter Roundtrip F: ein zwischenzeitlich gelöschter Kunde wird durch keinen anderen ersetzt :: AssertionError: Auswahl „Bestehender Kunde" nicht sichtbar: expected null not to be null
+- ROT src/services/archiveTruthOrphanGuardR02.test.ts (1)
+    - ARCHIVE-TRUTH-ORPHAN-GUARD-R02 D: getombstonetes Archivdokument blockiert nicht mehr :: AssertionError: expected false to be true // Object.is equality
+- ROT src/services/memory/officePilotMemoryNacharbeit1S4.test.ts (1)
+    - S4-N1-C1 — eine auf Dokumentebene gelöste Zuordnung bleibt gelöst C1-7 — der Grabstein verhält sich unverändert :: AssertionError: expected false to be true // Object.is equality
+- ROT src/services/payment/paymentProofDeleteGuard01.test.tsx (4)
+    - NACHTRAG-1 Löschschutz für Zahlungsnachweise A1 — ein unreferenziertes Dokument bleibt löschbar :: AssertionError: expected false to be true // Object.is equality
+    - NACHTRAG-1 Löschschutz für Zahlungsnachweise A5 — ein anderes Dokument bleibt davon unberührt löschbar :: AssertionError: expected false to be true // Object.is equality
+    - NACHTRAG-1 Löschschutz für Zahlungsnachweise A6 — nach dem Lösen des Nachweises ist das Dokument wieder löschbar :: AssertionError: expected false to be true // Object.is equality
+    - NACHTRAG-1 Löschschutz für Zahlungsnachweise A8 — ohne Zahlungsnachweis bleibt das bisherige Verhalten :: AssertionError: expected false to be true // Object.is equality
+
+## Einzelwiederholungen nach den Testanpassungen
+Einzeln grün: paymentProofDeleteGuard01 (16/16), archiveTruthOrphanGuardR02 (6/6), officePilotMemoryNacharbeit1S4 (16/16), intakeComplaint02c (29/29), eingangCustomerAssignmentResume01 (12/12).
+
+## Endlauf: DOKUMENTE-01-Tests und angepasste Bestandstests (16 Dateien, 2 Worker)
+Testdateien 16 · Tests 200 · bestanden 200 · rot 0 · übersprungen 0
+
+tsc --noEmit: ohne Fehler (Endstand).

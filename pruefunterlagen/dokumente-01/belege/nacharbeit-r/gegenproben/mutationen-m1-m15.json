@@ -1,0 +1,184 @@
+[
+  {
+    "id": "M1",
+    "was": "Lauf-Bindung des Clients aus",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 5,
+    "gruen": 23,
+    "rote": [
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S5 mehrstufiges Dokument: Wechsel nach der Archivzeile → keine Originalbindung unter dem neuen Konto, der Auftrag bleibt offen",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S7 der Zugang stammt aus genau der Prüfung davor — auch wenn die Sitzung unmittelbar danach wechselt",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S8a Datei: Wechsel während des Lesens der Bytes → weder Upload noch Registrierung",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S8b Datei: Wechsel nach dem Upload → Upload unter dem Inhaber, keine Registrierung unter dem Mitglied",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S9b Wechsel mitten im Abruf: kein weiterer Abruf, nichts übernommen"
+    ]
+  },
+  {
+    "id": "M2",
+    "was": "geprüfter Zugang wird nicht angeheftet",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 27,
+    "rote": [
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S7 der Zugang stammt aus genau der Prüfung davor — auch wenn die Sitzung unmittelbar danach wechselt"
+    ]
+  },
+  {
+    "id": "M3",
+    "was": "Zurücknehmen des laufenden Auftrags aus",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 3,
+    "gruen": 25,
+    "rote": [
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S5 mehrstufiges Dokument: Wechsel nach der Archivzeile → keine Originalbindung unter dem neuen Konto, der Auftrag bleibt offen",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S8a Datei: Wechsel während des Lesens der Bytes → weder Upload noch Registrierung",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S8b Datei: Wechsel nach dem Upload → Upload unter dem Inhaber, keine Registrierung unter dem Mitglied"
+    ]
+  },
+  {
+    "id": "M4",
+    "was": "Journal wird beim Senden nicht beachtet",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 27,
+    "rote": [
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S6 kein doppelter Versand: der nächste Lauf des Inhabers sendet nur den Rest; ein Neustart wendet das Journal an"
+    ]
+  },
+  {
+    "id": "M5",
+    "was": "Journal wird am Laufende nicht geschrieben",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 6,
+    "gruen": 22,
+    "rote": [
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S1 Inhaber → Mitglied während der ersten Sendung: genau eine Sendung, unter dem Inhaber; der Rest bleibt offen",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S2 Gegenrichtung Mitglied → Inhaber: nur die eigene Sendung des Mitglieds",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S3 Abmeldung während des Laufs: danach geht nichts mehr hinaus",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S6 kein doppelter Versand: der nächste Lauf des Inhabers sendet nur den Rest; ein Neustart wendet das Journal an",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S6b Neustart: Laden des Kontobestands wendet das Journal an und räumt es nach dem Speichern auf",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S9a Wechsel zwischen Senden und Abruf (nur die Sitzung): kein Abruf, nichts übernommen, keine Fehlermeldung"
+    ]
+  },
+  {
+    "id": "M6",
+    "was": "Abruf ungebunden",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 27,
+    "rote": [
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S9b Wechsel mitten im Abruf: kein weiterer Abruf, nichts übernommen"
+    ]
+  },
+  {
+    "id": "M7",
+    "was": "Koordinator übergeht Wechsel im Abruf",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 27,
+    "rote": [
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S9a Wechsel zwischen Senden und Abruf (nur die Sitzung): kein Abruf, nichts übernommen, keine Fehlermeldung"
+    ]
+  },
+  {
+    "id": "M8",
+    "was": "Koordinator zählt gesperrte Aufträge als offen",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 27,
+    "rote": [
+      "src/services/sync/altwarteschlangeR2Dokumente01.test.ts :: A8 zurückgehalten zählt weder als wartend noch als Fehler; „Aktion erforderlich\"; kein Lauf ihretwegen"
+    ]
+  },
+  {
+    "id": "M9",
+    "was": "keine Sperre bei Übernahme des Altbestands",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 3,
+    "gruen": 25,
+    "rote": [
+      "src/pages/syncHeldOrdersR2Dokumente01.test.tsx :: U1 eigener Abschnitt, erkennbare Datensätze, nicht zusätzlich „Ausstehend\"",
+      "src/services/sync/altwarteschlangeR2Dokumente01.test.ts :: A1 Übernahme: offene Aufträge unverändert erhalten und gesperrt; ein Lauf sendet nichts davon",
+      "src/services/sync/altwarteschlangeR2Dokumente01.test.ts :: A4 Freigabe durch das angemeldete Konto: nur die geprüften Aufträge, mit Prüfspur, danach genau einmal gesendet"
+    ]
+  },
+  {
+    "id": "M10",
+    "was": "Sendeweg beachtet Sperre nicht",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 3,
+    "gruen": 25,
+    "rote": [
+      "src/services/sync/altwarteschlangeR2Dokumente01.test.ts :: A1 Übernahme: offene Aufträge unverändert erhalten und gesperrt; ein Lauf sendet nichts davon",
+      "src/services/sync/altwarteschlangeR2Dokumente01.test.ts :: A7 eine neue Änderung an einem gesperrten Auftrag gibt ihn nicht still frei",
+      "src/services/sync/altwarteschlangeR2Dokumente01.test.ts :: A4 Freigabe durch das angemeldete Konto: nur die geprüften Aufträge, mit Prüfspur, danach genau einmal gesendet"
+    ]
+  },
+  {
+    "id": "M11",
+    "was": "keine Sperre beim Laden",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 27,
+    "rote": [
+      "src/services/sync/altwarteschlangeR2Dokumente01.test.ts :: A2 Neustart: die Sperre übersteht Speichern und Laden; ein Kontobestand ohne Ursprungsangaben wird beim Laden gesperrt"
+    ]
+  },
+  {
+    "id": "M12",
+    "was": "kein Ursprung beim Einreihen",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 27,
+    "rote": [
+      "src/services/sync/altwarteschlangeR2Dokumente01.test.ts :: A3 neue Aufträge tragen ihr Konto und gehen hinaus; fremdes Konto, fremder Betrieb, breitere Sicht nicht"
+    ]
+  },
+  {
+    "id": "M13",
+    "was": "Freigabe ohne Kontoprüfung",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 2,
+    "gruen": 26,
+    "rote": [
+      "src/pages/syncHeldOrdersR2Dokumente01.test.tsx :: U3 ein anderes angemeldetes Konto kann nicht freigeben",
+      "src/services/sync/altwarteschlangeR2Dokumente01.test.ts :: A5 abgelehnt: anderes Konto angemeldet, kein Kontobestand, nichts Gesperrtes, Speichern scheitert — nichts verändert"
+    ]
+  },
+  {
+    "id": "M14",
+    "was": "Verfolger-Grundlinie nach dem Laden roh",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 2,
+    "gruen": 26,
+    "rote": [
+      "src/services/sync/altwarteschlangeR2Dokumente01.test.ts :: A9 Wartung und Speichern nach dem Laden machen aus dem Altbestand keine neuen Aufträge und lösen keine Abweisung ab",
+      "src/services/sync/altwarteschlangeR2Dokumente01.test.ts :: A4 Freigabe durch das angemeldete Konto: nur die geprüften Aufträge, mit Prüfspur, danach genau einmal gesendet"
+    ]
+  },
+  {
+    "id": "M15",
+    "was": "Wartung nach dem Laden ungesperrt",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 27,
+    "rote": [
+      "src/services/sync/altwarteschlangeR2Dokumente01.test.ts :: A10 die Wartung nach dem Laden (Dateihash nachgetragen) löst eine endgültige Abweisung nicht ab"
+    ]
+  }
+]

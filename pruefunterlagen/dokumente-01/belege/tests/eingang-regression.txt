@@ -1,0 +1,31 @@
+## Eingangsweg nach der Firmendokument-Korrektur (225 Dateien, 3 Worker)
+Testdateien 224 · Tests 2572 · bestanden 2558 · rot 14 · übersprungen 0
+- ROT src/documentAssistFillFreeTextBridge01.test.tsx (8)
+    - DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge eindeutige Rechnungsnummer wird proposed und bleibt unbestätigt :: Error: useNavigate() may be used only in the context of a <Router> component.
+    - DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge Betrag, Frist, Datum und Absender werden korrekt zugeordnet :: Error: useNavigate() may be used only in the context of a <Router> component.
+    - DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge bestehender bestätigter Wert wird nicht überschrieben :: Error: useNavigate() may be used only in the context of a <Router> component.
+    - DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge normale Fragen verändern keine Felder und nutzen weiter den AI-Pfad :: Error: useNavigate() may be used only in the context of a <Router> component.
+    - DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge mehrdeutige Eingabe wird nicht übernommen :: Error: useNavigate() may be used only in the context of a <Router> component.
+    - DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge eindeutige Feldangabe verursacht keinen AI-Aufruf :: Error: useNavigate() may be used only in the context of a <Router> component.
+    - DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge Remount verwirft den Vorschlag :: Error: useNavigate() may be used only in the context of a <Router> component.
+    - DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge Bridge-Vorschlag ohne Bestätigen löst keine Persistenz aus :: Error: useNavigate() may be used only in the context of a <Router> component.
+- ROT src/documentUnderstanding01.test.ts (1)
+    - document field extraction and understanding erzeugt Dokument-Zusammenfassung mit KI-Aktionen :: AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an obj
+- ROT src/eingangDetailHooks03.test.tsx (1)
+    - FINAL-ACCEPTANCE-FIX 03 — stabile Hook-Reihenfolge in EingangDetailPage eine Instanz: fertig → Shell → fertig → !workflow → fertig → !item — ohne Hook-Fehler :: Error: STACK_TRACE_ERROR
+- ROT src/mobileMainClip01.test.tsx (1)
+    - FIX-MOBILE-MAIN-CLIP-01 Mobile Viewport: Schreibtisch, Eingang und Detail rendern Inhalt :: AssertionError: expected '<div class="page heute-page heute-04b…' to contain 'data-testid="desk-priorities"'
+- ROT src/uxHome01.test.tsx (1)
+    - UX-HOME-01 ABSCHLUSSFIX Desktop-Schreibtisch zeigt Mobile-First Startseite :: AssertionError: expected '<div class="page heute-page heute-04b…' to contain 'data-testid="home-card-orders"'
+- ROT src/services/contractDetailMainThreadYield01.test.tsx (1)
+    - CONTRACT-DETAIL-MAINTHREAD-YIELD-01 Übergang von Analyse-Shell zur fertigen Seite ohne Hook-Order-Fehler :: Error: STACK_TRACE_ERROR
+- ROT src/services/memory/officePilotMemoryNacharbeit1S4.test.ts (1)
+    - S4-N1-B1 — Firmenidentität ausdrücklich, kein globaler Zustand, kein verunreinigter Zwischenspeicher B1-4 — Zwischenspeicher kalt oder vorgewärmt: gleiches Erge :: Error: STACK_TRACE_ERROR
+
+## Einordnung
+- Vorbestehend rot (Altliste, gleiche Fehlerbilder schon an HEAD 2d0d44f und in den Gesamtläufen vom 16./17.10.):
+  documentAssistFillFreeTextBridge01 (8, useNavigate ohne Router), documentUnderstanding01 (1), mobileMainClip01 (1),
+  uxHome01 (1).
+- Lastbedingt, einzeln grün: eingangDetailHooks03 (1/1), contractDetailMainThreadYield01 (6/6),
+  officePilotMemoryNacharbeit1S4 (16/16).
+- Befund aus DOKUMENTE-01: keiner.

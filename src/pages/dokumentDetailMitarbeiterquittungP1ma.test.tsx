@@ -320,7 +320,13 @@ describe('P1MA WEISS — Dokumentdetail einer Mitarbeiterquittung', () => {
     expect(q('document-understanding-card')).not.toBeNull();
     expect(q('document-detail-experience')).not.toBeNull();
     expect(q('document-archive-truth-facts')).not.toBeNull();
-    expect(q('document-meaning-amounts')?.textContent).toContain('Gutschrift zu Ihren Gunsten');
+    /*
+     * DOKUMENTE-01 / F7 — die allgemeine Deutung liest jetzt den Originaltext statt
+     * des ganzen Archivtexts. Die Seiten-JSON-Zeile hatte „Auslagenerstattung" mit
+     * „350,00 €" verbunden und eine „Gutschrift zu Ihren Gunsten" erfunden; diese
+     * Erwartung hielt den Fehler fest.
+     */
+    expect(q('document-meaning-amounts')?.textContent ?? '').not.toContain('Gutschrift zu Ihren Gunsten');
   });
 });
 

@@ -1,0 +1,496 @@
+{
+  "start": "2026-10-20T11:51:57.616Z",
+  "phasen": {
+    "inhaberAnmeldung": {
+      "abzugRuhig": true,
+      "abzuege": 13
+    },
+    "inhaberArchiv": {
+      "Holzhandel": 2,
+      "Baustoffe": 4,
+      "DOK01 Rechnung 17": 0,
+      "WEISS DOK01 Archiv-Testrechnung": 0,
+      "Quittung": 6
+    },
+    "nachAbmeldung": {
+      "lokaleBetriebsBestaende": 1,
+      "sitzungImSpeicher": false
+    },
+    "mitgliedAnmeldung": {
+      "abzugRuhig": true,
+      "abzuege": 3
+    },
+    "mitgliedArchiv": {
+      "Holzhandel": 2,
+      "Baustoffe": 4,
+      "DOK01 Rechnung 17": 0,
+      "WEISS DOK01 Archiv-Testrechnung": 0,
+      "Quittung": 6
+    },
+    "mitgliedSync": "← Zurück Synchronisation Internetverbindung für Synchronisation sowie verbindliche Freigaben von Rechnungen und Nachträgen. Cloud-Synchronisation für Ihren Arbeitsbereich. OfficeTakt benötigt eine Internetverbindung für KI-Funktionen, Synchronisation sowie die verbindliche Freigabe von Rechnungen und Nachträgen. Status 5 Änderungen nicht übertragen ZULETZT SYNCHRONISIERT — Die Synchronisation ist fehlgeschlagen. Bitte versuchen Sie es erneut. Ausstehende Änderungen 0 Ausstehend 0 Abgeschlossen 5 Fehler Nicht übertragen Diese Änderungen sind nicht übertragen und liegen weiterhin auf diesem Gerät. Eintrag Keine Verbindung zur Cloud. · Erneuter Versuch möglich Fehler Eintrag Keine Verbindung zur Cloud. · Erneuter Versuch möglich Fehler Eintrag Keine Verbindung zur Cloud. · Erneuter Versuch möglich Fehler Eintrag Keine Verbindung zur Cloud. · Erneuter Versuch möglich Fehler Eintrag Keine Ver",
+    "widerrufMitglied": 204,
+    "widerrufInhaber": 204
+  },
+  "blockiert": [
+    {
+      "phase": "abmeldung",
+      "art": "auth-logout",
+      "scope": "global"
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-ed292cf7…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-b370e7cd…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-94d044af…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-758956bf…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-ed292cf7…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-b370e7cd…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-94d044af…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-758956bf…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-ed292cf7…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-b370e7cd…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-94d044af…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-758956bf…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-ed292cf7…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-b370e7cd…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-94d044af…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-758956bf…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-ed292cf7…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-b370e7cd…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-94d044af…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-758956bf…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-ed292cf7…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-b370e7cd…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-94d044af…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-758956bf…",
+      "version": 1,
+      "geloescht": false
+    },
+    {
+      "phase": "mitglied",
+      "art": "rpc",
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "kennung": "paper-reg-doc-65fa2410…",
+      "version": 1,
+      "geloescht": false
+    }
+  ],
+  "konsole": [
+    {
+      "t": "2026-10-20T11:53:16.861Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:16.889Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:16.909Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:16.927Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:16.947Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:20.691Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:20.702Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:20.713Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:20.724Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:20.735Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:25.888Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:25.899Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:25.910Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:25.919Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:25.929Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:41.936Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:41.943Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:41.952Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:41.960Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:41.969Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:50.722Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:50.741Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:50.758Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:50.777Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:53:50.802Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:54:02.726Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:54:02.755Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:54:02.771Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:54:02.787Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T11:54:02.805Z",
+      "phase": "mitglied",
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    }
+  ],
+  "_mitgliedSitzung": true,
+  "profilGeloescht": true,
+  "ende": "2026-10-20T11:54:07.871Z"
+}

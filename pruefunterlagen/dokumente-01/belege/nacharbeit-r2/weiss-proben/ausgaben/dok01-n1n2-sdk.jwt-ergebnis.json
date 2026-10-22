@@ -1,0 +1,19 @@
+{
+  "mode": "echter Produktadapter + installiertes Supabase SDK, nur Fetch ersetzt; synthetische Token, kein Netzwerk",
+  "calls": [
+    {
+      "rpc": "upsert_workspace_intake_entity",
+      "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJBIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJleHAiOjQxMDI0NDQ4MDB9.synthetisch",
+      "document": "doc-weiss-a1"
+    }
+  ],
+  "completed": [
+    "out-0"
+  ],
+  "failed": [],
+  "wrongIdentity": false,
+  "zugangNurA": true,
+  "identityChanged": true,
+  "identityChangeReason": "bereich",
+  "vorDemWechsel": "erster_rpc"
+}

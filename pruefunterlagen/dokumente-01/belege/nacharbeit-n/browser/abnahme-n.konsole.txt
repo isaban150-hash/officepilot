@@ -1,0 +1,49 @@
+OK   [A-inhaber] Inhaber in eigenem Kontobereich (volle Sicht) — {"wer":"inhaber","access":"full"}
+OK   [A-inhaber] kein gemeinsamer Betriebsbestand — ["inhaber:full"]
+OK   [A-inhaber] Inhaber sieht Dokumente — {"anzahl":6}
+OK   [A-inhaber] Dokument mit Schaltfläche „abgeheftet" gefunden
+OK   [A-inhaber] Haken gesetzt
+OK   [A-inhaber] ungesendete Aktion in der Warteschlange — {"status":["error"]}
+OK   [A-inhaber] Gegenprobe: Editor übernimmt die eigene Vorbelegung — {"betreffGleich":true}
+OK   [B-n2-desktop] Karte „Weiterarbeiten" sichtbar
+OK   [B-n2-desktop] Menüeintrag „Abmelden" liegt oben (nicht verdeckt) — {"oben":"button.dropdown-menu__item.dropdown-menu__item--danger","ueberlappt":true}
+OK   [B-n2-desktop] echter Klick auf „Abmelden" meldet ab — null
+OK   [C-mitglied] Mitglied in eigenem Kontobereich (Mitgliedssicht) — {"wer":"mitglied","access":"member"}
+OK   [C-mitglied] Server kennt fremde Dokumente (Prüfung aussagekräftig) — {"fremd":5}
+OK   [C-mitglied] keine fremden Dokumente im Bestand — {"imBestand":1}
+OK   [C-mitglied] keine fremden Dokumente im Archiv — {"karten":0}
+OK   [C-mitglied] keine fremden Titel im Archivtext — {"titel":5,"gefunden":0}
+OK   [C-mitglied] Dokumentdetail eines fremden Dokuments zeigt nichts — {"seite":false,"titel":false}
+OK   [C-mitglied] fremde Dateien nicht lesbar (aktiver Bereich und Rückfallbereiche) — {"geprueft":4,"lesbar":0,"quellen":3}
+OK   [C-mitglied] keine fremden Vorschau-Bindungen — {"bindungen":0}
+OK   [C-mitglied] keine fremden Papierregister-Einträge — {"eintraege":1}
+OK   [C-mitglied] keine fremden Aufträge in der Warteschlange — {"auftraege":0}
+OK   [C-mitglied] kein Versand fremder Daten (auch kein Papierregister-Abgleich) — {"versuche":0,"nachTyp":{}}
+OK   [C-mitglied] Inhaberbestand seit seiner Abmeldung unverändert
+OK   [C-mitglied] kein gemeinsamer Betriebsbestand — ["inhaber:full","mitglied:member"]
+OK   [C3-mitglied-zurueck] „Zurück“ erreicht den Verlaufseintrag des Inhabers — {"schritte":6}
+OK   [C3-mitglied-zurueck] „Zurück“ nach dem Kontowechsel: keine fremde Briefvorbelegung
+OK   [C3-mitglied-zurueck] „Zurück“ nach dem Kontowechsel: nirgends fremde Dokumenttitel — {"ausSeitenCache":0}
+OK   [C2-mitglied-abmelden] Mitglied meldet sich über das Menü ab — null
+OK   [D-inhaber-erneut] Inhaber wieder im eigenen Kontobereich — {"wer":"inhaber","access":"full"}
+OK   [D-inhaber-erneut] eigene Dokumente vollständig — {"fehlend":0,"anzahl":6}
+OK   [D-inhaber-erneut] Haken erhalten
+OK   [D-inhaber-erneut] ungesendete Aktion erhalten — {"status":["error"]}
+OK   [D-inhaber-erneut] Aktion nie unter dem Mitgliedskonto versucht — {"A-inhaber":2,"B-n2-desktop":3,"D-inhaber-erneut":3}
+OK   [D-inhaber-erneut] alle ungesendeten Aufträge aus A noch offen — {"a":1,"d":1}
+OK   [D2-n2-telefon] Karte „Weiterarbeiten" sichtbar (390 px)
+OK   [D2-n2-telefon] Menüeintrag „Abmelden" liegt oben (390 px) — {"oben":"button.dropdown-menu__item.dropdown-menu__item--danger","ueberlappt":true}
+OK   [D2-n2-telefon] echter Klick auf „Abmelden" meldet ab (390 px) — null
+OK   [E1-mitglied-als-admin] Rolle admin → volle Sicht im eigenen Kontobereich — {"wer":"mitglied","access":"full"}
+OK   [E2-wieder-mitglied] nach Rollenentzug Mitgliedssicht — {"wer":"mitglied","access":"member"}
+OK   [E2-wieder-mitglied] Admin-Bestand ruht unverändert
+OK   [E2-wieder-mitglied] nach Rollenentzug nichts Fremdes im Bestand
+OK   [E2-wieder-mitglied] Inhaberbestand weiter unverändert
+OK   [E3-entfernt] entfernte Mitgliedschaft: App gesperrt
+OK   [E3-entfernt] entfernte Mitgliedschaft: kein Betriebsbereich aktiv — {"scope":"user"}
+OK   [E3-entfernt] entfernte Mitgliedschaft: kein Versand — {"versuche":0}
+OK   [E3-entfernt] entfernte Mitgliedschaft: Bestände unverändert
+OK   [E4-wieder-zugelassen] nach erneuter Zulassung wieder Mitgliedssicht — {"wer":"mitglied","access":"member"}
+OK   [Z-gesamt] über alle Mitgliedsphasen: kein Versand von Inhaberdaten — {"versucheMitglied":0,"nachTyp":{}}
+{"abbruch":false,"pruefungen":47,"ok":47,"rot":0,"blockiert":14,"widerruf":[204,204,204,204],"profilGeloescht":true}
+exit=0

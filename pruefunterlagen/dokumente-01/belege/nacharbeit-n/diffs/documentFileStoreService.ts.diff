@@ -1,0 +1,27 @@
+diff --git a/a/src/services/documentFileStoreService.ts (W-Stand) b/src/services/documentFileStoreService.ts
+index cdaf4d1..9fb6883 100644
+--- a/a/src/services/documentFileStoreService.ts (W-Stand)
++++ b/src/services/documentFileStoreService.ts
+@@ -70,6 +70,22 @@ export function getDocumentFileDataUrl(ref: DocumentFileRef | string): string |
+ 
+ function buildBlobFallbackScopes(activeScope: StorageScope, userId?: string): StorageScope[] {
+   const scopes: StorageScope[] = [];
++  /*
++   * DOKUMENTE-01 N1 — ein Kontobereich liest Bytes nur für Dateien, die sein
++   * eigener (vom Server berechtigter) Bestand referenziert. Diese dürfen aus dem
++   * Altbereich desselben Betriebs übernommen werden, mit voller Sicht auch aus dem
++   * eigenen Mitgliedsbereich (Aufstieg). Fremde Kontobereiche sind nie Quelle.
++   */
++  if (activeScope.type === 'workspace' && activeScope.account) {
++    scopes.push({ type: 'workspace', workspaceId: activeScope.workspaceId, account: null });
++    if (activeScope.account.access === 'full') {
++      scopes.push({
++        type: 'workspace',
++        workspaceId: activeScope.workspaceId,
++        account: { userId: activeScope.account.userId, access: 'member' },
++      });
++    }
++  }
+   if (activeScope.type !== 'guest') {
+     scopes.push({ type: 'guest' });
+   }

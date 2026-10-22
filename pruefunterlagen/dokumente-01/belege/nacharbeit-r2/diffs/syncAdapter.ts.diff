@@ -1,0 +1,13 @@
+diff --git a/src/services/sync/syncAdapter.ts b/src/services/sync/syncAdapter.ts
+index b48eb56..a2e9d4f 100644
+--- a/src/services/sync/syncAdapter.ts
++++ b/src/services/sync/syncAdapter.ts
+@@ -69,6 +69,8 @@ export interface SyncPullResult {
+   skipPersist?: boolean;
+   /** DOKUMENTE-01 R1 — während des Abrufs wechselte Konto, Betrieb oder Sicht; nichts davon wird übernommen. */
+   identityChanged?: boolean;
++  /** DOKUMENTE-01 R1 — woran der Wechsel erkannt wurde (auch: Startidentität nicht bestätigt). */
++  identityChangeReason?: SyncRunIdentityChangeReason;
+ }
+ 
+ export interface SyncAcknowledgeInput {

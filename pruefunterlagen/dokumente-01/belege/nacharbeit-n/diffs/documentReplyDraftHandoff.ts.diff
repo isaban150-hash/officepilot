@@ -1,0 +1,11 @@
+diff --git a/src/types/documentReplyDraftHandoff.ts b/src/types/documentReplyDraftHandoff.ts
+index e7e0673..b9f6c46 100644
+--- a/src/types/documentReplyDraftHandoff.ts
++++ b/src/types/documentReplyDraftHandoff.ts
+@@ -24,4 +24,6 @@ export interface DocumentReplyDraftHandoffPayload {
+ 
+ export type DocumentReplyDraftHandoffLocationState = {
+   readonly [DOCUMENT_REPLY_DRAFT_HANDOFF_STATE_KEY]?: DocumentReplyDraftHandoffPayload;
++  /** DOKUMENTE-01 N1 — Speicherbereich, in dem die Übergabe entstand (`NAVIGATION_STATE_SCOPE_KEY`). */
++  readonly officetaktStorageScope?: string;
+ };

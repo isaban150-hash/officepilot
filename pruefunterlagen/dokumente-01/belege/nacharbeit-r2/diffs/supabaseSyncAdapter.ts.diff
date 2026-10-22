@@ -1,0 +1,37 @@
+diff --git a/src/services/sync/supabaseSyncAdapter.ts b/src/services/sync/supabaseSyncAdapter.ts
+index 8183e0b..0035fd2 100644
+--- a/src/services/sync/supabaseSyncAdapter.ts
++++ b/src/services/sync/supabaseSyncAdapter.ts
+@@ -1117,6 +1117,24 @@ export class SupabaseSyncAdapter implements SyncAdapter {
+      */
+     const runIdentity = input.runIdentity ?? (await captureSyncRunIdentity(this.client, workspaceId));
+     const runGuard = createSyncRunGuard(runIdentity, this.client);
++    if (runGuard.tripped) {
++      /*
++       * DOKUMENTE-01 R1-WEISS-START — ohne nachweisbare Startidentität sendet der Lauf nichts: keine Anfrage, keine
++       * Änderung an Warteschlange oder Status, kein Erfolg. Offene Aufträge bleiben unverändert beim Bereich; erst
++       * ein neuer Lauf mit bestätigter Identität setzt fort.
++       */
++      this.syncState = 'idle';
++      return {
++        success: false,
++        state: input.state,
++        completedOutboxIds: [],
++        failedOutbox: [],
++        report: finalizeSyncSimulationReport(report, new Date().toISOString()),
++        identityChanged: true,
++        identityChangeReason: runGuard.tripped,
++        runIdentity,
++      };
++    }
+     const client = bindClientToSyncRun(this.client, runGuard);
+     const journal = openConfirmationJournal(runIdentity.storageKey);
+     let identityChanged = false;
+@@ -1778,6 +1796,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
+       report: finalizeSyncSimulationReport(report, now),
+       skipPersist: true,
+       identityChanged: true,
++      identityChangeReason: runGuard.tripped ?? 'bereich',
+     };
+   }
+ 

@@ -245,7 +245,15 @@ describe('ARCHIVE-TRUTH-ORPHAN-GUARD-R02', () => {
     expect(getInboxDeleteBlockReason(orphanItem)).toBe('archive');
 
     // Produktiv geloeschtes Archivdokument darf nicht mehr blockieren.
-    expect(deleteDocument(imported.document.id).success).toBe(true);
+    // DOKUMENTE-01 / D-017 — die Rechnung ist ein Buchungsbeleg: gelöscht wird erst
+    // nach dem rechnerischen Ende ihrer Aufbewahrungsfrist.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2040-01-02T09:00:00Z'));
+    try {
+      expect(deleteDocument(imported.document.id).success).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
     expect(hasActiveArchiveDocumentForInboxItem(itemId)).toBe(false);
     expect(getInboxDeleteBlockReason(getInboxItemById(itemId)!)).toBeNull();
 

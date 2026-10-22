@@ -1,0 +1,172 @@
+diff --git a/src/pages/SyncPage.tsx b/src/pages/SyncPage.tsx
+index 5f12b88..e1bf859 100644
+--- a/src/pages/SyncPage.tsx
++++ b/src/pages/SyncPage.tsx
+@@ -6,6 +6,7 @@ import { DetailSection, SummaryList } from '../components/ui/Section';
+ import { InlineNotice } from '../components/ui/States';
+ import { RowList, RowListItem } from '../components/ui/Lists';
+ import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
++import { Checkbox } from '../components/ui/Checkbox';
+ import { useApp } from '../context/AppContext';
+ import type { SyncOutboxEntry, SyncState } from '../types/sync';
+ import type { SyncFailureKind } from '../services/sync/syncOutboxDescriptionService';
+@@ -15,6 +16,7 @@ import {
+   summarizeSyncStatus,
+   type SyncStatusSummary,
+   isLocalOnlySyncMode,
++  releaseHeldOutboxEntriesFromUi,
+   resolveArchivedDocumentConflictFromUi,
+   resolveCustomerConflictFromUi,
+   resolveEmployeeConflictFromUi,
+@@ -123,7 +125,7 @@ function statusTone(kind: SyncStatusSummary['kind']): 'default' | 'success' | 'w
+   if (kind === 'offline' || kind === 'syncing') return 'info';
+   if (kind === 'synced') return 'success';
+   /* 01G — eine ausstehende Entscheidung wird gewarnt, nicht als Fehler gefärbt. */
+-  if (kind === 'failed' || kind === 'waiting' || kind === 'conflict') return 'warning';
++  if (kind === 'failed' || kind === 'waiting' || kind === 'conflict' || kind === 'held') return 'warning';
+   return 'default';
+ }
+ 
+@@ -141,6 +143,11 @@ function statusLabelFor(
+       return summary.conflictCount === 1
+         ? translate('sync.summary.conflictOne')
+         : translate('sync.summary.conflict').replace('{count}', String(summary.conflictCount));
++    case 'held':
++      /* DOKUMENTE-01 R2 — zurückgehaltene Aufträge warten auf eine bewusste Freigabe. */
++      return (summary.heldCount ?? 0) === 1
++        ? translate('sync.held.summaryOne')
++        : translate('sync.held.summary').replace('{count}', String(summary.heldCount ?? 0));
+     case 'waiting':
+       return summary.waitingCount === 1
+         ? translate('sync.summary.waitingOne')
+@@ -320,6 +327,42 @@ export function SyncPage() {
+     return true;
+   };
+ 
++  /*
++   * DOKUMENTE-01 R2 — zurückgehaltene Aufträge: Herkunft nicht nachweisbar, deshalb nie automatisch gesendet. Das
++   * Konto dieses Bestands prüft sie einzeln, wählt aus und bestätigt die Freigabe ausdrücklich; erst dann gehören
++   * sie zu diesem Konto und gehen mit dem nächsten Abgleich hinaus.
++   */
++  const heldEntries = snapshot.heldOutboxEntries ?? [];
++  const [heldSelection, setHeldSelection] = useState<ReadonlySet<string>>(() => new Set());
++  const [heldConfirmOpen, setHeldConfirmOpen] = useState(false);
++  const [heldFailureKey, setHeldFailureKey] = useState<TranslationKey>('sync.held.failed');
++  const selectedHeldIds = heldEntries.filter((entry) => heldSelection.has(entry.id)).map((entry) => entry.id);
++  const toggleHeldSelection = (entryId: string) => {
++    setHeldSelection((current) => {
++      const next = new Set(current);
++      if (next.has(entryId)) next.delete(entryId);
++      else next.add(entryId);
++      return next;
++    });
++  };
++  const confirmHeldRelease = async (): Promise<boolean> => {
++    if (selectedHeldIds.length === 0) return false;
++    const result = await releaseHeldOutboxEntriesFromUi(selectedHeldIds);
++    refresh();
++    if (!result.ok) {
++      setHeldFailureKey(result.reason === 'session_mismatch' || result.reason === 'no_account' ? 'sync.held.notAllowed' : 'sync.held.failed');
++      return false;
++    }
++    setHeldSelection(new Set());
++    setHeldConfirmOpen(false);
++    showToast(
++      result.released === 1
++        ? translate('sync.held.releasedOne')
++        : translate('sync.held.released').replace('{count}', String(result.released)),
++    );
++    return true;
++  };
++
+   const summary = summarizeSyncStatus(snapshot);
+   const statusLabel = statusLabelFor(summary, snapshot.status.syncState, translate);
+   const tone = statusTone(summary.kind);
+@@ -418,6 +461,62 @@ export function SyncPage() {
+         )}
+       </DetailSection>
+ 
++      {heldEntries.length > 0 && (
++        <DetailSection title={translate('sync.held.title')} testId="sync-held">
++          <InlineNotice tone="warning" testId="sync-held-hint">
++            {translate('sync.held.hint')}
++          </InlineNotice>
++          <RowList testId="sync-held-list">
++            {heldEntries.map((held) => (
++              <RowListItem
++                key={held.id}
++                testId={`sync-held-entry-${held.entityType}`}
++                title={[translate(entityTypeKey(held.entityType)), held.label ?? translate('sync.held.labelMissing')].join(' · ')}
++                description={[
++                  translate(operationKey(held.operation)),
++                  translate('sync.held.queuedAt').replace('{date}', formatTimestamp(held.queuedAt)),
++                  translate(held.source === 'legacy_adoption' ? 'sync.held.sourceLegacy' : 'sync.held.sourceLoad'),
++                ].join(' · ')}
++                trailing={
++                  <Checkbox
++                    id={`sync-held-select-${held.id}`}
++                    data-testid="sync-held-select"
++                    label={translate('sync.held.select')}
++                    checked={heldSelection.has(held.id)}
++                    disabled={isSyncing}
++                    onChange={() => toggleHeldSelection(held.id)}
++                  />
++                }
++              />
++            ))}
++          </RowList>
++          <div className="sync-page__actions">
++            <Button
++              type="button"
++              variant="secondary"
++              fullWidth
++              disabled={isSyncing}
++              data-testid="sync-held-select-all"
++              onClick={() => setHeldSelection(new Set(heldEntries.map((entry) => entry.id)))}
++            >
++              {translate('sync.held.selectAll')}
++            </Button>
++            <Button
++              type="button"
++              fullWidth
++              disabled={isSyncing || selectedHeldIds.length === 0}
++              data-testid="sync-held-release"
++              onClick={() => {
++                setHeldFailureKey('sync.held.failed');
++                setHeldConfirmOpen(true);
++              }}
++            >
++              {translate('sync.held.release').replace('{count}', String(selectedHeldIds.length))}
++            </Button>
++          </div>
++        </DetailSection>
++      )}
++
+       {/*
+         * FINANZ-SYNC-BLOCKER-01B — nicht nur zählen, sondern benennen: welcher
+         * Datentyp, welcher Datensatz, welcher Grund, und ob ein erneuter
+@@ -668,6 +767,24 @@ export function SyncPage() {
+         </DetailSection>
+       )}
+ 
++      <SimpleConfirmDialog
++        open={heldConfirmOpen && selectedHeldIds.length > 0}
++        title={translate('sync.held.confirmTitle')}
++        message={(selectedHeldIds.length === 1
++          ? translate('sync.held.confirmMessageOne')
++          : translate('sync.held.confirmMessage')
++        ).replace('{count}', String(selectedHeldIds.length))}
++        confirmLabel={translate('sync.held.confirm')}
++        cancelLabel={translate('common.cancel')}
++        confirmVariant="primary"
++        confirmTestId="sync-held-confirm"
++        cancelTestId="sync-held-cancel"
++        dialogTestId="sync-held-dialog"
++        failureMessage={translate(heldFailureKey)}
++        onConfirm={confirmHeldRelease}
++        onCancel={() => setHeldConfirmOpen(false)}
++      />
++
+       <SimpleConfirmDialog
+         open={documentDecision !== null}
+         title={translate(

@@ -1,0 +1,183 @@
+/**
+ * DOKUMENTE-01 R2 — die Sync-Seite zeigt zurückgehaltene Aufträge zur bewussten Prüfung und Freigabe.
+ *
+ *  U1  eigener Abschnitt mit erkennbarem Datensatz, Vorgang, Herkunft; nicht zusätzlich als „Ausstehend";
+ *      Status „2 Aufträge zurückgehalten"
+ *  U2  Freigabe erst nach Auswahl und ausdrücklicher Bestätigung im Dialog; danach nur der geprüfte Auftrag frei
+ *  U3  ein anderes angemeldetes Konto kann nicht freigeben: der Dialog bleibt offen und nennt den Grund
+ */
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AppProvider } from '../context/AppContext';
+import { DEFAULT_SETUP } from '../data/mockData';
+import { SyncPage } from './SyncPage';
+import type { AppPersistedState, CompanyDocument } from '../types/models';
+import type { SyncOutboxEntry } from '../types/sync';
+import { STORAGE_VERSION } from '../services/sync/syncMigrationService';
+import { createSyncClient, resetSyncClientForTests } from '../services/sync/syncClientService';
+import { getSyncOutboxSnapshot, resetSyncOutboxForTests } from '../services/sync/syncOutboxService';
+import { resetSyncCoordinatorForTests } from '../services/sync/syncCoordinator';
+import { buildLegacyWorkspaceStorageKey, resetStorageScopeForTests } from '../services/storage/storageScopeService';
+import { switchToWorkspaceScope } from '../services/storage/storageBootstrapService';
+import * as supabaseLib from '../lib/supabase';
+
+const WS = 'ws-r2-seite';
+const INHABER = 'konto-inhaber-r2-seite';
+const MITGLIED = 'konto-mitglied-r2-seite';
+const JETZT = '2026-10-20T12:00:00.000Z';
+
+function dokument(id: string, title: string): CompanyDocument {
+  return {
+    id,
+    title,
+    category: 'sonstiges',
+    issuer: 'R2 Prüfung',
+    recognizedText: 'synthetisch',
+    issueDate: null,
+    validUntil: null,
+    digitalFolder: { id: 'sonstiges', name: 'Sonstiges', path: '/sonstiges' },
+    paperFolder: { folderId: 'sonstiges', register: 'S', label: 'Sonstiges' },
+    tags: [],
+    linkedCompany: null,
+    linkedVorgang: null,
+    archived: false,
+    createdAt: JETZT,
+    sync: { version: 0, updatedAt: JETZT, deleted: false, deviceId: 'geraet-r2', workspaceId: WS },
+  } as unknown as CompanyDocument;
+}
+
+function auftrag(id: string, entityId: string): SyncOutboxEntry {
+  return { id, entityType: 'document', entityId, operation: 'create', version: 0, queuedAt: JETZT, retryCount: 0, status: 'pending' };
+}
+
+function altbestand(): AppPersistedState {
+  return {
+    version: STORAGE_VERSION,
+    invoiceEntries: [],
+    syncClient: { ...createSyncClient(), serverWorkspaceId: WS, workspaceId: WS },
+    syncOutbox: [auftrag('alt-1', 'doc-alt-1'), auftrag('alt-2', 'doc-alt-2')],
+    setup: DEFAULT_SETUP,
+    vorgaenge: [],
+    customers: [],
+    inboxItems: [],
+    tasks: [],
+    documents: [dokument('doc-alt-1', 'Lieferschein Altbestand'), dokument('doc-alt-2', 'Mietvertrag Altbestand')],
+    savedAt: JETZT,
+  } as AppPersistedState;
+}
+
+function angemeldet(konto: string): void {
+  vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue({
+    auth: { getSession: async () => ({ data: { session: { user: { id: konto } } } }) },
+  } as never);
+}
+
+type Mount = { container: HTMLDivElement; root: Root };
+let mounted: Mount | undefined;
+
+function renderSyncPage(): Mount {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  let root!: Root;
+  act(() => {
+    root = createRoot(container);
+    root.render(
+      <MemoryRouter>
+        <AppProvider initialSetup={{ ...DEFAULT_SETUP, setupComplete: true, setupVersion: 1 }}>
+          <SyncPage />
+        </AppProvider>
+      </MemoryRouter>,
+    );
+  });
+  return { container, root };
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  resetStorageScopeForTests();
+  resetSyncOutboxForTests([]);
+  resetSyncClientForTests({ ...createSyncClient(), serverWorkspaceId: WS, workspaceId: WS });
+  resetSyncCoordinatorForTests();
+  localStorage.setItem(buildLegacyWorkspaceStorageKey(WS), JSON.stringify(altbestand()));
+  switchToWorkspaceScope(INHABER, WS, 'full', INHABER);
+});
+
+afterEach(() => {
+  act(() => mounted?.root.unmount());
+  mounted?.container.remove();
+  mounted = undefined;
+  vi.restoreAllMocks();
+  resetStorageScopeForTests();
+});
+
+function klick(element: Element | null): void {
+  expect(element).not.toBeNull();
+  act(() => {
+    (element as HTMLElement).click();
+  });
+}
+
+describe('DOKUMENTE-01 R2 — Sync-Seite: zurückgehaltene Aufträge', () => {
+  it('U1 eigener Abschnitt, erkennbare Datensätze, nicht zusätzlich „Ausstehend"', () => {
+    mounted = renderSyncPage();
+    const abschnitt = mounted.container.querySelector('[data-testid="sync-held"]');
+    expect(abschnitt?.textContent).toContain('Zurückgehaltene Aufträge');
+    expect(abschnitt?.textContent).toContain('Lieferschein Altbestand');
+    expect(abschnitt?.textContent).toContain('Mietvertrag Altbestand');
+    expect(abschnitt?.textContent).toContain('aus älterem gemeinsamen Bestand übernommen');
+    expect(mounted.container.querySelector('[data-testid="sync-held-hint"]')?.textContent).toContain(
+      'nicht automatisch übertragen',
+    );
+    expect(mounted.container.querySelector('[data-testid="sync-outbox-pending-list"]')).toBeNull();
+    expect(mounted.container.querySelector('[data-testid="sync-status-badge"]')?.textContent).toContain(
+      '2 Aufträge zurückgehalten',
+    );
+    const freigeben = mounted.container.querySelector('[data-testid="sync-held-release"]') as HTMLButtonElement;
+    expect(freigeben.disabled).toBe(true);
+  });
+
+  it('U2 Freigabe erst nach Auswahl und Bestätigung; danach ist nur der geprüfte Auftrag frei', async () => {
+    angemeldet(INHABER);
+    mounted = renderSyncPage();
+
+    klick(mounted.container.querySelectorAll('[data-testid="sync-held-select"]')[0]);
+    const freigeben = mounted.container.querySelector('[data-testid="sync-held-release"]') as HTMLButtonElement;
+    expect(freigeben.disabled).toBe(false);
+    expect(freigeben.textContent).toContain('(1)');
+    // Ohne Bestätigung geschieht nichts.
+    expect(getSyncOutboxSnapshot().filter((entry) => entry.hold)).toHaveLength(2);
+
+    klick(freigeben);
+    expect(document.querySelector('[data-testid="sync-held-dialog"]')?.textContent).toContain('Ihrem Konto zugeordnet');
+    await act(async () => {
+      (document.querySelector('[data-testid="sync-held-confirm"]') as HTMLElement).click();
+    });
+
+    await vi.waitFor(() => {
+      expect(getSyncOutboxSnapshot().filter((entry) => entry.hold).map((entry) => entry.id)).toEqual(['alt-2']);
+    });
+    const frei = getSyncOutboxSnapshot().find((entry) => entry.id === 'alt-1')!;
+    expect(frei.origin?.userId).toBe(INHABER);
+    expect(mounted.container.querySelector('[data-testid="sync-held"]')?.textContent).not.toContain('Lieferschein Altbestand');
+  });
+
+  it('U3 ein anderes angemeldetes Konto kann nicht freigeben', async () => {
+    angemeldet(MITGLIED);
+    mounted = renderSyncPage();
+
+    klick(mounted.container.querySelector('[data-testid="sync-held-select-all"]'));
+    klick(mounted.container.querySelector('[data-testid="sync-held-release"]'));
+    await act(async () => {
+      (document.querySelector('[data-testid="sync-held-confirm"]') as HTMLElement).click();
+    });
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('[data-testid="sync-held-dialog"]')?.textContent).toContain(
+        'Freigeben kann nur das Konto',
+      );
+    });
+    expect(getSyncOutboxSnapshot().filter((entry) => entry.hold)).toHaveLength(2);
+  });
+});

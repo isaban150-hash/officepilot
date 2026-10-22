@@ -27,6 +27,9 @@ import { deOrderDraftCloud } from './orderDraftCloud';
 import { deReplyNeed } from './replyNeed';
 import { deEmployeePayments } from './employeePayments';
 import { deWorkspaceRole } from './workspaceRole';
+import { deDocumentRetention } from './documentRetention';
+import { deSyncHeldOrders } from './syncHeldOrders';
+import { deVorgangsbindung } from './vorgangsbindung';
 
 export const deModules = {
   ...deAuth,
@@ -60,4 +63,7 @@ export const deModules = {
   ...deReplyNeed,
   ...deEmployeePayments,
   ...deWorkspaceRole,
+  ...deDocumentRetention,
+  ...deSyncHeldOrders,
+  ...deVorgangsbindung,
 } as const;

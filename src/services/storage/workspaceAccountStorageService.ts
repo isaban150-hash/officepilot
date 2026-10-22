@@ -1,0 +1,148 @@
+/**
+ * DOKUMENTE-01 N1 — Kontotrennung des lokalen Betriebsbestands.
+ *
+ * Bisher lag je Betrieb ein einziger lokaler Bestand (`officepilot-state:workspace:<id>`).
+ * Meldete sich im selben Browser nach dem Inhaber ein Mitglied an, lud es dessen
+ * Bestand: fremde Archivdokumente, Dateien, Vorschauen und die Warteschlange mit
+ * fremden Schreibaufträgen (WEISS-Befund N1, fünf endgültige Abweisungen).
+ *
+ * Jetzt liegt der Bestand je Konto **und** Sicht (`…:account:<nutzer>:<full|member>`):
+ *
+ *   - Die Sicht kommt aus der Mitgliederliste des Servers (Inhaber/Admin = `full`,
+ *     Mitglied = `member`); ohne aktive Mitgliedschaft gibt es keinen Bereich.
+ *   - Ein Konto lädt nur seinen eigenen Bestand. Was ein anderes Konto ungesendet
+ *     hinterlassen hat, bleibt in dessen Bestand und läuft weiter, sobald es sich
+ *     wieder anmeldet.
+ *   - Rollenentzug (Admin → Mitglied): eigener, neuer Mitgliedsbestand; der Bestand
+ *     mit voller Sicht bleibt unberührt liegen und gilt erst wieder bei voller Sicht.
+ *     Aufstieg (Mitglied → Admin): Der Mitgliedsbestand wird übernommen, wenn es
+ *     noch keinen mit voller Sicht gibt — volle Sicht umfasst alles, was er enthält.
+ *   - Altbestand (vor der Kontotrennung, ein Bestand für alle Konten): Nur ein Konto
+ *     mit voller Sicht übernimmt ihn, und nur einmal (verschieben, nicht kopieren).
+ *     Ein Mitglied übernimmt ihn nie — er kann Inhalte enthalten, die es nicht sehen
+ *     darf; es beginnt mit dem eigenen Bestand aus der Cloud.
+ *
+ * Gelöscht wird nichts: übernommene Bestände werden verschoben (geschrieben,
+ * zurückgelesen, erst dann der Quellschlüssel entfernt), alle anderen bleiben.
+ */
+import type { WorkspaceMember } from '../../types/workspace';
+import {
+  buildLegacyWorkspaceStorageKey,
+  buildStorageKey,
+  type StorageAccess,
+  type StorageAccount,
+} from './storageScopeService';
+import {
+  appendOutboxOriginLog,
+  holdOutboxEntriesInRawState,
+  toOutboxOriginLogEntity,
+} from '../sync/syncOutboxOriginService';
+
+export type WorkspaceAccountStoreAdoption =
+  /** Der Kontobestand existiert schon oder es gibt nichts zu übernehmen. */
+  | { action: 'none' }
+  /** Altbestand in den Bestand mit voller Sicht verschoben. */
+  | { action: 'adopted_legacy' }
+  /** Aufstieg: Mitgliedsbestand in den Bestand mit voller Sicht verschoben. */
+  | { action: 'adopted_member' }
+  /** Mitglied: Altbestand bewusst nicht übernommen, er bleibt unverändert liegen. */
+  | { action: 'kept_legacy' }
+  /** Schreiben oder Zurücklesen gescheitert — beide Kopien bleiben, nichts wurde entfernt. */
+  | { action: 'write_failed' };
+
+/** Sicht einer Mitgliedschaft; `null` heisst: kein Zugang zu einem lokalen Betriebsbestand. */
+export function accessForMembership(
+  member: Pick<WorkspaceMember, 'role' | 'status'> | null | undefined,
+): StorageAccess | null {
+  if (!member || member.status !== 'active') return null;
+  if (member.role === 'owner' || member.role === 'admin') return 'full';
+  if (member.role === 'member') return 'member';
+  return null;
+}
+
+/** Das Konto der angemeldeten Person im Betrieb, wie der Server es meldet — sonst `null`. */
+export function resolveSessionAccount(
+  members: ReadonlyArray<Pick<WorkspaceMember, 'userId' | 'role' | 'status'>>,
+  sessionUserId: string | null | undefined,
+): StorageAccount | null {
+  if (!sessionUserId) return null;
+  const eigene = members.filter((member) => member.userId === sessionUserId);
+  if (eigene.length !== 1) return null;
+  const access = accessForMembership(eigene[0]);
+  return access ? { userId: sessionUserId, access } : null;
+}
+
+function readRaw(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** Schreibt und liest zurück; erst danach gilt der Zielzustand als gesichert. */
+function writeAndVerify(key: string, raw: string): boolean {
+  try {
+    localStorage.setItem(key, raw);
+  } catch {
+    return false;
+  }
+  return readRaw(key) === raw;
+}
+
+function moveRaw(sourceKey: string, targetKey: string, raw: string): boolean {
+  if (!writeAndVerify(targetKey, raw)) return false;
+  try {
+    localStorage.removeItem(sourceKey);
+  } catch {
+    // Quelle bleibt stehen: doppelt ist sicherer als verloren.
+  }
+  return true;
+}
+
+/**
+ * Bereitet den Kontobestand vor, bevor er geladen wird. Siehe Dateikopf für die Regeln.
+ */
+export function prepareWorkspaceAccountStore(
+  workspaceId: string,
+  account: StorageAccount,
+): WorkspaceAccountStoreAdoption {
+  const targetKey = buildStorageKey({ type: 'workspace', workspaceId, account });
+  if (readRaw(targetKey) !== null) return { action: 'none' };
+
+  const legacyKey = buildLegacyWorkspaceStorageKey(workspaceId);
+  const legacyRaw = readRaw(legacyKey);
+
+  if (account.access === 'member') {
+    return legacyRaw !== null ? { action: 'kept_legacy' } : { action: 'none' };
+  }
+
+  if (legacyRaw !== null) {
+    /*
+     * DOKUMENTE-01 R2 — wer die offenen Aufträge des Altbestands eingereiht hat, ist nicht nachweisbar. Sie wandern
+     * unverändert mit, sind aber gegen automatischen Versand gesperrt, bis dieses Konto sie bewusst freigibt.
+     */
+    const now = new Date().toISOString();
+    const gesperrt = holdOutboxEntriesInRawState(legacyRaw, 'legacy_adoption', now);
+    if (!moveRaw(legacyKey, targetKey, gesperrt.raw)) return { action: 'write_failed' };
+    appendOutboxOriginLog(targetKey, {
+      at: now,
+      action: 'held',
+      source: 'legacy_adoption',
+      entries: gesperrt.held.map(toOutboxOriginLogEntity),
+    });
+    return { action: 'adopted_legacy' };
+  }
+
+  const memberKey = buildStorageKey({
+    type: 'workspace',
+    workspaceId,
+    account: { userId: account.userId, access: 'member' },
+  });
+  const memberRaw = readRaw(memberKey);
+  if (memberRaw !== null) {
+    return moveRaw(memberKey, targetKey, memberRaw) ? { action: 'adopted_member' } : { action: 'write_failed' };
+  }
+
+  return { action: 'none' };
+}

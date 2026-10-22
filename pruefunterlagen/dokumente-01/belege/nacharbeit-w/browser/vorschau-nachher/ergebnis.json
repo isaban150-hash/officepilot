@@ -1,0 +1,122 @@
+{
+  "start": "2026-10-20T11:48:57.986Z",
+  "phasen": {
+    "inhaberAnmeldung": {
+      "abzugRuhig": true,
+      "abzuege": 13
+    },
+    "kopieVorher": {
+      "panel": false
+    },
+    "kopieOrchestrierung": {
+      "vorschaubild": {
+        "kind": "persisted",
+        "registration": "created",
+        "thumbnailFileRefId": "(gesetzt)",
+        "createdThumbnailFileRef": false
+      },
+      "vorschau": {
+        "kind": "persisted",
+        "registration": "created",
+        "previewFileRefId": "(gesetzt)",
+        "createdPreviewFileRef": false
+      },
+      "original": {
+        "storageType": "indexeddb",
+        "lifecycle": "committed"
+      },
+      "kodierplan": {
+        "art": "page_1_preview_jpeg_encode",
+        "seite": 1,
+        "kante": 1280
+      },
+      "s1_bytes": {
+        "ok": true,
+        "laenge": 2202
+      },
+      "s2_kodieren": {
+        "ok": true,
+        "laenge": 38757
+      },
+      "s3_gleicheDatei": {
+        "storageType": "indexeddb",
+        "lifecycle": "committed"
+      },
+      "s4_speichern": {
+        "ok": true,
+        "neu": false,
+        "lifecycle": "committed"
+      }
+    },
+    "kopieOrchestrierungKonsole": [],
+    "originalOrchestrierung": {
+      "vorschaubild": {
+        "kind": "persisted",
+        "registration": "created",
+        "thumbnailFileRefId": "(gesetzt)",
+        "createdThumbnailFileRef": false
+      },
+      "vorschau": {
+        "kind": "persisted",
+        "registration": "created",
+        "previewFileRefId": "(gesetzt)",
+        "createdPreviewFileRef": false
+      },
+      "original": {
+        "storageType": "indexeddb",
+        "lifecycle": "committed"
+      },
+      "kodierplan": {
+        "art": "page_1_preview_jpeg_encode",
+        "seite": 1,
+        "kante": 1280
+      },
+      "s1_bytes": {
+        "ok": true,
+        "laenge": 2202
+      },
+      "s2_kodieren": {
+        "ok": true,
+        "laenge": 38757
+      },
+      "s3_gleicheDatei": {
+        "storageType": "indexeddb",
+        "lifecycle": "committed"
+      },
+      "s4_speichern": {
+        "ok": true,
+        "neu": false,
+        "lifecycle": "committed"
+      }
+    },
+    "originalOrchestrierungKonsole": [],
+    "kopieNachher": {
+      "panel": false
+    },
+    "kopieDetailBilder": 1,
+    "widerrufInhaber": 204
+  },
+  "blockiert": [],
+  "konsole": [
+    {
+      "t": "2026-10-20T11:49:27.963Z",
+      "phase": "inhaber",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    },
+    {
+      "t": "2026-10-20T11:49:27.979Z",
+      "phase": "inhaber",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    },
+    {
+      "t": "2026-10-20T11:49:28.039Z",
+      "phase": "inhaber",
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    }
+  ],
+  "profilGeloescht": true,
+  "ende": "2026-10-20T11:51:17.139Z"
+}

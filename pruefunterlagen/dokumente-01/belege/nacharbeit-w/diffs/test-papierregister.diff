@@ -1,0 +1,170 @@
+diff --git a/pruefunterlagen/dokumente-01/belege/nacharbeit-w/vorher/dokumente01_papierregister.sql b/supabase/tests/dokumente01_papierregister.sql
+index 715ea5d..08db592 100644
+--- a/pruefunterlagen/dokumente-01/belege/nacharbeit-w/vorher/dokumente01_papierregister.sql
++++ b/supabase/tests/dokumente01_papierregister.sql
+@@ -8,8 +8,15 @@
+ --   P4  Unverändert: kein Grabstein durch Mitglieder; Einträge zu fremden
+ --       Dokumenten weder sichtbar noch änderbar; ohne Dokument in der Cloud
+ --       gehört der Eintrag dem Schreibenden; geschützte Belege bleiben verborgen.
+---   P5  Altbestand wird einmalig umgestellt, Version und Inhalt bleiben.
+---   P6  Rechte: neue Funktionen intern.
++--   P5  Altbestand wird einmalig umgestellt, Version und Inhalt bleiben; Prüfspur.
++--   P7  DOK01-W2 — der Eintrag kommt vor dem Dokument: Sobald das Archivdokument
++--       eintrifft, gehört der Eintrag dessen Anleger. Frischer Abzug und RLS zeigen
++--       ihn, der Version-0-Erstversand ist ein lösbarer Konflikt, Abhaken geht,
++--       Grabstein nicht. Inhalt, Version, Grabstein und Schreiber bleiben; jeder
++--       Wechsel steht in der Prüfspur. Keine Freigabe fremder Dokumente: In der
++--       umgekehrten Reihenfolge wandert der Eintrag zum Inhaber und verschwindet für
++--       das Mitglied; andere Betriebe und andere Dokumentarten bleiben unberührt.
++--   P6  Rechte: neue Funktionen und die Prüfspur intern.
+ --
+ -- Ausführen (nur lokal, niemals --linked oder remote), mit der Migration in
+ -- derselben Transaktion:
+@@ -185,13 +192,16 @@ select pg_temp.pruefe('P4g Anleger: Inhaber, Mitglied, Schreibender',
+ 
+ /*
+  * P5 — Altbestand: vom Inhaber angelegt, bevor das Dokument des Mitglieds in der
+- * Cloud war (so entstand er auch vor dieser Migration). Danach kommt das Dokument.
++ * Cloud war — so entstand er vor dieser Migration. Damit der Aufbau den alten
++ * Zustand zeigt, ruht der Nachzug (P7) nur für diesen einen Einfügevorgang.
+  */
+ insert into public.workspace_paper_register_entries (workspace_id, client_entry_id, client_document_id, payload, row_version, created_by, updated_by)
+ values (pg_temp.ws(), 'paper-reg-doc-p-mitglied2', 'doc-p-mitglied2',
+         (pg_temp.eintrag('doc-p-mitglied2', true))->'payload', 3, pg_temp.inhaber(), pg_temp.inhaber());
++alter table public.workspace_documents disable trigger workspace_documents_paper_register_owner;
+ insert into public.workspace_documents (workspace_id, client_document_id, document_kind, payload, created_by)
+ values (pg_temp.ws(), 'doc-p-mitglied2', 'archived_document', '{"id":"doc-p-mitglied2","title":"Altbestand"}'::jsonb, pg_temp.mitglied());
++alter table public.workspace_documents enable trigger workspace_documents_paper_register_owner;
+ select pg_temp.pruefe('P5a vor der Umstellung: Inhaber',
+   (pg_temp.zeile('doc-p-mitglied2')).created_by = pg_temp.inhaber());
+ select pg_temp.pruefe('P5b genau eine Zeile umgestellt',
+@@ -206,6 +216,102 @@ select pg_temp.pruefe('P5d Wiederholung ohne Wirkung',
+ select pg_temp.als(pg_temp.mitglied());
+ select pg_temp.pruefe('P5e Mitglied sieht den Altbestand zu seinem Dokument', pg_temp.im_abzug('doc-p-mitglied2'));
+ select pg_temp.zurueck();
++select pg_temp.pruefe('P5f Prüfspur: Altbestand Inhaber → Mitglied; P1 als Anlage Inhaber → Mitglied',
++  exists (select 1 from public.workspace_paper_register_owner_changes c
++          where c.workspace_id = pg_temp.ws() and c.client_entry_id = 'paper-reg-doc-p-mitglied2'
++            and c.reason = 'altbestand' and c.previous_created_by = pg_temp.inhaber() and c.new_created_by = pg_temp.mitglied())
++  and exists (select 1 from public.workspace_paper_register_owner_changes c
++          where c.workspace_id = pg_temp.ws() and c.client_entry_id = 'paper-reg-doc-p-mitglied'
++            and c.reason = 'anlage' and c.previous_created_by = pg_temp.inhaber() and c.new_created_by = pg_temp.mitglied()));
++
++/*
++ * P7 — DOK01-W2: der Eintrag kommt vor dem Dokument (Reihenfolge der WEISS-Gegenprobe).
++ */
++create function pg_temp.archiv_eingang(p_doc text) returns jsonb language sql as $p$
++  select jsonb_build_object('client_document_id', p_doc, 'deleted', false,
++    'payload', jsonb_build_object('id', p_doc, 'title', 'Schreiben ' || p_doc, 'classifiedKind', 'brief'));
++$p$;
++
++select pg_temp.als(pg_temp.inhaber());
++select public.upsert_workspace_sync_entity(pg_temp.ws(), 'paper_register_entry', pg_temp.eintrag('doc-p-spaeter', true), 0);
++select pg_temp.zurueck();
++select pg_temp.pruefe('P7a ohne Dokument gehört der Eintrag dem Schreibenden (Inhaber)',
++  (pg_temp.zeile('doc-p-spaeter')).created_by = pg_temp.inhaber());
++create temp table p7_vorher on commit drop as select * from pg_temp.zeile('doc-p-spaeter');
++
++-- Das Mitglied liefert sein Dokument über den regulären Eingangsweg nach.
++select pg_temp.als(pg_temp.mitglied());
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'archived_document', pg_temp.archiv_eingang('doc-p-spaeter'), 0);
++select pg_temp.zurueck();
++select pg_temp.pruefe('P7b gehört jetzt dem Dokument (Mitglied); Inhalt, Version, Grabstein, Schreiber und Anlage bleiben',
++  (pg_temp.zeile('doc-p-spaeter')).created_by = pg_temp.mitglied()
++  and (pg_temp.zeile('doc-p-spaeter')).payload = (select payload from p7_vorher)
++  and (pg_temp.zeile('doc-p-spaeter')).row_version = (select row_version from p7_vorher)
++  and (pg_temp.zeile('doc-p-spaeter')).deleted = (select deleted from p7_vorher)
++  and (pg_temp.zeile('doc-p-spaeter')).updated_by = pg_temp.inhaber()
++  and (pg_temp.zeile('doc-p-spaeter')).created_at = (select created_at from p7_vorher));
++
++select pg_temp.als(pg_temp.mitglied());
++select pg_temp.pruefe('P7c frischer Abzug und RLS zeigen ihn dem Mitglied',
++  pg_temp.im_abzug('doc-p-spaeter') and pg_temp.per_rls('doc-p-spaeter'));
++select pg_temp.erwarte_abweisung('P7d Version-0-Erstversand des Mitgliedsgeräts: lösbarer Konflikt',
++  pg_temp.push_sql(pg_temp.eintrag('doc-p-spaeter', false), 0), 'Versionskonflikt paper_register_entry');
++select public.upsert_workspace_sync_entity(pg_temp.ws(), 'paper_register_entry', pg_temp.eintrag('doc-p-spaeter', false), 1);
++select pg_temp.erwarte_abweisung('P7f Grabstein bleibt Inhaber und Admin vorbehalten',
++  pg_temp.push_sql(pg_temp.eintrag('doc-p-spaeter', false, true), 2), 'Keine Schreibberechtigung');
++select pg_temp.zurueck();
++select pg_temp.pruefe('P7e das Mitglied hat geändert (Version 2, Schreiber Mitglied)',
++  (pg_temp.zeile('doc-p-spaeter')).row_version = 2
++  and (pg_temp.zeile('doc-p-spaeter')).updated_by = pg_temp.mitglied()
++  and not ((pg_temp.zeile('doc-p-spaeter')).payload->>'physicalFiled')::boolean
++  and not (pg_temp.zeile('doc-p-spaeter')).deleted);
++select pg_temp.pruefe('P7g Prüfspur: genau ein Nachzug Inhaber → Mitglied',
++  (select count(*) from public.workspace_paper_register_owner_changes c
++   where c.workspace_id = pg_temp.ws() and c.client_entry_id = 'paper-reg-doc-p-spaeter') = 1
++  and exists (select 1 from public.workspace_paper_register_owner_changes c
++          where c.workspace_id = pg_temp.ws() and c.client_entry_id = 'paper-reg-doc-p-spaeter'
++            and c.reason = 'dokument_nachgereicht' and c.previous_created_by = pg_temp.inhaber()
++            and c.new_created_by = pg_temp.mitglied()));
++
++-- Umgekehrt: Das Mitglied schreibt zuerst, das Dokument gehört aber dem Inhaber.
++select pg_temp.als(pg_temp.mitglied());
++select public.upsert_workspace_sync_entity(pg_temp.ws(), 'paper_register_entry', pg_temp.eintrag('doc-p-inhaber-spaeter', true), 0);
++select pg_temp.pruefe('P7h vorher: der Eintrag des Mitglieds ist für das Mitglied sichtbar',
++  pg_temp.im_abzug('doc-p-inhaber-spaeter'));
++select pg_temp.zurueck();
++select pg_temp.als(pg_temp.inhaber());
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'archived_document', pg_temp.archiv_eingang('doc-p-inhaber-spaeter'), 0);
++select pg_temp.zurueck();
++select pg_temp.als(pg_temp.mitglied());
++select pg_temp.pruefe('P7i keine Freigabe fremder Dokumente: der Eintrag folgt dem Inhaber und ist für das Mitglied weg',
++  not pg_temp.im_abzug('doc-p-inhaber-spaeter') and not pg_temp.per_rls('doc-p-inhaber-spaeter'));
++select pg_temp.erwarte_abweisung('P7j und für das Mitglied nicht mehr änderbar',
++  pg_temp.push_sql(pg_temp.eintrag('doc-p-inhaber-spaeter', false), 1), 'Keine Schreibberechtigung');
++select pg_temp.zurueck();
++select pg_temp.pruefe('P7k Inhalt erhalten, Zuordnung Inhaber',
++  (pg_temp.zeile('doc-p-inhaber-spaeter')).created_by = pg_temp.inhaber()
++  and ((pg_temp.zeile('doc-p-inhaber-spaeter')).payload->>'physicalFiled')::boolean
++  and (pg_temp.zeile('doc-p-inhaber-spaeter')).row_version = 1);
++
++-- Andere Betriebe und andere Dokumentarten bleiben unberührt.
++insert into public.workspaces (id, name, owner_user_id)
++values ('00000000-0000-0000-0000-0000000d02a2'::uuid, 'DOK01 Papierregister 2', '00000000-0000-0000-0000-0000000d0201'::uuid);
++insert into public.workspace_paper_register_entries (workspace_id, client_entry_id, client_document_id, payload, row_version, created_by, updated_by)
++values ('00000000-0000-0000-0000-0000000d02a2'::uuid, 'paper-reg-doc-p-zwei', 'doc-p-zwei',
++        (pg_temp.eintrag('doc-p-zwei', true))->'payload', 1, pg_temp.inhaber(), pg_temp.inhaber());
++select pg_temp.als(pg_temp.mitglied());
++select public.upsert_workspace_sync_entity(pg_temp.ws(), 'paper_register_entry', pg_temp.eintrag('doc-p-rechnungsbeleg', true), 0);
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'archived_document', pg_temp.archiv_eingang('doc-p-zwei'), 0);
++select pg_temp.zurueck();
++insert into public.workspace_invoices (workspace_id, vorgang_id, client_invoice_id, invoice_number, invoice_year, invoice_sequence_number, invoice_type, invoice_status, payload)
++values (pg_temp.ws(), null, 'inv-dok01p-entwurf', '2026-9701', 2026, 9701, 'rechnung', 'entwurf', '{}'::jsonb);
++insert into public.workspace_documents (workspace_id, client_document_id, document_kind, linked_invoice_id, payload, created_by)
++values (pg_temp.ws(), 'doc-p-rechnungsbeleg', 'generated_invoice', 'inv-dok01p-entwurf',
++        '{"id":"doc-p-rechnungsbeleg","category":"ausgangsrechnung","linkedInvoiceId":"inv-dok01p-entwurf"}'::jsonb, pg_temp.inhaber());
++select pg_temp.pruefe('P7l Eintrag im anderen Betrieb und Eintrag zu einem erzeugten Beleg unverändert',
++  (select e.created_by from public.workspace_paper_register_entries e
++   where e.workspace_id = '00000000-0000-0000-0000-0000000d02a2'::uuid and e.client_entry_id = 'paper-reg-doc-p-zwei') = pg_temp.inhaber()
++  and (pg_temp.zeile('doc-p-rechnungsbeleg')).created_by = pg_temp.mitglied());
+ 
+ /* P6 — Rechte. */
+ do $g$
+@@ -213,8 +319,17 @@ declare
+   v_funktion text;
+   v_rolle text;
+ begin
++  if not (select c.relrowsecurity from pg_class c where c.oid = 'public.workspace_paper_register_owner_changes'::regclass) then
++    raise exception 'P6 Prüfspur ohne RLS';
++  end if;
++  foreach v_rolle in array array['anon', 'authenticated', 'service_role'] loop
++    if has_table_privilege(v_rolle, 'public.workspace_paper_register_owner_changes', 'select, insert, update, delete') then
++      raise exception 'P6 Prüfspur -- Tabellenrecht für %', v_rolle;
++    end if;
++  end loop;
+   foreach v_funktion in array array[
+     'public.workspace_paper_register_entries_document_owner()',
++    'public.workspace_documents_paper_register_owner()',
+     'public.workspace_paper_register_entries_assign_document_owner()'
+   ] loop
+     foreach v_rolle in array array['anon', 'authenticated', 'service_role'] loop
+@@ -229,7 +344,7 @@ begin
+       raise exception 'P6 % -- EXECUTE für public', v_funktion;
+     end if;
+   end loop;
+-  raise notice 'OK  P6 neue Funktionen nur intern';
++  raise notice 'OK  P6 neue Funktionen und Prüfspur nur intern';
+ end;
+ $g$;
+ 

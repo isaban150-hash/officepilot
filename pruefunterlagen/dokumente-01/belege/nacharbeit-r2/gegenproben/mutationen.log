@@ -1,0 +1,63 @@
+{"id":"S1","erkannt":true,"rot":9,"gruen":35}
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L8 ohne bestätigte Anmeldung im Kontobereich: kein Grabstein, eigener Hinweis, nichts gelöscht
+  ROT src/services/sync/sendekontoR1Dokumente01.test.ts :: S12b eigener Token-Lieferant mit undurchsichtigem Token: nennt kein Konto → Halt schon beim Start, keine Anfrage
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T1 WEISS-Reproduktion: Startsitzung nicht lesbar, danach B angemeldet → keine Anfrage, A-Auftrag bleibt offen
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T2 keine Sitzung beim Start → keine Anfrage
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T2b leere Warteschlange: auch ohne Auftrag kein Erfolg — der Lauf hält an, bevor er etwas tut
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T3 Tokenquelle wirft → keine Anfrage
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T4 Tokenquelle liefert kein Token → keine Anfrage
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T5 Koordinator: kein Erfolg, Haltbericht, Fehlerzustand dieses Kontos, kein Abruf; der Planer versucht es später
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T6 neuer Lauf mit wieder lesbarer, richtiger Anmeldung: genau die A-Aufträge, mit dem Zugang von A
+{"id":"S2","erkannt":true,"rot":1,"gruen":43}
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T8 kein Rückfall: Prüfung ohne lesbaren Zugang → keine Anfrage, das SDK liest die Sitzung nicht selbst nach
+{"id":"S3","erkannt":true,"rot":11,"gruen":33}
+  ROT src/pages/syncHaltMeldungR1Dokumente01.test.tsx :: U1 nicht lesbare Startsitzung: Hinweis „angehalten“, kein Erfolg, keine Anfrage
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L8 ohne bestätigte Anmeldung im Kontobereich: kein Grabstein, eigener Hinweis, nichts gelöscht
+  ROT src/services/sync/sendekontoR1Dokumente01.test.ts :: S12b eigener Token-Lieferant mit undurchsichtigem Token: nennt kein Konto → Halt schon beim Start, keine Anfrage
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T1 WEISS-Reproduktion: Startsitzung nicht lesbar, danach B angemeldet → keine Anfrage, A-Auftrag bleibt offen
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T2 keine Sitzung beim Start → keine Anfrage
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T2b leere Warteschlange: auch ohne Auftrag kein Erfolg — der Lauf hält an, bevor er etwas tut
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T3 Tokenquelle wirft → keine Anfrage
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T4 Tokenquelle liefert kein Token → keine Anfrage
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T5 Koordinator: kein Erfolg, Haltbericht, Fehlerzustand dieses Kontos, kein Abruf; der Planer versucht es später
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T6 neuer Lauf mit wieder lesbarer, richtiger Anmeldung: genau die A-Aufträge, mit dem Zugang von A
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T8 kein Rückfall: Prüfung ohne lesbaren Zugang → keine Anfrage, das SDK liest die Sitzung nicht selbst nach
+{"id":"S4","erkannt":true,"rot":1,"gruen":43}
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T2b leere Warteschlange: auch ohne Auftrag kein Erfolg — der Lauf hält an, bevor er etwas tut
+{"id":"S5","erkannt":true,"rot":4,"gruen":40}
+  ROT src/pages/syncHaltMeldungR1Dokumente01.test.tsx :: U1 nicht lesbare Startsitzung: Hinweis „angehalten“, kein Erfolg, keine Anfrage
+  ROT src/services/sync/sendekontoR1Dokumente01.test.ts :: S9a Wechsel zwischen Senden und Abruf (nur die Sitzung): kein Abruf, nichts übernommen, kein Erfolg, keine fremde Fehlermeldung
+  ROT src/services/sync/sendekontoR1Dokumente01.test.ts :: S9b Wechsel mitten im Abruf: kein weiterer Abruf, nichts übernommen
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T5 Koordinator: kein Erfolg, Haltbericht, Fehlerzustand dieses Kontos, kein Abruf; der Planer versucht es später
+{"id":"S6","erkannt":true,"rot":1,"gruen":43}
+  ROT src/services/sync/startidentitaetR1Dokumente01.test.ts :: T5 Koordinator: kein Erfolg, Haltbericht, Fehlerzustand dieses Kontos, kein Abruf; der Planer versucht es später
+{"id":"S7","erkannt":true,"rot":1,"gruen":43}
+  ROT src/pages/syncHaltMeldungR1Dokumente01.test.tsx :: U1 nicht lesbare Startsitzung: Hinweis „angehalten“, kein Erfolg, keine Anfrage
+{"id":"S8","erkannt":true,"rot":1,"gruen":43}
+  ROT src/pages/syncHaltMeldungR1Dokumente01.test.tsx :: U2 „Erneut versuchen“ mit Haltbericht: Hinweis „angehalten“, nicht „abgeschlossen“
+{"id":"D1","erkannt":true,"rot":1,"gruen":43}
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L10 Handelnder ist nicht das Konto des Bereichs: kein Vorgang, keine Rückfrage, nichts gelöscht
+{"id":"D2","erkannt":true,"rot":3,"gruen":41}
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L1b keine Sitzung beim Aufruf, B meldet sich während der Rückfrage im zweiten Tab an (Bereich bleibt): Abbruch
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L3 nur die Sitzung wechselt (zweiter Tab), der Bereich bleibt: Abbruch, A behält das Dokument
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L7b B meldet sich genau beim Senden des Grabsteins an: die Anfrage trägt den geprüften Zugang von A, danach Abbruch
+{"id":"D3","erkannt":false,"rot":0,"gruen":44}
+{"id":"D4","erkannt":true,"rot":7,"gruen":37}
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L1 WEISS-Reproduktion (echtes SDK, keine Sitzung): kein Erfolg, B behält sein Dokument, kein Löschauftrag
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L1b keine Sitzung beim Aufruf, B meldet sich während der Rückfrage im zweiten Tab an (Bereich bleibt): Abbruch
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L2 bestätigte Anmeldung A, echter Kontowechsel zu B während der Rückfrage: kein Erfolg, nichts bei B
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L3 nur die Sitzung wechselt (zweiter Tab), der Bereich bleibt: Abbruch, A behält das Dokument
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L5 Abmeldung während der Rückfrage: Abbruch; nach erneuter Anmeldung von A ist das Dokument unverändert da
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L6a Rückkehr zu A nach dem Abbruch: Bestand unverändert, eine neue Löschung gelingt unter A
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L7b B meldet sich genau beim Senden des Grabsteins an: die Anfrage trägt den geprüften Zugang von A, danach Abbruch
+{"id":"D5","erkannt":true,"rot":1,"gruen":43}
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L8 ohne bestätigte Anmeldung im Kontobereich: kein Grabstein, eigener Hinweis, nichts gelöscht
+{"id":"D6","erkannt":true,"rot":1,"gruen":43}
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L7b B meldet sich genau beim Senden des Grabsteins an: die Anfrage trägt den geprüften Zugang von A, danach Abbruch
+{"id":"D7","erkannt":true,"rot":1,"gruen":43}
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L7b B meldet sich genau beim Senden des Grabsteins an: die Anfrage trägt den geprüften Zugang von A, danach Abbruch
+{"id":"D8","erkannt":true,"rot":1,"gruen":43}
+  ROT src/services/document/loeschvorgangBindungDokumente01.test.ts :: L1b keine Sitzung beim Aufruf, B meldet sich während der Rückfrage im zweiten Tab an (Bereich bleibt): Abbruch
+(node:12452) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+mutationen exit=0

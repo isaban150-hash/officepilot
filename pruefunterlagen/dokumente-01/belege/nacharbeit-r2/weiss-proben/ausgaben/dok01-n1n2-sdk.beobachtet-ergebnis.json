@@ -1,0 +1,10 @@
+{
+  "mode": "echter Produktadapter + installiertes Supabase SDK, nur Fetch ersetzt; synthetische Token, kein Netzwerk",
+  "calls": [],
+  "completed": [],
+  "failed": [],
+  "wrongIdentity": false,
+  "identityChanged": true,
+  "identityChangeReason": "start_unbestaetigt",
+  "vorDemWechsel": "lauf_beendet_ohne_rpc"
+}

@@ -1,0 +1,47 @@
+diff --git a/src/setupCloudPersist01.test.tsx b/src/setupCloudPersist01.test.tsx
+index d35e982..c15d29a 100644
+--- a/src/setupCloudPersist01.test.tsx
++++ b/src/setupCloudPersist01.test.tsx
+@@ -473,7 +473,8 @@ describe('OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — Assistent sichert in die Cloud
+     ).toBe(ensureCallsBefore);
+     expect(
+       Object.keys(localStorage).filter((key) => key.startsWith('officepilot-state:workspace:')),
+-    ).toEqual([`officepilot-state:workspace:${WORKSPACE_ID}`]);
++      // DOKUMENTE-01 N1 — genau ein Betriebsbestand, der des angemeldeten Kontos.
++    ).toEqual([`officepilot-state:workspace:${WORKSPACE_ID}:account:${userId}:full`]);
+     expect(
+       container.querySelector('[data-testid="cloud-backup-pending-banner"]'),
+       'Hinweis bleibt trotz Erfolg sichtbar',
+@@ -508,7 +509,8 @@ describe('OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — Assistent sichert in die Cloud
+ 
+     expect(companyUpsertAttempts()).toEqual([]);
+     expect(container.querySelector('[data-testid="app-shell"]')).not.toBeNull();
+-    const raw = localStorage.getItem(`officepilot-state:workspace:${WORKSPACE_ID}`) ?? '';
++    // DOKUMENTE-01 N1 — der Betriebsbestand liegt je Konto und Sicht.
++    const raw = localStorage.getItem(`officepilot-state:workspace:${WORKSPACE_ID}:account:${userId}:full`) ?? '';
+     expect(raw).toContain(COMPANY_NAME);
+   });
+ });
+@@ -721,7 +723,8 @@ describe('OFFICEPILOT-SETUP-CLOUD-PERSIST-01C', () => {
+ 
+     const container = await mountApp();
+ 
+-    const raw = localStorage.getItem(`officepilot-state:workspace:${WORKSPACE_ID}`);
++    // DOKUMENTE-01 N1 — der leere Altbestand wurde in den Kontobestand übernommen und dort gerettet.
++    const raw = localStorage.getItem(`officepilot-state:workspace:${WORKSPACE_ID}:account:${userId}:full`);
+     expect(raw, 'Workspace-Zustand fehlt').not.toBeNull();
+     const stored = JSON.parse(raw!) as {
+       setup?: { companyName?: string; setupComplete?: boolean };
+@@ -741,10 +744,10 @@ describe('OFFICEPILOT-SETUP-CLOUD-PERSIST-01C', () => {
+     expect(successfulUpserts('company_setup').length, 'company_setup nicht genau einmal').toBe(1);
+     expect(successfulUpserts('company_profile').length, 'company_profile nicht genau einmal').toBe(1);
+     expect(pendingCompanyOutbox(), 'offene Firmen-Outbox').toEqual([]);
+-    // Kein zweiter Workspace-Schlüssel.
++    // Kein zweiter Workspace-Schlüssel (DOKUMENTE-01 N1: nur der Kontobestand, der Altbestand ist übernommen).
+     expect(
+       Object.keys(localStorage).filter((key) => key.startsWith('officepilot-state:workspace:')),
+-    ).toEqual([`officepilot-state:workspace:${WORKSPACE_ID}`]);
++    ).toEqual([`officepilot-state:workspace:${WORKSPACE_ID}:account:${userId}:full`]);
+     expect(container.querySelector('[data-testid="first-run-wizard"]')).toBeNull();
+   });
+ 

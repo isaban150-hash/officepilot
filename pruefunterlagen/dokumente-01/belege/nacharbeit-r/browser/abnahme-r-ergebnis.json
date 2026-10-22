@@ -1,0 +1,609 @@
+{
+  "start": "2026-10-20T21:27:53.013Z",
+  "phasen": {
+    "R1vorbereitung": {
+      "abzugRuhig": true
+    },
+    "R1tab2": {
+      "abzugRuhig": true
+    },
+    "R1": {
+      "sendungen": 1,
+      "offen": 3
+    },
+    "R1b": {
+      "abzugRuhig": true
+    },
+    "R2": {
+      "abzugRuhig": true
+    }
+  },
+  "pruefungen": [
+    {
+      "phase": "R1-vorbereitung",
+      "name": "Inhaber im eigenen Kontobereich",
+      "ok": true,
+      "detail": {
+        "wer": "inhaber",
+        "access": "full"
+      }
+    },
+    {
+      "phase": "R1-zwei-tabs",
+      "name": "drei Dokumente lokal angelegt",
+      "ok": true,
+      "detail": {
+        "anzahl": 3
+      }
+    },
+    {
+      "phase": "R1-zwei-tabs",
+      "name": "drei offene Aufträge mit Ursprung Inhaber",
+      "ok": true,
+      "detail": {
+        "status": {
+          "pending": 3
+        }
+      }
+    },
+    {
+      "phase": "R1-zwei-tabs",
+      "name": "erste Sendung angehalten (Tab 1, Zugang Inhaber)",
+      "ok": true,
+      "detail": {
+        "sendungen": 1
+      }
+    },
+    {
+      "phase": "R1-zwei-tabs",
+      "name": "Tab 2: Mitglied angemeldet (eigene Sicht)",
+      "ok": true,
+      "detail": {
+        "wer": "mitglied",
+        "access": "member"
+      }
+    },
+    {
+      "phase": "R1-zwei-tabs",
+      "name": "genau eine Sendung der drei Dokumente",
+      "ok": true,
+      "detail": {
+        "proTabKonto": {
+          "1:inhaber": 1
+        }
+      }
+    },
+    {
+      "phase": "R1-zwei-tabs",
+      "name": "keine Sendung der Inhaberdokumente unter dem Mitglied",
+      "ok": true
+    },
+    {
+      "phase": "R1-zwei-tabs",
+      "name": "Tab 1 sendet nach dem Wechsel nichts mehr",
+      "ok": true,
+      "detail": {
+        "tab1": 1
+      }
+    },
+    {
+      "phase": "R1-zwei-tabs",
+      "name": "Aufträge beim Inhaber erhalten (keiner verloren, keiner fehlgeschlagen)",
+      "ok": true,
+      "detail": {
+        "status": {
+          "pending": 3
+        }
+      }
+    },
+    {
+      "phase": "R1-zwei-tabs",
+      "name": "Bestätigung im Journal des Inhabers",
+      "ok": true,
+      "detail": {
+        "journal": 1
+      }
+    },
+    {
+      "phase": "R1-zwei-tabs",
+      "name": "Mitgliedsbestand ohne Inhaberaufträge",
+      "ok": true,
+      "detail": {
+        "auftraege": 0
+      }
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "name": "genau die zwei übrigen gesendet",
+      "ok": true,
+      "detail": {
+        "anzahl": 2,
+        "bereitsGesendetErneut": 0
+      }
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "name": "mit dem Zugang des Inhabers",
+      "ok": true
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "name": "alle drei erledigt, Journal leer",
+      "ok": true,
+      "detail": {
+        "status": {
+          "completed": 3
+        },
+        "journal": 0
+      }
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "name": "über R1/R1b jedes Dokument genau einmal gesendet",
+      "ok": true
+    },
+    {
+      "phase": "R2-uebernahme",
+      "name": "Altbestand übernommen, Aufträge erhalten und gesperrt",
+      "ok": true,
+      "detail": [
+        {
+          "status": "pending",
+          "gesperrt": true,
+          "quelle": "legacy_adoption"
+        },
+        {
+          "status": "pending",
+          "gesperrt": true,
+          "quelle": "legacy_adoption"
+        }
+      ]
+    },
+    {
+      "phase": "R2-uebernahme",
+      "name": "nach Anmeldung und Abgleich nichts davon gesendet",
+      "ok": true,
+      "detail": {
+        "versuche": 0
+      }
+    },
+    {
+      "phase": "R2-uebernahme",
+      "name": "Anzeige „Aktion erforderlich\"",
+      "ok": true,
+      "detail": {
+        "anzeige": "action"
+      }
+    },
+    {
+      "phase": "R2-uebernahme",
+      "name": "Prüfspur: Zurückhaltung bei Übernahme",
+      "ok": true,
+      "detail": [
+        {
+          "aktion": "held",
+          "quelle": "legacy_adoption",
+          "von": null,
+          "anzahl": 2
+        }
+      ]
+    },
+    {
+      "phase": "R2-neustart",
+      "name": "nach Neustart weiter gesperrt",
+      "ok": true
+    },
+    {
+      "phase": "R2-neustart",
+      "name": "nach Neustart nichts gesendet",
+      "ok": true
+    },
+    {
+      "phase": "R2-freigabe",
+      "name": "Sync-Seite: Abschnitt mit zwei zurückgehaltenen Aufträgen",
+      "ok": true,
+      "detail": {
+        "zeilen": 2
+      }
+    },
+    {
+      "phase": "R2-freigabe",
+      "name": "Status nennt die Zurückhaltung",
+      "ok": true
+    },
+    {
+      "phase": "R2-freigabe",
+      "name": "Freigabe ohne Auswahl gesperrt",
+      "ok": true
+    },
+    {
+      "phase": "R2-freigabe",
+      "name": "genau ein Auftrag freigegeben, mit Inhaber als Ursprung",
+      "ok": true,
+      "detail": [
+        {
+          "gesperrt": false,
+          "ursprungInhaber": true
+        },
+        {
+          "gesperrt": true,
+          "ursprungInhaber": false
+        }
+      ]
+    },
+    {
+      "phase": "R2-freigabe",
+      "name": "genau der freigegebene Auftrag gesendet",
+      "ok": true,
+      "detail": {
+        "anzahl": 1,
+        "erkannt": true
+      }
+    },
+    {
+      "phase": "R2-freigabe",
+      "name": "mit dem Zugang des Inhabers",
+      "ok": true
+    },
+    {
+      "phase": "R2-freigabe",
+      "name": "der andere bleibt gesperrt",
+      "ok": true
+    },
+    {
+      "phase": "R2-freigabe",
+      "name": "Prüfspur: Freigabe durch den Inhaber",
+      "ok": true,
+      "detail": [
+        {
+          "aktion": "held",
+          "quelle": "legacy_adoption",
+          "vonInhaber": false,
+          "anzahl": 2
+        },
+        {
+          "aktion": "released",
+          "quelle": null,
+          "vonInhaber": true,
+          "anzahl": 1
+        }
+      ]
+    },
+    {
+      "phase": "Z-gesamt",
+      "name": "über alle Phasen: keine Dokumentsendung unter dem Mitglied",
+      "ok": true,
+      "detail": {
+        "R1-zwei-tabs:inhaber": 1,
+        "R1b-inhaber-erneut:inhaber": 2,
+        "R2-freigabe:inhaber": 1
+      }
+    }
+  ],
+  "blockiert": [
+    {
+      "phase": "R1-zwei-tabs",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1-zwei-tabs",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1-zwei-tabs",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "art": "rpc",
+      "tab": 1,
+      "rpc": "upsert_workspace_sync_entity",
+      "typ": "paper_register_entry",
+      "konto": "inhaber"
+    }
+  ],
+  "konsole": [
+    {
+      "t": "2026-10-20T21:28:31.835Z",
+      "phase": "R1-vorbereitung",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    },
+    {
+      "t": "2026-10-20T21:28:31.837Z",
+      "phase": "R1-vorbereitung",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    },
+    {
+      "t": "2026-10-20T21:28:42.649Z",
+      "phase": "R1-zwei-tabs",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:28:42.690Z",
+      "phase": "R1-zwei-tabs",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:28:42.716Z",
+      "phase": "R1-zwei-tabs",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:29:04.988Z",
+      "phase": "R1-zwei-tabs",
+      "tab": 2,
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T21:29:05.041Z",
+      "phase": "R1-zwei-tabs",
+      "tab": 2,
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T21:29:05.084Z",
+      "phase": "R1-zwei-tabs",
+      "tab": 2,
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T21:29:12.560Z",
+      "phase": "R1-zwei-tabs",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T21:29:12.599Z",
+      "phase": "R1-zwei-tabs",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T21:29:12.663Z",
+      "phase": "R1-zwei-tabs",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    },
+    {
+      "t": "2026-10-20T21:29:37.675Z",
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:29:37.704Z",
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:29:37.739Z",
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:29:41.650Z",
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:29:41.665Z",
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:29:41.685Z",
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:29:46.970Z",
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:29:46.983Z",
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:29:46.996Z",
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:29:50.561Z",
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:29:50.573Z",
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "t": "2026-10-20T21:29:50.585Z",
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "typ": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    }
+  ],
+  "widerruf": [
+    204,
+    204,
+    204,
+    204
+  ],
+  "profileGeloescht": true,
+  "sendungen": [
+    {
+      "phase": "R1-zwei-tabs",
+      "tab": 1,
+      "konto": "inhaber",
+      "typ": "archived_document"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "konto": "inhaber",
+      "typ": "archived_document"
+    },
+    {
+      "phase": "R1b-inhaber-erneut",
+      "tab": 1,
+      "konto": "inhaber",
+      "typ": "archived_document"
+    },
+    {
+      "phase": "R2-freigabe",
+      "tab": 3,
+      "konto": "inhaber",
+      "typ": "archived_document"
+    }
+  ],
+  "ende": "2026-10-20T21:31:57.667Z",
+  "summe": {
+    "pruefungen": 30,
+    "ok": 30,
+    "rot": 0,
+    "blockiert": 15,
+    "sendungen": 4
+  }
+}

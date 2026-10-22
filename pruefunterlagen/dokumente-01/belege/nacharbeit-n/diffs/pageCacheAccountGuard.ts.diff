@@ -1,0 +1,53 @@
+diff --git a/src/services/auth/pageCacheAccountGuard.ts b/src/services/auth/pageCacheAccountGuard.ts
+new file mode 100644
+index 0000000..c123d94
+--- /dev/null
++++ b/src/services/auth/pageCacheAccountGuard.ts
+@@ -0,0 +1,47 @@
++/**
++ * DOKUMENTE-01 N1 — Rückkehr aus dem Seiten-Cache (Back-Forward-Cache).
++ *
++ * Beim Zurücknavigieren stellt der Browser unter Umständen eine frühere Seite
++ * samt Arbeitsspeicher wieder her — mit dem Bestand des Kontos, das dort
++ * angemeldet war. Hat sich inzwischen ein anderes Konto angemeldet (oder ist
++ * niemand mehr angemeldet), wird die Seite neu geladen, statt diesen Bestand zu
++ * zeigen. Gleiches Konto: nichts geschieht, die Wiederaufnahme bleibt wie bisher.
++ */
++import { getSupabaseClient } from '../../lib/supabase';
++
++/** Abhängigkeiten als Objekt, damit Tests Sitzung und Neuladen gezielt ersetzen können. */
++export const pageCacheAccountDeps = {
++  /** Das Konto der gespeicherten Sitzung — `null`, wenn keine besteht oder sie nicht lesbar ist. */
++  async readStoredSessionUserId(): Promise<string | null> {
++    const client = getSupabaseClient();
++    if (!client) return null;
++    try {
++      const { data } = await client.auth.getSession();
++      return data.session?.user.id ?? null;
++    } catch {
++      return null;
++    }
++  },
++  reload(): void {
++    window.location.reload();
++  },
++};
++
++/**
++ * Beobachtet `pageshow` aus dem Seiten-Cache. `getBoundUserId` liefert das Konto,
++ * dessen Bestand die Seite im Arbeitsspeicher trägt (`null` = abgemeldet,
++ * `undefined` = noch kein Bestand geladen).
++ */
++export function watchPageCacheAccount(getBoundUserId: () => string | null | undefined): () => void {
++  if (typeof window === 'undefined') return () => undefined;
++  const onPageShow = (event: Event) => {
++    if (!(event as PageTransitionEvent).persisted) return;
++    void pageCacheAccountDeps.readStoredSessionUserId().then((storedUserId) => {
++      const boundUserId = getBoundUserId();
++      if (boundUserId === undefined) return;
++      if (storedUserId !== boundUserId) pageCacheAccountDeps.reload();
++    });
++  };
++  window.addEventListener('pageshow', onPageShow);
++  return () => window.removeEventListener('pageshow', onPageShow);
++}

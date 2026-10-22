@@ -1,0 +1,48 @@
+BEGIN
+INSERT 0 1
+INSERT 0 2
+INSERT 0 1
+INSERT 0 1
+INSERT 0 3
+INSERT 0 1
+INSERT 0 2
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+ {"sub":"00000000-0000-0000-0000-0000000007c1","role":"authenticated"}
+
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  OK         A Versand mit customer_id
+NOTICE:  OK         B Versand mit vorgang_id
+DO
+NOTICE:  OK         AB Versand mit Kunde und Vorgang
+NOTICE:  ABGELEHNT  C1 Kunde aus fremdem Workspace  -> customer_id gehoert nicht zum Workspace
+ 
+
+NOTICE:  ABGELEHNT  C2 Vorgang aus fremdem Workspace  -> vorgang_id gehoert nicht zum Workspace
+ 
+
+NOTICE:  ABGELEHNT  C3 geloeschter Kunde  -> customer_id gehoert nicht zum Workspace
+ 
+
+ 
+
+NOTICE:  ABGELEHNT  C4 unbekannter Vorgang  -> vorgang_id gehoert nicht zum Workspace
+DO
+NOTICE:  OK         C keine Versandauftraege aus abgelehnten Aufrufen
+DO
+NOTICE:  OK         D Versand ohne Kontext bleibt anlegbar und lesbar
+NOTICE:  OK         E/F Kontextliste nur mit passenden Versandauftraegen
+DO
+NOTICE:  ABGELEHNT  E2 Kontextliste ohne Kennung  -> customer_id oder vorgang_id fehlt
+ 
+
+ 
+
+NOTICE:  ABGELEHNT  E3 Kontextliste eines fremden Workspace  -> Kein Zugriff auf Workspace
+DO
+NOTICE:  OK         R Replay ergaenzt nur, ueberschreibt nie
+NOTICE:  OK         G Neuversuch: Kette (Versuch 2) und Kontext erhalten
+DO
+ROLLBACK

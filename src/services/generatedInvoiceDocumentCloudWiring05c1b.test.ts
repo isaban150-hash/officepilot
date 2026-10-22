@@ -52,6 +52,8 @@ const INVOICE_ID = 'inv-doc-wiring';
 const DOC_A = 'doc-11111111-1111-4111-8111-111111111111';
 const DOC_B = 'doc-22222222-2222-4222-8222-222222222222';
 const COMPANY = 'Muster GmbH';
+/** DOKUMENTE-01 / D-017 — der Löschweg der Oberfläche bestätigt immer die Aufbewahrungsprüfung. */
+const GEPRUEFT = { aufbewahrungGeprueft: true } as const;
 
 const adapterSource = readFileSync(
   resolve(process.cwd(), 'src/services/sync/supabaseSyncAdapter.ts'),
@@ -415,7 +417,7 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
       }),
     );
 
-    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A);
+    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A, undefined, GEPRUEFT);
 
     expect(result.ok).toBe(true);
     /*
@@ -445,7 +447,7 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
       }),
     );
 
-    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A);
+    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A, undefined, GEPRUEFT);
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -462,7 +464,7 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
     vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(false);
     vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue(null);
 
-    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A);
+    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A, undefined, GEPRUEFT);
 
     expect(result.ok).toBe(false);
     // Fehlende Konfiguration beweist nicht, dass keine Cloud-Kopie existiert.
@@ -485,7 +487,7 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
       }),
     );
 
-    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A);
+    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A, undefined, GEPRUEFT);
 
     expect(result.ok).toBe(true);
     expect(getDocumentById(DOC_A)).toBeUndefined();
@@ -508,7 +510,7 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
         }),
       );
 
-      const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A);
+      const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A, undefined, GEPRUEFT);
 
       expect(result).toEqual({ ok: false, errorKey: 'document.delete.blocked.finalizedInvoice' });
       expect(calls).toEqual([]);
@@ -534,7 +536,7 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
       stubRpcError('Archivdokument einer festgeschriebenen Rechnung kann nicht geloescht werden'),
     );
 
-    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A);
+    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A, undefined, GEPRUEFT);
 
     expect(result).toEqual({ ok: false, errorKey: 'document.delete.blocked.finalizedInvoice' });
     expect(getDocumentById(DOC_A)).toBeDefined();
@@ -556,7 +558,7 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
       }),
     );
 
-    const result = await deleteGeneratedInvoiceDocumentWithCloud('doc-beleg-1');
+    const result = await deleteGeneratedInvoiceDocumentWithCloud('doc-beleg-1', undefined, GEPRUEFT);
 
     expect(result.ok).toBe(true);
     // FINANZ-CORE-01A (STO-12) — genau die lesende Nachweis-Rückfrage, nichts Schreibendes.
@@ -574,7 +576,7 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
       }),
     );
 
-    const result = await deleteGeneratedInvoiceDocumentWithCloud('doc-nachweis-1');
+    const result = await deleteGeneratedInvoiceDocumentWithCloud('doc-nachweis-1', undefined, GEPRUEFT);
 
     expect(result).toEqual({ ok: false, errorKey: 'document.delete.blocked.paymentProof' });
     expect(calls).toEqual(['is_workspace_document_payment_proof']);

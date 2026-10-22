@@ -218,6 +218,7 @@ import {
   resetWorkspaceStore,
 } from './workspace/workspaceStore';
 import { LEGACY_SETUP_KEY } from './storage/storageScopeService';
+import { pruneConfirmationJournal } from './sync/syncConfirmationJournal';
 
 export { STORAGE_VERSION } from './sync/syncMigrationService';
 export const LEGACY_STORAGE_VERSION = 1;
@@ -1334,6 +1335,8 @@ export function savePersistedStateToKey(
     knownBusinessRevisions.set(storageKey, nextHeader.businessRevision);
     if (contentAfter) knownContentAreas.set(storageKey, contentAfter);
     else knownContentAreas.delete(storageKey);
+    // DOKUMENTE-01 R1 — gespeicherte Bestätigungen braucht das Journal nicht mehr; es behält nur noch offene.
+    pruneConfirmationJournal(storageKey, state.syncOutbox ?? []);
     if (businessChanged) {
       noteBusinessRevisionChange({
         storageKey,

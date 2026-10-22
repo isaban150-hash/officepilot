@@ -1,0 +1,3 @@
+Absichtlich leer: envDir der DOKUMENTE-01-Prüf-App (vite.dok01.config.mjs).
+Hier liegt nie eine .env-Datei. Alle VITE_*-Werte setzt dok01-pruefapp.mjs aus der Prozessumgebung
+(lokale Supabase 127.0.0.1:54321, lokaler Demo-anon-Schlüssel, KI aus, Mail-Stub).

@@ -1,0 +1,65 @@
+BEGIN
+INSERT 0 4
+UPDATE 4
+INSERT 0 2
+INSERT 0 4
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 4
+INSERT 0 6
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  OK  A1-A4 Mitglied löscht nichts und liest nichts über den Löschweg
+NOTICE:  OK  A5-A11 Inhaber/Admin löschen; Schutzregeln, Wiederholung, Mandantentrennung unverändert
+DO
+NOTICE:  OK  R1-R7 Mitglied, fremder Nutzer, anon und ungültige Begründung stellen nichts wieder her
+DO
+NOTICE:  OK  R3-R11 Inhaber/Admin stellen mit Begründung wieder her; eine unveränderliche Prüfzeile je Wiederherstellung; Rückkehr im Abzug
+DO
+NOTICE:  OK  I1-I5 kein Wiederbeleben über den Eingangsweg; Löschverbot und Bearbeitung unverändert; geprüfter Weg funktioniert
+NOTICE:  OK  B1-B4 Mitglied schreibt nicht an festgeschriebenen Rechnungen und am Versand (42501)
+NOTICE:  OK  B5-B10 fremde Nutzer und anon abgewiesen; Inhaber/Admin unverändert; Wiederholungen unverändert
+DO
+DO
+NOTICE:  OK  O1-O8 Mitglied bereitet Angebote vor, gibt nicht frei und bestätigt keine Nachträge; Inhaber/Admin unverändert
+INSERT 0 1
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  OK  S1/S2 Mitglied setzt keinen verbindlichen Angebotsstatus und keine Ablage; Beleg unverändert
+NOTICE:  OK  S3/S4 Wiederholungen und Entwurfsarbeit bleiben für Mitglieder erhalten
+NOTICE:  OK  S5 Inhaber und Admin: Ablage, versendet, abgelehnt, storniert, ersetzt wie bisher
+NOTICE:  OK  S6 fremder Betrieb und anon abgewiesen; Beleg unverändert
+NOTICE:  OK  S7/S8 keine Umgehung über gelöschte Entwürfe oder präparierte Nutzlast, für keine Rolle
+DO
+INSERT 0 2
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+CREATE FUNCTION
+NOTICE:  OK  Z1-Z3 fremder Inhaber: keine Auskunft über Zahlungsnachweise oder Personalbelege, auch nicht über deren Existenz
+DO
+NOTICE:  OK  Z4-Z7 Mitglied, Policies, Löschschutz und interne Aufrufe unverändert; anon ausgeschlossen
+NOTICE:  OK  G1-G6 Rechte ausdrücklich: Client-RPCs nur authenticated, Helfer nur service_role oder intern, nichts für anon
+DO
+DO
+NOTICE:  OK  G7 Aufrufketten der Service-Rolle (Rechteprüfung, Postfachzuordnung, Auto-Sync, Aufräumen) laufen
+ROLLBACK

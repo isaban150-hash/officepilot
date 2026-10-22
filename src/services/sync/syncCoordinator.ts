@@ -1,7 +1,8 @@
 import type { AppPersistedState } from '../../types/models';
 import type { SyncCoordinatorReport, SyncOutboxEntry, SyncState } from '../../types/sync';
 import type { OrderAmendmentIntentClearKey } from '../orderAmendment/orderAmendmentCloudPullMergeService';
-import type { SyncAdapter, SyncAdapterStatus } from './syncAdapter';
+import type { SyncAdapter, SyncAdapterStatus, SyncPushResult } from './syncAdapter';
+import { isStartIdentityProblem, type SyncRunIdentityChangeReason } from './syncRunIdentityService';
 import { createSyncAdapter } from './syncAdapterFactory';
 import {
   createEmptySyncSimulationReport,
@@ -33,7 +34,16 @@ export type SyncRunResult = {
 export const MAX_RETRY_ATTEMPTS = 3;
 
 function pendingOutboxCount(outbox: SyncOutboxEntry[] = []): number {
-  return outbox.filter((entry) => entry.status === 'pending' || entry.status === 'error').length;
+  // DOKUMENTE-01 R2 — zurückgehaltene Aufträge warten auf eine bewusste Freigabe; für sie startet kein Lauf.
+  return outbox.filter((entry) => (entry.status === 'pending' || entry.status === 'error') && !entry.hold).length;
+}
+
+/** DOKUMENTE-01 R1 — Kennung des Hinweises, dass ein Lauf wegen eines Kontowechsels angehalten wurde. */
+export const SYNC_IDENTITY_CHANGED_REPORT_ID = 'sync-identity-changed';
+
+/** DOKUMENTE-01 R1-WEISS-START — wurde dieser Lauf angehalten (Identität nicht bestätigt oder gewechselt)? */
+export function isSyncIdentityHaltReport(report: Pick<SyncCoordinatorReport, 'errors'> | null | undefined): boolean {
+  return Boolean(report?.errors.some((entry) => entry.outboxId === SYNC_IDENTITY_CHANGED_REPORT_ID));
 }
 
 function mergeReports(
@@ -119,6 +129,45 @@ export class SyncCoordinator {
     return this.retryAttempts;
   }
 
+  /**
+   * DOKUMENTE-01 R1 — während des Laufs wechselte Konto, Betrieb oder Sicht. Nichts wird übernommen oder bestätigt,
+   * kein Fehler erscheint im jetzt aktiven Konto, und der Bericht nennt keine Aufträge des früheren Kontos. Was der
+   * Server bis zum Wechsel bestätigt hat, steht im Journal des Ursprungsbereichs; alles andere bleibt dort offen.
+   */
+  private abortForIdentityChange(
+    state: AppPersistedState,
+    startedAt: string,
+    reason?: SyncRunIdentityChangeReason,
+  ): SyncRunResult {
+    const report = toCoordinatorReport(createEmptySyncSimulationReport(startedAt), this.retryAttempts, 0, 0);
+    report.finishedAt = new Date().toISOString();
+    report.durationMs = Math.max(0, Date.parse(report.finishedAt) - Date.parse(startedAt));
+    /*
+     * DOKUMENTE-01 R1-WEISS-START — ein angehaltener Lauf ist kein Erfolg: Er zählt als Fehler, damit weder die
+     * Oberfläche „erfolgreich“ meldet noch der Planer den Lauf als gelungen verbucht (er versucht es später neu —
+     * ein neuer Lauf mit bestätigter Identität setzt fort). Die Texte vermeiden Wörter, die der Planer als
+     * endgültig liest.
+     */
+    const startProblem = isStartIdentityProblem(reason);
+    const message = startProblem
+      ? 'Synchronisation angehalten: Die Identität dieses Laufs ließ sich beim Start nicht bestätigen – nichts gesendet, nichts übernommen.'
+      : 'Konto oder Bereich wurde während der Synchronisation gewechselt – Lauf angehalten, nichts übernommen.';
+    report.errorCount = 1;
+    report.errors.push({ outboxId: SYNC_IDENTITY_CHANGED_REPORT_ID, message });
+    // Startproblem: ehrlich als Fehler dieses Kontos. Wechsel mitten im Lauf: das neue Konto sieht keinen fremden.
+    this.syncState = startProblem ? 'error' : 'idle';
+    this.lastError = startProblem ? message : undefined;
+    this.lastReport = report;
+    return {
+      state,
+      report,
+      success: false,
+      skipPersist: true,
+      pendingInvoiceIntentClears: [],
+      pendingAmendmentIntentClears: [],
+    };
+  }
+
   prepareRetry(state: AppPersistedState): AppPersistedState {
     const device = wrapStateAsVirtualDevice(state);
     const retried = retryFailedOutboxEntries(device);
@@ -150,6 +199,8 @@ export class SyncCoordinator {
       0,
       0,
     );
+    // DOKUMENTE-01 R1 — der Abruf dieses Laufs gehört demselben Konto wie sein Senden.
+    let runIdentity: SyncPushResult['runIdentity'];
 
     if (pendingOutboxCount(outbox) > 0) {
       this.syncState = 'uploading';
@@ -159,6 +210,10 @@ export class SyncCoordinator {
         state: currentState,
         outbox,
       });
+      if (pushResult.identityChanged) {
+        return this.abortForIdentityChange(state, startedAt, pushResult.identityChangeReason);
+      }
+      runIdentity = pushResult.runIdentity;
 
       pushReport = toCoordinatorReport(
         pushResult.report,
@@ -223,7 +278,11 @@ export class SyncCoordinator {
         deviceId: state.syncClient!.deviceId,
         workspaceId: state.syncClient!.workspaceId,
         state: currentState,
+        ...(runIdentity ? { runIdentity } : {}),
       });
+      if (pullResult.identityChanged) {
+        return this.abortForIdentityChange(state, startedAt, pullResult.identityChangeReason);
+      }
 
       const pullReport = toCoordinatorReport(
         pullResult.report,
@@ -376,6 +435,12 @@ export class SyncCoordinator {
         state,
         outbox,
       });
+      if (pushResult.identityChanged) {
+        return {
+          ...this.abortForIdentityChange(state, startedAt, pushResult.identityChangeReason),
+          needsFullSync: false,
+        };
+      }
       const report = toCoordinatorReport(
         pushResult.report,
         this.retryAttempts,

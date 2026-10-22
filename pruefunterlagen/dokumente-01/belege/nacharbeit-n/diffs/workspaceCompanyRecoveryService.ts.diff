@@ -1,0 +1,99 @@
+diff --git a/src/services/workspace/workspaceCompanyRecoveryService.ts b/src/services/workspace/workspaceCompanyRecoveryService.ts
+index 6ff6586..3d17fe7 100644
+--- a/src/services/workspace/workspaceCompanyRecoveryService.ts
++++ b/src/services/workspace/workspaceCompanyRecoveryService.ts
+@@ -21,6 +21,7 @@ import {
+   type CompanyConflictInfo,
+ } from './workspaceCompanyConflictService';
+ import { createQuarantineFromLiveScope } from '../storage/localScopeEmergencyQuarantineService';
++import type { StorageAccount } from '../storage/storageScopeService';
+ 
+ export type CompanyRecoveryOutcome =
+   | { status: 'applied'; setupRowVersion: number; profileRowVersion: number }
+@@ -36,6 +37,8 @@ export type CompanyRecoveryOutcome =
+ 
+ export interface CompanyRecoveryInput {
+   workspaceId: string;
++  /** DOKUMENTE-01 N1 — das Konto, dessen Bestand der Konflikt zeigte. */
++  account?: StorageAccount | null;
+   /** Firmenname und Speicherzeitpunkt, wie sie dem Nutzer angezeigt wurden. */
+   confirmedCompanyName: string;
+   confirmedSavedAt?: string;
+@@ -113,7 +116,7 @@ function finalizeWorkspaceScopeAfterRecovery(
+ export async function applyConfirmedLocalCompany(
+   input: CompanyRecoveryInput,
+ ): Promise<CompanyRecoveryOutcome> {
+-  const candidate = readLocalCompanyCandidate(input.workspaceId);
++  const candidate = readLocalCompanyCandidate(input.workspaceId, input.account);
+   if (!candidate) return { status: 'failed', message: 'local_candidate_missing' };
+ 
+   /**
+@@ -146,7 +149,7 @@ export async function applyConfirmedLocalCompany(
+     }
+     return {
+       status: 'changed',
+-      conflict: buildConflictInfo(candidate, freshCloud, input.workspaceId),
++      conflict: buildConflictInfo(candidate, freshCloud, input.workspaceId, input.account),
+     };
+   }
+ 
+@@ -199,6 +202,7 @@ export async function applyConfirmedLocalCompany(
+         cloudProfileRowVersion: cloud.companyProfileRowVersion,
+         workspaceId: input.workspaceId,
+         storageKey: candidate.storageKey,
++        account: input.account,
+       },
+     };
+   }
+@@ -299,6 +303,7 @@ function buildConflictInfo(
+   candidate: { companyName: string; profileCompanyName: string; savedAt?: string; setupComplete: boolean; storageKey: string },
+   cloud: { setupCompanyName: string; profileCompanyName: string; setupRowVersion: number; companyProfileRowVersion: number },
+   workspaceId: string,
++  account?: StorageAccount | null,
+ ): CompanyConflictInfo {
+   return {
+     localCompanyName: candidate.companyName || candidate.profileCompanyName,
+@@ -309,6 +314,7 @@ function buildConflictInfo(
+     cloudProfileRowVersion: cloud.companyProfileRowVersion,
+     workspaceId,
+     storageKey: candidate.storageKey,
++    account,
+   };
+ }
+ 
+@@ -324,6 +330,8 @@ export type CloudAdoptionOutcome =
+ 
+ export interface CloudAdoptionInput {
+   workspaceId: string;
++  /** DOKUMENTE-01 N1 — das Konto, dessen Bestand der Konflikt zeigte. */
++  account?: StorageAccount | null;
+   /** Beide Namen und die Cloud-Versionen, wie sie dem Nutzer angezeigt wurden. */
+   confirmedLocalCompanyName: string;
+   confirmedCloudCompanyName: string;
+@@ -368,7 +376,7 @@ export interface CloudAdoptionInput {
+ export async function applyConfirmedCloudCompany(
+   input: CloudAdoptionInput,
+ ): Promise<CloudAdoptionOutcome> {
+-  const candidate = readLocalCompanyCandidate(input.workspaceId);
++  const candidate = readLocalCompanyCandidate(input.workspaceId, input.account);
+   if (!candidate) return { status: 'failed', message: 'local_candidate_missing' };
+ 
+   /* Der bestätigte lokale Stand ist exakt gebunden — wie im Gegenweg. */
+@@ -384,7 +392,7 @@ export async function applyConfirmedCloudCompany(
+     } catch {
+       // Ohne Cloud-Antwort bleiben die zuletzt bekannten Werte stehen.
+     }
+-    return { status: 'changed', conflict: buildConflictInfo(candidate, freshCloud, input.workspaceId) };
++    return { status: 'changed', conflict: buildConflictInfo(candidate, freshCloud, input.workspaceId, input.account) };
+   }
+ 
+   /* Kontroll-Pull: Der Cloud-Stand muss noch der angezeigte sein. Nur lesen. */
+@@ -401,7 +409,7 @@ export async function applyConfirmedCloudCompany(
+     cloud.companyProfileRowVersion !== input.confirmedCloudProfileRowVersion ||
+     normalizeCompanyName(cloudName) !== normalizeCompanyName(input.confirmedCloudCompanyName)
+   ) {
+-    return { status: 'changed', conflict: buildConflictInfo(candidate, cloud, input.workspaceId) };
++    return { status: 'changed', conflict: buildConflictInfo(candidate, cloud, input.workspaceId, input.account) };
+   }
+   if (!cloudName) return { status: 'failed', message: 'cloud_identity_missing' };
+ 

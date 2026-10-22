@@ -31,10 +31,13 @@ import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import {
   getDocumentById,
+  getDocumentRetention,
   isFinalizedInvoiceArchiveDocument,
   isGeneratedOutgoingInvoiceDocument,
   isInvoiceCorrectionDocument,
 } from '../services/documentService';
+import { retentionBlocksDelete } from '../services/document/documentRetention';
+import { DocumentRetentionCard } from '../components/documents/DocumentRetentionCard';
 import { isPayoutReceiptDocumentId } from '../services/employee/payoutReceiptDocumentId';
 import { buildInvoiceReachPath } from '../services/invoiceNavigation';
 import { deleteGeneratedInvoiceDocumentWithCloud } from '../services/document/generatedInvoiceDocumentDeleteService';
@@ -51,9 +54,10 @@ import {
 import {
   resolveArchivedCreditNoteMeaningSource,
   resolveArchivedMainDocumentText,
+  resolveArchivedMeaningText,
 } from '../services/document/documentAiContextService';
 import type { CompanyDocument } from '../types/models';
-import type { TranslationKey } from '../i18n';
+import { interpolateParams, type TranslationKey } from '../i18n';
 import {
   formatSafeDocumentDate,
   formatDocumentValidUntil,
@@ -154,6 +158,16 @@ export function DokumentDetailPage() {
    */
   const isDeleteProtected = isFinalizedInvoiceArchiveDocument(document);
   /*
+   * DOKUMENTE-01 / D-017 — die gesetzliche Aufbewahrung. Während der Frist gibt
+   * es kein „Löschen"; sonst nur nach ausdrücklicher Prüfbestätigung. Der Dienst
+   * und der Server prüfen dieselbe Regel noch einmal.
+   */
+  const aufbewahrung = getDocumentRetention(document);
+  const aufbewahrungSperrt = retentionBlocksDelete(aufbewahrung);
+  const aufbewahrungFristEnde = aufbewahrung.fristEnde
+    ? formatSafeDocumentDate(aufbewahrung.fristEnde, setup.language, aufbewahrung.fristEnde)
+    : '';
+  /*
    * BRIEFE-01D — dieselbe Überlegung für ein selbst verfasstes
    * Geschäftsschreiben: Der Betrieb hat es geschrieben, es kam nicht mit der
    * Post herein, und es gibt kein fremdes Original zum Abheften.
@@ -209,7 +223,10 @@ export function DokumentDetailPage() {
    * läuft unverändert der rein lokale Weg aus fa953da.
    */
   const handleDelete = async () => {
-    const result = await deleteGeneratedInvoiceDocumentWithCloud(document.id, deleteActor);
+    // DOKUMENTE-01 — erreichbar nur über die Bestätigung mit dem Prüftext darüber.
+    const result = await deleteGeneratedInvoiceDocumentWithCloud(document.id, deleteActor, {
+      aufbewahrungGeprueft: true,
+    });
     if (result.ok) {
       showToast(translate('document.deleted'));
       navigate('/dokumente', { replace: true });
@@ -321,6 +338,13 @@ export function DokumentDetailPage() {
    */
   const archivedMainDocumentText =
     isGeneratedInvoice || archivedCreditNoteMeaning ? null : resolveArchivedMainDocumentText(document);
+  /*
+   * DOKUMENTE-01 / F7 — alle übrigen Dokumente lesen ihre Bedeutung aus dem
+   * Originaltext, nicht aus dem ganzen Archivtext (Feldliste, doppelter Text,
+   * Seiten-JSON). Gutschrift und Hauptschreiben (oben) gehen vor.
+   */
+  const archivedMeaningText =
+    archivedCreditNoteMeaning || archivedMainDocumentText ? null : resolveArchivedMeaningText(document);
   const headerMeta = [
     linkedInvoice?.customerSnapshot?.name || document.issuer || null,
     document.issueDate
@@ -639,6 +663,12 @@ export function DokumentDetailPage() {
           <p className="hint-text" data-testid="document-detail-delete-role-hint">
             {translate('document.delete.roleHint')}
           </p>
+        ) : aufbewahrungSperrt ? (
+          <p className="hint-text" data-testid="document-detail-delete-retention">
+            {interpolateParams(translate('document.delete.blocked.retentionUntil'), {
+              datum: aufbewahrungFristEnde,
+            })}
+          </p>
         ) : !confirmDelete ? (
           <Button
             variant="danger"
@@ -652,6 +682,18 @@ export function DokumentDetailPage() {
           </Button>
         ) : (
           <>
+            {/*
+              * DOKUMENTE-01 / D-017 — die ausdrückliche Prüfbestätigung. Ohne
+              * laufende Frist („prüfen" oder rechnerisch abgelaufen) löscht nur,
+              * wer diesen Satz gelesen und bestätigt hat.
+              */}
+            <p className="hint-text" data-testid="document-detail-delete-retention-review">
+              {aufbewahrung.status === 'abgelaufen'
+                ? interpolateParams(translate('document.delete.retention.reviewExpired'), {
+                    datum: aufbewahrungFristEnde,
+                  })
+                : translate('document.delete.retention.reviewPruefen')}
+            </p>
             <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
               {translate('common.cancel')}
             </Button>
@@ -660,7 +702,7 @@ export function DokumentDetailPage() {
               data-testid="document-detail-delete-confirm"
               onClick={() => void handleDelete()}
             >
-              {translate('document.deleteConfirm')}
+              {translate('document.deleteConfirmReviewed')}
             </Button>
           </>
         )}
@@ -732,7 +774,7 @@ export function DokumentDetailPage() {
             <>
               {/* DOKUMENTVERSTAENDNIS-01C — was im Schreiben steht, vor der technischen Einordnung. */}
               <DocumentMeaningPanel
-                text={archivedCreditNoteMeaning?.text ?? archivedMainDocumentText ?? document.recognizedText}
+                text={archivedCreditNoteMeaning?.text ?? archivedMainDocumentText ?? archivedMeaningText ?? document.recognizedText}
                 sender={document.issuer}
                 ownInvoice={ownInvoiceMeaning}
                 employeePayment={employeePaymentMeaning}
@@ -762,6 +804,12 @@ export function DokumentDetailPage() {
             documentId={document.id}
             markFiledVariant={filingMarkPrimary ? 'primary' : 'outline'}
             onChanged={() => setDetailRevision((value) => value + 1)}
+          />
+
+          {/* DOKUMENTE-01 / D-017 — gesetzliche Aufbewahrung, ohne Entsorgungsvorschlag. */}
+          <DocumentRetentionCard
+            retention={aufbewahrung}
+            ohnePapieroriginal={isGeneratedInvoice || isPayoutReceipt}
           />
 
           {/*

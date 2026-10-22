@@ -1,0 +1,79 @@
+diff --git a/pruefunterlagen/dokumente-01/belege/nacharbeit-w/vorher/20261125120000_dokumente01_aufbewahrung.sql b/supabase/migrations/20261125120000_dokumente01_aufbewahrung.sql
+index 01a133f..ada7cbb 100644
+--- a/pruefunterlagen/dokumente-01/belege/nacharbeit-w/vorher/20261125120000_dokumente01_aufbewahrung.sql
++++ b/supabase/migrations/20261125120000_dokumente01_aufbewahrung.sql
+@@ -12,7 +12,12 @@
+ --   4  Archivdokumente                  — während der Frist kein Grabstein und keine
+ --                                         Abschwächung der Einstufung, auf keinem Weg.
+ --   5  Original                        — Original-Bindung und Datei eines geschützten
+---                                         Dokuments werden nicht beerdigt. Die
++--                                         Dokuments werden nicht beerdigt und nicht
++--                                         umgehängt: Datei, Dokument, Betrieb, Art und
++--                                         Teil der Bindung bleiben, ebenso Inhalt und
++--                                         Ablageort der Datei (DOK01-W1). Eine identische
++--                                         Wiederholung und Vorschau, Archiv-PDF und
++--                                         E-Rechnungs-XML bleiben frei. Die
+ --                                         E-Rechnungsbindung (structured) bleibt beim
+ --                                         Aufräumen ohne Bedingung (20261106): Ihr XML
+ --                                         entsteht byte-gleich aus der festgeschriebenen
+@@ -284,7 +289,25 @@ declare
+ begin
+   -- Nur das empfangene Original ist das Dokument selbst; Vorschau, Archiv-PDF und
+   -- E-Rechnungs-XML entstehen daraus bzw. aus der festgeschriebenen Rechnung neu.
+-  if old.binding_kind <> 'original' then
++  -- Eine schon beerdigte Bindung hat nichts mehr zu schützen.
++  if old.binding_kind <> 'original' or coalesce(old.deleted, false) then
++    return new;
++  end if;
++
++  /*
++   * DOK01-W1 — geschützt ist die Zuordnung, nicht nur das Löschflag. Sonst hängt
++   * ein Schreiber das Original erst auf eine andere Datei um und beerdigt danach
++   * die bisherige, die dann an keinem Original mehr hängt. Frei bleibt die
++   * identische Wiederholung: dieselbe Datei an demselben Dokument im selben
++   * Betrieb, gleiche Art, gleicher Teil, nicht beerdigt. Herkunft, Version und
++   * Bearbeiter ändern die Zuordnung nicht.
++   */
++  if new.workspace_id = old.workspace_id
++     and new.client_document_id = old.client_document_id
++     and new.client_file_ref_id is not distinct from old.client_file_ref_id
++     and new.binding_kind = old.binding_kind
++     and coalesce(new.part, '') = coalesce(old.part, '')
++     and not coalesce(new.deleted, false) then
+     return new;
+   end if;
+ 
+@@ -312,7 +335,6 @@ drop trigger if exists workspace_document_file_bindings_retention_guard on publi
+ create trigger workspace_document_file_bindings_retention_guard
+   before update on public.workspace_document_file_bindings
+   for each row
+-  when (not old.deleted and new.deleted)
+   execute function public.workspace_document_file_bindings_retention_guard();
+ 
+ create or replace function public.workspace_files_retention_guard()
+@@ -325,6 +347,19 @@ declare
+   v_document public.workspace_documents;
+   v_aufbewahrung record;
+ begin
++  -- Eine schon beerdigte Datei hat nichts mehr zu schützen.
++  if coalesce(old.deleted, false) then
++    return new;
++  end if;
++  -- DOK01-W1 — frei sind Metadaten (Name, Typ, Herkunft); Grabstein, Inhalt und Ablageort nicht.
++  if not coalesce(new.deleted, false)
++     and new.workspace_id = old.workspace_id
++     and new.client_file_ref_id = old.client_file_ref_id
++     and new.content_sha256 is not distinct from old.content_sha256
++     and new.storage_path is not distinct from old.storage_path then
++    return new;
++  end if;
++
+   for v_document in
+     select d.*
+     from public.workspace_document_file_bindings b
+@@ -354,5 +389,4 @@ drop trigger if exists workspace_files_retention_guard on public.workspace_files
+ create trigger workspace_files_retention_guard
+   before update on public.workspace_files
+   for each row
+-  when (not old.deleted and new.deleted)
+   execute function public.workspace_files_retention_guard();

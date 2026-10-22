@@ -1,6 +1,7 @@
 import type { TranslationKey } from '../i18n';
 import { t } from '../i18n';
 import { isDatevRelevantKind } from './brain/financeIntelligenceService';
+import { resolveOriginalRetentionAdvice } from './document/documentRetention';
 import { buildDocumentGuidance, buildPrioritizedDocumentGuidance } from './documentGuidanceService';
 import {
   formatDigitalFolderBreadcrumb,
@@ -71,26 +72,21 @@ function pushUnique(blocks: AssistantTextBlock[], block: AssistantTextBlock): vo
   if (!exists) blocks.push(block);
 }
 
+/*
+ * DOKUMENTE-01 / D-017 — wie in `documentGuidanceService`: Ein abgelegtes
+ * Dokument ist kein Grund mehr für „kann entsorgt werden"; das gilt nur für
+ * Werbung. Steuerrelevante Arten (DATEV) bleiben aufzubewahren.
+ */
 function resolveOriginalGuidance(
   item: InboxItem,
   kind: ClassifiedDocumentKind,
 ): OriginalGuidanceStatus {
-  if (item.isAdvertisement) return 'dispose_after_digital';
-  if (
-    isDatevRelevantKind(kind) ||
-    kind === 'freistellungsbescheinigung' ||
-    kind === 'lohnabrechnung' ||
-    kind === 'kontoauszug'
-  ) {
-    return 'keep_until_tax';
-  }
-  if (kind === 'mahnung' || kind === 'zahlungserinnerung' || item.deadline) {
-    return 'keep';
-  }
-  if (item.status === 'abgelegt' || item.importedToArchive) {
-    return 'dispose_after_digital';
-  }
-  return 'uncertain';
+  return resolveOriginalRetentionAdvice({
+    isAdvertisement: item.isAdvertisement,
+    classifiedKind: kind,
+    hasDeadline: Boolean(item.deadline),
+    taxRelevant: isDatevRelevantKind(kind),
+  });
 }
 
 function buildBriefLines(

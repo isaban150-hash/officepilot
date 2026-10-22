@@ -1,0 +1,1219 @@
+
+ RUN  v3.2.6 C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > H — abgebrochene Dateiauswahl lässt den Entwurf unverändert
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'save_clicked',
+  source: 'scan'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'execute_decision_start'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'confirm_pending_start',
+  fileSize: 6,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'cached_payload_loaded',
+  fileSize: 6,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'file_store_start',
+  fileSize: 6
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'hash_start',
+  fileSize: 6
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > H — abgebrochene Dateiauswahl lässt den Entwurf unverändert
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'hash_done',
+  fileSize: 6,
+  durationMs: 23
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > H — abgebrochene Dateiauswahl lässt den Entwurf unverändert
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'file_ref_created',
+  fileSize: 6,
+  success: true
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > H — abgebrochene Dateiauswahl lässt den Entwurf unverändert
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'inbox_item_build_start',
+  pageCount: 0,
+  textLength: 21,
+  fileSize: 6
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'classification_start',
+  pageCount: 0,
+  textLength: 21,
+  detectionReasonKey: 'preview_classification_reused'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'classification_done',
+  pageCount: 0,
+  textLength: 21,
+  classifiedKind: 'baustellenfoto',
+  detectionReasonKey: 'classification.detect.baustellenfoto',
+  durationMs: 3
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm80i5-s3ctm', step: 'stage_inbox_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'stage_inbox_done',
+  durationMs: 1
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm80i5-s3ctm', step: 'persist_all_start' }
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm80i5-s3ctm', step: 'rollback_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'rollback_done',
+  durationMs: 1
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > H — abgebrochene Dateiauswahl lässt den Entwurf unverändert
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'execute_decision_resolved',
+  success: false
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'finally_reset_loading'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > Q — Duplikat zu einem dauerhaften Dokument öffnet das bestehende Objekt
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8139-4uul9',
+  step: 'save_clicked',
+  source: 'scan'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8139-4uul9',
+  step: 'execute_decision_start'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > Q — Duplikat zu einem dauerhaften Dokument öffnet das bestehende Objekt
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8139-4uul9',
+  step: 'execute_decision_resolved',
+  success: true
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > Q — Duplikat zu einem dauerhaften Dokument öffnet das bestehende Objekt
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8139-4uul9', step: 'navigation_start' }
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8139-4uul9', step: 'navigation_done' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8139-4uul9',
+  step: 'finally_reset_loading'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M — dauerhaft speichern: Metadaten weg, Datei committed, ein InboxItem
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'save_clicked',
+  source: 'scan'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'execute_decision_start'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'confirm_pending_start',
+  fileSize: 6,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'cached_payload_loaded',
+  fileSize: 6,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'file_store_start',
+  fileSize: 6
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'hash_start',
+  fileSize: 6
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M — dauerhaft speichern: Metadaten weg, Datei committed, ein InboxItem
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'hash_done',
+  fileSize: 6,
+  durationMs: 7
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M — dauerhaft speichern: Metadaten weg, Datei committed, ein InboxItem
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'file_ref_created',
+  fileSize: 6,
+  success: true
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M — dauerhaft speichern: Metadaten weg, Datei committed, ein InboxItem
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'inbox_item_build_start',
+  pageCount: 0,
+  textLength: 21,
+  fileSize: 6
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'classification_start',
+  pageCount: 0,
+  textLength: 21,
+  detectionReasonKey: 'preview_classification_reused'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'classification_done',
+  pageCount: 0,
+  textLength: 21,
+  classifiedKind: 'baustellenfoto',
+  detectionReasonKey: 'classification.detect.baustellenfoto',
+  durationMs: 0
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm82bq-esjxe', step: 'stage_inbox_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'stage_inbox_done',
+  durationMs: 0
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm82bq-esjxe', step: 'persist_all_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'persist_all_done',
+  durationMs: 2
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'cached_file_release_start'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'cached_file_release_done',
+  durationMs: 0
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'intake_success',
+  success: true,
+  fileSize: 6,
+  pageCount: 0,
+  textLength: 21,
+  classifiedKind: 'baustellenfoto'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M — dauerhaft speichern: Metadaten weg, Datei committed, ein InboxItem
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'execute_decision_resolved',
+  success: true
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M — dauerhaft speichern: Metadaten weg, Datei committed, ein InboxItem
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm82bq-esjxe', step: 'navigation_start' }
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm82bq-esjxe', step: 'navigation_done' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82bq-esjxe',
+  step: 'finally_reset_loading'
+}
+
+ ✓ |default| src/uploadDraftContinueWorking01.test.tsx (20 tests) 4983ms
+   ✓ UPLOAD-DRAFT-RESUME-01C2 > A/B — UiSession trägt nur die Draft-ID und die echte Draft-Route  832ms
+   ✓ UPLOAD-DRAFT-RESUME-01C2 > E — Weiterarbeiten führt exakt zum Entwurf, ohne zweite Analyse  330ms
+   ✓ UPLOAD-DRAFT-RESUME-01C2 > F — Verwerfen entfernt Entwurf, temp-Ref und Blob  377ms
+   ✓ UPLOAD-DRAFT-RESUME-01C2 > G — Persistenzfehler beim Verwerfen lässt Karte und Entwurf bestehen  328ms
+   ✓ UPLOAD-DRAFT-RESUME-01C2 > I — abgelaufener, beschädigter und fremder Entwurf erzeugen keine Karte  643ms
+   ✓ UPLOAD-DRAFT-RESUME-01C2 > M — StrictMode: Validierung hängt nicht und öffnet keine verspätete Karte  301ms
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2 — geworfene Ausnahme beim Speichern wird sichtbar, der Entwurf bleibt
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82i0-hg0ja',
+  step: 'save_clicked',
+  source: 'scan'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82i0-hg0ja',
+  step: 'execute_decision_start'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2 — geworfene Ausnahme beim Speichern wird sichtbar, der Entwurf bleibt
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82i0-hg0ja',
+  step: 'finally_reset_loading'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2b — nach dem Fehlschlag ist ein erneuter Versuch möglich und erfolgreich
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82nu-vxdgu',
+  step: 'save_clicked',
+  source: 'scan'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82nu-vxdgu',
+  step: 'execute_decision_start'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2b — nach dem Fehlschlag ist ein erneuter Versuch möglich und erfolgreich
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82nu-vxdgu',
+  step: 'finally_reset_loading'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2b — nach dem Fehlschlag ist ein erneuter Versuch möglich und erfolgreich
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'save_clicked',
+  source: 'scan'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'execute_decision_start'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'confirm_pending_start',
+  fileSize: 8,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'cached_payload_loaded',
+  fileSize: 8,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'file_store_start',
+  fileSize: 8
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'hash_start',
+  fileSize: 8
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2b — nach dem Fehlschlag ist ein erneuter Versuch möglich und erfolgreich
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'hash_done',
+  fileSize: 8,
+  durationMs: 7
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2b — nach dem Fehlschlag ist ein erneuter Versuch möglich und erfolgreich
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'file_ref_created',
+  fileSize: 8,
+  success: true
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2b — nach dem Fehlschlag ist ein erneuter Versuch möglich und erfolgreich
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'inbox_item_build_start',
+  pageCount: 0,
+  textLength: 21,
+  fileSize: 8
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'classification_start',
+  pageCount: 0,
+  textLength: 21,
+  detectionReasonKey: 'preview_classification_reused'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'classification_done',
+  pageCount: 0,
+  textLength: 21,
+  classifiedKind: 'baustellenfoto',
+  detectionReasonKey: 'classification.detect.baustellenfoto',
+  durationMs: 0
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm82q3-e7ijj', step: 'stage_inbox_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'stage_inbox_done',
+  durationMs: 0
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm82q3-e7ijj', step: 'persist_all_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'persist_all_done',
+  durationMs: 1
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'cached_file_release_start'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'cached_file_release_done',
+  durationMs: 0
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'intake_success',
+  success: true,
+  fileSize: 8,
+  pageCount: 0,
+  textLength: 21,
+  classifiedKind: 'baustellenfoto'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2b — nach dem Fehlschlag ist ein erneuter Versuch möglich und erfolgreich
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'execute_decision_resolved',
+  success: true
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2b — nach dem Fehlschlag ist ein erneuter Versuch möglich und erfolgreich
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm82q3-e7ijj', step: 'navigation_start' }
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm82q3-e7ijj', step: 'navigation_done' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82q3-e7ijj',
+  step: 'finally_reset_loading'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2c — ein zurückgegebener persist_failed bleibt sichtbar und behält den Entwurf
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'save_clicked',
+  source: 'scan'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'execute_decision_start'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'confirm_pending_start',
+  fileSize: 8,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'cached_payload_loaded',
+  fileSize: 8,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'file_store_start',
+  fileSize: 8
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'hash_start',
+  fileSize: 8
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2c — ein zurückgegebener persist_failed bleibt sichtbar und behält den Entwurf
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'hash_done',
+  fileSize: 8,
+  durationMs: 6
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2c — ein zurückgegebener persist_failed bleibt sichtbar und behält den Entwurf
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'file_ref_created',
+  fileSize: 8,
+  success: true
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2c — ein zurückgegebener persist_failed bleibt sichtbar und behält den Entwurf
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'inbox_item_build_start',
+  pageCount: 0,
+  textLength: 21,
+  fileSize: 8
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'classification_start',
+  pageCount: 0,
+  textLength: 21,
+  detectionReasonKey: 'preview_classification_reused'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'classification_done',
+  pageCount: 0,
+  textLength: 21,
+  classifiedKind: 'baustellenfoto',
+  detectionReasonKey: 'classification.detect.baustellenfoto',
+  durationMs: 0
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm82wx-nvybm', step: 'stage_inbox_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'stage_inbox_done',
+  durationMs: 0
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm82wx-nvybm', step: 'persist_all_start' }
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm82wx-nvybm', step: 'rollback_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'rollback_done',
+  durationMs: 0
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2c — ein zurückgegebener persist_failed bleibt sichtbar und behält den Entwurf
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'execute_decision_resolved',
+  success: false
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'finally_reset_loading'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2d — reale Sequenz: Entwurf, Reload, Wiederaufnahme, dann erfolgreich speichern
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'save_clicked',
+  source: 'scan'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'execute_decision_start'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'confirm_pending_start',
+  fileSize: 8,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'cached_payload_loaded',
+  fileSize: 8,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'file_store_start',
+  fileSize: 8
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'hash_start',
+  fileSize: 8
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2d — reale Sequenz: Entwurf, Reload, Wiederaufnahme, dann erfolgreich speichern
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'hash_done',
+  fileSize: 8,
+  durationMs: 12
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2d — reale Sequenz: Entwurf, Reload, Wiederaufnahme, dann erfolgreich speichern
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'file_ref_created',
+  fileSize: 8,
+  success: true
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2d — reale Sequenz: Entwurf, Reload, Wiederaufnahme, dann erfolgreich speichern
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'inbox_item_build_start',
+  pageCount: 0,
+  textLength: 21,
+  fileSize: 8
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'classification_start',
+  pageCount: 0,
+  textLength: 21,
+  detectionReasonKey: 'preview_classification_reused'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'classification_done',
+  pageCount: 0,
+  textLength: 21,
+  classifiedKind: 'baustellenfoto',
+  detectionReasonKey: 'classification.detect.baustellenfoto',
+  durationMs: 1
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8333-ssjk0', step: 'stage_inbox_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'stage_inbox_done',
+  durationMs: 0
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8333-ssjk0', step: 'persist_all_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'persist_all_done',
+  durationMs: 2
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'cached_file_release_start'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'cached_file_release_done',
+  durationMs: 0
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'intake_success',
+  success: true,
+  fileSize: 8,
+  pageCount: 0,
+  textLength: 21,
+  classifiedKind: 'baustellenfoto'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2d — reale Sequenz: Entwurf, Reload, Wiederaufnahme, dann erfolgreich speichern
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'execute_decision_resolved',
+  success: true
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2d — reale Sequenz: Entwurf, Reload, Wiederaufnahme, dann erfolgreich speichern
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8333-ssjk0', step: 'navigation_start' }
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8333-ssjk0', step: 'navigation_done' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8333-ssjk0',
+  step: 'finally_reset_loading'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2e — reale Sequenz mit Ausnahme: sichtbarer Fehler, Entwurf bleibt erhalten
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm83c1-tzmxz',
+  step: 'save_clicked',
+  source: 'scan'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm83c1-tzmxz',
+  step: 'execute_decision_start'
+}
+
+stdout | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2e — reale Sequenz mit Ausnahme: sichtbarer Fehler, Entwurf bleibt erhalten
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm83c1-tzmxz',
+  step: 'finally_reset_loading'
+}
+
+ ✓ |default| src/scanDraftResume01.test.tsx (27 tests) 7409ms
+   ✓ UPLOAD-DRAFT-RESUME-01D2 Scan > C — während des Writes bleibt die Analyse verborgen und erscheint danach bedienbar  636ms
+   ✓ UPLOAD-DRAFT-RESUME-01D2 Scan > E — Weiterarbeiten öffnet exakt den Scanentwurf ohne zweites OCR  353ms
+   ✓ UPLOAD-DRAFT-RESUME-01D2 Scan > F — Reload mit gültigem Kamera-Entwurf öffnet keinen Picker  442ms
+   ✓ UPLOAD-DRAFT-RESUME-01D2 Scan > H — abgebrochene Dateiauswahl lässt den Entwurf unverändert  370ms
+   ✓ UPLOAD-DRAFT-RESUME-01D2 Scan > Q — Duplikat zu einem dauerhaften Dokument öffnet das bestehende Objekt  479ms
+   ✓ UPLOAD-DRAFT-RESUME-01D2 Scan > I — neue Datei ersetzt den Entwurf sicher  301ms
+   ✓ UPLOAD-DRAFT-RESUME-01D2 Scan > M2b — nach dem Fehlschlag ist ein erneuter Versuch möglich und erfolgreich  324ms
+   ✓ UPLOAD-DRAFT-RESUME-01D2 Scan > M2d — reale Sequenz: Entwurf, Reload, Wiederaufnahme, dann erfolgreich speichern  314ms
+   ✓ UPLOAD-DRAFT-RESUME-01D2 Scan > R — Layout, Fakten und Zuordnungen überstehen Reload ohne OCR und ohne KI  346ms
+ ✓ |default| src/services/einvoice/einvoiceVertrauenGls01.test.ts (6 tests) 1519ms
+   ✓ FINALISIERUNG ZUGFeRD — Vertrauensmarke > Z1: markierte Ablage mit gleichen Bytes wird ausgeliefert; eine markierte Fälschung nicht  772ms
+   ✓ FINALISIERUNG ZUGFeRD — Vertrauensmarke > Z2: der Inhaber ersetzt eine markierte Fälschung; ein Mitglied legt nichts ab  482ms
+stdout | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > C — Dauerhaft speichern nach Wiederherstellung erzeugt genau ein InboxItem
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'save_clicked',
+  source: 'upload'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'execute_decision_start'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'confirm_pending_start',
+  fileSize: 7,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'cached_payload_loaded',
+  fileSize: 7,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'file_store_start',
+  fileSize: 7
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'hash_start',
+  fileSize: 7
+}
+
+stdout | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > C — Dauerhaft speichern nach Wiederherstellung erzeugt genau ein InboxItem
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'hash_done',
+  fileSize: 7,
+  durationMs: 19
+}
+
+stdout | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > C — Dauerhaft speichern nach Wiederherstellung erzeugt genau ein InboxItem
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'file_ref_created',
+  fileSize: 7,
+  success: true
+}
+
+stdout | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > C — Dauerhaft speichern nach Wiederherstellung erzeugt genau ein InboxItem
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'inbox_item_build_start',
+  pageCount: 0,
+  textLength: 21,
+  fileSize: 7
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'classification_start',
+  pageCount: 0,
+  textLength: 21,
+  detectionReasonKey: 'preview_classification_reused'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'classification_done',
+  pageCount: 0,
+  textLength: 21,
+  classifiedKind: 'baustellenfoto',
+  detectionReasonKey: 'classification.detect.baustellenfoto',
+  durationMs: 3
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8cst-a3o7u', step: 'stage_inbox_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'stage_inbox_done',
+  durationMs: 1
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8cst-a3o7u', step: 'persist_all_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'persist_all_done',
+  durationMs: 8
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'cached_file_release_start'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'cached_file_release_done',
+  durationMs: 1
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'intake_success',
+  success: true,
+  fileSize: 7,
+  pageCount: 0,
+  textLength: 21,
+  classifiedKind: 'baustellenfoto'
+}
+
+stdout | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > C — Dauerhaft speichern nach Wiederherstellung erzeugt genau ein InboxItem
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'execute_decision_resolved',
+  success: true
+}
+
+stdout | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > C — Dauerhaft speichern nach Wiederherstellung erzeugt genau ein InboxItem
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8cst-a3o7u', step: 'navigation_start' }
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8cst-a3o7u', step: 'navigation_done' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8cst-a3o7u',
+  step: 'finally_reset_loading'
+}
+
+stdout | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > P — echter Dateiwechsel A → B über die sichtbare Oberfläche
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'save_clicked',
+  source: 'upload'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'execute_decision_start'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'confirm_pending_start',
+  fileSize: 9,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'cached_payload_loaded',
+  fileSize: 9,
+  pageCount: 0,
+  textLength: 21
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'file_store_start',
+  fileSize: 9
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'hash_start',
+  fileSize: 9
+}
+
+stdout | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > P — echter Dateiwechsel A → B über die sichtbare Oberfläche
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'hash_done',
+  fileSize: 9,
+  durationMs: 17
+}
+
+stdout | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > P — echter Dateiwechsel A → B über die sichtbare Oberfläche
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'file_ref_created',
+  fileSize: 9,
+  success: true
+}
+
+stdout | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > P — echter Dateiwechsel A → B über die sichtbare Oberfläche
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'inbox_item_build_start',
+  pageCount: 0,
+  textLength: 21,
+  fileSize: 9
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'classification_start',
+  pageCount: 0,
+  textLength: 21,
+  detectionReasonKey: 'preview_classification_reused'
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'classification_done',
+  pageCount: 0,
+  textLength: 21,
+  classifiedKind: 'baustellenfoto',
+  detectionReasonKey: 'classification.detect.baustellenfoto',
+  durationMs: 0
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8edw-lmosj', step: 'stage_inbox_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'stage_inbox_done',
+  durationMs: 0
+}
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8edw-lmosj', step: 'persist_all_start' }
+[OfficePilot:document-save-trace] { traceId: 'contract-save-mvgm8edw-lmosj', step: 'rollback_start' }
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'rollback_done',
+  durationMs: 0
+}
+
+stdout | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > P — echter Dateiwechsel A → B über die sichtbare Oberfläche
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'execute_decision_resolved',
+  success: false
+}
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'finally_reset_loading'
+}
+
+ ✓ |default| src/uploadDraftResume01.test.tsx (24 tests) 4839ms
+   ✓ UPLOAD-DRAFT-RESUME-01B1 > A — Vorschau wird als Entwurf gesichert, ohne Domänenobjekte anzulegen  744ms
+   ✓ UPLOAD-DRAFT-RESUME-01B1 > B — nach Reload erscheint dieselbe Vorschau ohne zweite Analyse  319ms
+   ✓ UPLOAD-DRAFT-RESUME-01B1 > C — Dauerhaft speichern nach Wiederherstellung erzeugt genau ein InboxItem  399ms
+   ✓ UPLOAD-DRAFT-RESUME-01B1 > P — echter Dateiwechsel A → B über die sichtbare Oberfläche  487ms
+   ✓ UPLOAD-DRAFT-RESUME-01B1 > U — Unmount während des Writes lässt keinen unsichtbaren Entwurf zurück  302ms
+ ✓ |default| src/storageDerivativeRecoveryDetailRetry01.test.tsx (12 tests) 780ms
+stdout | src/storageTempPromotion02.test.ts > STORAGE-TEMP-PROMOTION-02 > committed-Promotion ist idempotenter No-op
+Warning: Please use the `legacy` build in Node.js environments.
+
+ ✓ |default| src/storageTempPromotion02.test.ts (17 tests) 1598ms
+   ✓ STORAGE-TEMP-PROMOTION-02 > temp wird zu committed mit Promotion-Zeit und ohne expiresAt  440ms
+ ✓ |default| src/documentArchiveMobileAndPaperStatus01.test.tsx (9 tests) 455ms
+ ✓ |default| src/storageDerivativeStepOutcome01.test.ts (7 tests) 373ms
+ ✓ |default| src/storageImageToPdfArchiveExecutor01.test.ts (9 tests) 291ms
+ ✓ |default| src/storagePdfThumbnailExecutor01.test.ts (10 tests) 863ms
+   ✓ STORAGE-PDF-THUMBNAIL-EXECUTOR-01 > Fall F: Raster unverändert / Import / Refcount > Import bleibt erfolgreich bei Encode-Fehler; Refcount schützt Thumbnail  410ms
+ ✓ |default| src/storageRasterCapabilityEnablement01.test.ts (4 tests) 293ms
+ ✓ |default| src/storageDerivativePostImportSerialize01.test.ts (6 tests) 867ms
+   ✓ STORAGE-DERIVATIVE-POST-IMPORT-SERIALIZE-01 > Import bleibt non-blocking gegenüber dem Coordinator  336ms
+ ✓ |default| src/storageRepresentationUiPreview01.test.tsx (6 tests) 593ms
+   ✓ STORAGE-REPRESENTATION-UI-PREVIEW-01 > ready zeigt Preview und Original-Panel  410ms
+ ✓ |default| src/storageDerivativeRollbackIsolation01.test.ts (7 tests) 100ms
+ ✓ |default| src/storageDerivativeManualRetryStep01.test.ts (8 tests) 208ms
+ ✓ |default| src/storageRasterArchiveExecutor01.test.ts (10 tests) 238ms
+ ✓ |default| src/storagePdfMetadataStripExecutor01.test.ts (11 tests) 986ms
+   ✓ STORAGE-PDF-METADATA-STRIP-EXECUTOR-01 > Fall A: erfolgreicher Metadata-Strip-Pfad > strippt Info-Metadaten, setzt archive-Binding; Original bleibt unverändert  415ms
+stdout | src/storageIntegrityVerify02.test.ts > STORAGE-INTEGRITY-VERIFY-02 > erfolgreicher Write + Readback + Hash + Größe
+Warning: Please use the `legacy` build in Node.js environments.
+
+ ✓ |default| src/storageIntegrityVerify02.test.ts (12 tests) 2905ms
+   ✓ STORAGE-INTEGRITY-VERIFY-02 > erfolgreicher Write + Readback + Hash + Größe  806ms
+   ✓ STORAGE-INTEGRITY-VERIFY-02 > save_duplicate_anyway erzeugt weiterhin keinen zweiten Blob  1069ms
+ ✓ |default| src/storageRasterThumbnailExecutor01.test.ts (8 tests) 551ms
+ ✓ |default| src/documentOriginalIosOverflow02.test.tsx (4 tests) 321ms
+ ✓ |default| src/storageRasterPreviewExecutor01.test.ts (8 tests) 384ms
+ ✓ |default| src/services/document/intakeCloudSync01b.test.ts (15 tests) 86ms
+ ✓ |default| src/storageRepresentationUiThumbnail01.test.tsx (4 tests) 377ms
+ ✓ |default| src/storageRepresentationReadLookup01.test.ts (12 tests) 131ms
+ ✓ |default| src/storageDerivativeRecoveryDetailStatus01.test.ts (10 tests) 89ms
+ ✓ |default| src/storagePdfPreviewExecutor01.test.ts (11 tests) 523ms
+ ✓ |default| src/services/document/vorschauCloudDubletteDokumente01.test.ts (4 tests) 109ms
+
+ Test Files  27 passed (27)
+      Tests  281 passed (281)
+   Start at  13:43:28
+   Duration  176.61s (transform 18.46s, setup 213.16s, collect 16.73s, tests 31.87s, environment 56.14s, prepare 10.87s)
+
+JSON report written to C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/pruefunterlagen/dokumente-01/belege/nacharbeit-w/client/gezielt-1.vitest.json
+
+stderr | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > H — abgebrochene Dateiauswahl lässt den Entwurf unverändert
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm80i5-s3ctm',
+  step: 'intake_failure',
+  success: false,
+  errorName: 'persist_failed',
+  errorMessage: 'persist_failed'
+}
+
+stderr | src/uploadDraftContinueWorking01.test.tsx > UPLOAD-DRAFT-RESUME-01C2 > J — committed oder geteilter FileRef bleibt beim Verwerfen erhalten
+An update to UiSessionRecoveryHost inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2 — geworfene Ausnahme beim Speichern wird sichtbar, der Entwurf bleibt
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82i0-hg0ja',
+  step: 'execute_decision_rejected',
+  success: false,
+  errorName: 'Error',
+  errorMessage: 'unerwarteter Fehler beim Speichern'
+}
+
+stderr | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2b — nach dem Fehlschlag ist ein erneuter Versuch möglich und erfolgreich
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82nu-vxdgu',
+  step: 'execute_decision_rejected',
+  success: false,
+  errorName: 'Error',
+  errorMessage: 'unerwarteter Fehler beim Speichern'
+}
+
+stderr | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2c — ein zurückgegebener persist_failed bleibt sichtbar und behält den Entwurf
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm82wx-nvybm',
+  step: 'intake_failure',
+  success: false,
+  errorName: 'persist_failed',
+  errorMessage: 'persist_failed'
+}
+
+stderr | src/scanDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01D2 Scan > M2e — reale Sequenz mit Ausnahme: sichtbarer Fehler, Entwurf bleibt erhalten
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm83c1-tzmxz',
+  step: 'execute_decision_rejected',
+  success: false,
+  errorName: 'Error',
+  errorMessage: 'unerwarteter Fehler beim Speichern'
+}
+
+stderr | src/services/einvoice/einvoiceVertrauenGls01.test.ts > FINALISIERUNG XRechnung — Vertrauensmarke > V1: markierte Ablage mit genau den Bytes einer frischen Erzeugung wird ausgeliefert und wiederverwendet
+[OfficeTakt] Firmen-Gedächtnis konnte nicht neu aufgebaut werden: TypeError: Cannot read properties of undefined (reading 'trim')
+    at deriveTopic (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\documentSummaryService.ts:176:23)
+    at buildDocumentSummary (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\documentSummaryService.ts:258:17)
+    at applyUnderstanding (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\officePilotMemoryProjection.ts:326:17)
+    at applyArchivePass (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\officePilotMemoryProjection.ts:369:3)
+    at deriveOfficePilotMemory (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\officePilotMemoryProjection.ts:513:5)
+    at rebuildOfficePilotMemoryProjection (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1579:24)
+    at persistAll (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1761:3)
+    at ensureXRechnungArtifact (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\einvoice\xrechnungArtifactService.ts:471:5)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\einvoice\einvoiceVertrauenGls01.test.ts:191:18
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+stderr | src/services/einvoice/einvoiceVertrauenGls01.test.ts > FINALISIERUNG XRechnung — Vertrauensmarke > V2: eine markierte Fälschung wird nie ausgeliefert; der Inhaber ersetzt sie durch die eigene Erzeugung
+[OfficeTakt] Firmen-Gedächtnis konnte nicht neu aufgebaut werden: TypeError: Cannot read properties of undefined (reading 'trim')
+    at deriveTopic (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\documentSummaryService.ts:176:23)
+    at buildDocumentSummary (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\documentSummaryService.ts:258:17)
+    at applyUnderstanding (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\officePilotMemoryProjection.ts:326:17)
+    at applyArchivePass (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\officePilotMemoryProjection.ts:369:3)
+    at deriveOfficePilotMemory (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\officePilotMemoryProjection.ts:513:5)
+    at rebuildOfficePilotMemoryProjection (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1579:24)
+    at persistAll (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1761:3)
+    at ensureXRechnungArtifact (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\einvoice\xrechnungArtifactService.ts:471:5)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\einvoice\einvoiceVertrauenGls01.test.ts:211:22
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+stderr | src/services/einvoice/einvoiceVertrauenGls01.test.ts > FINALISIERUNG ZUGFeRD — Vertrauensmarke > Z1: markierte Ablage mit gleichen Bytes wird ausgeliefert; eine markierte Fälschung nicht
+[OfficeTakt] Firmen-Gedächtnis konnte nicht neu aufgebaut werden: TypeError: Cannot read properties of undefined (reading 'trim')
+    at deriveTopic (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\documentSummaryService.ts:176:23)
+    at buildDocumentSummary (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\documentSummaryService.ts:258:17)
+    at applyUnderstanding (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\officePilotMemoryProjection.ts:326:17)
+    at applyArchivePass (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\officePilotMemoryProjection.ts:369:3)
+    at deriveOfficePilotMemory (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\officePilotMemoryProjection.ts:513:5)
+    at rebuildOfficePilotMemoryProjection (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1579:24)
+    at persistAll (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1761:3)
+    at ensureZugferdArtifact (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\einvoice\zugferd\zugferdArtifactService.ts:550:5)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\einvoice\einvoiceVertrauenGls01.test.ts:261:18
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+stderr | src/services/einvoice/einvoiceVertrauenGls01.test.ts > FINALISIERUNG ZUGFeRD — Vertrauensmarke > Z2: der Inhaber ersetzt eine markierte Fälschung; ein Mitglied legt nichts ab
+[OfficeTakt] Firmen-Gedächtnis konnte nicht neu aufgebaut werden: TypeError: Cannot read properties of undefined (reading 'trim')
+    at deriveTopic (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\documentSummaryService.ts:176:23)
+    at buildDocumentSummary (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\documentSummaryService.ts:258:17)
+    at applyUnderstanding (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\officePilotMemoryProjection.ts:326:17)
+    at applyArchivePass (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\officePilotMemoryProjection.ts:369:3)
+    at deriveOfficePilotMemory (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\memory\officePilotMemoryProjection.ts:513:5)
+    at rebuildOfficePilotMemoryProjection (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1579:24)
+    at persistAll (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\persistenceService.ts:1761:3)
+    at ensureZugferdArtifact (C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\einvoice\zugferd\zugferdArtifactService.ts:550:5)
+    at C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot\src\services\einvoice\einvoiceVertrauenGls01.test.ts:274:21
+    at file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+stderr | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > N — während der Sicherung bleibt die Analyse verborgen und erscheint danach bedienbar
+An update to DocumentUploadPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to MemoryRouter inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to DocumentUploadPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AppProvider inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to DocumentUploadPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/uploadDraftResume01.test.tsx > UPLOAD-DRAFT-RESUME-01B1 > P — echter Dateiwechsel A → B über die sichtbare Oberfläche
+[OfficePilot:document-save-trace] {
+  traceId: 'contract-save-mvgm8edw-lmosj',
+  step: 'intake_failure',
+  success: false,
+  errorName: 'persist_failed',
+  errorMessage: 'persist_failed'
+}
+
+stderr | src/storageDerivativeRecoveryDetailRetry01.test.tsx > STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01 > fehlgeschlagener Retry bleibt sichtbar und zeigt Fehlstatus
+[OfficePilot:derivative-step-outcome] raster_preview orchestrator_error
+
+stderr | src/storageDerivativeRecoveryDetailRetry01.test.tsx > STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01 > Service-Lock ist zweite Absicherung (in_flight)
+[OfficePilot:derivative-step-retry] raster_preview in_flight
+
+stderr | src/storageDerivativeStepOutcome01.test.ts > STORAGE-DERIVATIVE-STEP-OUTCOME-01 > speichert persisted/noop/conflict/error Outcomes
+[OfficePilot:derivative-step-outcome] raster_thumbnail unexpected_failure
+
+stderr | src/storageRepresentationUiPreview01.test.tsx > STORAGE-REPRESENTATION-UI-PREVIEW-01 > ready zeigt Preview und Original-Panel
+DOMException [NotSupportedError]: Failed to fetch from "blob:nodedata:385c804c-4844-4322-b9b8-4b48d16ef07c": URL scheme "blob" is not supported.
+    at FetchRequestValidationUtility.validateSchema (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/fetch/utilities/FetchRequestValidationUtility.ts:120:10)
+    at Fetch.send (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/fetch/Fetch.ts:135:33)
+    at BrowserWindow.fetch (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/window/BrowserWindow.ts:1596:6)
+    at BrowserFrameNavigator.navigate (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/browser/utilities/BrowserFrameNavigator.ts:202:34)
+    at DetachedBrowserFrame.goto (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/browser/detached-browser/DetachedBrowserFrame.ts:179:32)
+    at HTMLIFrameElement.#loadPage (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/html-iframe-element/HTMLIFrameElement.ts:434:5)
+    at HTMLIFrameElement.[connectedToDocument] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/html-iframe-element/HTMLIFrameElement.ts:273:17)
+    at HTMLIFrameElement.[connectedToNode] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/node/Node.ts:987:44)
+    at HTMLIFrameElement.[connectedToNode] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/html-element/HTMLElement.ts:1008:40)
+    at HTMLDivElement.[connectedToNode] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/node/Node.ts:977:49)
+
+stderr | src/storageRepresentationUiPreview01.test.tsx > STORAGE-REPRESENTATION-UI-PREVIEW-01 > missing zeigt nur Original-Panel
+DOMException [NotSupportedError]: Failed to fetch from "blob:nodedata:65722451-b67c-48e6-a9fe-00a113c483e6": URL scheme "blob" is not supported.
+    at FetchRequestValidationUtility.validateSchema (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/fetch/utilities/FetchRequestValidationUtility.ts:120:10)
+    at Fetch.send (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/fetch/Fetch.ts:135:33)
+    at BrowserWindow.fetch (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/window/BrowserWindow.ts:1596:6)
+    at BrowserFrameNavigator.navigate (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/browser/utilities/BrowserFrameNavigator.ts:202:34)
+    at DetachedBrowserFrame.goto (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/browser/detached-browser/DetachedBrowserFrame.ts:179:32)
+    at HTMLIFrameElement.#loadPage (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/html-iframe-element/HTMLIFrameElement.ts:434:5)
+    at HTMLIFrameElement.[connectedToDocument] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/html-iframe-element/HTMLIFrameElement.ts:273:17)
+    at HTMLIFrameElement.[connectedToNode] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/node/Node.ts:987:44)
+    at HTMLIFrameElement.[connectedToNode] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/html-element/HTMLElement.ts:1008:40)
+    at HTMLDivElement.[connectedToNode] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/node/Node.ts:977:49)
+
+stderr | src/storageRepresentationUiPreview01.test.tsx > STORAGE-REPRESENTATION-UI-PREVIEW-01 > Fehler zeigt nur Original-Panel
+DOMException [NotSupportedError]: Failed to fetch from "blob:nodedata:a56d1409-806b-49b4-b87c-2597bb827bd0": URL scheme "blob" is not supported.
+    at FetchRequestValidationUtility.validateSchema (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/fetch/utilities/FetchRequestValidationUtility.ts:120:10)
+    at Fetch.send (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/fetch/Fetch.ts:135:33)
+    at BrowserWindow.fetch (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/window/BrowserWindow.ts:1596:6)
+    at BrowserFrameNavigator.navigate (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/browser/utilities/BrowserFrameNavigator.ts:202:34)
+    at DetachedBrowserFrame.goto (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/browser/detached-browser/DetachedBrowserFrame.ts:179:32)
+    at HTMLIFrameElement.#loadPage (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/html-iframe-element/HTMLIFrameElement.ts:434:5)
+    at HTMLIFrameElement.[connectedToDocument] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/html-iframe-element/HTMLIFrameElement.ts:273:17)
+    at HTMLIFrameElement.[connectedToNode] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/node/Node.ts:987:44)
+    at HTMLIFrameElement.[connectedToNode] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/html-element/HTMLElement.ts:1008:40)
+    at HTMLDivElement.[connectedToNode] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/node/Node.ts:977:49)
+
+stderr | src/storageRepresentationUiPreview01.test.tsx > STORAGE-REPRESENTATION-UI-PREVIEW-01 > Object-URL wird bei Unmount freigegeben
+An update to DocumentDetailPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/storageDerivativeManualRetryStep01.test.ts > STORAGE-DERIVATIVE-MANUAL-RETRY-STEP-01 > ready → Skip ohne Attempt-Erhöhung und ohne Outcome-Overwrite
+[OfficePilot:derivative-step-retry] raster_archive already_ready
+
+stderr | src/storageDerivativeManualRetryStep01.test.ts > STORAGE-DERIVATIVE-MANUAL-RETRY-STEP-01 > noop/conflict/fehlendes Outcome → not_eligible
+[OfficePilot:derivative-step-retry] raster_archive not_eligible
+
+stderr | src/storageDerivativeManualRetryStep01.test.ts > STORAGE-DERIVATIVE-MANUAL-RETRY-STEP-01 > noop/conflict/fehlendes Outcome → not_eligible
+[OfficePilot:derivative-step-retry] raster_archive not_eligible
+
+stderr | src/storageDerivativeManualRetryStep01.test.ts > STORAGE-DERIVATIVE-MANUAL-RETRY-STEP-01 > noop/conflict/fehlendes Outcome → not_eligible
+[OfficePilot:derivative-step-retry] raster_archive not_eligible
+
+stderr | src/storageDerivativeManualRetryStep01.test.ts > STORAGE-DERIVATIVE-MANUAL-RETRY-STEP-01 > attempt 5 → exhausted
+[OfficePilot:derivative-step-retry] raster_archive exhausted
+
+stderr | src/storageDerivativeManualRetryStep01.test.ts > STORAGE-DERIVATIVE-MANUAL-RETRY-STEP-01 > paralleler Aufruf → in_flight
+[OfficePilot:derivative-step-retry] raster_archive in_flight
+
+stderr | src/storageDerivativeManualRetryStep01.test.ts > STORAGE-DERIVATIVE-MANUAL-RETRY-STEP-01 > Coordinator und Retry teilen denselben Lock
+[OfficePilot:derivative-step-retry] raster_archive in_flight
+
+stderr | src/storageDerivativeManualRetryStep01.test.ts > STORAGE-DERIVATIVE-MANUAL-RETRY-STEP-01 > Coordinator und Retry teilen denselben Lock
+[OfficePilot:post-import-derivatives] raster_archive in_flight
+
+stderr | src/storageRasterArchiveExecutor01.test.ts > STORAGE-RASTER-ARCHIVE-EXECUTOR-01 > Fall D: Rollback > Blob-Fehler → kein Binding, Original unverändert
+[OfficePilot:raster-thumbnail-encode] raster_thumbnail unexpected_failure
+
+stderr | src/storageRasterArchiveExecutor01.test.ts > STORAGE-RASTER-ARCHIVE-EXECUTOR-01 > Fall D: Rollback > Blob-Fehler → kein Binding, Original unverändert
+[OfficePilot:derivative-step-outcome] raster_thumbnail unexpected_failure
+
+stderr | src/storageRasterThumbnailExecutor01.test.ts > STORAGE-RASTER-THUMBNAIL-EXECUTOR-01 > Fall E: PDF noop / Refcount > PDF-Source → encode_plan_unresolved
+[OfficePilot:raster-thumbnail-encode] raster_thumbnail unexpected_failure
+
+stderr | src/storageRasterThumbnailExecutor01.test.ts > STORAGE-RASTER-THUMBNAIL-EXECUTOR-01 > Fall E: PDF noop / Refcount > PDF-Source → encode_plan_unresolved
+[OfficePilot:derivative-step-outcome] raster_thumbnail unexpected_failure
+
+stderr | src/documentOriginalIosOverflow02.test.tsx > DOCUMENT-ORIGINAL-IOS-OVERFLOW-02 > DocumentOriginalFilePanel behält Download und Preview-Klassen
+DOMException [NotSupportedError]: Failed to fetch from "blob:nodedata:0d2cec8b-04c5-4c3d-af57-286c85103da9": URL scheme "blob" is not supported.
+    at FetchRequestValidationUtility.validateSchema (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/fetch/utilities/FetchRequestValidationUtility.ts:120:10)
+    at Fetch.send (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/fetch/Fetch.ts:135:33)
+    at BrowserWindow.fetch (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/window/BrowserWindow.ts:1596:6)
+    at BrowserFrameNavigator.navigate (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/browser/utilities/BrowserFrameNavigator.ts:202:34)
+    at DetachedBrowserFrame.goto (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/browser/detached-browser/DetachedBrowserFrame.ts:179:32)
+    at HTMLIFrameElement.#loadPage (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/html-iframe-element/HTMLIFrameElement.ts:434:5)
+    at HTMLIFrameElement.[connectedToDocument] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/html-iframe-element/HTMLIFrameElement.ts:273:17)
+    at HTMLIFrameElement.[connectedToNode] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/node/Node.ts:987:44)
+    at HTMLIFrameElement.[connectedToNode] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/html-element/HTMLElement.ts:1008:40)
+    at HTMLDivElement.[connectedToNode] (file:///C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/node_modules/happy-dom/src/nodes/node/Node.ts:977:49)
+
+stderr | src/storageRasterPreviewExecutor01.test.ts > STORAGE-RASTER-PREVIEW-EXECUTOR-01 > Fall E: PDF noop / Refcount / keine Thumbnail-Störung > PDF-Source → encode_plan_unresolved
+[OfficePilot:raster-thumbnail-encode] raster_thumbnail unexpected_failure
+
+stderr | src/storageRasterPreviewExecutor01.test.ts > STORAGE-RASTER-PREVIEW-EXECUTOR-01 > Fall E: PDF noop / Refcount / keine Thumbnail-Störung > PDF-Source → encode_plan_unresolved
+[OfficePilot:derivative-step-outcome] raster_thumbnail unexpected_failure
+

@@ -1,0 +1,115 @@
+[
+  {
+    "datei": "src/services/sync/supabaseSyncAdapter.ts",
+    "art": "gegen HEAD (keine frühere Änderung)",
+    "zeilen": 399
+  },
+  {
+    "datei": "src/services/sync/syncAdapter.ts",
+    "art": "gegen HEAD (keine frühere Änderung)",
+    "zeilen": 60
+  },
+  {
+    "datei": "src/services/sync/syncCoordinator.ts",
+    "art": "gegen HEAD (keine frühere Änderung)",
+    "zeilen": 100
+  },
+  {
+    "datei": "src/services/sync/syncOutboxService.ts",
+    "art": "gegen HEAD (keine frühere Änderung)",
+    "zeilen": 75
+  },
+  {
+    "datei": "src/services/sync/syncUiService.ts",
+    "art": "gegen HEAD (keine frühere Änderung)",
+    "zeilen": 322
+  },
+  {
+    "datei": "src/services/sync/syncIndicatorService.ts",
+    "art": "gegen HEAD (keine frühere Änderung)",
+    "zeilen": 20
+  },
+  {
+    "datei": "src/services/persistenceService.ts",
+    "art": "gegen HEAD (keine frühere Änderung)",
+    "zeilen": 22
+  },
+  {
+    "datei": "src/services/orderAmendment/orderAmendmentCloudPullOrchestrator.ts",
+    "art": "gegen HEAD (keine frühere Änderung)",
+    "zeilen": 29
+  },
+  {
+    "datei": "src/types/sync.ts",
+    "art": "gegen HEAD (keine frühere Änderung)",
+    "zeilen": 49
+  },
+  {
+    "datei": "src/pages/SyncPage.tsx",
+    "art": "gegen HEAD (keine frühere Änderung)",
+    "zeilen": 173
+  },
+  {
+    "datei": "src/services/sync/syncRunIdentityService.ts",
+    "art": "neu",
+    "zeilen": 401
+  },
+  {
+    "datei": "src/services/sync/syncConfirmationJournal.ts",
+    "art": "neu",
+    "zeilen": 211
+  },
+  {
+    "datei": "src/services/sync/syncOutboxOriginService.ts",
+    "art": "neu",
+    "zeilen": 210
+  },
+  {
+    "datei": "src/i18n/locales/de/syncHeldOrders.ts",
+    "art": "neu",
+    "zeilen": 39
+  },
+  {
+    "datei": "src/services/sync/sendekontoR1Dokumente01.test.ts",
+    "art": "neu",
+    "zeilen": 747
+  },
+  {
+    "datei": "src/services/sync/altwarteschlangeR2Dokumente01.test.ts",
+    "art": "neu",
+    "zeilen": 467
+  },
+  {
+    "datei": "src/pages/syncHeldOrdersR2Dokumente01.test.tsx",
+    "art": "neu",
+    "zeilen": 190
+  },
+  {
+    "datei": "src/services/storage/storageBootstrapService.ts",
+    "art": "R-Anteil gegen N1-Stand",
+    "n1StandBelegt": true,
+    "unveraendertGegenN1": false,
+    "zeilen": 98
+  },
+  {
+    "datei": "src/services/storage/workspaceAccountStorageService.ts",
+    "art": "R-Anteil gegen N1-Stand",
+    "n1StandBelegt": true,
+    "unveraendertGegenN1": false,
+    "zeilen": 39
+  },
+  {
+    "datei": "src/companyIdentityRecovery02.test.tsx",
+    "art": "R-Anteil gegen N1-Stand",
+    "n1StandBelegt": true,
+    "unveraendertGegenN1": false,
+    "zeilen": 72
+  },
+  {
+    "datei": "src/services/sync/syncPullPersistService.ts",
+    "art": "R-Anteil gegen N1-Stand",
+    "n1StandBelegt": true,
+    "unveraendertGegenN1": true,
+    "zeilen": 1
+  }
+]

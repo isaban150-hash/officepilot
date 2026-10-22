@@ -1,0 +1,10 @@
+OK   [V1-inhaber] PDF mit lokalem Original gefunden und Vorschau erzeugt — {"vorschaubild":"persisted","vorschau":"persisted","bindungen":["thumbnail","preview"]}
+OK   [V1-inhaber] Detail zeigt Vorschaubild — {"seite":true,"bilder":1}
+OK   [V2-mitglied] Mitglied: Mitgliedssicht — {"access":"member"}
+OK   [V2-mitglied] Mitglied: Vorschau-Dateien des Inhabers nicht lesbar — {"lesbar":0,"quellen":3}
+OK   [V2-mitglied] Mitglied: keine Vorschau-Bindung, keine Dateireferenz — {"bindungen":0,"refs":0}
+OK   [V2-mitglied] Mitglied: Detail des Inhaberdokuments zeigt nichts — {"seite":false,"bilder":0}
+OK   [V3-inhaber-erneut] Inhaber: eigene Vorschau-Bindungen und Bytes erhalten — {"lesbar":2,"bindungen":2}
+OK   [V3-inhaber-erneut] Inhaber: Detail zeigt Vorschaubild wieder — {"seite":true,"bilder":1}
+{"abbruch":false,"pruefungen":8,"ok":8,"rot":0,"blockiert":0,"widerruf":[204,204,204],"profilGeloescht":true}
+exit=0

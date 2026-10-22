@@ -201,8 +201,19 @@ function waehleBetraege(core: DocumentSemanticCore): SemanticAmount[] {
       b.role === 'credit_amount' || b.role === 'invoice_total' || b.role === 'fee',
   );
   if (wichtig.length > 0) {
+    /*
+     * DOKUMENTE-01 / F7 — derselbe Betrag in derselben Rolle steht nur einmal da,
+     * auch wenn das Schreiben ihn zweimal nennt (z. B. im Text und in der Summe).
+     */
+    const gesehen = new Set<string>();
+    const eindeutig = wichtig.filter((b) => {
+      const schluessel = `${b.role}|${b.value}|${b.isClaimAgainstUs}`;
+      if (gesehen.has(schluessel)) return false;
+      gesehen.add(schluessel);
+      return true;
+    });
     /* Forderungen zuerst, danach nach Höhe — die grosse Zahl trägt die Aussage. */
-    return [...wichtig]
+    return [...eindeutig]
       .sort((a, b) => Number(b.isClaimAgainstUs) - Number(a.isClaimAgainstUs) || b.value - a.value)
       .slice(0, 4);
   }

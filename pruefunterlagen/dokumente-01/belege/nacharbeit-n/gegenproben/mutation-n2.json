@@ -1,0 +1,19 @@
+{
+  "vorher": {
+    "gesamt": 3,
+    "rot": []
+  },
+  "mutiert": {
+    "gesamt": 3,
+    "rot": [
+      {
+        "test": "N2a der Kartenträger bildet keinen eigenen Stapelkontext",
+        "grund": "AssertionError: expected '40' to be 'auto' // Object.is equality"
+      }
+    ]
+  },
+  "nachher": {
+    "gesamt": 3,
+    "rot": []
+  }
+}

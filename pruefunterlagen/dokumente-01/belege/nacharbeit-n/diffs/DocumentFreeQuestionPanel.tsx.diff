@@ -1,0 +1,21 @@
+diff --git a/src/components/documents/DocumentFreeQuestionPanel.tsx b/src/components/documents/DocumentFreeQuestionPanel.tsx
+index 209ee26..e7ef3e0 100644
+--- a/src/components/documents/DocumentFreeQuestionPanel.tsx
++++ b/src/components/documents/DocumentFreeQuestionPanel.tsx
+@@ -21,6 +21,7 @@ import type { SemanticDeadline } from '../../types/documentSemanticCore';
+ import {
+   buildLetterPrefill,
+   buildReplyDraft,
++  createLetterDraftPrefillLocationState,
+   hasEmailAddress,
+   hasPostalAddress,
+   isReplyRequest,
+@@ -357,7 +358,7 @@ export function DocumentFreeQuestionPanel({
+                 variant={reply.channelPreference === 'email' ? 'outline' : 'primary'}
+                 onClick={() => {
+                   navigate('/schreiben/neu', {
+-                    state: { officetaktLetterDraftPrefill: buildLetterPrefill(reply) },
++                    state: createLetterDraftPrefillLocationState(buildLetterPrefill(reply)),
+                   });
+                 }}
+                 data-testid={`${testIdPrefix}-reply-letter`}

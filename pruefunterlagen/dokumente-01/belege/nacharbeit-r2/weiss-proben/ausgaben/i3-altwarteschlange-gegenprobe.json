@@ -1,0 +1,12 @@
+{
+  "adoption": {
+    "action": "adopted_legacy"
+  },
+  "pendingAfterAdoption": 2,
+  "accountOnOriginalOrders": [
+    null,
+    null
+  ],
+  "calls": [],
+  "completed": []
+}

@@ -28,6 +28,10 @@ import { getCustomerById } from '../customerStoreService';
 import { getCompanyProfile } from '../companyProfileService';
 import { normalizeCompanyIdentityValue } from '../companyRelevanceService';
 import { isAuthorityClassifiedKind, isInsuranceClassifiedKind } from '../businessInterpretationMeaning';
+import {
+  isNavigationStateFromActiveScope,
+  stampNavigationStateWithActiveScope,
+} from '../storage/storageScopeService';
 
 /** Welcher Weg nach dem Entwurf naheliegt. */
 export type ReplyChannelPreference = 'letter' | 'email' | 'undecided';
@@ -411,4 +415,20 @@ export function isLetterDraftPrefill(value: unknown): value is LetterDraftPrefil
   if (!value || typeof value !== 'object') return false;
   const kandidat = value as Partial<LetterDraftPrefill>;
   return typeof kandidat.subject === 'string' && typeof kandidat.body === 'string';
+}
+
+/**
+ * DOKUMENTE-01 N1 — die Vorbelegung reist im Navigationszustand und bleibt im
+ * Verlauf des Tabs stehen. Sie trägt den Speicherbereich, in dem sie entstand,
+ * und der Editor übernimmt sie nur dort; nach einem Kontowechsel führt „Zurück"
+ * nicht zum Text eines anderen Kontos.
+ */
+export function createLetterDraftPrefillLocationState(prefill: LetterDraftPrefill) {
+  return stampNavigationStateWithActiveScope({ [LETTER_DRAFT_PREFILL_STATE_KEY]: prefill });
+}
+
+export function readLetterDraftPrefillFromLocationState(state: unknown): LetterDraftPrefill | null {
+  if (!isNavigationStateFromActiveScope(state)) return null;
+  const prefill = (state as Record<string, unknown>)[LETTER_DRAFT_PREFILL_STATE_KEY];
+  return isLetterDraftPrefill(prefill) ? prefill : null;
 }

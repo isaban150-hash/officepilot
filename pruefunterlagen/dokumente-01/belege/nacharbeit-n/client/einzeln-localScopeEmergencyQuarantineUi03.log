@@ -1,0 +1,75 @@
+
+ RUN  v3.2.6 C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot
+
+ ✓ |default| src/localScopeEmergencyQuarantineUi03.test.tsx (66 tests) 74147ms
+   ✓ 02P3/Route — exakte providerfreie Erkennung > U1: /local-recovery zeigt weiterhin die bisherige Seite  394ms
+   ✓ 02P3/Route — exakte providerfreie Erkennung > U3: ein abschließender Schrägstrich ist zulässig  348ms
+   ✓ 02P3/Route — exakte providerfreie Erkennung > U4: ähnliche Pfade sind keine Recovery-Routen  428ms
+   ✓ 02P3/Route — exakte providerfreie Erkennung > U5: kein Gate, kein Provider, kein RPC, kein Schreibzugriff beim Mount  346ms
+   ✓ 02P3/Auswahl — ausdrückliche Workspace-Wahl > U7: nur gültige Workspace-Kopien sind auswählbar  340ms
+   ✓ 02P3/Auswahl — ausdrückliche Workspace-Wahl > U8: auch ein einzelner Workspace wird nicht automatisch ausgewählt  319ms
+   ✓ 02P3/Auswahl — ausdrückliche Workspace-Wahl > U9: bei mehreren Workspaces entscheidet der Klick, nicht Name oder Datum  681ms
+   ✓ 02P3/Auswahl — ausdrückliche Workspace-Wahl > U10: die Inventurzeile nennt die Unterscheidungsmerkmale  325ms
+   ✓ 02P3/Vorbereitung und Download > U11: die Vorbereitung schreibt nichts und verwendet genau den gewählten Schlüssel  886ms
+   ✓ 02P3/Vorbereitung und Download > U12: kein automatischer Download und Dateiauswahl erst danach  1091ms
+   ✓ 02P3/Vorbereitung und Download > U13: zwei Download-Klicks im selben Tick lösen nur einen Vorgang aus  1133ms
+   ✓ 02P3/Vorbereitung und Download > U14: zwei Vorbereitungs-Klicks im selben Tick erzeugen nur eine Sitzung  821ms
+   ✓ 02P3/Wiederauswahl > U15: ohne Datei bleibt die Quarantäne gesperrt  1122ms
+   ✓ 02P3/Wiederauswahl > U16: gleicher Dateiname mit anderen Bytes wird abgelehnt  1376ms
+   ✓ 02P3/Wiederauswahl > U17: eine andere synthetische Notfall-ZIP wird abgelehnt und niemals importiert  2606ms
+   ✓ 02P3/Wiederauswahl > U18: exakt die heruntergeladene Zielsicherung wird angenommen  1377ms
+   ✓ 02P3/Wiederauswahl > U19: zwei change-Ereignisse lösen nur eine Prüfung aus  1467ms
+   ✓ 02P3/Generationsschutz > U20: ein storage-Ereignis entwertet die vorbereitete Sitzung  1452ms
+   ✓ 02P3/Generationsschutz > U21: ein Zielwechsel entwertet die vorbereitete Sitzung  1474ms
+   ✓ 02P3/Generationsschutz > U22: nach einem Remount existiert keine alte Sitzung  1347ms
+   ✓ 02P3/Quarantäne > U23: vor dem Startklick null Quarantäneschreibzugriffe  1173ms
+   ✓ 02P3/Quarantäne > U24: die Quarantäne läuft nur nach eigenem Startklick und nur einmal  1799ms
+   ✓ 02P3/Quarantäne > U25: der Bericht zeigt alle gebundenen Prüfdaten  1560ms
+   ✓ 02P3/Quarantäne > U26: ein staging-Marker desselben Ziels blockiert und bietet keine Bereinigung an  603ms
+   ✓ 02P3/Quarantäne > U27: ein complete-Marker löst weder Import noch App-Start aus  323ms
+   ✓ 02P3/storage-Ereignis während der Quarantäne > U28: eine erkannte Zieländerung führt zum blockierten Abschlussbericht  1845ms
+   ✓ 02P3/storage-Ereignis während der Quarantäne > U29: eine echte Zieländerung während der Quarantäne verhindert complete  1691ms
+   ✓ 02P3B/A — kein Wiederauswahlweg vor dem Download > V1: ein change-Ereignis vor dem Download löst keine Prüfung aus  1116ms
+   ✓ 02P3B/B — verspätete Promise-Ergebnisse > V2: ein storage-Ereignis während prepare verwirft dessen spätes ok  875ms
+   ✓ 02P3B/B — verspätete Promise-Ergebnisse > V3: ein storage-Ereignis während verify verwirft dessen spätes ok  1137ms
+   ✓ 02P3B/B — verspätete Promise-Ergebnisse > V4: ein Zielwechsel während prepare verwirft dessen spätes Ergebnis  912ms
+   ✓ 02P3B/B — verspätete Promise-Ergebnisse > V5: ein Unmount während verify verwirft dessen spätes Ergebnis  1385ms
+   ✓ 02P3B/C — tatsächliche Dienstaufrufzahlen > V6: doppelter Prepare-Klick ruft den Dienst genau einmal  919ms
+   ✓ 02P3B/C — tatsächliche Dienstaufrufzahlen > V7: zwei change-Ereignisse rufen die Prüfung genau einmal  1567ms
+   ✓ 02P3B/C — tatsächliche Dienstaufrufzahlen > V8: doppelter Quarantäneklick ruft den Kern genau einmal  1738ms
+   ✓ 02P3B/D — Auswahl während laufender Quarantäne > V9: ein Zielwechsel während der Quarantäne bleibt wirkungslos  1729ms
+   ✓ 02P3B/E — complete ist ein Endzustand > V10: nach complete gibt es keine Auswahl und keinen neuen Ablauf  2032ms
+   ✓ 02P3B/F — storage-Ereignis nach complete > V11: der Bericht bleibt vollständig und erhält eine Warnung  2072ms
+   ✓ 02P3B/G — storage-Ereignis vor dem Quarantänestart > V12: der Bereich muss danach erneut ausdrücklich gewählt werden  2176ms
+   ✓ 02P3B/H — Downloadfehler > V13: ein fehlgeschlagener Download bleibt wiederholbar  1747ms
+   ✓ 02P3B/I — gebundene Resultatschlüssel > V14: der Bericht verwendet markerKey, stateKey und Blob-Bereich der Rückgabe  1480ms
+   ✓ 02P3B/J — Markeränderung eines anderen Tabs > V15: ein neuer staging-Marker blockiert das vorbereitete Ziel ohne Bereinigung  1558ms
+   ✓ 02P3C/A — Dateiereignis nach Verifikation und nach complete > W1: nach erfolgreicher Wiederauswahl gibt es keinen Auswahlknopf und keine zweite Prüfung  1851ms
+   ✓ 02P3C/A — Dateiereignis nach Verifikation und nach complete > W2: nach complete bleibt ein Dateiereignis vollständig wirkungslos  1948ms
+   ✓ 02P3C/B — Dateiereignis während der Quarantäne > W3: ein Dateiereignis während quarantining verändert nichts  1984ms
+   ✓ 02P3C/C — Markerereignis nach complete > W4: ein fremder staging-Marker beschädigt den Abschlussbericht nicht  1936ms
+   ✓ 02P3E — mobil lesbare Zielauswahl > X1: der Zielknopf trägt die eigene Klasse und behält alle Bindungen  620ms
+   ✓ 02P3E — mobil lesbare Zielauswahl > X2: der Knopf enthält genau sechs fachliche Zeilen  322ms
+   ✓ 02P3E — mobil lesbare Zielauswahl > X3: jede Zeile trägt die richtige Beschriftung und den richtigen Wert  336ms
+   ✓ 02P3E — mobil lesbare Zielauswahl > X4: keine Verkettung, keine führenden Gedankenstriche, Schlüssel nur in seiner Zeile  324ms
+   ✓ 02P3E — mobil lesbare Zielauswahl > X5: technische Werte tragen die Monospace-Klasse und bleiben vollständig  335ms
+   ✓ 02P3E — mobil lesbare Zielauswahl > X6: je Workspace genau ein Knopf ohne verschachtelte Bedienelemente  391ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y1: das Vorbereitungsergebnis besteht aus beschrifteten Zeilen  848ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y2: die vollständigen Werte bleiben unverändert im DOM  844ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y3: gewählter Bereich und Markerliste tragen die Umbruchklasse  643ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y4: der blockierende staging-Marker ist strukturiert  589ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y5: der Abschlussbericht verwendet die Umbruchklasse lückenlos  1669ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y6: jeder Dateieintrag zeigt getrennte, vollständige Werte  1558ms
+   ✓ 02P3F — technische Prüfwerte mobil sicher darstellen > Y7: system.css erfüllt den scoped Umbruchvertrag  335ms
+   ✓ 02P3D/W5 — Markerereignis während laufender Quarantäne > W5: ein fremder staging-Marker entwertet die laufende Quarantäne nicht  1851ms
+   ✓ 02P3B/K — fremde ZIP verändert wirklich nichts > V16: localStorage und Zielblobs bleiben byteidentisch  1521ms
+   ✓ 02P3B/K — fremde ZIP verändert wirklich nichts > U-Resume: nach Download und Remount kehrt der Ablauf sicher zurück  1575ms
+   ✓ 02P3B/K — fremde ZIP verändert wirklich nichts > U-Resume-Changed: ein veränderter Zielbestand verwirft den Wiederaufsetzpunkt  1534ms
+
+ Test Files  1 passed (1)
+      Tests  66 passed (66)
+   Start at  17:24:34
+   Duration  119.98s (transform 25.48s, setup 16.86s, collect 24.76s, tests 74.15s, environment 2.65s, prepare 498ms)
+
+JSON report written to C:/Users/Lenovo-ThinkPad-E590/Desktop/officepilot/pruefunterlagen/dokumente-01/belege/nacharbeit-n/client/einzeln-localScopeEmergencyQuarantineUi03.vitest.json
+

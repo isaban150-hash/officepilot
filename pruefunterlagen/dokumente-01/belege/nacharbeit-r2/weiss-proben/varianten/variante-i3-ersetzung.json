@@ -1,0 +1,5 @@
+{
+  "quelle": "dok01-n1n2-sendekonto-und-altbestand.mjs",
+  "alt": "calls,completed:legacyResult.completedOutboxIds}",
+  "neu": "calls,completed:legacyResult.completedOutboxIds,identityChanged:legacyResult.identityChanged??false,startProblem:legacyResult.runIdentity?.startProblem??null,startKonsistent:legacyResult.runIdentity?.consistent??null,gesperrt:(legacyResult.state.syncOutbox??[]).map(x=>x.originHold?.reason??x.status)}"
+}

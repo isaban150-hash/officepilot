@@ -1,0 +1,66 @@
+BEGIN
+INSERT 0 2
+INSERT 0 1
+INSERT 0 2
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+ {"sub":"00000000-0000-0000-0000-0000000007b1","role":"authenticated"}
+
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  OK         K1 eigener Brief (schriftverkehr + linkedLetterId) -> letter
+DO
+ 
+
+NOTICE:  ABGELEHNT  K2 eigener Brief als other  -> Dokumentart passt nicht zum Dokument
+NOTICE:  OK         B1 queued -> sending (atomar, Version +1)
+NOTICE:  OK         C1 zweiter Claim (alte Version) -> claimed=false
+NOTICE:  OK         C2 Claim aus sending -> claimed=false
+NOTICE:  OK         D1 sending -> provider_accepted
+DO
+NOTICE:  OK         E1 Replay nach provider_accepted -> claimed=false
+NOTICE:  OK         F1 falsche row_version -> claimed=false, bleibt queued
+DO
+NOTICE:  OK         S1 frischer Claim bleibt sending
+NOTICE:  OK         S2 Untergrenze 120 s schuetzt laufende Aufrufe
+DO
+NOTICE:  OK         S3 haengender Claim -> unknown, kein erneuter Claim
+NOTICE:  ABGELEHNT  U1 Neuversuch unknown ohne Bestaetigung  -> Versandstatus unklar
+NOTICE:  OK         U2 bestaetigter Neuversuch: attempt 2, unklare Zeile unveraendert
+NOTICE:  ABGELEHNT  U3 zweiter Neuversuch zu derselben unklaren Zeile  -> bereits angelegt
+DO
+NOTICE:  OK         U4 nach gescheitertem Neuversuch erneut moeglich
+DO
+NOTICE:  ABGELEHNT  R1 Nutzergrenze  -> Versandlimit erreicht
+ 
+
+NOTICE:  OK         R2 Replay trotz Grenze moeglich (zaehlt nicht)
+DO
+UPDATE 20
+DO
+NOTICE:  OK         R3 gleitendes Fenster, keine Dauersperre
+INSERT 0 60
+ {"sub":"00000000-0000-0000-0000-0000000007b2","role":"authenticated"}
+
+ 
+
+NOTICE:  ABGELEHNT  R4 Workspace-Grenze  -> Versandlimit erreicht
+ {"sub":"00000000-0000-0000-0000-0000000007b1","role":"authenticated"}
+
+NOTICE:  OK         G1/H1 for_send liefert Anzeigename und Reply-To
+DO
+NOTICE:  OK         P1 Claim/Recovery/for_send nur service_role
+NOTICE:  OK         P2 Statusuebergaenge
+DO
+NOTICE:  ABGELEHNT  P3 sending ohne sending_started_at  -> workspace_document_deliveries_sending_fields_check
+ 
+
+INSERT 0 1
+ {"sub":"00000000-0000-0000-0000-0000000007bf","role":"authenticated"}
+
+ 
+
+NOTICE:  ABGELEHNT  P4 fremder Nutzer  -> Kein Zugriff auf Workspace
+ROLLBACK

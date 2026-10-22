@@ -411,7 +411,8 @@ export function EingangDetailPage() {
   );
   /** Synchronous lock — a second click in the same event turn must not create again. */
   const contractCreateLockRef = useRef(false);
-  const [manualCategory, setManualCategory] = useState<ClassifiedDocumentKind>('sonstiges');
+  // DOKUMENTE-01 — ohne Wahl des Nutzers bleibt die erkannte Art (keine stille Vorauswahl „Sonstiges").
+  const [manualCategory, setManualCategory] = useState<ClassifiedDocumentKind | null>(null);
   const [intakeExecution, setIntakeExecution] = useState<WorkflowResultExecution | null>(null);
   const [isExecutingIntake, setIsExecutingIntake] = useState(false);
   const [isCreatingContractOrder, setIsCreatingContractOrder] = useState(false);
@@ -957,7 +958,7 @@ export function EingangDetailPage() {
   };
 
   const handleMarkAsCompanyDocument = () => {
-    const updated = markInboxAsCompanyDocument(item.id, manualCategory);
+    const updated = markInboxAsCompanyDocument(item.id, manualCategory ?? undefined);
     if (updated) {
       setItem(updated);
       showToast(translate('companyRelevance.markedSuccess'));
@@ -1812,6 +1813,7 @@ export function EingangDetailPage() {
           translate={translate}
           markedAsCompanyDocument={Boolean(item.markedAsCompanyDocument)}
           selectedCategory={manualCategory}
+          recognizedKind={item.classifiedKind ?? null}
           onCategoryChange={setManualCategory}
           onMarkAsCompanyDocument={handleMarkAsCompanyDocument}
         />

@@ -1,0 +1,38 @@
+diff --git a/src/i18n/locales/de/syncHeldOrders.ts b/src/i18n/locales/de/syncHeldOrders.ts
+new file mode 100644
+index 0000000..0717b9d
+--- /dev/null
++++ b/src/i18n/locales/de/syncHeldOrders.ts
+@@ -0,0 +1,32 @@
++/**
++ * DOKUMENTE-01 R2 — zurückgehaltene Sendeaufträge ohne nachweisbares Ursprungskonto.
++ *
++ * Die Texte sagen, warum nichts automatisch hinausgeht, was die Freigabe bewirkt
++ * (Zuordnung zum eigenen Konto, Versand mit der eigenen Anmeldung) und dass nur
++ * das Konto des Bestands freigeben kann.
++ */
++export const deSyncHeldOrders = {
++  'sync.held.title': 'Zurückgehaltene Aufträge',
++  'sync.held.hint':
++    'Diese Änderungen stammen aus einem älteren gemeinsamen Bestand dieses Geräts. Wer sie angelegt hat, lässt sich nicht nachweisen – deshalb werden sie nicht automatisch übertragen. Prüfen Sie jeden Eintrag. Erst wenn Sie ihn ausdrücklich freigeben, gehört er zu Ihrem Konto und wird mit Ihrer Anmeldung übertragen.',
++  'sync.held.labelMissing': 'Datensatz nicht auf diesem Gerät',
++  'sync.held.queuedAt': 'angelegt {date}',
++  'sync.held.sourceLegacy': 'aus älterem gemeinsamen Bestand übernommen',
++  'sync.held.sourceLoad': 'Herkunft nicht nachweisbar',
++  'sync.held.select': 'Geprüft',
++  'sync.held.selectAll': 'Alle auswählen',
++  'sync.held.release': 'Ausgewählte freigeben ({count})',
++  'sync.held.confirmTitle': 'Aufträge freigeben?',
++  'sync.held.confirmMessage':
++    '{count} Aufträge werden Ihrem Konto zugeordnet und beim nächsten Abgleich mit Ihrer Anmeldung übertragen. Geben Sie nur frei, was Sie geprüft haben – die Zuordnung lässt sich nicht zurücknehmen.',
++  'sync.held.confirmMessageOne':
++    '1 Auftrag wird Ihrem Konto zugeordnet und beim nächsten Abgleich mit Ihrer Anmeldung übertragen. Geben Sie ihn nur frei, wenn Sie ihn geprüft haben – die Zuordnung lässt sich nicht zurücknehmen.',
++  'sync.held.confirm': 'Freigeben',
++  'sync.held.released': '{count} Aufträge freigegeben – sie werden beim nächsten Abgleich übertragen.',
++  'sync.held.releasedOne': '1 Auftrag freigegeben – er wird beim nächsten Abgleich übertragen.',
++  'sync.held.failed': 'Die Freigabe konnte nicht gespeichert werden. Es wurde nichts verändert.',
++  'sync.held.notAllowed':
++    'Freigeben kann nur das Konto, dem dieser Bestand gehört, und nur, während es angemeldet ist. Es wurde nichts verändert.',
++  'sync.held.summary': '{count} Aufträge zurückgehalten',
++  'sync.held.summaryOne': '1 Auftrag zurückgehalten',
++} as const;

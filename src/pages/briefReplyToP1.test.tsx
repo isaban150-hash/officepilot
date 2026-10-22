@@ -28,6 +28,7 @@ import { getCommunicationEvents } from '../services/communicationHistoryService'
 import { listBusinessLetters as getBusinessLetters } from '../services/businessLetterService';
 import { resolveDocumentReplyNeed } from '../services/documentReplyNeedService';
 import { resolveDocumentReplySource, buildReplyLetterPrefill } from '../services/document/documentReplySourceService';
+import { createLetterDraftPrefillLocationState } from '../services/document/documentReplyBridgeService';
 import type { BusinessInterpretationResult } from '../types/businessInterpretation';
 
 const WS = '00000000-0000-4000-8000-0000000p1b01';
@@ -139,7 +140,8 @@ afterEach(async () => {
   resetTestStores();
 });
 
-const neuerAntwortbrief = () => ({ pathname: '/schreiben/neu', state: { officetaktLetterDraftPrefill: vorbelegung() } });
+// DOKUMENTE-01 N1 — die Vorbelegung trägt den Speicherbereich, in dem sie entstand.
+const neuerAntwortbrief = () => ({ pathname: '/schreiben/neu', state: createLetterDraftPrefillLocationState(vorbelegung()) });
 
 describe('P1 — Briefweg der Antwort', () => {
   it('I — Quelle, Empfänger und Betreff sind übernommen; die Herkunft ist sichtbar', async () => {

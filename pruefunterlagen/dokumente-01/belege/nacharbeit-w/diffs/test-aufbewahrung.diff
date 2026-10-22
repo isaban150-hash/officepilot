@@ -1,0 +1,168 @@
+diff --git a/pruefunterlagen/dokumente-01/belege/nacharbeit-w/vorher/dokumente01_aufbewahrung.sql b/supabase/tests/dokumente01_aufbewahrung.sql
+index e002262..3b1f70f 100644
+--- a/pruefunterlagen/dokumente-01/belege/nacharbeit-w/vorher/dokumente01_aufbewahrung.sql
++++ b/supabase/tests/dokumente01_aufbewahrung.sql
+@@ -11,6 +11,11 @@
+ --      Dateien ungeschützter Dokumente nicht.
+ --   F  Kein Weg vorbei: auch ein direktes UPDATE scheitert; Wiederherstellung frei,
+ --      danach gilt der Schutz wieder.
++--   H  Originalbindung (DOK01-W1): kein Umhängen auf eine andere Datei und danach
++--      kein Beerdigen der bisherigen; auch nicht über Dokument, Betrieb, Art oder
++--      Teil; Inhalt und Ablageort der Originaldatei bleiben. Identische Wiederholung,
++--      Vorschau- und Archiv-PDF-Pflege bleiben frei; ohne laufende Frist ist das
++--      Umhängen frei.
+ --   G  Rechte: alle neuen Funktionen intern.
+ --
+ -- Jede Prüfung läuft als Rolle authenticated mit den Claims des Nutzers --
+@@ -442,6 +447,151 @@ select pg_temp.erwarte_abweisung('F3 nach der Wiederherstellung gilt der Schutz
+ select pg_temp.zurueck();
+ select pg_temp.pruefe('F4 wiederhergestellt und lebend', pg_temp.lebt('doc-dok01-zurueck'));
+ 
++/* ------------------------------------------------------------------ */
++/* H — Originalbindung: kein Umhängen (DOK01-W1)                       */
++/* ------------------------------------------------------------------ */
++
++create function pg_temp.bindung(p_doc text, p_art text) returns public.workspace_document_file_bindings language sql as $p$
++  select * from public.workspace_document_file_bindings
++  where workspace_id = pg_temp.ws() and client_document_id = p_doc and binding_kind = p_art;
++$p$;
++
++create function pg_temp.datei(p_id text) returns public.workspace_files language sql as $p$
++  select * from public.workspace_files where workspace_id = pg_temp.ws() and client_file_ref_id = p_id;
++$p$;
++
++-- Die Umgehung aus der WEISS-Endabnahme: erst umhängen, dann die bisherige Datei beerdigen.
++select pg_temp.als(pg_temp.inhaber());
++select pg_temp.erwarte_abweisung('H1 Original auf die Vorschau-Datei umhängen (aktuelle Version, nicht beerdigt)',
++  pg_temp.eingang_sql('document_file_binding', jsonb_build_object(
++    'binding_id', 'doc-dok01-rechnung|original|', 'client_document_id', 'doc-dok01-rechnung',
++    'client_file_ref_id', 'file-dok01-vorschau', 'binding_kind', 'original', 'provenance', 'received',
++    'deleted', false), 1),
++  'Original eines Dokuments mit Aufbewahrungsfrist', '42501');
++select pg_temp.erwarte_abweisung('H2 danach die bisherige Originaldatei beerdigen',
++  pg_temp.eingang_sql('document_file', jsonb_build_object(
++    'client_file_ref_id', 'file-dok01-rechnung', 'content_sha256', repeat('a', 64),
++    'size_bytes', 100, 'mime_type', 'application/pdf', 'deleted', true), 1),
++  'Datei eines Dokuments mit Aufbewahrungsfrist', '42501');
++select pg_temp.zurueck();
++select pg_temp.als(pg_temp.admin());
++select pg_temp.erwarte_abweisung('H3 Admin: Umhängen ebenso abgewiesen',
++  pg_temp.eingang_sql('document_file_binding', jsonb_build_object(
++    'binding_id', 'doc-dok01-rechnung|original|', 'client_document_id', 'doc-dok01-rechnung',
++    'client_file_ref_id', 'file-dok01-vorschau', 'binding_kind', 'original', 'provenance', 'received',
++    'deleted', false), 1),
++  'Original eines Dokuments mit Aufbewahrungsfrist', '42501');
++select pg_temp.zurueck();
++select pg_temp.pruefe('H4 Zuordnung, Versionen und Datei unverändert',
++  (pg_temp.bindung('doc-dok01-rechnung', 'original')).client_file_ref_id = 'file-dok01-rechnung'
++  and not (pg_temp.bindung('doc-dok01-rechnung', 'original')).deleted
++  and (pg_temp.bindung('doc-dok01-rechnung', 'original')).row_version = 1
++  and not (pg_temp.datei('file-dok01-rechnung')).deleted
++  and (pg_temp.datei('file-dok01-rechnung')).row_version = 1);
++
++-- Frei: identische Wiederholung, Archiv-PDF und Vorschau neu erzeugen, alte Vorschau-Datei aufräumen.
++select pg_temp.als(pg_temp.inhaber());
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'document_file_binding', jsonb_build_object(
++  'binding_id', 'doc-dok01-rechnung|original|', 'client_document_id', 'doc-dok01-rechnung',
++  'client_file_ref_id', 'file-dok01-rechnung', 'binding_kind', 'original', 'provenance', 'received',
++  'deleted', false), 1);
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'document_file', jsonb_build_object(
++  'client_file_ref_id', 'file-dok01-archiv-1', 'content_sha256', repeat('d', 64),
++  'size_bytes', 90, 'mime_type', 'application/pdf', 'deleted', false), 0);
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'document_file', jsonb_build_object(
++  'client_file_ref_id', 'file-dok01-archiv-2', 'content_sha256', repeat('e', 64),
++  'size_bytes', 91, 'mime_type', 'application/pdf', 'deleted', false), 0);
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'document_file_binding', jsonb_build_object(
++  'binding_id', 'doc-dok01-rechnung|archive|', 'client_document_id', 'doc-dok01-rechnung',
++  'client_file_ref_id', 'file-dok01-archiv-1', 'binding_kind', 'archive', 'provenance', 'derived',
++  'deleted', false), 0);
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'document_file_binding', jsonb_build_object(
++  'binding_id', 'doc-dok01-rechnung|archive|', 'client_document_id', 'doc-dok01-rechnung',
++  'client_file_ref_id', 'file-dok01-archiv-2', 'binding_kind', 'archive', 'provenance', 'derived',
++  'deleted', false), 1);
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'document_file', jsonb_build_object(
++  'client_file_ref_id', 'file-dok01-vorschau-2', 'content_sha256', repeat('f', 64),
++  'size_bytes', 50, 'mime_type', 'image/jpeg', 'deleted', false), 0);
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'document_file_binding', jsonb_build_object(
++  'binding_id', 'doc-dok01-rechnung|preview|', 'client_document_id', 'doc-dok01-rechnung',
++  'client_file_ref_id', 'file-dok01-vorschau-2', 'binding_kind', 'preview', 'provenance', 'derived',
++  'deleted', false), 2);
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'document_file', jsonb_build_object(
++  'client_file_ref_id', 'file-dok01-vorschau', 'content_sha256', repeat('b', 64),
++  'size_bytes', 100, 'mime_type', 'application/pdf', 'deleted', true), 1);
++select pg_temp.zurueck();
++select pg_temp.pruefe('H5 Wiederholung angenommen (Version 2, gleiche Datei); Archiv-PDF und Vorschau umgehängt; alte Vorschau-Datei gelöscht',
++  (pg_temp.bindung('doc-dok01-rechnung', 'original')).row_version = 2
++  and (pg_temp.bindung('doc-dok01-rechnung', 'original')).client_file_ref_id = 'file-dok01-rechnung'
++  and (pg_temp.bindung('doc-dok01-rechnung', 'archive')).client_file_ref_id = 'file-dok01-archiv-2'
++  and (pg_temp.bindung('doc-dok01-rechnung', 'preview')).client_file_ref_id = 'file-dok01-vorschau-2'
++  and not (pg_temp.bindung('doc-dok01-rechnung', 'preview')).deleted
++  and (pg_temp.datei('file-dok01-vorschau')).deleted);
++
++-- Auch direkt (als postgres): keine Zuordnung des geschützten Originals ändert sich.
++select pg_temp.erwarte_abweisung('H6a Datei der Originalbindung direkt tauschen',
++  $q$update public.workspace_document_file_bindings set client_file_ref_id = 'file-dok01-archiv-1'
++     where workspace_id = '00000000-0000-0000-0000-0000000d01a1' and client_document_id = 'doc-dok01-rechnung'
++       and binding_kind = 'original'$q$,
++  'Original eines Dokuments mit Aufbewahrungsfrist', '42501');
++select pg_temp.erwarte_abweisung('H6b anderem Dokument zuordnen',
++  $q$update public.workspace_document_file_bindings set client_document_id = 'doc-dok01-pruefen'
++     where workspace_id = '00000000-0000-0000-0000-0000000d01a1' and client_document_id = 'doc-dok01-rechnung'
++       and binding_kind = 'original'$q$,
++  'Original eines Dokuments mit Aufbewahrungsfrist', '42501');
++select pg_temp.erwarte_abweisung('H6c anderem Betrieb zuordnen',
++  $q$update public.workspace_document_file_bindings set workspace_id = '00000000-0000-0000-0000-0000000d01ff'
++     where workspace_id = '00000000-0000-0000-0000-0000000d01a1' and client_document_id = 'doc-dok01-rechnung'
++       and binding_kind = 'original'$q$,
++  'Original eines Dokuments mit Aufbewahrungsfrist', '42501');
++select pg_temp.erwarte_abweisung('H6d Art ändern',
++  $q$update public.workspace_document_file_bindings set binding_kind = 'preview'
++     where workspace_id = '00000000-0000-0000-0000-0000000d01a1' and client_document_id = 'doc-dok01-rechnung'
++       and binding_kind = 'original'$q$,
++  'Original eines Dokuments mit Aufbewahrungsfrist', '42501');
++select pg_temp.erwarte_abweisung('H6e Teil ändern',
++  $q$update public.workspace_document_file_bindings set part = 'seite-2'
++     where workspace_id = '00000000-0000-0000-0000-0000000d01a1' and client_document_id = 'doc-dok01-rechnung'
++       and binding_kind = 'original'$q$,
++  'Original eines Dokuments mit Aufbewahrungsfrist', '42501');
++-- Inhalt und Ablageort stimmig zusammen getauscht: Die Pfad-Constraint (Pfad = Betrieb/Hash) lässt das zu,
++-- erst der Dateiwächter nicht.
++select pg_temp.erwarte_abweisung('H7a Inhalt und Ablageort der Originaldatei direkt austauschen',
++  $q$update public.workspace_files
++     set content_sha256 = repeat('9', 64), storage_path = '00000000-0000-0000-0000-0000000d01a1/' || repeat('9', 64)
++     where workspace_id = '00000000-0000-0000-0000-0000000d01a1' and client_file_ref_id = 'file-dok01-rechnung'$q$,
++  'Datei eines Dokuments mit Aufbewahrungsfrist', '42501');
++select pg_temp.erwarte_abweisung('H7b Kennung der Originaldatei direkt umbenennen',
++  $q$update public.workspace_files set client_file_ref_id = 'file-dok01-umbenannt'
++     where workspace_id = '00000000-0000-0000-0000-0000000d01a1' and client_file_ref_id = 'file-dok01-rechnung'$q$,
++  'Datei eines Dokuments mit Aufbewahrungsfrist', '42501');
++update public.workspace_files set original_file_name = 'Rechnung-Baustoffe.pdf'
++where workspace_id = pg_temp.ws() and client_file_ref_id = 'file-dok01-rechnung';
++select pg_temp.pruefe('H7c Metadaten der Originaldatei bleiben änderbar, Inhalt und Ort unverändert',
++  (pg_temp.datei('file-dok01-rechnung')).original_file_name = 'Rechnung-Baustoffe.pdf'
++  and (pg_temp.datei('file-dok01-rechnung')).content_sha256 = repeat('a', 64)
++  and (pg_temp.datei('file-dok01-rechnung')).storage_path = pg_temp.ws()::text || '/' || repeat('a', 64));
++
++-- Kein Überschutz: ohne laufende Frist („prüfen") bleibt das Original umhängbar.
++select pg_temp.archiv('doc-dok01-pruefen-h', '{"classifiedKind":"sonstiges","category":"sonstiges"}');
++insert into public.workspace_files (workspace_id, client_file_ref_id, content_sha256, size_bytes, mime_type, storage_path, created_by)
++values (pg_temp.ws(), 'file-dok01-pruefen-h1', repeat('1', 64), 10, 'application/pdf', pg_temp.ws()::text || '/' || repeat('1', 64), pg_temp.inhaber()),
++       (pg_temp.ws(), 'file-dok01-pruefen-h2', repeat('2', 64), 10, 'application/pdf', pg_temp.ws()::text || '/' || repeat('2', 64), pg_temp.inhaber());
++insert into public.workspace_document_file_bindings (workspace_id, client_document_id, client_file_ref_id, binding_kind, provenance, created_by)
++values (pg_temp.ws(), 'doc-dok01-pruefen-h', 'file-dok01-pruefen-h1', 'original', 'received', pg_temp.inhaber());
++select pg_temp.als(pg_temp.inhaber());
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'document_file_binding', jsonb_build_object(
++  'binding_id', 'doc-dok01-pruefen-h|original|', 'client_document_id', 'doc-dok01-pruefen-h',
++  'client_file_ref_id', 'file-dok01-pruefen-h2', 'binding_kind', 'original', 'provenance', 'received',
++  'deleted', false), 1);
++select public.upsert_workspace_intake_entity(pg_temp.ws(), 'document_file', jsonb_build_object(
++  'client_file_ref_id', 'file-dok01-pruefen-h1', 'content_sha256', repeat('1', 64),
++  'size_bytes', 10, 'mime_type', 'application/pdf', 'deleted', true), 1);
++select pg_temp.zurueck();
++select pg_temp.pruefe('H8 „prüfen": Original umgehängt, frühere Datei gelöscht',
++  (pg_temp.bindung('doc-dok01-pruefen-h', 'original')).client_file_ref_id = 'file-dok01-pruefen-h2'
++  and (pg_temp.datei('file-dok01-pruefen-h1')).deleted);
++
+ /* ------------------------------------------------------------------ */
+ /* G — Rechte                                                          */
+ /* ------------------------------------------------------------------ */

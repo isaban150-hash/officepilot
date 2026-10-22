@@ -1,0 +1,222 @@
+BEGIN
+CREATE TABLE
+CREATE INDEX
+ALTER TABLE
+REVOKE
+REVOKE
+CREATE FUNCTION
+REVOKE
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+NOTICE:  trigger "workspace_documents_paper_register_owner" for relation "public.workspace_documents" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+ workspace_paper_register_entries_assign_document_owner 
+--------------------------------------------------------
+                                                      0
+(1 row)
+
+INSERT 0 2
+UPDATE 2
+INSERT 0 1
+INSERT 0 2
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ 
+
+ {"deleted": false, "payload": {"id": "7223f029-fbfd-4087-9bd6-b370c313c9a1", "deleted": false, "payload": {"id": "paper-reg-doc-p-mitglied", "folderId": "folder-5", "register": "B", "createdAt": "2026-10-20T08:00:00.000Z", "updatedAt": "2026-10-20T08:00:00.000Z", "documentId": "doc-p-mitglied", "documentTitle": "Bescheid doc-p-mitglied", "physicalFiled": false}, "created_at": "2026-10-20T11:37:37.609882+00:00", "created_by": "00000000-0000-0000-0000-0000000d0202", "deleted_at": null, "updated_at": "2026-10-20T11:37:37.609882+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0201", "row_version": 1, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "client_entry_id": "paper-reg-doc-p-mitglied", "client_document_id": "doc-p-mitglied"}, "entity_id": "paper-reg-doc-p-mitglied", "entity_type": "paper_register_entry", "row_version": 1}
+
+ 
+
+ 
+
+NOTICE:  OK  P1 Eintrag gehört dem Dokument (created_by Mitglied), geschrieben vom Inhaber
+ 
+
+NOTICE:  OK  P2a Mitglied sieht den Eintrag im Abzug
+ 
+
+NOTICE:  OK  P2b Mitglied sieht den Eintrag per RLS
+ 
+
+ {"deleted": false, "payload": {"id": "7223f029-fbfd-4087-9bd6-b370c313c9a1", "deleted": false, "payload": {"id": "paper-reg-doc-p-mitglied", "folderId": "folder-5", "register": "B", "createdAt": "2026-10-20T08:00:00.000Z", "updatedAt": "2026-10-20T08:00:00.000Z", "documentId": "doc-p-mitglied", "documentTitle": "Bescheid doc-p-mitglied", "physicalFiled": true}, "created_at": "2026-10-20T11:37:37.609882+00:00", "created_by": "00000000-0000-0000-0000-0000000d0202", "deleted_at": null, "updated_at": "2026-10-20T11:37:37.609882+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0202", "row_version": 2, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "client_entry_id": "paper-reg-doc-p-mitglied", "client_document_id": "doc-p-mitglied"}, "entity_id": "paper-reg-doc-p-mitglied", "entity_type": "paper_register_entry", "row_version": 2}
+
+ 
+
+NOTICE:  OK  P2c Mitglied hat abgehakt
+ 
+
+ 
+
+ 
+
+ 
+
+NOTICE:  ABGEWIESEN  P3 Mitgliedsgerät sendet seinen Eintrag mit Version 0  -> Versionskonflikt paper_register_entry
+ 
+
+ 
+
+NOTICE:  ABGEWIESEN  P4a kein Grabstein durch ein Mitglied  -> Keine Schreibberechtigung
+ 
+
+ 
+
+ {"deleted": false, "payload": {"id": "e9a4a7c8-fa78-4132-9c73-b52ddb53e62c", "deleted": false, "payload": {"id": "paper-reg-doc-p-inhaber", "folderId": "folder-5", "register": "B", "createdAt": "2026-10-20T08:00:00.000Z", "updatedAt": "2026-10-20T08:00:00.000Z", "documentId": "doc-p-inhaber", "documentTitle": "Bescheid doc-p-inhaber", "physicalFiled": false}, "created_at": "2026-10-20T11:37:37.609882+00:00", "created_by": "00000000-0000-0000-0000-0000000d0201", "deleted_at": null, "updated_at": "2026-10-20T11:37:37.609882+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0201", "row_version": 1, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "client_entry_id": "paper-reg-doc-p-inhaber", "client_document_id": "doc-p-inhaber"}, "entity_id": "paper-reg-doc-p-inhaber", "entity_type": "paper_register_entry", "row_version": 1}
+
+ {"deleted": false, "payload": {"id": "5b37a5a3-e2f6-4865-8b98-cb6e7f0772d0", "deleted": false, "payload": {"id": "paper-reg-emp-receipt-dok01p", "folderId": "folder-5", "register": "B", "createdAt": "2026-10-20T08:00:00.000Z", "updatedAt": "2026-10-20T08:00:00.000Z", "documentId": "emp-receipt-dok01p", "documentTitle": "Bescheid emp-receipt-dok01p", "physicalFiled": false}, "created_at": "2026-10-20T11:37:37.609882+00:00", "created_by": "00000000-0000-0000-0000-0000000d0202", "deleted_at": null, "updated_at": "2026-10-20T11:37:37.609882+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0201", "row_version": 1, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "client_entry_id": "paper-reg-emp-receipt-dok01p", "client_document_id": "emp-receipt-dok01p"}, "entity_id": "paper-reg-emp-receipt-dok01p", "entity_type": "paper_register_entry", "row_version": 1}
+
+ 
+
+ 
+
+ 
+
+NOTICE:  OK  P4b Eintrag zum Dokument des Inhabers: weder im Abzug noch per RLS
+NOTICE:  ABGEWIESEN  P4c und nicht änderbar  -> Keine Schreibberechtigung
+ 
+
+ 
+
+NOTICE:  OK  P4d geschützter Beleg bleibt verborgen, obwohl das Dokument dem Mitglied gehört
+ 
+
+NOTICE:  ABGEWIESEN  P4e und nicht änderbar  -> Keine Schreibberechtigung
+ {"deleted": false, "payload": {"id": "72fdebf1-1177-4da5-80b0-4b6deef9043a", "deleted": false, "payload": {"id": "paper-reg-doc-p-offline", "folderId": "folder-5", "register": "B", "createdAt": "2026-10-20T08:00:00.000Z", "updatedAt": "2026-10-20T08:00:00.000Z", "documentId": "doc-p-offline", "documentTitle": "Bescheid doc-p-offline", "physicalFiled": true}, "created_at": "2026-10-20T11:37:37.609882+00:00", "created_by": "00000000-0000-0000-0000-0000000d0202", "deleted_at": null, "updated_at": "2026-10-20T11:37:37.609882+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0202", "row_version": 1, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "client_entry_id": "paper-reg-doc-p-offline", "client_document_id": "doc-p-offline"}, "entity_id": "paper-reg-doc-p-offline", "entity_type": "paper_register_entry", "row_version": 1}
+
+ 
+
+NOTICE:  OK  P4f ohne Dokument in der Cloud gehört der Eintrag dem Schreibenden
+ 
+
+ 
+
+NOTICE:  OK  P4g Anleger: Inhaber, Mitglied, Schreibender
+INSERT 0 1
+ALTER TABLE
+INSERT 0 1
+ALTER TABLE
+ 
+
+NOTICE:  OK  P5a vor der Umstellung: Inhaber
+ 
+
+NOTICE:  OK  P5b genau eine Zeile umgestellt
+ 
+
+NOTICE:  OK  P5c gehört dem Dokument; Version, Inhalt und Schreiber bleiben
+NOTICE:  OK  P5d Wiederholung ohne Wirkung
+ 
+
+ 
+
+NOTICE:  OK  P5e Mitglied sieht den Altbestand zu seinem Dokument
+ 
+
+ 
+
+ 
+
+NOTICE:  OK  P5f Prüfspur: Altbestand Inhaber → Mitglied; P1 als Anlage Inhaber → Mitglied
+CREATE FUNCTION
+ 
+
+ {"deleted": false, "payload": {"id": "890b711d-8b5f-4e08-bf3a-73fc159b1692", "deleted": false, "payload": {"id": "paper-reg-doc-p-spaeter", "folderId": "folder-5", "register": "B", "createdAt": "2026-10-20T08:00:00.000Z", "updatedAt": "2026-10-20T08:00:00.000Z", "documentId": "doc-p-spaeter", "documentTitle": "Bescheid doc-p-spaeter", "physicalFiled": true}, "created_at": "2026-10-20T11:37:37.609882+00:00", "created_by": "00000000-0000-0000-0000-0000000d0201", "deleted_at": null, "updated_at": "2026-10-20T11:37:37.609882+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0201", "row_version": 1, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "client_entry_id": "paper-reg-doc-p-spaeter", "client_document_id": "doc-p-spaeter"}, "entity_id": "paper-reg-doc-p-spaeter", "entity_type": "paper_register_entry", "row_version": 1}
+
+ 
+
+ 
+
+NOTICE:  OK  P7a ohne Dokument gehört der Eintrag dem Schreibenden (Inhaber)
+SELECT 1
+ 
+
+ {"deleted": false, "payload": {"id": "e4da4a54-d7a5-400f-baec-eabed235f5d4", "deleted": false, "payload": {"id": "doc-p-spaeter", "title": "Schreiben doc-p-spaeter", "classifiedKind": "brief"}, "created_at": "2026-10-20T11:37:37.609882+00:00", "created_by": "00000000-0000-0000-0000-0000000d0202", "deleted_at": null, "deleted_by": null, "updated_at": "2026-10-20T11:37:37.609882+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0202", "row_version": 1, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "document_kind": "archived_document", "linked_invoice_id": null, "linked_vorgang_id": null, "client_document_id": "doc-p-spaeter"}, "entity_id": "doc-p-spaeter", "entity_type": "archived_document", "row_version": 1}
+
+ 
+
+ 
+
+NOTICE:  OK  P7b gehört jetzt dem Dokument (Mitglied); Inhalt, Version, Grabstein, Schreiber und Anlage bleiben
+ 
+
+ 
+
+NOTICE:  OK  P7c frischer Abzug und RLS zeigen ihn dem Mitglied
+NOTICE:  ABGEWIESEN  P7d Version-0-Erstversand des Mitgliedsgeräts: lösbarer Konflikt  -> Versionskonflikt paper_register_entry
+ 
+
+ {"deleted": false, "payload": {"id": "890b711d-8b5f-4e08-bf3a-73fc159b1692", "deleted": false, "payload": {"id": "paper-reg-doc-p-spaeter", "folderId": "folder-5", "register": "B", "createdAt": "2026-10-20T08:00:00.000Z", "updatedAt": "2026-10-20T08:00:00.000Z", "documentId": "doc-p-spaeter", "documentTitle": "Bescheid doc-p-spaeter", "physicalFiled": false}, "created_at": "2026-10-20T11:37:37.609882+00:00", "created_by": "00000000-0000-0000-0000-0000000d0202", "deleted_at": null, "updated_at": "2026-10-20T11:37:37.609882+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0202", "row_version": 2, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "client_entry_id": "paper-reg-doc-p-spaeter", "client_document_id": "doc-p-spaeter"}, "entity_id": "paper-reg-doc-p-spaeter", "entity_type": "paper_register_entry", "row_version": 2}
+
+ 
+
+NOTICE:  ABGEWIESEN  P7f Grabstein bleibt Inhaber und Admin vorbehalten  -> Keine Schreibberechtigung
+ 
+
+ 
+
+NOTICE:  OK  P7e das Mitglied hat geändert (Version 2, Schreiber Mitglied)
+ 
+
+NOTICE:  OK  P7g Prüfspur: genau ein Nachzug Inhaber → Mitglied
+ 
+
+ {"deleted": false, "payload": {"id": "cd722e7d-fbd0-4b5e-9ca1-2670b55e33ad", "deleted": false, "payload": {"id": "paper-reg-doc-p-inhaber-spaeter", "folderId": "folder-5", "register": "B", "createdAt": "2026-10-20T08:00:00.000Z", "updatedAt": "2026-10-20T08:00:00.000Z", "documentId": "doc-p-inhaber-spaeter", "documentTitle": "Bescheid doc-p-inhaber-spaeter", "physicalFiled": true}, "created_at": "2026-10-20T11:37:37.609882+00:00", "created_by": "00000000-0000-0000-0000-0000000d0202", "deleted_at": null, "updated_at": "2026-10-20T11:37:37.609882+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0202", "row_version": 1, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "client_entry_id": "paper-reg-doc-p-inhaber-spaeter", "client_document_id": "doc-p-inhaber-spaeter"}, "entity_id": "paper-reg-doc-p-inhaber-spaeter", "entity_type": "paper_register_entry", "row_version": 1}
+
+NOTICE:  OK  P7h vorher: der Eintrag des Mitglieds ist für das Mitglied sichtbar
+ 
+
+ 
+
+ 
+
+ {"deleted": false, "payload": {"id": "707fffaf-226b-4d8e-b142-d51c7aaf8ffb", "deleted": false, "payload": {"id": "doc-p-inhaber-spaeter", "title": "Schreiben doc-p-inhaber-spaeter", "classifiedKind": "brief"}, "created_at": "2026-10-20T11:37:37.609882+00:00", "created_by": "00000000-0000-0000-0000-0000000d0201", "deleted_at": null, "deleted_by": null, "updated_at": "2026-10-20T11:37:37.609882+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0201", "row_version": 1, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "document_kind": "archived_document", "linked_invoice_id": null, "linked_vorgang_id": null, "client_document_id": "doc-p-inhaber-spaeter"}, "entity_id": "doc-p-inhaber-spaeter", "entity_type": "archived_document", "row_version": 1}
+
+ 
+
+ 
+
+NOTICE:  OK  P7i keine Freigabe fremder Dokumente: der Eintrag folgt dem Inhaber und ist für das Mitglied weg
+ 
+
+NOTICE:  ABGEWIESEN  P7j und für das Mitglied nicht mehr änderbar  -> Keine Schreibberechtigung
+ 
+
+ 
+
+ 
+
+NOTICE:  OK  P7k Inhalt erhalten, Zuordnung Inhaber
+INSERT 0 1
+INSERT 0 1
+ 
+
+ {"deleted": false, "payload": {"id": "ee15498a-a2a7-4773-8e52-d49fb39e8b8c", "deleted": false, "payload": {"id": "paper-reg-doc-p-rechnungsbeleg", "folderId": "folder-5", "register": "B", "createdAt": "2026-10-20T08:00:00.000Z", "updatedAt": "2026-10-20T08:00:00.000Z", "documentId": "doc-p-rechnungsbeleg", "documentTitle": "Bescheid doc-p-rechnungsbeleg", "physicalFiled": true}, "created_at": "2026-10-20T11:37:37.609882+00:00", "created_by": "00000000-0000-0000-0000-0000000d0202", "deleted_at": null, "updated_at": "2026-10-20T11:37:37.609882+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0202", "row_version": 1, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "client_entry_id": "paper-reg-doc-p-rechnungsbeleg", "client_document_id": "doc-p-rechnungsbeleg"}, "entity_id": "paper-reg-doc-p-rechnungsbeleg", "entity_type": "paper_register_entry", "row_version": 1}
+
+ {"deleted": false, "payload": {"id": "de361fb8-99db-4a49-851c-fed001f0ec35", "deleted": false, "payload": {"id": "doc-p-zwei", "title": "Schreiben doc-p-zwei", "classifiedKind": "brief"}, "created_at": "2026-10-20T11:37:37.609882+00:00", "created_by": "00000000-0000-0000-0000-0000000d0202", "deleted_at": null, "deleted_by": null, "updated_at": "2026-10-20T11:37:37.609882+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0202", "row_version": 1, "workspace_id": "00000000-0000-0000-0000-0000000d02a1", "document_kind": "archived_document", "linked_invoice_id": null, "linked_vorgang_id": null, "client_document_id": "doc-p-zwei"}, "entity_id": "doc-p-zwei", "entity_type": "archived_document", "row_version": 1}
+
+ 
+
+INSERT 0 1
+INSERT 0 1
+NOTICE:  OK  P7l Eintrag im anderen Betrieb und Eintrag zu einem erzeugten Beleg unverändert
+ 
+
+DO
+NOTICE:  OK  P6 neue Funktionen und Prüfspur nur intern
+ROLLBACK

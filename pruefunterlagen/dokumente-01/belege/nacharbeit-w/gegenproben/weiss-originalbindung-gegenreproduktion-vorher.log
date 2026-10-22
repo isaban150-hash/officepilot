@@ -1,0 +1,130 @@
+BEGIN
+CREATE TABLE
+INSERT 0 32
+DO
+NOTICE:  V  32 Regelvektoren wie im Client
+INSERT 0 3
+UPDATE 3
+INSERT 0 1
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 1
+CREATE FUNCTION
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+ archiv 
+--------
+ 
+(1 row)
+
+INSERT 0 1
+INSERT 0 2
+INSERT 0 2
+INSERT 0 3
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ als 
+-----
+ 
+(1 row)
+
+NOTICE:  ABGEWIESEN  WEISS Basisloeschschutz
+ erwarte_abweisung 
+-------------------
+ 
+(1 row)
+
+                                                                                                                                                                                                                                                                                                                                                           upsert_workspace_intake_entity                                                                                                                                                                                                                                                                                                                                                            
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"deleted": false, "payload": {"id": "fa5e85c0-c5f0-4075-9413-ac6393325cce", "part": null, "deleted": false, "created_at": "2026-10-20T11:37:56.422874+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": null, "provenance": "received", "updated_at": "2026-10-20T11:37:56.422874+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "binding_kind": "original", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "client_document_id": "doc-dok01-rechnung", "client_file_ref_id": "file-dok01-vorschau", "einvoice_untrusted_at": null, "einvoice_untrusted_reason": null}, "entity_id": "doc-dok01-rechnung|original|", "entity_type": "document_file_binding", "row_version": 2}
+(1 row)
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                              upsert_workspace_intake_entity                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"deleted": true, "payload": {"id": "a9e03663-ae8f-426b-b4d7-ca1d859fb741", "deleted": true, "mime_type": "application/pdf", "created_at": "2026-10-20T11:37:56.422874+00:00", "created_by": "00000000-0000-0000-0000-0000000d0101", "deleted_at": "2026-10-20T11:37:56.422874+00:00", "size_bytes": 100, "updated_at": "2026-10-20T11:37:56.422874+00:00", "updated_by": "00000000-0000-0000-0000-0000000d0101", "row_version": 2, "uploaded_at": "2026-10-20T11:37:56.422874+00:00", "uploaded_by": null, "storage_path": "00000000-0000-0000-0000-0000000d01a1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "workspace_id": "00000000-0000-0000-0000-0000000d01a1", "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "client_file_ref_id": "file-dok01-rechnung", "original_file_name": "", "derived_from_client_file_ref_id": null}, "entity_id": "file-dok01-rechnung", "entity_type": "document_file", "row_version": 2}
+(1 row)
+
+ zurueck 
+---------
+ 
+(1 row)
+
+NOTICE:  OK  WEISS Original ersetzt
+ pruefe 
+--------
+ 
+(1 row)
+
+NOTICE:  OK  WEISS alte Originaldatei geloescht
+ pruefe 
+--------
+ 
+(1 row)
+
+NOTICE:  OK  WEISS Dokument weiterhin gesetzlich gesperrt
+ pruefe 
+--------
+ 
+(1 row)
+
+ROLLBACK
+                                              result                                              
+--------------------------------------------------------------------------------------------------
+ WEISS_ORIGINAL_ERSETZT_UND_DATEI_GELOESCHT_BEI_LAUFENDER_FRIST_REPRODUZIERT_ALLES_ZURUECKGEROLLT
+(1 row)
+

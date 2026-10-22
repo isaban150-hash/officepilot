@@ -1,0 +1,64 @@
+BEGIN
+INSERT 0 9
+UPDATE 9
+UPDATE 1
+UPDATE 1
+INSERT 0 2
+INSERT 0 9
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 5
+INSERT 0 5
+INSERT 0 6
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  OK  E1-E2 structured/extracted an gewöhnlichen Archivdokumenten ist Eingangsweg (Inhaber und Mitglied)
+DO
+NOTICE:  OK  E3-E5 E-Rechnungen und Rechnungsbelege bleiben geschützt; Umwidmen wird geprüft
+DO
+NOTICE:  OK  E6-E7 Einstufung und Fehlmarke mit derselben Abgrenzung; andere Marken bleiben
+DO
+DO
+NOTICE:  OK  R1 Mitglieder beleben keine Grabsteine wieder (Datei, Bindung, Eingang, Arbeitsergebnis); eigene Änderungen und Inhaber wie bisher
+DO
+NOTICE:  OK  R2 Mitglieder binden nur an eigene oder noch unbekannte Dokumente; Inhaber/Admin überall
+NOTICE:  OK  R3 corr- nur als Korrekturbeleg, auch für Inhaber/Admin; Altplatzhalter bleibt bereinigbar
+DO
+NOTICE:  OK  R4 Datei hinter einer Bindung unter corr- bleibt für Mitglieder unveränderlich
+DO
+NOTICE:  OK  R5 kein Versandvermerk für intern stornierte Rechnungen; Korrektur der Versandangaben und normaler Vermerk wie bisher
+DO
+NOTICE:  OK  R6 Versandvermerk und Leistungszeitraum prüfen Lizenz und Sperre; Mitglied 42501, Admin mit Lizenz wie bisher
+DO
+NOTICE:  OK  R7 eigene Zeile mit fremdem Hash öffnet kein eingeschränktes Objekt; Inhaber liest, Fremde nicht
+DO
+NOTICE:  OK  R8 Mitglieder ändern nur eigene Bankzeilen; Anlegen, eigenes Umbenennen und Inhaber wie bisher
+DO
+DO
+NOTICE:  OK  M1 Rollenmatrix: 10 Akteure x 8 Schutzaktionen wie erwartet (Kontosperre auf allen Wegen, seit 20261109; Lizenz nur bei Finanz- und Rechnungsaktionen)
+DO
+NOTICE:  OK  M2-M3 Rechteentzug und Herabstufung wirken sofort, auch mitten im Ablauf
+DO
+NOTICE:  OK  G1-G4 Wächter für niemanden direkt aufrufbar, security definer, Trigger aktiv; Lesepolicy aufrufbar
+ROLLBACK

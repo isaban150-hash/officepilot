@@ -1,0 +1,22 @@
+diff --git a/src/components/documents/DocumentReplyNeedPanel.tsx b/src/components/documents/DocumentReplyNeedPanel.tsx
+index eae0d26..25c3ce0 100644
+--- a/src/components/documents/DocumentReplyNeedPanel.tsx
++++ b/src/components/documents/DocumentReplyNeedPanel.tsx
+@@ -14,7 +14,7 @@ import { useApp } from '../../context/AppContext';
+ import type { TranslationKey } from '../../i18n';
+ import { recordMarkedNoReplyNeeded } from '../../services/communicationHistoryService';
+ import { isReplyNeedPending, type DocumentReplyNeed } from '../../services/documentReplyNeedService';
+-import { LETTER_DRAFT_PREFILL_STATE_KEY } from '../../services/document/documentReplyBridgeService';
++import { createLetterDraftPrefillLocationState } from '../../services/document/documentReplyBridgeService';
+ import {
+   buildReplyEmailHref,
+   buildReplyLetterPrefill,
+@@ -92,7 +92,7 @@ export function DocumentReplyNeedPanel({
+   const openLetter = () => {
+     if (!info) return;
+     navigate('/schreiben/neu', {
+-      state: { [LETTER_DRAFT_PREFILL_STATE_KEY]: buildReplyLetterPrefill(info) },
++      state: createLetterDraftPrefillLocationState(buildReplyLetterPrefill(info)),
+     });
+   };
+   const openEmail = () => {

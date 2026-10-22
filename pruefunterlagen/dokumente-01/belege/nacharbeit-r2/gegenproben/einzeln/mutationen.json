@@ -1,0 +1,205 @@
+[
+  {
+    "id": "S1",
+    "was": "Startregel: nicht nachweisbare Anmeldung gilt als zusammengehörig",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 9,
+    "gruen": 35,
+    "rote": [
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L8 ohne bestätigte Anmeldung im Kontobereich: kein Grabstein, eigener Hinweis, nichts gelöscht",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S12b eigener Token-Lieferant mit undurchsichtigem Token: nennt kein Konto → Halt schon beim Start, keine Anfrage",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T1 WEISS-Reproduktion: Startsitzung nicht lesbar, danach B angemeldet → keine Anfrage, A-Auftrag bleibt offen",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T2 keine Sitzung beim Start → keine Anfrage",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T2b leere Warteschlange: auch ohne Auftrag kein Erfolg — der Lauf hält an, bevor er etwas tut",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T3 Tokenquelle wirft → keine Anfrage",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T4 Tokenquelle liefert kein Token → keine Anfrage",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T5 Koordinator: kein Erfolg, Haltbericht, Fehlerzustand dieses Kontos, kein Abruf; der Planer versucht es später",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T6 neuer Lauf mit wieder lesbarer, richtiger Anmeldung: genau die A-Aufträge, mit dem Zugang von A"
+    ]
+  },
+  {
+    "id": "S2",
+    "was": "Netzaufruf ohne geprüften Zugang fällt auf die SDK-Sitzung zurück",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 43,
+    "rote": [
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T8 kein Rückfall: Prüfung ohne lesbaren Zugang → keine Anfrage, das SDK liest die Sitzung nicht selbst nach"
+    ]
+  },
+  {
+    "id": "S3",
+    "was": "S1 und S2 zusammen (Stand vor der Korrektur)",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 11,
+    "gruen": 33,
+    "rote": [
+      "src/pages/syncHaltMeldungR1Dokumente01.test.tsx :: U1 nicht lesbare Startsitzung: Hinweis „angehalten“, kein Erfolg, keine Anfrage",
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L8 ohne bestätigte Anmeldung im Kontobereich: kein Grabstein, eigener Hinweis, nichts gelöscht",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S12b eigener Token-Lieferant mit undurchsichtigem Token: nennt kein Konto → Halt schon beim Start, keine Anfrage",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T1 WEISS-Reproduktion: Startsitzung nicht lesbar, danach B angemeldet → keine Anfrage, A-Auftrag bleibt offen",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T2 keine Sitzung beim Start → keine Anfrage",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T2b leere Warteschlange: auch ohne Auftrag kein Erfolg — der Lauf hält an, bevor er etwas tut",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T3 Tokenquelle wirft → keine Anfrage",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T4 Tokenquelle liefert kein Token → keine Anfrage",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T5 Koordinator: kein Erfolg, Haltbericht, Fehlerzustand dieses Kontos, kein Abruf; der Planer versucht es später",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T6 neuer Lauf mit wieder lesbarer, richtiger Anmeldung: genau die A-Aufträge, mit dem Zugang von A",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T8 kein Rückfall: Prüfung ohne lesbaren Zugang → keine Anfrage, das SDK liest die Sitzung nicht selbst nach"
+    ]
+  },
+  {
+    "id": "S4",
+    "was": "Frühhalt im Adapter entfernt",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 43,
+    "rote": [
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T2b leere Warteschlange: auch ohne Auftrag kein Erfolg — der Lauf hält an, bevor er etwas tut"
+    ]
+  },
+  {
+    "id": "S5",
+    "was": "Halt zählt nicht als Fehler und steht nicht im Bericht",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 4,
+    "gruen": 40,
+    "rote": [
+      "src/pages/syncHaltMeldungR1Dokumente01.test.tsx :: U1 nicht lesbare Startsitzung: Hinweis „angehalten“, kein Erfolg, keine Anfrage",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S9a Wechsel zwischen Senden und Abruf (nur die Sitzung): kein Abruf, nichts übernommen, kein Erfolg, keine fremde Fehlermeldung",
+      "src/services/sync/sendekontoR1Dokumente01.test.ts :: S9b Wechsel mitten im Abruf: kein weiterer Abruf, nichts übernommen",
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T5 Koordinator: kein Erfolg, Haltbericht, Fehlerzustand dieses Kontos, kein Abruf; der Planer versucht es später"
+    ]
+  },
+  {
+    "id": "S6",
+    "was": "Startproblem ohne Fehlerzustand des Kontos",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 43,
+    "rote": [
+      "src/services/sync/startidentitaetR1Dokumente01.test.ts :: T5 Koordinator: kein Erfolg, Haltbericht, Fehlerzustand dieses Kontos, kein Abruf; der Planer versucht es später"
+    ]
+  },
+  {
+    "id": "S7",
+    "was": "Seite: Halt nach „Jetzt synchronisieren“ wie gewöhnlicher Ausgang",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 43,
+    "rote": [
+      "src/pages/syncHaltMeldungR1Dokumente01.test.tsx :: U1 nicht lesbare Startsitzung: Hinweis „angehalten“, kein Erfolg, keine Anfrage"
+    ]
+  },
+  {
+    "id": "S8",
+    "was": "Seite: Halt nach „Erneut versuchen“ wie gewöhnlicher Ausgang",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 43,
+    "rote": [
+      "src/pages/syncHaltMeldungR1Dokumente01.test.tsx :: U2 „Erneut versuchen“ mit Haltbericht: Hinweis „angehalten“, nicht „abgeschlossen“"
+    ]
+  },
+  {
+    "id": "D1",
+    "was": "veraltete Oberfläche (Handelnder ≠ Konto des Bereichs) nicht erkannt",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 43,
+    "rote": [
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L10 Handelnder ist nicht das Konto des Bereichs: kein Vorgang, keine Rückfrage, nichts gelöscht"
+    ]
+  },
+  {
+    "id": "D2",
+    "was": "keine Prüfung nach der Nachweisrückfrage",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 3,
+    "gruen": 41,
+    "rote": [
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L1b keine Sitzung beim Aufruf, B meldet sich während der Rückfrage im zweiten Tab an (Bereich bleibt): Abbruch",
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L3 nur die Sitzung wechselt (zweiter Tab), der Bereich bleibt: Abbruch, A behält das Dokument",
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L7b B meldet sich genau beim Senden des Grabsteins an: die Anfrage trägt den geprüften Zugang von A, danach Abbruch"
+    ]
+  },
+  {
+    "id": "D3",
+    "was": "keine Bereichsprüfung unmittelbar vor dem lokalen Löschen",
+    "angewendet": true,
+    "erkannt": false,
+    "rot": 0,
+    "gruen": 44,
+    "rote": []
+  },
+  {
+    "id": "D4",
+    "was": "D2 und D3 zusammen (Stand vor der Korrektur, Nachweisweg)",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 7,
+    "gruen": 37,
+    "rote": [
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L1 WEISS-Reproduktion (echtes SDK, keine Sitzung): kein Erfolg, B behält sein Dokument, kein Löschauftrag",
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L1b keine Sitzung beim Aufruf, B meldet sich während der Rückfrage im zweiten Tab an (Bereich bleibt): Abbruch",
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L2 bestätigte Anmeldung A, echter Kontowechsel zu B während der Rückfrage: kein Erfolg, nichts bei B",
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L3 nur die Sitzung wechselt (zweiter Tab), der Bereich bleibt: Abbruch, A behält das Dokument",
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L5 Abmeldung während der Rückfrage: Abbruch; nach erneuter Anmeldung von A ist das Dokument unverändert da",
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L6a Rückkehr zu A nach dem Abbruch: Bestand unverändert, eine neue Löschung gelingt unter A",
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L7b B meldet sich genau beim Senden des Grabsteins an: die Anfrage trägt den geprüften Zugang von A, danach Abbruch"
+    ]
+  },
+  {
+    "id": "D5",
+    "was": "Cloud-Grabstein ohne bestätigte Anmeldung",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 43,
+    "rote": [
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L8 ohne bestätigte Anmeldung im Kontobereich: kein Grabstein, eigener Hinweis, nichts gelöscht"
+    ]
+  },
+  {
+    "id": "D6",
+    "was": "keine Prüfung nach dem Grabstein",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 43,
+    "rote": [
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L7b B meldet sich genau beim Senden des Grabsteins an: die Anfrage trägt den geprüften Zugang von A, danach Abbruch"
+    ]
+  },
+  {
+    "id": "D7",
+    "was": "direkter Vorgang ungebunden: das SDK nimmt beim Senden die Sitzung, die gerade gilt",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 43,
+    "rote": [
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L7b B meldet sich genau beim Senden des Grabsteins an: die Anfrage trägt den geprüften Zugang von A, danach Abbruch"
+    ]
+  },
+  {
+    "id": "D8",
+    "was": "unbestätigte Bindung übersieht eine neue Anmeldung",
+    "angewendet": true,
+    "erkannt": true,
+    "rot": 1,
+    "gruen": 43,
+    "rote": [
+      "src/services/document/loeschvorgangBindungDokumente01.test.ts :: L1b keine Sitzung beim Aufruf, B meldet sich während der Rückfrage im zweiten Tab an (Bereich bleibt): Abbruch"
+    ]
+  }
+]

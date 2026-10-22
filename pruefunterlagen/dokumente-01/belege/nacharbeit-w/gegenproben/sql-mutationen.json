@@ -1,0 +1,109 @@
+{
+  "zeit": "2026-10-20T11:40:09.172Z",
+  "kontrolle": [
+    {
+      "test": "dokumente01_aufbewahrung.sql",
+      "code": 0,
+      "fehler": null,
+      "bestanden": 39,
+      "ok": true
+    },
+    {
+      "test": "dokumente01_papierregister.sql",
+      "code": 0,
+      "fehler": null,
+      "bestanden": 31,
+      "ok": true
+    }
+  ],
+  "mutationen": [
+    {
+      "name": "M1 Bindungswächter wie vor W1 (nur Grabstein)",
+      "erwartet": "H1",
+      "code": 3,
+      "bestandenVorher": 24,
+      "fehler": "H1 Original auf die Vorschau-Datei umhängen (aktuelle Version, nicht beerdigt) -- NICHT abgewiesen, erwartet: Original eines Dokuments mit Aufbewahrungsfrist",
+      "erkannt": true
+    },
+    {
+      "name": "M2 Dateiwechsel gilt als identische Wiederholung",
+      "erwartet": "H1",
+      "code": 3,
+      "bestandenVorher": 24,
+      "fehler": "H1 Original auf die Vorschau-Datei umhängen (aktuelle Version, nicht beerdigt) -- NICHT abgewiesen, erwartet: Original eines Dokuments mit Aufbewahrungsfrist",
+      "erkannt": true
+    },
+    {
+      "name": "M3 Betrieb nicht verglichen",
+      "erwartet": "H6c",
+      "code": 3,
+      "bestandenVorher": 31,
+      "fehler": "H6c anderem Betrieb zuordnen -- falsche Abweisung: insert or update on table \"workspace_document_file_bindings\" violates foreign key constraint \"workspace_docum",
+      "erkannt": true
+    },
+    {
+      "name": "M4 Teil nicht verglichen",
+      "erwartet": "H6e",
+      "code": 3,
+      "bestandenVorher": 33,
+      "fehler": "H6e Teil ändern -- NICHT abgewiesen, erwartet: Original eines Dokuments mit Aufbewahrungsfrist",
+      "erkannt": true
+    },
+    {
+      "name": "M5 Dateiwächter wie vor W1 (nur Grabstein)",
+      "erwartet": "H7a",
+      "code": 3,
+      "bestandenVorher": 34,
+      "fehler": "H7a Inhalt und Ablageort der Originaldatei direkt austauschen -- NICHT abgewiesen, erwartet: Datei eines Dokuments mit Aufbewahrungsfrist",
+      "erkannt": true
+    },
+    {
+      "name": "M6 Überschutz: keine identische Wiederholung mehr",
+      "erwartet": "Original eines Dokuments mit Aufbewahrungsfrist",
+      "code": 3,
+      "bestandenVorher": 28,
+      "fehler": "Keine Schreibberechtigung: Original eines Dokuments mit Aufbewahrungsfrist bis 31.12.2034",
+      "erkannt": true
+    },
+    {
+      "name": "M7 kein Nachzug, wenn das Dokument nach dem Eintrag kommt",
+      "erwartet": "P7b",
+      "code": 3,
+      "bestandenVorher": 19,
+      "fehler": "P7b gehört jetzt dem Dokument (Mitglied); Inhalt, Version, Grabstein, Schreiber und Anlage bleiben -- Zusicherung verletzt",
+      "erkannt": true
+    },
+    {
+      "name": "M8 Nachzug ohne Prüfspur",
+      "erwartet": "P7g",
+      "code": 3,
+      "bestandenVorher": 24,
+      "fehler": "P7g Prüfspur: genau ein Nachzug Inhaber → Mitglied -- Zusicherung verletzt",
+      "erkannt": true
+    },
+    {
+      "name": "M9 Nachzug betriebsübergreifend",
+      "erwartet": "P7l",
+      "code": 3,
+      "bestandenVorher": 29,
+      "fehler": "P7l Eintrag im anderen Betrieb und Eintrag zu einem erzeugten Beleg unverändert -- Zusicherung verletzt",
+      "erkannt": true
+    },
+    {
+      "name": "M10 Nachzug zählt die Version hoch",
+      "erwartet": "P7b",
+      "code": 3,
+      "bestandenVorher": 19,
+      "fehler": "P7b gehört jetzt dem Dokument (Mitglied); Inhalt, Version, Grabstein, Schreiber und Anlage bleiben -- Zusicherung verletzt",
+      "erkannt": true
+    },
+    {
+      "name": "M11 Anlage ohne Prüfspur",
+      "erwartet": "P5f",
+      "code": 3,
+      "bestandenVorher": 17,
+      "fehler": "P5f Prüfspur: Altbestand Inhaber → Mitglied; P1 als Anlage Inhaber → Mitglied -- Zusicherung verletzt",
+      "erkannt": true
+    }
+  ]
+}

@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { buildCustomerOptionLabels } from '../services/customer/customerOptionLabels';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { isLetterDraftPrefill } from '../services/document/documentReplyBridgeService';
+import { readLetterDraftPrefillFromLocationState } from '../services/document/documentReplyBridgeService';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/Card';
 import { Page } from '../components/ui/Page';
@@ -69,13 +69,11 @@ export function BriefEditorPage() {
    * Text sind zu lang fuer eine URL, und sie gehoeren nicht in den Verlauf
    * des Browsers. Es wird nichts gespeichert und nichts fertiggestellt — der
    * Editor zeigt nur, was vorbereitet wurde.
+   *
+   * DOKUMENTE-01 N1 — der Zustand bleibt trotzdem im Verlauf des Tabs stehen;
+   * übernommen wird er nur im Speicherbereich, in dem er entstand.
    */
-  const vorbelegung = isLetterDraftPrefill(
-    (location.state as { officetaktLetterDraftPrefill?: unknown } | null)?.officetaktLetterDraftPrefill,
-  )
-    ? ((location.state as { officetaktLetterDraftPrefill: import('../services/document/documentReplyBridgeService').LetterDraftPrefill })
-        .officetaktLetterDraftPrefill)
-    : null;
+  const vorbelegung = readLetterDraftPrefillFromLocationState(location.state);
 
   const vorhandener = letterId ? getBusinessLetterById(letterId) : null;
   const kunden = useMemo(() => getCustomerStoreSnapshot(), []);

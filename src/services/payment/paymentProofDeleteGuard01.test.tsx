@@ -84,9 +84,14 @@ describe('NACHTRAG-1 Löschschutz für Zahlungsnachweise', () => {
     resetDocuments();
     hydrateVorgangStore([]);
     hydrateExpenseStore([ausgabe()]);
+    /*
+     * DOKUMENTE-01 / D-017 — als Foto abgelegt: Eine erkannte Quittung wäre
+     * zusätzlich ein Buchungsbeleg mit laufender Aufbewahrung und gar nicht
+     * löschbar. Geprüft wird hier allein der Zahlungsnachweis-Schutz.
+     */
     hydrateDocumentStore([
-      dokument('doc-nachweis', 'quittung', 'Quittung Baumarkt'),
-      dokument('doc-frei', 'quittung', 'Quittung ohne Zahlungsbezug'),
+      dokument('doc-nachweis', 'foto', 'Quittung Baumarkt'),
+      dokument('doc-frei', 'foto', 'Quittung ohne Zahlungsbezug'),
     ]);
   });
 

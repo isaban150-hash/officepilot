@@ -359,7 +359,10 @@ begin
   perform pg_temp.als(pg_temp.mitglied());
   v := pg_temp.archiv('doc-f-neu', null, '{"id":"doc-f-neu","title":"Lieferschein","linkedInvoiceId":null}'::jsonb);
   v := pg_temp.archiv('doc-f-neu', null, '{"id":"doc-f-neu","title":"Lieferschein Mai","linkedInvoiceId":null}'::jsonb, 1);
-  v := pg_temp.archiv('doc-f-alt-mitglied', null, '{"id":"doc-f-alt-mitglied","title":"Kein Rechnungsbeleg"}'::jsonb, 1);
+  -- DOKUMENTE-01: nur der Rechnungsbezug geht, die Einstufung bleibt (wie `withoutInvoiceDocumentClaim`).
+  -- Seit 20261125 weist der Server das Entfernen der Kategorie während der Aufbewahrungsfrist ab.
+  v := pg_temp.archiv('doc-f-alt-mitglied', null,
+    '{"id":"doc-f-alt-mitglied","title":"Kein Rechnungsbeleg","category":"ausgangsrechnung","classifiedKind":"ausgangsrechnung"}'::jsonb, 1);
   perform pg_temp.zurueck();
   r := pg_temp.dok('doc-f-neu');
   if r.row_version is distinct from 2::bigint or r.payload->>'title' is distinct from 'Lieferschein Mai' then

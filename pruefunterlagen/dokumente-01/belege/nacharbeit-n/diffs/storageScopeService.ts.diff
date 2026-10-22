@@ -1,0 +1,114 @@
+diff --git a/src/services/storage/storageScopeService.ts b/src/services/storage/storageScopeService.ts
+index 7fe5006..3098c42 100644
+--- a/src/services/storage/storageScopeService.ts
++++ b/src/services/storage/storageScopeService.ts
+@@ -3,26 +3,70 @@ export const LEGACY_SETUP_KEY = 'officepilot-setup';
+ export const LEGACY_QUARANTINE_PREFIX = 'officepilot-legacy-state:';
+ export const STORAGE_KEY_PREFIX = 'officepilot-state';
+ 
++/**
++ * DOKUMENTE-01 N1 — Sicht des angemeldeten Kontos auf einen Betrieb.
++ *
++ * `full`: Inhaber und Admin sehen alle Daten des Betriebs. `member`: ein Mitglied
++ * sieht nur, was der Server ihm gibt (eigene Archivdokumente, eigene Einträge).
++ * Die Stufe gehört zum Speicherort, damit ein Rollenentzug nie einen Bestand mit
++ * breiterer Sicht weiterverwendet.
++ */
++export type StorageAccess = 'full' | 'member';
++
++export interface StorageAccount {
++  userId: string;
++  access: StorageAccess;
++}
++
+ export type StorageScope =
+   | { type: 'guest' }
+   | { type: 'user'; userId: string }
+-  | { type: 'workspace'; workspaceId: string };
++  /**
++   * DOKUMENTE-01 N1 — `account` trennt den Betriebsbestand je Konto und Sicht.
++   * Fehlt er und ist derselbe Betrieb aktiv, gilt das aktive Konto (so bilden
++   * bestehende Aufrufer wie die Rechnungsvorprüfung den richtigen Schlüssel ohne
++   * Änderung). Ohne aktives Konto — oder ausdrücklich mit `account: null` —
++   * entsteht der bisherige Betriebsschlüssel: der Altbestand aus der Zeit vor der
++   * Kontotrennung.
++   */
++  | { type: 'workspace'; workspaceId: string; account?: StorageAccount | null };
+ 
+ let activeScope: StorageScope = { type: 'guest' };
+ 
++/** Das Konto, für das ein Betriebsschlüssel gebildet wird — explizit, das aktive oder keines (Altbestand). */
++export function resolveWorkspaceAccount(
++  scope: Extract<StorageScope, { type: 'workspace' }>,
++): StorageAccount | undefined {
++  if (scope.account === null) return undefined;
++  if (scope.account) return scope.account;
++  if (activeScope.type === 'workspace' && activeScope.workspaceId === scope.workspaceId) {
++    return activeScope.account ?? undefined;
++  }
++  return undefined;
++}
++
+ export function buildStorageKey(scope: StorageScope): string {
+   switch (scope.type) {
+     case 'guest':
+       return `${STORAGE_KEY_PREFIX}:guest`;
+     case 'user':
+       return `${STORAGE_KEY_PREFIX}:user:${scope.userId}`;
+-    case 'workspace':
+-      return `${STORAGE_KEY_PREFIX}:workspace:${scope.workspaceId}`;
++    case 'workspace': {
++      const account = resolveWorkspaceAccount(scope);
++      return account
++        ? `${STORAGE_KEY_PREFIX}:workspace:${scope.workspaceId}:account:${account.userId}:${account.access}`
++        : `${STORAGE_KEY_PREFIX}:workspace:${scope.workspaceId}`;
++    }
+     default:
+       return `${STORAGE_KEY_PREFIX}:guest`;
+   }
+ }
+ 
++/** Der Betriebsschlüssel aus der Zeit vor der Kontotrennung (ein Bestand für alle Konten). */
++export function buildLegacyWorkspaceStorageKey(workspaceId: string): string {
++  return `${STORAGE_KEY_PREFIX}:workspace:${workspaceId}`;
++}
++
+ export function getActiveStorageScope(): StorageScope {
+   return activeScope;
+ }
+@@ -31,10 +75,35 @@ export function getActiveStorageKey(): string {
+   return buildStorageKey(activeScope);
+ }
+ 
++/** Das Konto des aktiven Betriebsbereichs; `null` für Gast, Nutzerbereich oder Altbestand. */
++export function getActiveStorageAccount(): StorageAccount | null {
++  return activeScope.type === 'workspace' && activeScope.account ? { ...activeScope.account } : null;
++}
++
+ export function setActiveStorageScope(scope: StorageScope): void {
+   activeScope = scope;
+ }
+ 
++/**
++ * DOKUMENTE-01 N1 — Navigationszustand mit fachlichem Inhalt (Vorbelegungen,
++ * Übergaben) liegt im Verlauf des Browsertabs und übersteht Abmelden und
++ * Anmelden: Mit „Zurück" käme ein anderes Konto an ihn heran. Er trägt deshalb
++ * den Speicherbereich (Betrieb, Konto, Sicht), in dem er entstand, und gilt nur
++ * dort.
++ */
++export const NAVIGATION_STATE_SCOPE_KEY = 'officetaktStorageScope' as const;
++
++export function stampNavigationStateWithActiveScope<T extends object>(
++  state: T,
++): T & { readonly [NAVIGATION_STATE_SCOPE_KEY]: string } {
++  return { ...state, [NAVIGATION_STATE_SCOPE_KEY]: getActiveStorageKey() };
++}
++
++export function isNavigationStateFromActiveScope(state: unknown): boolean {
++  if (!state || typeof state !== 'object') return false;
++  return (state as Record<string, unknown>)[NAVIGATION_STATE_SCOPE_KEY] === getActiveStorageKey();
++}
++
+ export function buildLegacyQuarantineKey(timestamp = Date.now()): string {
+   return `${LEGACY_QUARANTINE_PREFIX}${timestamp}`;
+ }

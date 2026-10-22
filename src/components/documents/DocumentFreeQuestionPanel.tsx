@@ -21,6 +21,7 @@ import type { SemanticDeadline } from '../../types/documentSemanticCore';
 import {
   buildLetterPrefill,
   buildReplyDraft,
+  createLetterDraftPrefillLocationState,
   hasEmailAddress,
   hasPostalAddress,
   isReplyRequest,
@@ -357,7 +358,7 @@ export function DocumentFreeQuestionPanel({
                 variant={reply.channelPreference === 'email' ? 'outline' : 'primary'}
                 onClick={() => {
                   navigate('/schreiben/neu', {
-                    state: { officetaktLetterDraftPrefill: buildLetterPrefill(reply) },
+                    state: createLetterDraftPrefillLocationState(buildLetterPrefill(reply)),
                   });
                 }}
                 data-testid={`${testIdPrefix}-reply-letter`}

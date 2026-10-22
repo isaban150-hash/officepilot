@@ -1,0 +1,40 @@
+BEGIN
+INSERT 0 4
+UPDATE 4
+INSERT 0 2
+INSERT 0 4
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 4
+INSERT 0 5
+INSERT 0 6
+INSERT 0 10
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  OK  V1 Altbestand: genau ein Grund je Bindung, unauffällige und Nicht-E-Rechnungen ohne Marke, Versionen unverändert
+DO
+NOTICE:  OK  V2-V6 Marke nur durch den Server: kein Nutzer setzt oder entfernt sie, Wiederholen/Herkunft/Grabstein/Wiederbeleben behalten sie, nur eine geprüfte neue Datei entfernt sie, der Abzug liefert sie
+DO
+DO
+NOTICE:  OK  D1-D6 Mitglied fälscht keinen Rechnungsbeleg: kein Rechnungsbezug in Spalte oder Nutzlast, nichts unter corr-, keine Rechnungsbelege, auf keinem Weg
+DO
+NOTICE:  OK  D7-D10 Eingangsweg und Bereinigen bleiben, Inhaber/Admin wie bisher, Stornierung gelingt; Altbestand unter corr- blockiert (siehe P1)
+NOTICE:  OK  P1 Prüfabfrage findet das vorab angelegte corr-Dokument; das bereinigte Altdokument ist nicht mehr auffällig
+DO
+NOTICE:  OK  R1-R4 Rolle zum Schreibzeitpunkt: herabgestuft nein, aufgestiegen ja, entfernt kein Zugang, abgelaufene Lizenz legt nichts an, räumt aber auf
+DO
+DO
+NOTICE:  OK  G1-G4 Funktionen für niemanden direkt aufrufbar, security definer, Dokument-Trigger aktiv, Sperren auf Beleg und Datei
+ROLLBACK

@@ -1,4 +1,7 @@
-import { isSupabaseConfigured } from '../../lib/supabase';
+import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
+import type { StorageAccess, StorageAccount } from '../storage/storageScopeService';
+import type { WorkspaceMember } from '../../types/workspace';
+import { resolveSessionAccount } from '../storage/workspaceAccountStorageService';
 import {
   applyPersistedStateFromSync,
   buildPersistedStateSnapshot,
@@ -40,19 +43,50 @@ let bootstrapCompleted = false;
  * ausschliesslich Dienste auf und darf keine React-Komponente importieren.
  * Hier greift die vorhandene Reset-Kette ohne jede neue Verdrahtung.
  */
-let lastSuccessfulBootstrap: { userId: string; workspaceId: string } | null = null;
-
-export function getLastSuccessfulWorkspaceBootstrap(): {
+/**
+ * DOKUMENTE-01 N1 — mit der Sicht (`access`), unter der das Konto freigegeben
+ * wurde: Ein Zweitlauf derselben Seite lädt denselben Kontobestand.
+ */
+export interface WorkspaceBootstrapBinding {
   userId: string;
   workspaceId: string;
-} | null {
+  access?: StorageAccess;
+}
+
+let lastSuccessfulBootstrap: WorkspaceBootstrapBinding | null = null;
+
+export function getLastSuccessfulWorkspaceBootstrap(): WorkspaceBootstrapBinding | null {
   return lastSuccessfulBootstrap ? { ...lastSuccessfulBootstrap } : null;
 }
 
-export function setLastSuccessfulWorkspaceBootstrap(
-  value: { userId: string; workspaceId: string } | null,
-): void {
+export function setLastSuccessfulWorkspaceBootstrap(value: WorkspaceBootstrapBinding | null): void {
   lastSuccessfulBootstrap = value ? { ...value } : null;
+}
+
+/**
+ * DOKUMENTE-01 N1 — wer angemeldet ist. Vorrang hat die Angabe des Aufrufers (das
+ * Gate kennt den Nutzer); sonst die Sitzung. Ohne Sitzung `null` — dann scheitert
+ * in Produktion schon jede RPC dieses Laufs; nur Testgerüste ohne Sitzung kommen
+ * weiter und behalten den bisherigen Betriebsschlüssel.
+ */
+async function resolveSessionUserId(given: string | null | undefined): Promise<string | null> {
+  if (given) return given;
+  try {
+    const client = getSupabaseClient();
+    const { data } = (await client?.auth.getSession()) ?? { data: null };
+    return data?.session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Gibt es für dieses Konto (oder als Altbestand) einen echten lokalen Firmenbestand? */
+function hasRealLocalWorkspaceCompany(workspaceId: string, sessionUserId: string | null): boolean {
+  if (isRealLocalCompany(readLocalCompanyCandidate(workspaceId))) return true;
+  if (!sessionUserId) return false;
+  return (['full', 'member'] as const).some((access) =>
+    isRealLocalCompany(readLocalCompanyCandidate(workspaceId, { userId: sessionUserId, access })),
+  );
 }
 
 /**
@@ -120,7 +154,10 @@ export interface WorkspaceCloudBootstrapResult {
   localWorkspaceCandidate?: boolean;
 }
 
-export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<WorkspaceCloudBootstrapResult> {
+export async function bootstrapWorkspaceCloudSyncIfNeeded(
+  /** DOKUMENTE-01 N1 — das angemeldete Konto, wie das Gate es kennt. */
+  options: { sessionUserId?: string | null } = {},
+): Promise<WorkspaceCloudBootstrapResult> {
   if (!isSupabaseConfigured()) return { status: 'ready' };
   if (bootstrapCompleted) return { status: 'already_bootstrapped' };
   if (bootstrapPromise) return bootstrapPromise;
@@ -131,15 +168,19 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<WorkspaceCl
 
     let createdWorkspace = false;
     let state = buildPersistedStateSnapshot();
+    const sessionUserId = await resolveSessionUserId(options.sessionUserId);
+    /** DOKUMENTE-01 N1 — Mitgliedschaft laut Provisionierung in diesem Lauf (nie aus dem lokalen Bestand). */
+    let provisionedMembers: WorkspaceMember[] = [];
 
     /**
      * OFFICEPILOT-…-02B-K3 — der lokale Workspace-Kandidat wird bereits vor dem
      * Provisioning bestimmt. So kann auch ein früher Fehler melden, dass ein
      * echter lokaler Bestand existiert und die App gesperrt bleiben muss.
+     * DOKUMENTE-01 N1 — Altbestand und Kontobestände dieses Kontos zählen.
      */
     const knownWorkspaceId = state.syncClient?.serverWorkspaceId ?? state.workspace?.id;
     let hasLocalWorkspaceCompany = knownWorkspaceId
-      ? isRealLocalCompany(readLocalCompanyCandidate(knownWorkspaceId))
+      ? hasRealLocalWorkspaceCompany(knownWorkspaceId, sessionUserId)
       : false;
 
     if (!client.cloudProvisionedAt || !state.workspace) {
@@ -158,6 +199,7 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<WorkspaceCl
       }
       createdWorkspace = provision.created === true;
       state = provision.state;
+      provisionedMembers = provision.state.workspaceMembers ?? [];
       applyPersistedStateFromSync(state);
       applyWorkspaceStateToStores(state);
     }
@@ -174,9 +216,6 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<WorkspaceCl
     if (!workspaceId) {
       return { status: 'failed', reason: 'provision' };
     }
-
-    const localCandidate = readLocalCompanyCandidate(workspaceId);
-    hasLocalWorkspaceCompany = hasLocalWorkspaceCompany || isRealLocalCompany(localCandidate);
 
     let pull;
     try {
@@ -196,6 +235,28 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<WorkspaceCl
       };
     }
 
+    /*
+     * DOKUMENTE-01 N1 — das Konto der angemeldeten Person und seine Sicht, wie der
+     * Server sie in der Mitgliederliste meldet. Ist das Konto bekannt, aber ohne
+     * aktive Mitgliedschaft (entzogen, eingeladen, entfernt): kein Bereichswechsel,
+     * kein Push. Erst mit dem Konto ist klar, welcher lokale Bestand gilt.
+     */
+    const pullMembers = pull.members.filter((member) => member.userId === sessionUserId);
+    const account: StorageAccount | null = sessionUserId
+      ? resolveSessionAccount(
+          // Der Abzug entscheidet, sobald er das Konto nennt (auch inaktiv); fehlt es
+          // dort, gilt die Antwort der Provisionierung aus genau diesem Lauf.
+          pullMembers.length > 0 ? pullMembers : provisionedMembers,
+          sessionUserId,
+        )
+      : null;
+    if (sessionUserId && !account) {
+      return { status: 'failed', reason: 'auth', localWorkspaceCandidate: hasLocalWorkspaceCompany };
+    }
+
+    const localCandidate = readLocalCompanyCandidate(workspaceId, account);
+    hasLocalWorkspaceCompany = hasLocalWorkspaceCompany || isRealLocalCompany(localCandidate);
+
     const conflict = detectCompanyConflict(
       localCandidate,
       buildCloudCompanySnapshot(pull),
@@ -203,7 +264,7 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<WorkspaceCl
     );
     if (conflict) {
       // Nichts anwenden, nichts speichern, nichts senden.
-      return { status: 'company_conflict', conflict };
+      return { status: 'company_conflict', conflict: { ...conflict, account } };
     }
 
     /**
@@ -219,7 +280,13 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<WorkspaceCl
       };
     }
     // Ab hier ohne Konflikt: zuerst der richtige Scope, dann der Cloud-Kandidat.
-    switchToWorkspaceScope(ownerUserId, workspaceId);
+    // DOKUMENTE-01 N1 — der Bestand des angemeldeten Kontos in seiner Sicht; nur
+    // ohne ermittelbare Sitzung (Testgerüste) der bisherige Betriebsschlüssel.
+    if (account) {
+      switchToWorkspaceScope(account.userId, workspaceId, account.access, ownerUserId);
+    } else {
+      switchToWorkspaceScope(ownerUserId, workspaceId);
+    }
     state = buildPersistedStateSnapshot();
     applyPersistedStateFromSync(state);
     applyWorkspaceStateToStores(state);

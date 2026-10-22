@@ -1,0 +1,41 @@
+BEGIN
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 4
+INSERT 0 6
+INSERT 0 1
+ {"sub":"00000000-0000-0000-0000-00000000baf1","role":"authenticated"}
+
+CREATE FUNCTION
+ 
+
+NOTICE:  ABGELEHNT  1a versendete Rechnung  -> Archivdokument einer festgeschriebenen Rechnung kann nicht geloescht werden
+NOTICE:  ABGELEHNT  1b vorbereitete Rechnung  -> Archivdokument einer festgeschriebenen Rechnung kann nicht geloescht werden
+ 
+
+ 
+
+NOTICE:  ABGELEHNT  1c Korrekturbeleg einer festgeschriebenen Rechnung  -> Archivdokument einer festgeschriebenen Rechnung kann nicht geloescht werden
+NOTICE:  ABGELEHNT  1d Leerzeichen um die Kennung umgehen den Schutz nicht  -> Archivdokument einer festgeschriebenen Rechnung kann nicht geloescht werden
+ 
+
+NOTICE:  OK         1 geschuetzte Dokumente und Rechnungen unveraendert
+DO
+NOTICE:  ABGELEHNT  2a fremder Workspace  -> Kein Zugriff auf Workspace
+ 
+
+NOTICE:  ABGELEHNT  2b fremdes Dokument ueber den eigenen Workspace  -> Dokument nicht gefunden
+ 
+
+NOTICE:  OK         3 normales Dokument geloescht, Wiederholung idempotent
+NOTICE:  OK         3c Dokument einer Entwurfsrechnung loeschbar
+NOTICE:  OK         3d Pruefung bleibt im eigenen Workspace
+DO
+NOTICE:  OK         4 bereits geloeschter Beleg bleibt idempotent
+DO
+DO
+NOTICE:  OK         5 Rechte unveraendert
+ SQL OK
+
+ROLLBACK

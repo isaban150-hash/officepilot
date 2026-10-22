@@ -1,0 +1,48 @@
+diff --git a/src/services/homeHintDismissalService.ts b/src/services/homeHintDismissalService.ts
+index 71fc524..ce7d131 100644
+--- a/src/services/homeHintDismissalService.ts
++++ b/src/services/homeHintDismissalService.ts
+@@ -1,5 +1,18 @@
++import { getActiveStorageAccount, getActiveStorageKey } from './storage/storageScopeService';
++
+ const STORAGE_KEY = 'officepilot_home_hint_dismissals';
+ 
++/**
++ * DOKUMENTE-01 N1 — Hinweis-Kennungen tragen Dokumenttitel, Kunden und
++ * Rechnungsnummern, und „erledigt", „später" oder „ausblenden" eines Kontos darf
++ * einem anderen Konto keinen Hinweis verbergen: im Kontobereich gilt ein eigener
++ * Schlüssel. Ohne Kontobereich (Gast, Altbestand, Tests) der bisherige gemeinsame
++ * Schlüssel; er bleibt unangetastet.
++ */
++function storageKey(): string {
++  return getActiveStorageAccount() ? `${getActiveStorageKey()}:home-hint-dismissals` : STORAGE_KEY;
++}
++
+ export type HomeHintDismissAction = 'done' | 'snooze' | 'hidden';
+ export type SnoozeDuration = 'tomorrow' | '3days' | 'nextweek';
+ 
+@@ -13,7 +26,7 @@ type DismissalStore = Record<string, HintDismissalRecord>;
+ 
+ function readStore(): DismissalStore {
+   try {
+-    const raw = localStorage.getItem(STORAGE_KEY);
++    const raw = localStorage.getItem(storageKey());
+     if (!raw) return {};
+     const parsed = JSON.parse(raw) as DismissalStore;
+     return parsed && typeof parsed === 'object' ? parsed : {};
+@@ -23,7 +36,7 @@ function readStore(): DismissalStore {
+ }
+ 
+ function writeStore(store: DismissalStore): void {
+-  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
++  localStorage.setItem(storageKey(), JSON.stringify(store));
+ }
+ 
+ export function buildHomeHintId(messageKey: string, params?: Record<string, string | number>): string {
+@@ -87,5 +100,5 @@ export function snoozeHomeHint(
+ }
+ 
+ export function resetHomeHintDismissals(): void {
+-  localStorage.removeItem(STORAGE_KEY);
++  localStorage.removeItem(storageKey());
+ }

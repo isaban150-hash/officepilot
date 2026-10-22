@@ -1,0 +1,220 @@
+diff --git a/src/services/sync/syncRunIdentityService.ts b/src/services/sync/syncRunIdentityService.ts
+index 4847f45..bd7d3fd 100644
+--- a/src/services/sync/syncRunIdentityService.ts
++++ b/src/services/sync/syncRunIdentityService.ts
+@@ -46,18 +46,35 @@ export interface SyncRunIdentity {
+   readonly sessionUserId: string | null | undefined;
+   /** Bereich und Sitzung passten schon beim Start zusammen; sonst sendet der Lauf nichts. */
+   readonly consistent: boolean;
++  /**
++   * Warum der Start nicht zusammenpasste: `start_unbestaetigt` — im Kontobereich war keine Anmeldung nachweisbar
++   * (nicht lesbar, keine Sitzung, Token ohne lesbares Konto); `start_inkonsistent` — eine andere Anmeldung oder ein
++   * Bereichswechsel beim Lesen. `null`, wenn der Start zusammenpasste.
++   */
++  readonly startProblem: 'start_unbestaetigt' | 'start_inkonsistent' | null;
+   readonly capturedAt: string;
+ }
+ 
+-export type SyncRunIdentityChangeReason = 'bereich' | 'sitzung' | 'sitzung_unlesbar' | 'start_inkonsistent';
++export type SyncRunIdentityChangeReason =
++  | 'bereich'
++  | 'sitzung'
++  | 'sitzung_unlesbar'
++  | 'start_inkonsistent'
++  | 'start_unbestaetigt';
+ 
+ const REASON_TEXT: Record<SyncRunIdentityChangeReason, string> = {
+   bereich: 'Betrieb, Konto oder Sicht hat gewechselt',
+   sitzung: 'ein anderes Konto ist angemeldet',
+   sitzung_unlesbar: 'die Anmeldung ist nicht mehr lesbar',
+   start_inkonsistent: 'Anmeldung und Speicherbereich gehörten schon beim Start nicht zusammen',
++  start_unbestaetigt: 'die Anmeldung dieses Kontos ließ sich beim Start nicht bestätigen',
+ };
+ 
++/** Hält der Lauf schon beim Start an (Startidentität nicht nachweisbar oder fremd)? */
++export function isStartIdentityProblem(reason: SyncRunIdentityChangeReason | null | undefined): boolean {
++  return reason === 'start_unbestaetigt' || reason === 'start_inkonsistent';
++}
++
+ export class SyncRunIdentityChangedError extends Error {
+   readonly code = 'sync_run_identity_changed' as const;
+ 
+@@ -177,6 +194,12 @@ function activeScopeWorkspaceId(): string | null {
+ /**
+  * Hält die Ursprungsidentität fest. Der Speicherbereich wird vor dem Lesen der Sitzung gelesen und danach
+  * erneut verglichen: Wechselt er dazwischen, gilt der Lauf von Anfang an als nicht zusammengehörig.
++ *
++ * DOKUMENTE-01 R1-WEISS-START — im Kontobereich nur mit **nachweisbarer** Startidentität: Die Anmeldung ist lesbar
++ * und nennt genau das Konto dieses Bereichs (Sitzung oder Konto aus dem Token). Nicht lesbare Sitzung oder
++ * Tokenquelle, keine Sitzung und ein Token ohne lesbares Konto weisen nichts nach: Der Lauf hält dann an, statt
++ * später den Zugang zu nehmen, den das SDK gerade liefert. Erst ein neuer Lauf mit bestätigter Identität sendet.
++ * Außerhalb eines Kontobereichs (nur Testgerüste) bleibt es beim bisherigen Weg.
+  */
+ export async function captureSyncRunIdentity(
+   client: SupabaseClient | null | undefined,
+@@ -187,10 +210,16 @@ export async function captureSyncRunIdentity(
+   const account = getActiveStorageAccount();
+   const session = await readSession(client);
+   const scopeStable = getActiveStorageKey() === storageKey;
+-  // Ein Kontobereich gehört genau einem Konto: Nennt die Anmeldung ein Konto, muss es dieses sein. Ein Token ohne
+-  // lesbares Konto lässt sich nicht zuordnen; es zählt dann nur, dass es während des Laufs dasselbe bleibt.
+-  const sessionMatchesAccount =
+-    !account || !session.readable || session.source === 'opaque_token' || session.userId === account.userId;
++  const provable = session.readable && session.source !== 'opaque_token' && session.userId !== null;
++  const startProblem: SyncRunIdentity['startProblem'] = !scopeStable
++    ? 'start_inkonsistent'
++    : !account
++      ? null
++      : !provable
++        ? 'start_unbestaetigt'
++        : session.userId !== account.userId
++          ? 'start_inkonsistent'
++          : null;
+   return Object.freeze({
+     storageKey,
+     workspaceId,
+@@ -198,7 +227,8 @@ export async function captureSyncRunIdentity(
+     accountUserId: account?.userId ?? null,
+     access: account?.access ?? null,
+     sessionUserId: session.readable ? session.userId : undefined,
+-    consistent: scopeStable && sessionMatchesAccount,
++    consistent: startProblem === null,
++    startProblem,
+     capturedAt: new Date().toISOString(),
+   });
+ }
+@@ -218,13 +248,17 @@ export interface SyncRunGuard {
+   assertScopeNow(): void;
+   /** Zugang des Ursprungskontos aus der letzten bestandenen Prüfung (`Bearer …`), sonst `null`. */
+   authorization(): string | null;
++  /** Am Netzaufruf ohne geprüften Zugang: anhalten und die Anfrage nicht entstehen lassen. */
++  refuseWithoutVerifiedAccess(): never;
+ }
+ 
+ export function createSyncRunGuard(
+   identity: SyncRunIdentity,
+   client: SupabaseClient | null | undefined,
+ ): SyncRunGuard {
+-  let tripped: SyncRunIdentityChangeReason | null = identity.consistent ? null : 'start_inkonsistent';
++  let tripped: SyncRunIdentityChangeReason | null = identity.consistent
++    ? null
++    : (identity.startProblem ?? 'start_inkonsistent');
+   let verifiedAccessToken: string | null = null;
+   const trip = (reason: SyncRunIdentityChangeReason): false => {
+     if (!tripped) tripped = reason;
+@@ -262,6 +296,10 @@ export function createSyncRunGuard(
+     authorization() {
+       return verifiedAccessToken ? `Bearer ${verifiedAccessToken}` : null;
+     },
++    refuseWithoutVerifiedAccess(): never {
++      trip('sitzung_unlesbar');
++      throw new SyncRunRequestRefusedError(tripped ?? 'sitzung_unlesbar');
++    },
+   };
+ }
+ 
+@@ -272,11 +310,15 @@ type FetchLike = (input: unknown, init?: Record<string, unknown>) => Promise<unk
+ /**
+  * Der Netzaufruf eines Laufs: Schlussblick ohne Warten, dann mit dem geprüften Zugang des Ursprungskontos. Die
+  * Supabase-Bibliotheken übernehmen einen vorhandenen `Authorization`-Kopf, statt den der Sitzung zu lesen.
++ *
++ * DOKUMENTE-01 R1-WEISS-START — im Kontobereich nie ohne diesen Zugang: Ohne ihn läse das SDK die Sitzung, die
++ * gerade gilt — womöglich die eines anderen Kontos. Die Anfrage entsteht dann nicht, der Lauf hält an.
+  */
+ function bindFetch(fetchFn: FetchLike, guard: SyncRunGuard): FetchLike {
+   return async (input, init) => {
+     guard.assertScopeNow();
+     const authorization = guard.authorization();
++    if (!authorization && guard.identity.accountUserId !== null) guard.refuseWithoutVerifiedAccess();
+     if (!authorization) return fetchFn(input, init);
+     const headers = new Headers((init?.headers as HeadersInit | undefined) ?? undefined);
+     headers.set('Authorization', authorization);
+@@ -378,12 +420,13 @@ export function bindClientToSyncRun<T extends SupabaseClient | null | undefined>
+   return new Proxy(client as object, {
+     get(target, prop, receiver) {
+       if (prop === 'rpc') {
+-        return (fn: string, args?: unknown, options?: unknown) =>
+-          deferredRequest(() => (target as unknown as { rpc: AnyFunction }).rpc(fn, args, options), guard);
++        // Die Argumente unverändert weiterreichen (gleiche Anzahl wie beim Aufruf).
++        return (...args: unknown[]) =>
++          deferredRequest(() => (target as unknown as { rpc: AnyFunction }).rpc(...args), guard);
+       }
+       if (prop === 'from') {
+-        return (relation: string) =>
+-          deferredRequest(() => (target as unknown as { from: AnyFunction }).from(relation), guard);
++        return (...args: unknown[]) =>
++          deferredRequest(() => (target as unknown as { from: AnyFunction }).from(...args), guard);
+       }
+       if (prop === 'storage') {
+         return bindStorage(Reflect.get(target, prop, receiver), guard);
+@@ -392,3 +435,70 @@ export function bindClientToSyncRun<T extends SupabaseClient | null | undefined>
+     },
+   }) as T;
+ }
++
++/* -------------------------------------------------------------------------- */
++/* Direkte Vorgänge                                                            */
++/* -------------------------------------------------------------------------- */
++
++/**
++ * DOKUMENTE-01 (DOK-WEISS-DIREKT) — ein direkter Vorgang (etwa eine Löschung aus der Oberfläche) gehört dem
++ * Bereich (Betrieb, Konto, Sicht), in dem er aufgerufen wurde. Zwischen Aufruf und Änderung liegen Rückfragen an
++ * den Server; wechselt in dieser Zeit das Konto, darf der Vorgang weder im neuen Bestand ändern noch dort einen
++ * Auftrag einreihen, noch Erfolg melden.
++ */
++export interface DirectOperationBinding {
++  /**
++   * Client für die Anfragen des Vorgangs. Mit bestätigter Anmeldung an ihn gebunden (Prüfung vor jeder Anfrage,
++   * geprüfter Zugang). Ohne bestätigte Anmeldung der übergebene Client — dann nur für lesende Rückfragen.
++   */
++  readonly client: SupabaseClient | null | undefined;
++  /** Die Anmeldung nennt nachweislich das Konto dieses Bereichs. Ohne das im Kontobereich keine Cloud-Mutation. */
++  readonly confirmed: boolean;
++  /** Synchron, unmittelbar vor einer lokalen Mutation: noch derselbe Bereich, nichts angehalten. */
++  scopeStillActive(): boolean;
++  /** Nach einer asynchronen Grenze: derselbe Bereich, und angemeldet ist kein anderes Konto als beim Aufruf. */
++  stillValid(): Promise<boolean>;
++}
++
++/**
++ * Bindet einen direkten Vorgang an den Bereich, den der Aufrufer **vor** seiner ersten asynchronen Grenze
++ * festgehalten hat (`startStorageKey`). `null`: Der Vorgang gehört schon nicht mehr dem aktiven Bereich, oder ein
++ * anderes Konto ist angemeldet — sofort abbrechen.
++ */
++export async function bindDirectOperation(
++  client: SupabaseClient | null | undefined,
++  startStorageKey: string,
++): Promise<DirectOperationBinding | null> {
++  const identity = await captureSyncRunIdentity(client, activeScopeWorkspaceId() ?? '');
++  if (identity.storageKey !== startStorageKey || getActiveStorageKey() !== startStorageKey) return null;
++  if (identity.startProblem === 'start_inkonsistent') return null;
++  if (identity.consistent) {
++    const guard = createSyncRunGuard(identity, client);
++    return {
++      client: bindClientToSyncRun(client, guard),
++      confirmed: true,
++      scopeStillActive: () => !guard.tripped && getActiveStorageKey() === startStorageKey,
++      stillValid: () => guard.check(),
++    };
++  }
++  // Im Kontobereich ohne nachweisbare Anmeldung: lesen ja, ändern nur lokal im eigenen Bereich, nie in der Cloud.
++  const startSessionUserId = identity.sessionUserId;
++  let angehalten = false;
++  const anhalten = (): false => {
++    angehalten = true;
++    return false;
++  };
++  return {
++    client,
++    confirmed: false,
++    scopeStillActive: () => !angehalten && getActiveStorageKey() === startStorageKey,
++    async stillValid() {
++      if (angehalten || getActiveStorageKey() !== startStorageKey) return anhalten();
++      const now = await readSession(client);
++      if (getActiveStorageKey() !== startStorageKey) return anhalten();
++      // Wer jetzt angemeldet ist, war es beim Aufruf nicht nachweislich: eine neue Anmeldung ist ein Wechsel.
++      if (now.readable && now.userId !== null && now.userId !== startSessionUserId) return anhalten();
++      return true;
++    },
++  };
++}

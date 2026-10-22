@@ -1,0 +1,16 @@
+diff --git a/src/services/storage/localScopeBlobInventoryService.ts b/src/services/storage/localScopeBlobInventoryService.ts
+index 21700a9..29a69e4 100644
+--- a/src/services/storage/localScopeBlobInventoryService.ts
++++ b/src/services/storage/localScopeBlobInventoryService.ts
+@@ -54,7 +54,10 @@ export function buildScopeKeyFromStorageKey(storageKey: string): string | null {
+   }
+   if (storageKey.startsWith(workspacePrefix)) {
+     const id = storageKey.slice(workspacePrefix.length);
+-    return id && !id.includes(':') ? `workspace:${id}` : null;
++    if (id && !id.includes(':')) return `workspace:${id}`;
++    // DOKUMENTE-01 N1 — Kontobestand: seine Dateien liegen im gleichnamigen Kontobereich.
++    const konto = id.match(/^([^:]+):account:([^:]+):(full|member)$/);
++    return konto ? `workspace:${konto[1]}:account:${konto[2]}:${konto[3]}` : null;
+   }
+   return null;
+ }

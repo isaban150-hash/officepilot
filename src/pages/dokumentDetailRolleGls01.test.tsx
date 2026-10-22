@@ -106,11 +106,36 @@ describe('GLS01 UI — Löschen auf der Dokumentseite', () => {
 
   it('U9: Inhaber behalten den Löschweg', async () => {
     alsInhaber();
-    const id = fremddokument();
-    const mount = await mountDetail(id);
+    /*
+     * DOKUMENTE-01 / D-017 — die Eingangsrechnung aus U8 ist ein Buchungsbeleg mit
+     * laufender Aufbewahrung; den Löschweg zeigt hier ein Dokument ohne feste Frist.
+     */
+    const result = addDocument({
+      title: 'Schreiben Holz AG',
+      category: 'sonstiges',
+      issuer: 'Holz AG',
+      recognizedText: 'Sehr geehrte Damen und Herren',
+      issueDate: '2026-08-01',
+      classifiedKind: 'brief',
+      archived: true,
+    });
+    if (!result.success) throw new Error('Dokument nicht angelegt');
+    const mount = await mountDetail(result.document.id);
 
     expect(byTestId(mount, 'document-detail-delete-trigger')).not.toBeNull();
     expect(byTestId(mount, 'document-detail-delete-role-hint')).toBeNull();
+
+    unmount(mount);
+  });
+
+  it('U9b: bei laufender Aufbewahrung sieht auch der Inhaber die Frist statt „Löschen"', async () => {
+    alsInhaber();
+    const id = fremddokument();
+    const mount = await mountDetail(id);
+
+    expect(byTestId(mount, 'document-detail-delete-trigger')).toBeNull();
+    expect(byTestId(mount, 'document-detail-delete-role-hint')).toBeNull();
+    expect(byTestId(mount, 'document-detail-delete-retention')).not.toBeNull();
 
     unmount(mount);
   });

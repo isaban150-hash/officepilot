@@ -248,12 +248,24 @@ describe('01D-1 — Fristart', () => {
   });
 
   it('8: response_due wird kein Zahlungsziel und kein Belegdatum', async () => {
-    const item = await intake(TEXT.response, 'anhoerung');
-    expect(item.deadline).toBe('2026-10-20');
-    expect(item.deadlineType).toBe('response_due');
-    const input = buildExpenseInputFromInbox(item);
-    expect(input.paymentDueDate).toBeUndefined();
-    expect(input.issueDate).not.toBe('2026-10-20');
+    /*
+     * DOKUMENTE-01 — ohne erkanntes Belegdatum gilt der heutige Tag. Ohne festes
+     * Datum fiel der Test genau am 20.10.2026 um: „heute" war dann zugleich die
+     * Antwortfrist. Die Uhr steht deshalb auf einem anderen Tag.
+     */
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-01T09:00:00'));
+    try {
+      const item = await intake(TEXT.response, 'anhoerung');
+      expect(item.deadline).toBe('2026-10-20');
+      expect(item.deadlineType).toBe('response_due');
+      const input = buildExpenseInputFromInbox(item);
+      expect(input.paymentDueDate).toBeUndefined();
+      expect(input.issueDate).not.toBe('2026-10-20');
+      expect(input.issueDate).toBe('2026-09-01');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('9: document_submission_due wird kein Zahlungsziel', async () => {

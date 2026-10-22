@@ -1,0 +1,99 @@
+{
+  "start": "2026-10-20T16:07:58.189Z",
+  "pruefungen": [
+    {
+      "phase": "V1-inhaber",
+      "name": "PDF mit lokalem Original gefunden und Vorschau erzeugt",
+      "ok": true,
+      "detail": {
+        "vorschaubild": "persisted",
+        "vorschau": "persisted",
+        "bindungen": [
+          "thumbnail",
+          "preview"
+        ]
+      }
+    },
+    {
+      "phase": "V1-inhaber",
+      "name": "Detail zeigt Vorschaubild",
+      "ok": true,
+      "detail": {
+        "seite": true,
+        "bilder": 1
+      }
+    },
+    {
+      "phase": "V2-mitglied",
+      "name": "Mitglied: Mitgliedssicht",
+      "ok": true,
+      "detail": {
+        "access": "member"
+      }
+    },
+    {
+      "phase": "V2-mitglied",
+      "name": "Mitglied: Vorschau-Dateien des Inhabers nicht lesbar",
+      "ok": true,
+      "detail": {
+        "lesbar": 0,
+        "quellen": 3
+      }
+    },
+    {
+      "phase": "V2-mitglied",
+      "name": "Mitglied: keine Vorschau-Bindung, keine Dateireferenz",
+      "ok": true,
+      "detail": {
+        "bindungen": 0,
+        "refs": 0
+      }
+    },
+    {
+      "phase": "V2-mitglied",
+      "name": "Mitglied: Detail des Inhaberdokuments zeigt nichts",
+      "ok": true,
+      "detail": {
+        "seite": false,
+        "bilder": 0
+      }
+    },
+    {
+      "phase": "V3-inhaber-erneut",
+      "name": "Inhaber: eigene Vorschau-Bindungen und Bytes erhalten",
+      "ok": true,
+      "detail": {
+        "lesbar": 2,
+        "bindungen": 2
+      }
+    },
+    {
+      "phase": "V3-inhaber-erneut",
+      "name": "Inhaber: Detail zeigt Vorschaubild wieder",
+      "ok": true,
+      "detail": {
+        "seite": true,
+        "bilder": 1
+      }
+    }
+  ],
+  "blockiert": 0,
+  "antworten4xx": {
+    "V1-inhaber | 401 | /rest/v1/profiles": 2,
+    "V2-mitglied | 400 | pull_workspace_expenses": 2,
+    "V2-mitglied | 400 | pull_workspace_employee_data": 2,
+    "V2-mitglied | 400 | pull_workspace_accounting_assignments": 2
+  },
+  "widerruf": [
+    204,
+    204,
+    204
+  ],
+  "profilGeloescht": true,
+  "ende": "2026-10-20T16:12:21.771Z",
+  "summe": {
+    "pruefungen": 8,
+    "ok": 8,
+    "rot": 0
+  }
+}

@@ -1,0 +1,60 @@
+BEGIN
+INSERT 0 5
+UPDATE 4
+UPDATE 1
+INSERT 0 2
+INSERT 0 5
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+INSERT 0 11
+INSERT 0 12
+INSERT 0 11
+INSERT 0 1
+INSERT 0 4
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 1
+NOTICE:  OK  M1-M8 Mitglied legt keine E-Rechnungsbindung an; keine Rolle, Unterrolle, Schreibweise und kein vorgeblicher Rechnungsbeleg hilft
+DO
+DO
+NOTICE:  OK  M9-M10 Altbestand: Mitglied ersetzt, wiederholt, ändert, löscht und belebt nichts; Dateien dahinter unberührt, fehlende nicht nachgereicht
+NOTICE:  OK  M11 auch direkt an der Tabelle und im Namen des Mitglieds (wie jede Security-Definer-Funktion) keine Änderung
+DO
+DO
+NOTICE:  OK  M12 Eingangsweg des Mitglieds unverändert: Datei anlegen, Original und Archivfassung binden, ersetzen, umbenennen
+DO
+NOTICE:  OK  I1-I6 Inhaber/Admin legen XRechnung, ZUGFeRD und Altbindung an, wiederholen und ersetzen; das Mitglied nicht
+DO
+NOTICE:  OK  I7-I9 kein Anlegen bei offenem oder verneintem Leistungszeitraum, an Entwürfen oder mit abgelaufener Lizenz
+DO
+NOTICE:  OK  I10-I12 Grabstein ohne Bedingung, kein Wiederbeleben ohne Bestätigung, Archiv-PDF wie bisher, Betriebe getrennt
+DO
+NOTICE:  OK  O1-O4 Bestätigung, Datei und Beleg dürfen später kommen: wiederholbare Abweisung, danach gelingt derselbe Aufruf
+DO
+NOTICE:  OK  T1-T4 Unterrolle nur genau und an structured, nur am lebenden Rechnungsbeleg, Datei lebend, im Betrieb und vom passenden Typ, Schlüssel fest
+DO
+NOTICE:  OK  W1-W3 Wartung ohne Nutzer frei, Fremdschlüsselpflege läuft, Urheberschaft lässt sich nicht umschreiben
+CREATE FUNCTION
+NOTICE:  OK  D1 Altbestand: Mitgliedsbindung, fehlende Datei und Wartungsbindung zur Prüfung markiert, nichts gelöscht
+DO
+DO
+NOTICE:  OK  G1-G4 Trigger-Funktionen für niemanden direkt aufrufbar, security definer, Trigger aktiv vor INSERT und UPDATE
+ROLLBACK

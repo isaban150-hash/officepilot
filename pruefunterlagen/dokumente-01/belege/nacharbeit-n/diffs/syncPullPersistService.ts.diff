@@ -1,0 +1,59 @@
+diff --git a/src/services/sync/syncPullPersistService.ts b/src/services/sync/syncPullPersistService.ts
+index ff143c7..475d851 100644
+--- a/src/services/sync/syncPullPersistService.ts
++++ b/src/services/sync/syncPullPersistService.ts
+@@ -15,6 +15,7 @@ import { getSyncCoordinator } from './syncCoordinator';
+ import { getSyncOutboxSnapshot, runAutomaticSyncWrite } from './syncOutboxService';
+ import { rebaseSyncCandidateOntoLocalChanges } from './syncLocalRebaseService';
+ import { reconcileInvoicePaymentTasks } from '../invoice/invoicePaymentTaskSync';
++import { getActiveStorageKey } from '../storage/storageScopeService';
+ 
+ /**
+  * SYNC-AUTOMATIK-01A — der lokale Stand beim Start eines Laufs.
+@@ -26,10 +27,19 @@ import { reconcileInvoicePaymentTasks } from '../invoice/invoicePaymentTaskSync'
+ export interface SyncRunBase {
+   state: AppPersistedState;
+   revision: number;
++  /**
++   * DOKUMENTE-01 N1 — der Speicherbereich (Betrieb, Konto, Sicht) beim Laufstart.
++   * Fehlt er (ältere Aufrufer), gilt der bisherige Weg.
++   */
++  storageKey?: string;
+ }
+ 
+ export function captureSyncRunBase(): SyncRunBase {
+-  return { state: buildPersistedStateSnapshot(), revision: getLocalMutationRevision() };
++  return {
++    state: buildPersistedStateSnapshot(),
++    revision: getLocalMutationRevision(),
++    storageKey: getActiveStorageKey(),
++  };
+ }
+ 
+ export type ApplySyncPullCandidateResult = {
+@@ -88,6 +98,25 @@ export function applySyncPullCandidateSafely(input: {
+   /** 01A — Stand beim Laufstart; fehlt er, gilt der bisherige Weg. */
+   base?: SyncRunBase;
+ }): ApplySyncPullCandidateResult {
++  /*
++   * DOKUMENTE-01 N1 — ein Lauf gehört dem Bereich, in dem er begann. Wurde
++   * inzwischen abgemeldet oder das Konto bzw. seine Sicht gewechselt, trägt der
++   * Kandidat den Bestand und die Warteschlange des früheren Kontos. Er wird
++   * verworfen: nichts anwenden, nichts speichern, keine Fehlermeldung im neuen
++   * Konto. Der gespeicherte Bestand des früheren Kontos bleibt unverändert, seine
++   * offenen Aufträge laufen bei seiner nächsten Anmeldung.
++   */
++  if (input.base?.storageKey !== undefined && input.base.storageKey !== getActiveStorageKey()) {
++    return {
++      persisted: false,
++      report: withReportWarning(
++        { ...input.report, errors: [...input.report.errors] },
++        'storage-scope-changed',
++        'Konto oder Bereich wurde während der Synchronisation gewechselt – Ergebnis verworfen.',
++      ),
++    };
++  }
++
+   const coordinator = getSyncCoordinator();
+   const previous = clonePersistedState(buildPersistedStateSnapshot());
+   let report = { ...input.report, errors: [...input.report.errors] };

@@ -1,0 +1,19 @@
+{
+  "mode": "echter Produktadapter und installiertes SDK; nur Auth-Lesefehler und Fetch nachgebildet, kein Netzwerk",
+  "sessionReads": 1,
+  "calls": [],
+  "completed": [],
+  "failed": [],
+  "identityChanged": true,
+  "runIdentity": {
+    "storageKey": "officepilot-state:workspace:weiss-unlesbare-startsitzung:account:A:full",
+    "workspaceId": "weiss-unlesbare-startsitzung",
+    "scopeWorkspaceId": "weiss-unlesbare-startsitzung",
+    "accountUserId": "A",
+    "access": "full",
+    "consistent": false,
+    "startProblem": "start_unbestaetigt",
+    "capturedAt": "2026-10-20T22:56:53.033Z"
+  },
+  "wrongIdentity": false
+}

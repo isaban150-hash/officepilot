@@ -31,6 +31,14 @@ export function deriveSyncIndicatorState(input: {
   // Dieser Tab muss neu geladen werden — das ist eine Handlung des Nutzers.
   if (input.staleTab) return 'action';
   if (summary.kind === 'conflict') return 'action';
+  // DOKUMENTE-01 R2 — zurückgehaltene Aufträge gehen nie von selbst hinaus; sie warten auf eine bewusste Freigabe.
+  const held = input.outbox.some(
+    (entry) =>
+      entry.hold !== undefined &&
+      (entry.status === 'pending' || entry.status === 'error' || entry.status === 'blocked') &&
+      isSupabaseSyncAllowed(entry.entityType),
+  );
+  if (held) return 'action';
   // Blockiert (nicht Testmodus) löst sich nicht von selbst.
   const blocked = input.outbox.some(
     (entry) =>

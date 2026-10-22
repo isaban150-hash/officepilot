@@ -1,0 +1,4 @@
+src/services/sync/startidentitaetR1Dokumente01.test.ts
+src/services/document/loeschvorgangBindungDokumente01.test.ts
+src/pages/syncHaltMeldungR1Dokumente01.test.tsx
+src/services/sync/sendekontoR1Dokumente01.test.ts

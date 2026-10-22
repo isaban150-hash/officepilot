@@ -1,0 +1,18 @@
+diff --git a/src/styles/shell.css b/src/styles/shell.css
+index ec7ee38..cdff060 100644
+--- a/src/styles/shell.css
++++ b/src/styles/shell.css
+@@ -578,6 +578,13 @@
+ /* Resume-Hinweis: eine Zeile, kleine Aktionen, dominiert die Tagesarbeit nicht. */
+ .ui-session-recovery-host {
+   position: static;
++  /*
++   * DOKUMENTE-01 N2 — `.app-shell` ist ein Flex-Container; als Flex-Element bildete
++   * der Träger mit dem z-index 40 der früheren Sticky-Fassung einen Stapelkontext
++   * über dem Kopf (z-index 10) und verdeckte das geöffnete Benutzermenü samt
++   * „Abmelden". Ohne eigenen Stapelkontext liegt der Hinweis wieder unter dem Kopf.
++   */
++  z-index: auto;
+   padding: var(--space-3) var(--space-4) 0;
+ }
+ 

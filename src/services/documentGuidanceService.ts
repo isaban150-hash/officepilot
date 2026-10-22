@@ -19,6 +19,7 @@ import { requiresCustomerAssignment } from './documentResultPresentationService'
 import { buildDocumentWorkTruthConflictDisplayLines } from './documentWorkResultResolveService';
 import { buildDocumentWorkTruthViewForInboxItem } from './documentWorkResultTruthOrchestration';
 import { getTaskProposals } from './workflowDecisionUtils';
+import { resolveOriginalRetentionAdvice } from './document/documentRetention';
 import type { DocumentFieldFillConfirmRow } from '../types/documentFieldFillConfirm';
 import type { StorageRecommendationLevel } from '../types/storageRecommendation';
 import type {
@@ -110,25 +111,20 @@ const REPLY_LIKELY_KINDS = new Set<ClassifiedDocumentKind>([
   'soka_bau',
 ]);
 
+/*
+ * DOKUMENTE-01 / D-017 — die Empfehlung zum Original folgt der Aufbewahrung.
+ * Bisher hieß „abgelegt" hier „kann entsorgt werden" — für jede Rechnung und
+ * jeden Beleg. Entsorgen empfiehlt OfficeTakt jetzt nur noch bei Werbung.
+ */
 function resolveOriginalGuidance(
   item: InboxItem,
   kind: ClassifiedDocumentKind,
 ): OriginalGuidanceStatus {
-  if (item.isAdvertisement) return 'dispose_after_digital';
-  if (
-    kind === 'freistellungsbescheinigung' ||
-    kind === 'lohnabrechnung' ||
-    kind === 'kontoauszug'
-  ) {
-    return 'keep_until_tax';
-  }
-  if (kind === 'mahnung' || kind === 'zahlungserinnerung' || item.deadline) {
-    return 'keep';
-  }
-  if (item.status === 'abgelegt' || item.importedToArchive) {
-    return 'dispose_after_digital';
-  }
-  return 'uncertain';
+  return resolveOriginalRetentionAdvice({
+    isAdvertisement: item.isAdvertisement,
+    classifiedKind: kind,
+    hasDeadline: Boolean(item.deadline),
+  });
 }
 
 function resolveKind(item: InboxItem, workflow?: WorkflowResult | null): ClassifiedDocumentKind {
