@@ -8,7 +8,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider } from './context/AuthContext';
 import { DEFAULT_COMPANY_PROFILE } from './data/companyProfileDefaults';
@@ -23,6 +23,7 @@ import {
   resetInvoiceNumberSequence,
 } from './services/invoiceNumberService';
 import { createDefaultSetupWizardDraft, type SetupWizardDraft } from './types/setup';
+import { alsInhaber } from './test/workspaceRoleTestUtils';
 
 const incompleteSetup = { ...DEFAULT_SETUP, setupComplete: false };
 
@@ -144,9 +145,16 @@ describe('ONBOARDING-INVOICE-NUMBER-EMPTY-01B', () => {
     sessionStorage.clear();
     hydrateCompanyProfileStore({ ...DEFAULT_COMPANY_PROFILE });
     resetInvoiceNumberSequence();
+    /*
+     * EINRICHTUNG-01 (AP3, O-05.4) — den Assistenten bedienen im Cloud-Betrieb nur Inhaber und Admins; ohne geladene
+     * Mitgliedschaft sperrt er fail-closed. Diese Tests prüfen den Assistenten selbst und laufen deshalb als Inhaber
+     * (dasselbe Muster wie GO-LIVE-SECURITY-01, `alsInhaber`). Die Sperre selbst prüft einrichtung01OnboardingAp3.
+     */
+    alsInhaber();
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     if (mounted) {
       act(() => mounted!.root.unmount());
       mounted.container.remove();

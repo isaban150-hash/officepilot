@@ -3,7 +3,7 @@ import { LICENSE_VERSION } from '../../config/legalVersions';
 
 export function LizenzbedingungenPage() {
   return (
-    <LegalPageLayout title="Lizenzbedingungen" testId="lizenzbedingungen-page">
+    <LegalPageLayout target="license" testId="lizenzbedingungen-page">
       <p>
         <strong>Platzhalter – Lizenzbedingungen (Version {LICENSE_VERSION})</strong>
       </p>

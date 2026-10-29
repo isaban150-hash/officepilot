@@ -22,6 +22,13 @@ vi.mock('../../services/backupRestoreService', () => ({
     if (phase === 'rollback') return 'backup.restore.phase.rollback';
     return 'backup.restore.phase.stage';
   },
+  // EINRICHTUNG-01 (S-10.3) — diese Suite prüft den lokalen Betrieb.
+  isCloudWorkspaceScopeActive: () => false,
+}));
+
+// EINRICHTUNG-01 (E9) — Sicherung nur für Inhaber und Admins; diese Suite läuft als Inhaber.
+vi.mock('../../hooks/useWorkspaceWriteAccess', () => ({
+  useWorkspaceWriteAccess: () => ({ canWrite: true, canIntake: true, role: 'owner', reason: 'owner_or_admin' }),
 }));
 
 vi.mock('../../context/AppContext', () => ({
@@ -157,6 +164,10 @@ describe('BackupExportPanel', () => {
     await act(async () => {
       restoreBtn.click();
     });
+    // EINRICHTUNG-01 (AP8; 1.28) — die Wiederherstellung startet erst nach der Rückfrage.
+    await act(async () => {
+      (container.querySelector('[data-testid="backup-restore-dialog-confirm"]') as HTMLButtonElement).click();
+    });
 
     expect(restoreMock).toHaveBeenCalledTimes(1);
     expect(restoreMock.mock.calls[0]![0].confirmed).toBe(true);
@@ -193,6 +204,10 @@ describe('BackupExportPanel', () => {
     });
     await act(async () => {
       (container.querySelector('[data-testid="backup-restore-action"]') as HTMLButtonElement).click();
+    });
+    // EINRICHTUNG-01 (AP8; 1.28) — die Wiederherstellung startet erst nach der Rückfrage.
+    await act(async () => {
+      (container.querySelector('[data-testid="backup-restore-dialog-confirm"]') as HTMLButtonElement).click();
     });
 
     const errorEl = container.querySelector('[data-testid="backup-restore-error"]');

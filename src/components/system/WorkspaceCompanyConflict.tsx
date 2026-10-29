@@ -79,6 +79,7 @@ export function WorkspaceCompanyConflict({
 
   return (
     <AuthLayout
+      language={lang}
       title={t('companyConflict.title', lang)}
       subtitle={t('companyConflict.subtitle', lang)}
       testId="workspace-company-conflict"

@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { createMockSupabaseClient, resetMockSupabaseAuth } from './mockSupabaseAuth';
+import { createMockIsolatedAuthClient, createMockSupabaseClient, resetMockSupabaseAuth } from './mockSupabaseAuth';
 
 vi.mock('../lib/supabase', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/supabase')>();
@@ -9,6 +9,8 @@ vi.mock('../lib/supabase', async (importOriginal) => {
     getSupabaseAnonKey: () => 'mock-anon-key',
     isSupabaseConfigured: () => true,
     getSupabaseClient: () => createMockSupabaseClient(),
+    // EINRICHTUNG-01 (AP3, K-03.3) — Prüf-Client ohne Wirkung auf die Sitzung dieses Geräts.
+    createIsolatedAuthClient: () => createMockIsolatedAuthClient(),
     resetSupabaseClientCache: () => {},
   };
 });

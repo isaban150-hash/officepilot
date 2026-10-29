@@ -12,24 +12,25 @@ import type {
   BackupExportResult,
   BackupFileManifestEntry,
   BackupManifest,
+  BackupMissingFileEntry,
   BackupRecordCounts,
 } from '../types/backupExport';
 import { BACKUP_SCHEMA_VERSION } from '../types/backupExport';
+import { findBackupCredentialPaths } from './backupCredentialScan';
+import { buildBackupAreaCounts } from './backupAreaCounts';
+import { collectRequiredBackupFileRefIds } from './backupAreaPreview';
+import { buildBackupFileName, resolveBetriebName } from './exportFileNames';
+import { OBJECT_URL_RELEASE_DELAY_MS } from './storage/localRecoveryDownloadService';
 
 export { BACKUP_SCHEMA_VERSION };
 
-function pad2(value: number): string {
-  return String(value).padStart(2, '0');
-}
-
-/** Deterministic backup filename for a given local timestamp. */
-export function buildBackupFilename(when: Date = new Date()): string {
-  const y = when.getFullYear();
-  const m = pad2(when.getMonth() + 1);
-  const d = pad2(when.getDate());
-  const hh = pad2(when.getHours());
-  const mm = pad2(when.getMinutes());
-  return `OfficePilot_Backup_${y}-${m}-${d}_${hh}-${mm}.zip`;
+/**
+ * Deterministic backup filename for a given local timestamp.
+ *
+ * EINRICHTUNG-01 (AP7; 1.23, F13) — `OfficeTakt_Sicherung_<Betrieb>_<JJJJ-MM-TT>_<HH-MM>.zip`.
+ */
+export function buildBackupFilename(when: Date = new Date(), betrieb?: string | null): string {
+  return buildBackupFileName(betrieb, when);
 }
 
 function cloneJson<T>(value: T): T {
@@ -50,28 +51,23 @@ export function buildSanitizedBackupAppState(
   return cloned;
 }
 
-/** All FileRefs in the store plus any binding targets (original + derived). */
-function collectRequiredFileRefIds(): string[] {
-  const ids = new Set<string>();
-  for (const ref of getDocumentFileRefStoreSnapshot()) {
-    ids.add(ref.id);
-  }
-  for (const binding of getDocumentFileRepresentationBindingStoreSnapshot()) {
-    ids.add(binding.fileRefId);
-  }
-  return Array.from(ids).sort((a, b) => a.localeCompare(b));
-}
-
-function resolveRequiredFileRefs():
-  | { ok: true; refs: DocumentFileRef[] }
-  | { ok: false } {
+/**
+ * EINRICHTUNG-01 (S-13) — alle benötigten Dateireferenzen, getrennt nach
+ * vorhanden und fehlend (Bindung ohne Referenz). Kein früher Abbruch mehr: Der
+ * Aufrufer entscheidet, ob eine Lücke eine Sicherung verhindert.
+ */
+function resolveRequiredFileRefs(): { refs: DocumentFileRef[]; missing: BackupMissingFileEntry[] } {
   const refs: DocumentFileRef[] = [];
-  for (const id of collectRequiredFileRefIds()) {
+  const missing: BackupMissingFileEntry[] = [];
+  for (const id of collectRequiredBackupFileRefIds()) {
     const ref = getDocumentFileRefById(id);
-    if (!ref) return { ok: false };
+    if (!ref) {
+      missing.push({ fileRefId: id });
+      continue;
+    }
     refs.push(ref);
   }
-  return { ok: true, refs };
+  return { refs, missing };
 }
 
 function buildRecordCounts(state: AppPersistedState): BackupRecordCounts {
@@ -101,23 +97,45 @@ export type BackupBundleArtifacts = {
   appState: AppPersistedState;
 };
 
+export type BackupBuildOptions = {
+  /**
+   * EINRICHTUNG-01 (S-13.2) — nur nach ausdrücklicher Zustimmung: fehlende
+   * Dateien weglassen und die Lücke im Manifest vermerken (Teilsicherung).
+   */
+  allowMissingFiles?: boolean;
+};
+
 /**
  * Builds a complete backup ZIP in memory. Does not mutate stores.
- * Fails if any referenced file blob is missing.
+ * Fehlt eine referenzierte Datei, entsteht ohne Zustimmung keine Sicherung; die
+ * Antwort nennt die fehlenden Dateien (S-13.1). Mit `allowMissingFiles` entsteht
+ * eine ausdrücklich gekennzeichnete Teilsicherung (S-13.2).
  */
 export async function buildLocalBackupBundle(
   when: Date = new Date(),
+  options: BackupBuildOptions = {},
 ): Promise<
   | { ok: true; artifacts: BackupBundleArtifacts }
-  | { ok: false; reason: 'missing_blob' | 'build_failed'; errorKey: string }
+  | {
+      ok: false;
+      reason: 'missing_blob' | 'build_failed' | 'contains_credentials';
+      errorKey: string;
+      missingFiles?: BackupMissingFileEntry[];
+      credentialPaths?: string[];
+    }
 > {
   try {
     const refsBefore = getDocumentFileRefStoreSnapshot();
     const appState = buildSanitizedBackupAppState();
-    const resolved = resolveRequiredFileRefs();
-    if (!resolved.ok) {
-      return { ok: false, reason: 'missing_blob', errorKey: 'backup.error.missingFile' };
+
+    // EIN-04 — dieselbe strukturelle Prüfung wie beim Einspielen: keine Sicherung, die später abgewiesen würde.
+    const credentialPaths = findBackupCredentialPaths(appState);
+    if (credentialPaths.length > 0) {
+      return { ok: false, reason: 'contains_credentials', errorKey: 'backup.error.credentials', credentialPaths };
     }
+
+    const resolved = resolveRequiredFileRefs();
+    const missing: BackupMissingFileEntry[] = [...resolved.missing];
 
     const fileEntries: BackupFileManifestEntry[] = [];
     const zip = new JSZip();
@@ -126,7 +144,11 @@ export async function buildLocalBackupBundle(
     for (const ref of resolved.refs) {
       const blob = await getDocumentFileBlob(ref);
       if (!blob) {
-        return { ok: false, reason: 'missing_blob', errorKey: 'backup.error.missingFile' };
+        missing.push({
+          fileRefId: ref.id,
+          ...(ref.originalFileName ? { originalFileName: ref.originalFileName } : {}),
+        });
+        continue;
       }
 
       const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -144,6 +166,11 @@ export async function buildLocalBackupBundle(
       });
     }
 
+    // S-13.1 — ohne Zustimmung keine Sicherung mit Lücke; die Antwort nennt die Dateien.
+    if (missing.length > 0 && !options.allowMissingFiles) {
+      return { ok: false, reason: 'missing_blob', errorKey: 'backup.error.missingFile', missingFiles: missing };
+    }
+
     // Ensure snapshot refs match store; re-attach refs list from live store (cloned in sanitize).
     appState.documentFileRefs = cloneJson(getDocumentFileRefStoreSnapshot());
     appState.documentFileRepresentationBindings = cloneJson(
@@ -154,16 +181,19 @@ export async function buildLocalBackupBundle(
       schemaVersion: BACKUP_SCHEMA_VERSION,
       exportedAt: when.toISOString(),
       recordCounts: buildRecordCounts(appState),
+      areaCounts: buildBackupAreaCounts(appState, fileEntries.length),
       fileCount: fileEntries.length,
       totalFileBytes,
       files: fileEntries,
+      // S-13.2 — Teilsicherung ausdrücklich kennzeichnen; nie als vollständig ausgeben.
+      ...(missing.length > 0 ? { incomplete: true as const, missingFiles: missing } : {}),
     };
 
     zip.file('manifest.json', JSON.stringify(manifest, null, 2));
     zip.file('app-state.json', JSON.stringify(appState));
 
     const zipBlob = await zip.generateAsync({ type: 'blob' });
-    const filename = buildBackupFilename(when);
+    const filename = buildBackupFilename(when, resolveBetriebName(appState));
 
     // Guarantees: store identity unchanged (read-only path).
     const refsAfter = getDocumentFileRefStoreSnapshot();
@@ -181,8 +211,13 @@ export async function buildLocalBackupBundle(
 }
 
 /**
- * Triggers a browser download for a prepared ZIP. Revokes the Object URL after click.
- * Does not mutate stores.
+ * Triggers a browser download for a prepared ZIP. Does not mutate stores.
+ *
+ * EINRICHTUNG-01 (EIN-05, S-12) — derselbe Weg wie bei den Notfallseiten: Der
+ * Link hängt vor dem Klick im Dokument und wird danach entfernt; die
+ * Object-URL wird erst nach {@link OBJECT_URL_RELEASE_DELAY_MS} freigegeben.
+ * Bisher wurde sie schon im nächsten Tick widerrufen — Safari/iOS brach den
+ * Download dabei ab. Ein Erfolg bedeutet „Download gestartet", nicht „gespeichert".
  */
 export function downloadBackupBlob(blob: Blob, filename: string): { objectUrl: string; revoke: () => void } {
   const objectUrl = URL.createObjectURL(blob);
@@ -199,9 +234,10 @@ export function downloadBackupBlob(blob: Blob, filename: string): { objectUrl: s
     anchor.href = objectUrl;
     anchor.download = filename;
     anchor.rel = 'noopener';
+    document.body.appendChild(anchor);
     anchor.click();
-    // Revoke on next tick so the browser can start the download.
-    setTimeout(revoke, 0);
+    anchor.remove();
+    setTimeout(revoke, OBJECT_URL_RELEASE_DELAY_MS);
   }
 
   return { objectUrl, revoke };
@@ -213,10 +249,17 @@ export function downloadBackupBlob(blob: Blob, filename: string): { objectUrl: s
  */
 export async function exportLocalBackupBundle(
   when: Date = new Date(),
+  options: BackupBuildOptions = {},
 ): Promise<BackupExportResult> {
-  const built = await buildLocalBackupBundle(when);
+  const built = await buildLocalBackupBundle(when, options);
   if (!built.ok) {
-    return { ok: false, reason: built.reason, errorKey: built.errorKey };
+    return {
+      ok: false,
+      reason: built.reason,
+      errorKey: built.errorKey,
+      ...(built.missingFiles ? { missingFiles: built.missingFiles } : {}),
+      ...(built.credentialPaths ? { credentialPaths: built.credentialPaths } : {}),
+    };
   }
 
   try {
@@ -229,6 +272,7 @@ export async function exportLocalBackupBundle(
       filename: built.artifacts.filename,
       blob: built.artifacts.zipBlob,
       manifest: built.artifacts.manifest,
+      incomplete: built.artifacts.manifest.incomplete === true,
       objectUrl,
       revokeObjectUrl: revoke,
     };
@@ -237,21 +281,14 @@ export async function exportLocalBackupBundle(
   }
 }
 
-/** Test helper: assert sanitized state has no auth-like keys. */
+/**
+ * Test helper: assert sanitized state has no auth structures.
+ * EINRICHTUNG-01 (EIN-04) — dieselbe strukturelle Prüfung wie Export und Einspielen.
+ */
 export function assertBackupAppStateHasNoSecrets(state: AppPersistedState): void {
-  const raw = JSON.stringify(state);
-  const forbidden = [
-    'accessToken',
-    'refreshToken',
-    'password',
-    'Authorization',
-    'sb-',
-    'supabase.auth',
-  ];
-  for (const needle of forbidden) {
-    if (raw.includes(needle)) {
-      throw new Error(`backup_contains_forbidden:${needle}`);
-    }
+  const paths = findBackupCredentialPaths(state);
+  if (paths.length > 0) {
+    throw new Error(`backup_contains_forbidden:${paths[0]}`);
   }
   if ('syncOutbox' in state && state.syncOutbox !== undefined) {
     throw new Error('backup_contains_syncOutbox');

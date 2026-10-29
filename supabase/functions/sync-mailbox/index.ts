@@ -14,6 +14,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { manualSyncCooldownRemaining, runInboundSync } from '../_shared/inboundSyncCore.ts';
 import { createInboundSyncDeps } from '../_shared/inboundSyncServer.ts';
+import { readWorkspaceAccessDenial, workspaceAccessErrorCode } from '../_shared/workspaceAccess.ts';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -59,6 +60,15 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const { data: userData, error: userError } = await admin.auth.getUser(authorization.slice('bearer '.length).trim());
   const userId = userData?.user?.id ?? null;
   if (userError || !userId) return json({ ok: false, error: 'unauthenticated' }, 401);
+
+  // EINRICHTUNG-01 (AP1, Vertrag 1.1, Z-05.6) — zentrale Zugriffsregel; nicht wirksame Betriebslizenz eigens benannt.
+  const access = await readWorkspaceAccessDenial(admin, workspaceId, userId, 'write');
+  if (!access.ok) return json({ ok: false, error: 'server_error' }, 500);
+  if (access.denial) {
+    const code = workspaceAccessErrorCode(access.denial);
+    log({ connectionId, outcome: code });
+    return json({ ok: false, error: code }, code === 'invalid_request' ? 400 : 403);
+  }
 
   const { data: canWrite, error: writeError } = await admin.rpc('workspace_user_can_write', { p_workspace_id: workspaceId, p_user_id: userId });
   if (writeError || canWrite !== true) return json({ ok: false, error: 'forbidden' }, 403);

@@ -253,6 +253,20 @@ export function hasPendingCompanyCloudBackup(): boolean {
 }
 
 /**
+ * EINRICHTUNG-01 (AP3, O-03.3) — hat der Server die jüngste Änderung der Firmendaten endgültig abgewiesen? Dann liegt
+ * sie nur auf diesem Gerät, und mit ihr bleibt auch der Betriebsname beim Serverstand (beides oder nichts). Ohne diese
+ * Auskunft verschwände der Hinweis „Cloud-Sicherung steht aus“ mit der Abweisung — ein stiller Teilabschluss.
+ * Maßgeblich ist je Entität der jüngste Auftrag; eine spätere, angenommene Änderung löst den Hinweis.
+ */
+export function hasRejectedCompanyCloudChange(): boolean {
+  const newest = newestOutboxEntriesByEntity(
+    outbox,
+    (entry) => entry.entityType === 'company_setup' || entry.entityType === 'company_profile',
+  );
+  return [...newest.values()].some((entry) => entry.status === 'failed');
+}
+
+/**
  * REAL-DEVICE-CLOUD-COMPANY-IDENTICAL-COMPLETE-01 — schließt genau einen
  * gegenstandslosen Firmen-Auftrag ab: lokaler und Cloud-Payload sind bereits
  * identisch, es bleibt nur eine Versionshistorie.

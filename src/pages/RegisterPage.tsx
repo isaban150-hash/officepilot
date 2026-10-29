@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthLayout } from '../components/auth/AuthLayout';
 import { PasswordInput } from '../components/auth/PasswordInput';
 import { Button } from '../components/ui/Button';
@@ -12,10 +12,12 @@ export function RegisterPage() {
   const { register } = useAuth();
   const { translate, language } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [companyName, setCompanyName] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
+  // EINRICHTUNG-01 (AP4, M-03.1) — aus dem Einladungslink vorbelegt; die Person kann sie ändern.
+  const [email, setEmail] = useState(() => searchParams.get('email')?.trim() ?? '');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [phone, setPhone] = useState('');
@@ -43,18 +45,26 @@ export function RegisterPage() {
     }
 
     setLoading(true);
-    const result = await register({
-      companyName,
-      firstName,
-      lastName,
-      email,
-      password,
-      phone: phone || undefined,
-      industry: industry || undefined,
-      acceptedTermsVersion: TERMS_VERSION,
-      acceptedPrivacyVersion: PRIVACY_VERSION,
-      acceptedLicenseVersion: LICENSE_VERSION,
-    });
+    let result: Awaited<ReturnType<typeof register>>;
+    try {
+      result = await register({
+        companyName,
+        firstName,
+        lastName,
+        email,
+        password,
+        phone: phone || undefined,
+        industry: industry || undefined,
+        acceptedTermsVersion: TERMS_VERSION,
+        acceptedPrivacyVersion: PRIVACY_VERSION,
+        acceptedLicenseVersion: LICENSE_VERSION,
+      });
+    } catch {
+      // EINRICHTUNG-01 (EIN-26, A-09.2) — eine Ausnahme lässt das Formular nie im Ladezustand.
+      setLoading(false);
+      setError(getRegisterErrorMessage('registration_failed', language));
+      return;
+    }
     setLoading(false);
 
     if (!result.success) {
@@ -85,6 +95,12 @@ export function RegisterPage() {
         {success ? (
           <p className="auth-form__success" role="status" data-testid="register-success">
             {success}
+          </p>
+        ) : null}
+        {success ? (
+          // EINRICHTUNG-01 (A-08.1) — derselbe Hinweis für neue und bekannte Adressen: keine Existenzaussage.
+          <p className="form-hint" data-testid="register-success-hint">
+            {translate('auth.register.successHint')}
           </p>
         ) : null}
         <label className="auth-form__field">
@@ -173,7 +189,7 @@ export function RegisterPage() {
           <span>
             {translate('auth.register.acceptTerms')}{' '}
             <Link to="/agb" target="_blank" rel="noopener noreferrer">
-              AGB
+              {translate('legal.footer.terms')}
             </Link>{' '}
             ({TERMS_VERSION})
           </span>
@@ -188,7 +204,7 @@ export function RegisterPage() {
           <span>
             {translate('auth.register.acceptPrivacy')}{' '}
             <Link to="/datenschutz" target="_blank" rel="noopener noreferrer">
-              Datenschutz
+              {translate('legal.footer.privacy')}
             </Link>{' '}
             ({PRIVACY_VERSION})
           </span>
@@ -203,7 +219,7 @@ export function RegisterPage() {
           <span>
             {translate('auth.register.acceptLicense')}{' '}
             <Link to="/lizenzbedingungen" target="_blank" rel="noopener noreferrer">
-              Lizenz
+              {translate('legal.footer.license')}
             </Link>{' '}
             ({LICENSE_VERSION})
           </span>

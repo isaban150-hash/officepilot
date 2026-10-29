@@ -5,24 +5,7 @@ export const bgSettings = {
   'settings.gear': 'Отвори настройките',
   'settings.backToHub': 'Към настройките',
 
-  'settings.group.company': 'Фирма',
-  'settings.company.title': 'Фирмен профил',
-  'settings.company.description': 'Основни данни, адрес, контакт, данъчни и регистрови данни',
-
-  'settings.group.documents': 'Фактури и плащания',
-  'settings.payment.title': 'Срок за плащане и отстъпка',
-  'settings.payment.description': 'Стойности по подразбиране за нови фактури — променими за всяка фактура',
-  'settings.documents.title': 'Текстове на фактурите',
-  'settings.documents.description': 'Долен колонтитул и бележки върху фактурите',
-
-  'settings.group.design': 'Документи и дизайн',
-  'settings.design.title': 'Лого и оформление',
-  'settings.design.description': 'Фирмено лого, шаблон на документа и преглед',
-
-
   /* SETTINGS-01B4 — Фактури и плащания. */
-  'settings.invoices.title': 'Фактури и плащания',
-  'settings.invoices.description': 'Срок за плащане, текст за плащане, отстъпка, данъчен статус и стандартни текстове за нови фактури',
   'settings.invoices.page.subtitle': 'Стойности по подразбиране за нови фактури — променими за всяка фактура. Съществуващи чернови и издадени фактури не се променят.',
   'settings.invoices.historicalHint': 'Тези стойности важат само за фактури, създадени отсега нататък.',
   'settings.invoices.readOnly': 'Само администратори могат да променят настройките по подразбиране за фактури.',
@@ -33,6 +16,8 @@ export const bgSettings = {
   'settings.invoices.number.title': 'Номер на фактура',
   'settings.invoices.number.hint': 'Номерът се издава от сървъра при финализиране. Тук задавате само формата.',
   'settings.invoices.number.prefix': 'Префикс (по избор)',
+  // EINRICHTUNG-01 (AP9; 1.31) — Beispielwert; nur Buchstaben A–Z, Ziffern und Bindestrich sind erlaubt.
+  'settings.invoices.number.prefixPlaceholder': 'FA',
   'settings.invoices.number.yearInNumber': 'Година в номера на фактурата',
   'settings.invoices.number.padding': 'Брой цифри на поредния номер',
   'settings.invoices.number.preview': 'Преглед',
@@ -77,25 +62,19 @@ export const bgSettings = {
   'settings.invoices.preview.title': 'Пример за нова фактура',
   'settings.invoices.preview.hint': 'Така би била попълнена фактура, създадена днес. Нищо не се създава и не се дава номер.',
   'settings.invoices.preview.due': 'Срок за плащане',
-  'settings.group.communication': 'Имейл и комуникация',
-  'settings.communication.title': 'Имейл и комуникация',
-  'settings.communication.description': 'Име на подателя, адрес за отговор и стандартни текстове за изпращане на документи',
   'settings.communication.page.subtitle': 'Как документите ви достигат до получателя по имейл.',
-  'settings.communication.readOnly': 'Само собственици и администратори могат да променят настройките за комуникация.',
   'settings.communication.historicalHint': 'Тези стойности важат за нови изпращания. Вече изпратените документи остават непроменени.',
   'settings.communication.section.sender': 'Подател',
-  'settings.communication.sender.hint': 'Важи за изпращането на документи по имейл (писма, оферти, други документи): Получателят вижда показваното име и отговаря на адреса за отговор. Фактурите и коригиращите документи използват името на фирмата, правната форма и фирмения имейл, както са записани при одобрението на фактурата. Техническият адрес на подателя се задава от услугата за изпращане на OfficeTakt и не може да се избира свободно.',
+  'settings.communication.sender.hint': 'Показваното име и адресът за отговор важат за всички имейли от OfficeTakt, включително за фактурите. В PDF файла на фактурата стоят фирмените данни към момента на одобрението. Техническият адрес на подателя се задава от услугата за изпращане на OfficeTakt и не може да се избира свободно.',
   'settings.communication.senderDisplayName': 'Показвано име на подателя (по избор)',
   'settings.communication.senderDisplayName.derived': 'Празно = име на фирмата и правна форма: „{name}“',
   'settings.communication.senderDisplayName.custom': 'Собствено показвано име. Оставете празно, за да се използват името на фирмата и правната форма.',
   'settings.communication.replyToEmail': 'Адрес за отговор (Reply-To, по избор)',
-  'settings.communication.replyToEmail.fallback': 'Празно = фирмен имейл: {email}',
-  'settings.communication.replyToEmail.custom': 'Отговорите отиват на този адрес. Оставете празно, за да се използва фирменият имейл.',
   'settings.communication.identity.from': 'Технически подател',
   'settings.communication.identity.fromValue': 'Услуга за изпращане на OfficeTakt (не може да се променя)',
   'settings.communication.identity.displayName': 'Показвано име',
   'settings.communication.identity.replyTo': 'Адрес за отговор',
-  'settings.communication.identity.hint': 'Така подателят се показва при получателя. При изпращане на фактура важат фирмените данни, замразени в тази фактура.',
+  'settings.communication.identity.hint': 'Така подателят се показва при получателя — при всички имейли от OfficeTakt, включително при фактурите.',
   'settings.communication.saved': 'Настройките за комуникация са запазени.',
   'settings.invoices.currency.title': 'Валута',
   'settings.invoices.currency.eurLabel': 'Евро',
@@ -109,29 +88,9 @@ export const bgSettings = {
   'settings.invoices.email.fallbackHint': 'Празно = стандартен текст на OfficeTakt на избрания език.',
   'settings.invoices.email.preview': 'Пример за фактура {invoiceNumber}',
 
-
-  /* SETTINGS-01B5 — Страница „Фирмена дейност". */
-  'settings.operating.title': 'Фирмена дейност',
-  'settings.operating.description': 'Език, архивиране на данни, синхронизация и администриране',
-  'settings.operating.page.subtitle': 'Настройки на дейността и административни пътища — не данни за фактури.',
-  'settings.operating.section.language': 'Език',
-  'settings.operating.language.hint': 'Езикът важи за тази инсталация и действа веднага.',
-  'settings.operating.section.backup': 'Архивиране на данни',
-  'settings.operating.section.sync': 'Синхронизация',
-  'settings.operating.sync.manage': 'Управление на синхронизацията',
-  'settings.operating.section.admin': 'Потребители и достъп',
-  'settings.operating.admin.users': 'Управление на потребители и достъп',
-  'settings.operating.admin.more': 'Други раздели',
-  'settings.operating.role.admin': 'Можеш да променяш фирмения профил, настройките за фактури и дизайна на тази фирма.',
-  'settings.operating.role.member': 'С потребителския си акаунт виждаш настройките; да ги променят могат само администратори.',
+  /* SETTINGS-01B4 — Hinweis bei steuerfreien Rechnungen. */
   'settings.invoices.taxFreeNotice': 'Бележка при фактури без данък',
   'settings.invoices.taxFreeNotice.hint': 'Появява се само върху фактури с данъчен статус „Освободена / без ДДС". Празно = стандартна бележка.',
-
-  'settings.group.team': 'Фирмена дейност',
-  'settings.team.operations.title': 'Фирма и други области',
-  'settings.team.operations.description': 'Език, архивиране и всички останали области',
-  'settings.team.users.title': 'Потребители и достъп',
-  'settings.team.users.description': 'Одобряване и управление на достъпи',
 
   'settings.company.page.subtitle': 'Тези данни се показват в новите фактури и документи.',
   'settings.company.section.company': 'Предприятие',
@@ -141,10 +100,6 @@ export const bgSettings = {
   'settings.company.section.register': 'Регистър',
   'settings.company.section.bank': 'Банкова връзка',
   'settings.company.saved': 'Фирменият профил е записан.',
-  'settings.company.unsavedHint': 'Незаписани промени',
-  'settings.company.noChanges': 'Няма промени',
-  'settings.company.readOnly': 'Само администратори могат да променят фирмените данни. Тук данните са само за преглед.',
-  'settings.company.roleUnknown': 'Ролята ти в тази фирма още не е известна. Фирмените данни ще могат да се променят след следващото синхронизиране.',
   'settings.company.historicalHint': 'Промените важат за нови документи. Вече одобрените фактури остават непроменени.',
   // BROWSER-ACCEPTANCE-FIX 01 / B2
   'settings.company.iban.storedInvalid': 'Запазеният IBAN не е валиден.',
@@ -175,7 +130,6 @@ export const bgSettings = {
   'settings.design.preview.title': 'Така изглежда вашият документ',
   'settings.design.preview.hint': 'Преглед с примерни данни — клиент, позиции и номер не са истински.',
   'settings.design.saved': 'Дизайнът е записан.',
-  'settings.design.readOnly': 'Само администратори могат да променят логото и оформлението. Прегледът тук е само за гледане.',
   // E-MAIL-07C — Signatur und Vorlagen
   'settings.communication.signature.title': 'Подпис',
   'settings.communication.signature.hint': 'Добавя се веднъж под всеки имейл от OfficeTakt. В прозореца за изпращане текстът може да се промени преди изпращане.',
@@ -188,4 +142,8 @@ export const bgSettings = {
   'settings.communication.template.hint': 'Попълване за нови имейли от този вид. Празно: стандартният шаблон (текстът в полето). Промените в прозореца за изпращане не променят шаблона.',
   'settings.communication.template.placeholders': 'Налични заместители: {list}',
   'settings.communication.template.preview': 'Преглед с примерни стойности',
+  // EINRICHTUNG-01 (AP9; 1.31) — примерни стойности за прегледа, на езика на шаблона.
+  'settings.communication.previewSample.customerName': 'Примерен клиент ООД',
+  'settings.communication.previewSample.offerTitle': 'Ремонт на баня',
+  'settings.communication.previewSample.letterTitle': 'Потвърждение на час',
 } as const;

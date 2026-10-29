@@ -7,8 +7,10 @@
  *
  * Neutrale synthetische Daten, kein Netz.
  */
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import * as sha256Digest from '../sha256Digest';
 import type { LogoAssetReference } from '../../types/branding';
 import {
   buildBrandingAssetPath,
@@ -77,9 +79,14 @@ function fakeStorage(behaviour: {
   return { client, calls };
 }
 
+/** Unabhängige Referenz für die inhaltsadressierte Kennung (EINRICHTUNG-01, AP6). */
+async function sha256HexOf(blob: Blob): Promise<string> {
+  return createHash('sha256').update(new Uint8Array(await blob.arrayBuffer())).digest('hex');
+}
+
 /** Führt `run` ohne die genannten Crypto-Fähigkeiten aus und stellt sie wieder her. */
 async function withoutCrypto(
-  removed: Array<'randomUUID' | 'getRandomValues'>,
+  removed: Array<'randomUUID' | 'getRandomValues' | 'subtle'>,
   run: () => Promise<void> | void,
 ): Promise<void> {
   const originals = removed.map(
@@ -187,11 +194,9 @@ describe('BRANDING-01D Pfad und Kennung', () => {
 describe('BRANDING-01D Upload', () => {
   it('schreibt in den richtigen Bucket, mit contentType und ohne upsert', async () => {
     const { client, calls } = fakeStorage({});
+    const blob = pngBlob();
 
-    const result = await uploadBrandingAsset(
-      { workspaceId: WORKSPACE, blob: pngBlob(), mimeType: 'image/png' },
-      client,
-    );
+    const result = await uploadBrandingAsset({ workspaceId: WORKSPACE, blob, mimeType: 'image/png' }, client);
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('unerwartet');
@@ -201,7 +206,10 @@ describe('BRANDING-01D Upload', () => {
     expect(path).toBe(`${WORKSPACE}/${result.reference.assetId}`);
     expect(options).toEqual({ contentType: 'image/png', upsert: false });
     expect(result.reference.mimeType).toBe('image/png');
-    expect(result.reference.assetId).toMatch(UUID_V4);
+    // EINRICHTUNG-01 (AP6; F-07, K7) — inhaltsadressiert: Die Kennung ist die SHA-256-Prüfsumme der Bytes.
+    expect(result.reference.assetId).toBe(await sha256HexOf(blob));
+    expect(result.reused).toBe(false);
+    expect(isPathSafeBrandingAssetId(result.reference.assetId)).toBe(true);
   });
 
   it('prüft vor dem Netzaufruf: zu groß, falscher Typ, falsche Bytes', async () => {
@@ -224,55 +232,97 @@ describe('BRANDING-01D Upload', () => {
 
   it('lehnt einen ungültigen Workspace ab, bevor eine Kennung entsteht', async () => {
     const { client, calls } = fakeStorage({});
-    /*
-     * Der Nachweis der Reihenfolge: Ohne jede Zufallsquelle müsste eine
-     * Kennungserzeugung `secure_random_unavailable` melden. Gemeldet wird
-     * stattdessen der Workspace — also wurde gar nicht erst erzeugt.
-     */
-    await withoutCrypto(['randomUUID', 'getRandomValues'], async () => {
-      const result = await uploadBrandingAsset(
-        { workspaceId: 'nicht-uuid', blob: pngBlob(), mimeType: 'image/png' },
-        client,
-      );
+    // Der Nachweis der Reihenfolge: Für einen ungültigen Workspace wird nicht einmal die Prüfsumme berechnet.
+    const digest = vi.spyOn(sha256Digest, 'digestSha256');
 
-      expect(result).toEqual({ ok: false, error: 'invalid_workspace' });
-      expect(calls.upload).toEqual([]);
-    });
+    const result = await uploadBrandingAsset(
+      { workspaceId: 'nicht-uuid', blob: pngBlob(), mimeType: 'image/png' },
+      client,
+    );
+
+    expect(result).toEqual({ ok: false, error: 'invalid_workspace' });
+    expect(calls.upload).toEqual([]);
+    expect(digest).not.toHaveBeenCalled();
+    digest.mockRestore();
   });
 
-  it('meldet eine fehlende Zufallsquelle strukturiert, ohne Storage-Aufruf', async () => {
-    const { client, calls } = fakeStorage({});
-
-    await withoutCrypto(['randomUUID', 'getRandomValues'], async () => {
-      const randomSpy = vi.spyOn(Math, 'random');
-
+  it('EINRICHTUNG-01 (AP6; F-07): gleiche Bytes ergeben dieselbe Kennung — ohne Zufallsquelle und ohne crypto.subtle', async () => {
+    const expected = await sha256HexOf(pngBlob());
+    const upload = async () => {
       const result = await uploadBrandingAsset(
         { workspaceId: WORKSPACE, blob: pngBlob(), mimeType: 'image/png' },
-        client,
+        fakeStorage({}).client,
       );
+      if (!result.ok) throw new Error(`unerwartet: ${result.error}`);
+      return result.reference.assetId;
+    };
 
-      // Kein abgelehntes Promise, sondern der reguläre Ergebnisvertrag.
-      expect(result).toEqual({ ok: false, error: 'secure_random_unavailable' });
-      expect(calls.upload).toEqual([]);
+    expect(await upload()).toBe(expected);
+    await withoutCrypto(['randomUUID', 'getRandomValues'], async () => {
+      const randomSpy = vi.spyOn(Math, 'random');
+      expect(await upload()).toBe(expected);
       expect(randomSpy).not.toHaveBeenCalled();
       randomSpy.mockRestore();
     });
+    // HTTP im lokalen Netz (Mobile Safari): ohne crypto.subtle rechnet der JS-Fallback dieselbe Prüfsumme.
+    await withoutCrypto(['subtle'], async () => {
+      expect(await upload()).toBe(expected);
+    });
+
+    const other = await uploadBrandingAsset({ workspaceId: WORKSPACE, blob: pngBlob(80), mimeType: 'image/png' }, fakeStorage({}).client);
+    expect(other.ok && other.reference.assetId).not.toBe(expected);
   });
 
-  it('meldet einen belegten Pfad als Konflikt — kein Überschreiben', async () => {
-    const { client } = fakeStorage({
+  it('belegter Pfad mit gleichem Inhalt: vorhandenes Objekt geprüft und wiederverwendet — kein Überschreiben, kein Duplikat', async () => {
+    const blob = pngBlob();
+    const assetId = await sha256HexOf(blob);
+    const { client, calls } = fakeStorage({
       upload: () => ({
         data: null,
         error: { message: 'The resource already exists', statusCode: '409' },
       }),
+      download: () => ({ data: pngBlob(), error: null }),
     });
 
-    const result = await uploadBrandingAsset(
-      { workspaceId: WORKSPACE, blob: pngBlob(), mimeType: 'image/png' },
-      client,
-    );
+    const result = await uploadBrandingAsset({ workspaceId: WORKSPACE, blob, mimeType: 'image/png' }, client);
 
-    expect(result).toEqual({ ok: false, error: 'conflict' });
+    expect(result).toEqual({ ok: true, reference: { assetId, mimeType: 'image/png' }, reused: true });
+    expect(calls.upload).toHaveLength(1);
+    expect(calls.upload[0][2]).toEqual({ contentType: 'image/png', upsert: false });
+    expect(calls.download).toEqual([[`${WORKSPACE}/${assetId}`]]);
+  });
+
+  it('belegter Pfad mit abweichendem oder unlesbarem Inhalt: Konflikt, keine Referenz', async () => {
+    const conflict = () => ({
+      data: null,
+      error: { message: 'The resource already exists', statusCode: '409' },
+    });
+
+    const differing = await uploadBrandingAsset(
+      { workspaceId: WORKSPACE, blob: pngBlob(), mimeType: 'image/png' },
+      fakeStorage({ upload: conflict, download: () => ({ data: pngBlob(80), error: null }) }).client,
+    );
+    expect(differing).toEqual({ ok: false, error: 'conflict' });
+
+    const unreadable = await uploadBrandingAsset(
+      { workspaceId: WORKSPACE, blob: pngBlob(), mimeType: 'image/png' },
+      fakeStorage({
+        upload: conflict,
+        download: () => ({ data: null, error: { message: 'Object not found', statusCode: '404' } }),
+      }).client,
+    );
+    expect(unreadable).toEqual({ ok: false, error: 'conflict' });
+  });
+
+  it('andere Storage-Fehler bleiben Fehler, ohne Lesen des Pfads', async () => {
+    const { client, calls } = fakeStorage({
+      upload: () => ({ data: null, error: { message: 'new row violates row-level security policy', statusCode: '403' } }),
+    });
+
+    const result = await uploadBrandingAsset({ workspaceId: WORKSPACE, blob: pngBlob(), mimeType: 'image/png' }, client);
+
+    expect(result).toEqual({ ok: false, error: 'forbidden' });
+    expect(calls.download).toEqual([]);
   });
 });
 

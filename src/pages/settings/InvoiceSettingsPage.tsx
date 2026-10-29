@@ -1,21 +1,24 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
-import { PageHeader } from '../../components/ui/Card';
-import { ReadOnlyNotice } from '../../components/ui/ReadOnlyNotice';
+import { SettingsAccessNotice, resolveSettingsNoticeVariant } from '../../components/settings/SettingsAccessNotice';
+import { SettingsPageHeader } from '../../components/settings/SettingsPageHeader';
+import { SettingsSaveBar } from '../../components/settings/SettingsSaveBar';
 import { InlineNotice } from '../../components/ui/States';
 import { NumericInput } from '../../components/ui/NumericInput';
-import { InvoiceNumberFormatSection } from '../../components/settings/InvoiceNumberFormatSection';
 import { useApp } from '../../context/AppContext';
-import { useAuth } from '../../context/AuthContext';
+import { SettingsForeignFieldErrorList, foreignFieldErrors } from '../../components/settings/SettingsForeignFieldErrors';
+import { useFocusFieldFromHash } from '../../hooks/useFocusFieldFromHash';
 import { useFormResume } from '../../hooks/useFormResume';
+import { STANDARD_TAX_FREE_NOTICE } from '../../services/invoice/taxNoticeTexts';
+import { useSettingsAccess } from '../../hooks/useSettingsAccess';
 import { changedProfileFields, useProfileFormBase } from '../../hooks/useProfileFormBase';
 import { getCompanyProfile } from '../../services/companyProfileService';
-import { isSupabaseConfigured } from '../../lib/supabase';
 import {
   COMPANY_PROFILE_TEXT_LIMITS,
   TAX_STATUS_VALUES,
   isTaxStatus,
+  textInputMaxLength,
 } from '../../services/company/companyProfileSettingsContract';
 import {
   reconcilePaymentTermsWithDays,
@@ -29,12 +32,12 @@ import { buildSkontoText } from '../../services/invoiceTaxService';
 import { getBusinessDay } from '../../services/businessDateService';
 import { getLastPersistSuccess } from '../../services/persistenceService';
 import { validateCompanyProfileForSettings } from '../../services/setupValidationService';
-import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
 import { migrateCompanyProfileLegacyFields } from '../../services/company/companyProfileLegacyMigrationService';
 import { resolveProfileCurrency } from '../../services/company/companyProfileSettingsContract';
 import { getAllExpensesFromStore } from '../../services/expenseStore';
 import { COMMUNICATION_SETTINGS_ROUTE } from './CommunicationSettingsPage';
 import type { TranslationKey } from '../../i18n';
+import { SETTINGS_TARGET_PATHS, settingsTargetTitleKey } from './settingsHubConfig';
 import type { CompanyProfile, TaxStatus } from '../../types/models';
 
 /**
@@ -141,13 +144,9 @@ type FieldErrors = Partial<Record<string, TranslationKey>>;
 
 export function InvoiceSettingsPage() {
   const { companyProfile, setup, updateCompanyProfile, translate, showToast } = useApp();
-  const { user } = useAuth();
-
-  const access = useMemo(
-    () => resolveWorkspaceWriteAccess({ userId: user?.id, cloudConfigured: isSupabaseConfigured() }),
-    [user?.id],
-  );
-  const editable = access.canWrite;
+  // EINRICHTUNG-01 (AP5; 1.16) — reaktiv: Rolle, Lizenz und Löschantrag wirken ohne Neuladen.
+  const { access, canEdit: editable } = useSettingsAccess();
+  const noticeVariant = resolveSettingsNoticeVariant(access);
 
   const resume = useFormResume<InvoiceSettingsDraft>({
     namespace: 'invoiceSettings',
@@ -162,17 +161,31 @@ export function InvoiceSettingsPage() {
   }));
   const [errors, setErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
+  // EINRICHTUNG-01 (AP9; 1.30) — Speicherfehler als bleibender Hinweis an der Speicherleiste, nicht als Toast.
+  const [saveError, setSaveError] = useState<TranslationKey | null>(null);
   /*
    * FINANZ-CORE-01A (EIN-08) — Fehler in Feldern, die diese Seite nicht zeigt (Firmendaten). Bisher
    * scheiterte das Speichern mit einer Sammelmeldung, ohne zu sagen, woran.
    */
-  const [fremdeFehler, setFremdeFehler] = useState<TranslationKey[]>([]);
+  const [fremdeFehler, setFremdeFehler] = useState<Array<{ field: string; message: TranslationKey }>>([]);
+  // EINRICHTUNG-01 (AP6; F-01.2) — Sprung aus der Fehlerliste einer anderen Seite: Fokus am Feld.
+  useFocusFieldFromHash();
 
   resume.observe(draft);
   // FINANZ-CORE-01A (EIN-03) — Ausgangsstand des Entwurfs; unberührte Felder folgen dem Profil.
   const baseRef = useProfileFormBase(companyProfile, pickInvoiceSettings, setDraft);
 
   const dirty = isInvoiceSettingsDirty(draft, companyProfile);
+
+  /* EINRICHTUNG-01 (AP5; 1.17) — „Verwerfen“: zurück auf den gespeicherten Stand, der Entwurf entfällt. */
+  const discard = () => {
+    setDraft(pickInvoiceSettings(companyProfile));
+    baseRef.current = pickInvoiceSettings(companyProfile);
+    setErrors({});
+    // EINRICHTUNG-01 (AP9; 1.30) — mit dem Verwerfen gilt auch der Hinweis des letzten Speicherversuchs nicht mehr.
+    setSaveError(null);
+    resume.clearResume();
+  };
 
   const clearError = (...keys: string[]) => {
     if (!keys.some((key) => errors[key])) return;
@@ -238,6 +251,7 @@ export function InvoiceSettingsPage() {
     event.preventDefault();
     if (!editable || saving || !dirty) return;
     setSaving(true);
+    setSaveError(null);
     try {
       // FINANZ-CORE-01A (EIN-03) — nur die geänderten Felder, über dem aktuellen Stand des Stores.
       const changed = changedProfileFields(
@@ -253,14 +267,13 @@ export function InvoiceSettingsPage() {
       );
       if (!validation.valid) {
         setErrors(validation.errors);
-        const fremd = Object.entries(validation.errors)
-          .filter(([key]) => !(INVOICE_SETTINGS_FIELDS as readonly string[]).includes(key))
-          .map(([, message]) => message)
-          .filter((message): message is TranslationKey => Boolean(message));
-        setFremdeFehler([...new Set(fremd)]);
-        showToast(
-          translate(fremd.length > 0 ? 'settings.invoices.companyDataIncomplete' : 'settings.company.validationSummary'),
+        // EINRICHTUNG-01 (AP6; F-01) — je Feld mit Seite und Sprung; Felder dieser Seite markiert sie selbst.
+        const fremd = foreignFieldErrors(validation.errors, 'invoices').filter(
+          ({ field }) => !(INVOICE_SETTINGS_FIELDS as readonly string[]).includes(field),
         );
+        setFremdeFehler(fremd);
+        // EINRICHTUNG-01 (AP9; 1.30) — Sammelhinweis bleibt an der Speicherleiste stehen (kein verschwindender Toast).
+        setSaveError(fremd.length > 0 ? 'settings.invoices.companyDataIncomplete' : 'settings.company.validationSummary');
         return;
       }
       setErrors({});
@@ -268,14 +281,14 @@ export function InvoiceSettingsPage() {
 
       const result = updateCompanyProfile(changed);
       if (!result.success) {
-        showToast(translate(result.errorKey as TranslationKey));
+        setSaveError(result.errorKey as TranslationKey);
         return;
       }
       setDraft(pickInvoiceSettings(result.profile));
       baseRef.current = pickInvoiceSettings(result.profile);
       resume.clearResume();
       if (!getLastPersistSuccess()) {
-        showToast(translate('persist.failed.userAction'));
+        setSaveError('persist.failed.userAction');
         return;
       }
       showToast(translate('settings.invoices.saved'));
@@ -296,21 +309,15 @@ export function InvoiceSettingsPage() {
 
   return (
     <div className="page settings-page settings-subpage" data-testid="settings-invoices-page">
-      <PageHeader
-        title={translate('settings.invoices.title')}
-        subtitle={translate('settings.invoices.page.subtitle')}
-        backLabel={translate('settings.backToHub')}
-        backHref="/einstellungen"
-        backTestId="settings-invoices-back"
-      />
+      <SettingsPageHeader target="invoices" subtitle={translate('settings.invoices.page.subtitle')} backTestId="settings-invoices-back" />
 
-      {!editable ? (
-        <ReadOnlyNotice message={translate(access.reason === 'member' ? 'settings.invoices.readOnly' : 'settings.company.roleUnknown')} testId="settings-invoices-readonly" />
-      ) : (
+      {!editable && noticeVariant ? (
+        <SettingsAccessNotice variant={noticeVariant} testId="settings-invoices-readonly" />
+      ) : editable ? (
         <p className="hint-text" data-testid="settings-invoices-historical-hint">
           {translate('settings.invoices.historicalHint')}
         </p>
-      )}
+      ) : null}
 
       {fremdeFehler.length > 0 ? (
         <InlineNotice
@@ -318,21 +325,16 @@ export function InvoiceSettingsPage() {
           testId="settings-invoices-company-errors"
           title={translate('settings.invoices.companyDataIncomplete')}
           action={
-            <Link to="/einstellungen/firma" data-testid="settings-invoices-company-link">
+            <Link to={SETTINGS_TARGET_PATHS['company-profile']} data-testid="settings-invoices-company-link">
               {translate('settings.invoices.openCompanySettings')}
             </Link>
           }
         >
-          <ul>
-            {fremdeFehler.map((message) => (
-              <li key={message}>{translate(message)}</li>
-            ))}
-          </ul>
+          <SettingsForeignFieldErrorList entries={fremdeFehler} testId="settings-invoices-company-errors" />
         </InlineNotice>
       ) : null}
 
-      {/* 01C — Nummernformat ist Server-/Sequenz-Wahrheit mit eigener Speicherung, kein Profilfeld. */}
-      <InvoiceNumberFormatSection editable={editable} />
+      {/* EINRICHTUNG-01 (AP5; 1.15) — das Nummernformat steht auf der eigenen Seite „Nummernkreise“. */}
 
       <form className="settings-form settings-invoices" onSubmit={handleSubmit} noValidate>
         {/* ---------------- Zahlungsbedingungen ---------------- */}
@@ -497,6 +499,8 @@ export function InvoiceSettingsPage() {
               type="text"
               className={`input${error('taxFreeNotice') ? ' input--error' : ''}`}
               value={draft.taxFreeNotice}
+              maxLength={textInputMaxLength(COMPANY_PROFILE_TEXT_LIMITS.taxFreeNotice)}
+              placeholder={STANDARD_TAX_FREE_NOTICE}
               readOnly={!editable}
               onChange={(event) => setField('taxFreeNotice', event.target.value)}
               data-testid="settings-invoices-taxFreeNotice"
@@ -513,7 +517,7 @@ export function InvoiceSettingsPage() {
             [
               ['defaultIntroText', 'settings.invoices.introText', COMPANY_PROFILE_TEXT_LIMITS.defaultIntroText],
               ['defaultClosingText', 'settings.invoices.closingText', COMPANY_PROFILE_TEXT_LIMITS.defaultClosingText],
-              ['invoiceFooterNotes', 'settings.invoices.footerNotes', undefined],
+              ['invoiceFooterNotes', 'settings.invoices.footerNotes', COMPANY_PROFILE_TEXT_LIMITS.invoiceFooterNotes],
             ] as const
           ).map(([key, labelKey, maxLength]) => (
             <div className="settings-form__field" key={key}>
@@ -523,7 +527,7 @@ export function InvoiceSettingsPage() {
                 name={key}
                 className={`input settings-invoices__textarea${error(key) ? ' input--error' : ''}`}
                 rows={3}
-                maxLength={maxLength}
+                maxLength={maxLength === undefined ? undefined : textInputMaxLength(maxLength)}
                 value={draft[key]}
                 readOnly={!editable}
                 onChange={(event) => setField(key, event.target.value)}
@@ -550,7 +554,7 @@ export function InvoiceSettingsPage() {
         {/* ---------------- E-Mail-Versand: seit 01D unter „E-Mail & Kommunikation" ---------------- */}
         <p className="hint-text" data-testid="settings-invoices-email-moved">
           {translate('settings.invoices.email.movedHint')}{' '}
-          <Link to={COMMUNICATION_SETTINGS_ROUTE} data-testid="settings-invoices-email-moved-link">{translate('settings.communication.title')}</Link>
+          <Link to={COMMUNICATION_SETTINGS_ROUTE} data-testid="settings-invoices-email-moved-link">{translate(settingsTargetTitleKey('communication'))}</Link>
         </p>
 
         {/* ---------------- Beispiel für neue Rechnung ---------------- */}
@@ -587,16 +591,7 @@ export function InvoiceSettingsPage() {
           </dl>
         </section>
 
-        {editable ? (
-          <div className="settings-form__actions">
-            <span className="settings-form__dirty" data-testid="settings-invoices-dirty">
-              {dirty ? translate('settings.company.unsavedHint') : translate('settings.company.noChanges')}
-            </span>
-            <Button type="submit" disabled={!dirty || saving} loading={saving} data-testid="settings-invoices-save">
-              {translate('common.save')}
-            </Button>
-          </div>
-        ) : null}
+        {editable ? <SettingsSaveBar dirty={dirty} saving={saving} onDiscard={discard} testIdPrefix="settings-invoices" draftKept error={saveError ? translate(saveError) : null} /> : null}
       </form>
     </div>
   );

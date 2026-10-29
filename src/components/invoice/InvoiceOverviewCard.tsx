@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { resolveCloudConfirmedActionAccess } from '../../services/workspace/workspaceRoleService';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { StatusBadge } from '../ui/Badge';
@@ -56,7 +57,8 @@ export function InvoiceOverviewCard({
   const [currentItem, setCurrentItem] = useState(item);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   // GO-LIVE-SECURITY-01 / ABSCHLUSS — Zahlungen erfassen nur Inhaber und Verwaltung.
-  const darfFinanzen = useWorkspaceWriteAccess().canWrite;
+  // EINRICHTUNG-01 (AP2, Vertrag 1.11) — zusätzlich gesperrt, solange die Rechte nur aus dem Zwischenspeicher stammen.
+  const darfFinanzen = resolveCloudConfirmedActionAccess(useWorkspaceWriteAccess());
   const { invoice, paymentSummary } = currentItem;
   /*
    * MANUAL-INVOICE-UI-01B2 — der Vorgangslink bleibt der Vorgangsrechnung

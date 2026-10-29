@@ -1,0 +1,46 @@
+/** EINRICHTUNG-01 (AP7; Vertrag 1.24) — „Данни › Експорт“. */
+export const bgDataExport = {
+  'dataExport.subtitle': 'Всички данни на тази фирма като четим ZIP файл: таблици (CSV), оригинални файлове и запазени PDF.',
+  'dataExport.intro':
+    'Експортът е предназначен за хора и други програми. Той не е резервно копие за възстановяване и не е пакет за счетоводителя; не задава статус на приключване или предаване.',
+  'dataExport.local': 'Локален режим без облак: Експортът съдържа данните на това устройство.',
+  'dataExport.notAllowed': 'Експорта могат да създават само собственикът и администраторите на тази фирма.',
+  'dataExport.prepare': 'Проверка за пълнота',
+  'dataExport.prepare.hint':
+    'Проверката зарежда актуалното състояние от сървъра и всички файлове. Не изпраща отворени промени; само ги посочва.',
+  'dataExport.cancel': 'Отказ',
+  'dataExport.progress.binding': 'Проверяват се акаунт, фирма и роля …',
+  'dataExport.progress.pull': 'Актуалното състояние се зарежда от сървъра …',
+  'dataExport.progress.check': 'Проверява се пълнотата …',
+  'dataExport.progress.files': 'Файлове: {done} от {total}',
+  'dataExport.progress.emails': 'Изпратени имейли и прикачени файлове: {done} от {total}',
+  'dataExport.progress.csv': 'Създават се таблиците …',
+  'dataExport.progress.zip': 'Създава се ZIP файлът: {done} %',
+  'dataExport.progress.download': 'Изтеглянето започва …',
+  'dataExport.result.complete': 'Проверката е без забележки: Експортът е пълен.',
+  'dataExport.result.gaps': 'Експортът би бил непълен. Проверката откри следните пропуски:',
+  'dataExport.result.gapsHint':
+    'Можете първо да отстраните пропуските (например на страницата Синхронизация) или да създадете изрично непълен експорт със списък на пропуските.',
+  'dataExport.result.syncLink': 'Към синхронизацията',
+  'dataExport.result.size': 'Очакван размер: {size}',
+  'dataExport.sizeWarning':
+    'Експортът е по-голям от около 1 GB. Създава се в браузъра и може да отнеме дълго или да не успее на това устройство.',
+  'dataExport.create': 'Създаване на експорт',
+  'dataExport.createWithGaps': 'Създаване на експорт със списък на пропуските',
+  'dataExport.success': 'Изтеглянето започна: {name}. Моля, проверете дали файлът е в папката за изтегляния.',
+  'dataExport.successIncomplete':
+    'Изтеглянето на непълния експорт започна: {name}. Пропуските са в luecken.csv и в прегледа.',
+  'dataExport.cancelled': 'Експортът е прекратен. Не е създаден файл.',
+  'dataExport.bindingChanged': 'Експортът е прекратен, защото акаунтът, фирмата или ролята са се променили. Не е създаден файл.',
+  'dataExport.failed': 'Експортът не можа да бъде създаден. Не е създаден файл. Моля, опитайте отново.',
+  'dataExport.gap.sync_open': 'Отворени промени: {count}',
+  'dataExport.gap.sync_rejected': 'Отхвърлени промени: {count}',
+  'dataExport.gap.sync_held': 'Задържани промени: {count}',
+  'dataExport.gap.pull_skipped': 'Няма ново изтегляне от сървъра, защото първо трябва да се синхронизират отворените промени.',
+  'dataExport.gap.pull_failed': 'Актуалното състояние не можа да бъде заредено изцяло от сървъра.',
+  'dataExport.gap.persist_failed': 'Последното записване на това устройство е неуспешно.',
+  'dataExport.gap.file_unavailable': 'Файлът не е наличен: {detail}',
+  'dataExport.gap.finance_unconfirmed': 'Финансовото състояние не е потвърдено: {detail}',
+  'dataExport.gap.emails_unavailable': 'Изпратените имейли не можаха да бъдат заредени.',
+  'dataExport.gap.emails_truncated': 'Включени са само най-новите 500 изпратени имейла; по-старите липсват.',
+} as const;

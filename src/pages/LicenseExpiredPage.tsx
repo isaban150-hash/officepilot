@@ -1,21 +1,28 @@
 import { Button } from '../components/ui/Button';
 import { AuthLayout } from '../components/auth/AuthLayout';
 import { useAuth } from '../context/AuthContext';
+import { useAuthPageText } from '../hooks/useAuthPageText';
 
+/**
+ * Rückfallseite für einen Kontostatus, der weder wartend, gesperrt noch freigegeben ist. EINRICHTUNG-01 (AP9; 1.31) —
+ * übersetzt; die Lizenz ist nach E3 die des Betriebs, verlängern kann sie dessen Inhaber.
+ */
 export function LicenseExpiredPage() {
   const { logout, user } = useAuth();
+  const { language, text } = useAuthPageText(user?.id ?? null);
 
   return (
     <AuthLayout
-      title="Lizenz abgelaufen"
-      subtitle="Ihre OfficeTakt-Lizenz ist nicht mehr aktiv."
+      language={language}
+      title={text('auth.licenseExpired.title')}
+      subtitle={text('auth.licenseExpired.subtitle')}
       testId="license-expired-page"
     >
       <div className="auth-info">
-        {user ? <p>Benutzer: {user.email}</p> : null}
-        <p>Bitte wenden Sie sich an Ihren Administrator, um die Lizenz zu verlängern.</p>
+        {user ? <p>{text('auth.licenseExpired.user', { email: user.email })}</p> : null}
+        <p>{text('auth.licenseExpired.contact')}</p>
         <Button variant="outline" fullWidth onClick={logout} data-testid="license-expired-logout">
-          Abmelden
+          {text('auth.logout.action')}
         </Button>
       </div>
     </AuthLayout>

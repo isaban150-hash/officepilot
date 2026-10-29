@@ -1,4 +1,5 @@
 import type { CompanyProfile, CompanySetup } from '../types/models';
+import { STANDARD_TAX_FREE_NOTICE } from '../services/invoice/taxNoticeTexts';
 
 export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   companyName: '',
@@ -29,7 +30,8 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   skontoPercent: 0,
   skontoDays: 0,
   managingDirector: '',
-  taxFreeNotice: 'Die Leistung ist ohne Umsatzsteuer.',
+  // EINRICHTUNG-01 (AP6; V-02) — derselbe Standardhinweis wie der Rückfall auf Rechnung und Angebot.
+  taxFreeNotice: STANDARD_TAX_FREE_NOTICE,
   invoiceFooterNotes: '',
 };
 

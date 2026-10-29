@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Button, type ButtonVariant } from './Button';
 import { Dialog } from './Dialog';
 
@@ -34,6 +34,15 @@ interface SimpleConfirmDialogProps {
    */
   onConfirm: () => boolean | Promise<boolean>;
   onCancel: () => void;
+  /** EINRICHTUNG-01 (AP6; E-07) — weiterer Inhalt unter der Meldung, etwa ein Link. */
+  details?: ReactNode;
+  /**
+   * EINRICHTUNG-01 (AP8; Vertrag 1.28) — Eingabebestätigung: „Bestätigen“ bleibt gesperrt, bis genau dieser Text
+   * eingegeben ist (ohne Rand-Leerzeichen, Groß/klein egal).
+   */
+  confirmPhrase?: string;
+  confirmPhraseLabel?: string;
+  confirmPhraseTestId?: string;
 }
 
 export function SimpleConfirmDialog({
@@ -51,7 +60,13 @@ export function SimpleConfirmDialog({
   fallbackFocusRef,
   onConfirm,
   onCancel,
+  details,
+  confirmPhrase,
+  confirmPhraseLabel,
+  confirmPhraseTestId = 'simple-confirm-phrase',
 }: SimpleConfirmDialogProps) {
+  const [phrase, setPhrase] = useState('');
+  const phraseOk = !confirmPhrase || phrase.trim().toLocaleLowerCase('de') === confirmPhrase.trim().toLocaleLowerCase('de');
   const cancelRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const [confirming, setConfirming] = useState(false);
@@ -63,10 +78,11 @@ export function SimpleConfirmDialog({
     confirmingRef.current = false;
     setConfirming(false);
     setErrorVisible(false);
+    setPhrase('');
   }, [open]);
 
   const handleConfirm = async () => {
-    if (confirmingRef.current || confirming) return;
+    if (confirmingRef.current || confirming || !phraseOk) return;
     confirmingRef.current = true;
     setConfirming(true);
     setErrorVisible(false);
@@ -118,7 +134,7 @@ export function SimpleConfirmDialog({
             ref={confirmRef}
             variant={confirmVariant}
             fullWidth
-            disabled={confirming}
+            disabled={confirming || !phraseOk}
             loading={confirming}
             onClick={() => void handleConfirm()}
             data-testid={confirmTestId}
@@ -128,6 +144,20 @@ export function SimpleConfirmDialog({
         </>
       }
     >
+      {details ? <div className="dialog__details">{details}</div> : null}
+      {confirmPhrase ? (
+        <label className="edit-field dialog__phrase">
+          <span className="edit-field__label">{confirmPhraseLabel ?? confirmPhrase}</span>
+          <input
+            className="input"
+            value={phrase}
+            autoComplete="off"
+            disabled={confirming}
+            onChange={(event) => setPhrase(event.target.value)}
+            data-testid={confirmPhraseTestId}
+          />
+        </label>
+      ) : null}
       {errorVisible && failureMessage ? (
         <p className="dialog__error" role="alert" data-testid="simple-confirm-error">
           {failureMessage}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { resolveCloudConfirmedActionAccess } from '../services/workspace/workspaceRoleService';
 import { releaseReconciliationForPayment } from '../services/bank/bankReconciliationStore';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { InvoiceDocumentView } from '../components/invoice/InvoiceDocumentView';
@@ -190,7 +191,8 @@ export function InvoiceDetailPage() {
    * Sperre zeigte ein Mitgliedsgerät einen Scheinerfolg.
    */
   const writeAccess = resolveWorkspaceWriteAccess({ userId: authUserId, cloudConfigured });
-  const darfFinanzen = writeAccess.canWrite;
+  // EINRICHTUNG-01 (AP2, Vertrag 1.11) — zusätzlich gesperrt, solange die Rechte nur aus dem Zwischenspeicher stammen.
+  const darfFinanzen = resolveCloudConfirmedActionAccess(writeAccess);
   const outputHold = invoice
     ? resolveInvoiceOutputHold({
         access: writeAccess,

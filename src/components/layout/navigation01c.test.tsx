@@ -86,8 +86,10 @@ describe('UIUX-FOUNDATION-01C — navConfig (A)', () => {
     const member = resolveMehrGroups({ isAdmin: false }).flatMap((g) => g.items.map((i) => i.to));
     const admin = resolveMehrGroups({ isAdmin: true }).flatMap((g) => g.items.map((i) => i.to));
     expect(member).not.toContain('/admin/users');
-    expect(admin).toContain('/admin/users');
-    expect(resolveMehrGroups({ isAdmin: false }).map((g) => g.id)).toEqual(['work', 'finance', 'officepilot', 'system']);
+    /* EINRICHTUNG-01 (AP4, P-01.1): Die Plattform-Verwaltung hat genau einen Einstieg im Benutzermenü, nicht unter „Mehr“. */
+    expect(admin).not.toContain('/admin/users');
+    /* EINRICHTUNG-01 (AP5; Vertrag 1.15): Die Gruppe „System“ entfällt; die Synchronisation steht im Hub unter „Hilfe und Rechtliches“. */
+    expect(resolveMehrGroups({ isAdmin: false }).map((g) => g.id)).toEqual(['work', 'finance', 'officepilot']);
   });
 });
 
@@ -131,7 +133,8 @@ describe('UIUX-FOUNDATION-01C — Mehr (D)', () => {
     const html = renderToStaticMarkup(withProviders(<MehrPage />));
     expect(html).toContain('data-testid="mehr-page"');
     expect(html).toContain('data-testid="mehr-group-work"');
-    expect(html).toContain('data-testid="mehr-group-system"');
+    /* EINRICHTUNG-01 (AP5; Vertrag 1.15): keine Gruppe „System“, kein Einstellungsziel in „Mehr“. */
+    expect(html).not.toContain('data-testid="mehr-group-system"');
     expect(html).toContain('data-testid="mehr-link-finanzen"');
     expect(html).toContain('data-testid="mehr-link-dokumente"');
     /* 01D: Zeilen kommen aus dem kanonischen RowList-Pattern. */
@@ -141,7 +144,8 @@ describe('UIUX-FOUNDATION-01C — Mehr (D)', () => {
     expect(html).not.toContain('href="/admin/users"');
     expect(html).not.toContain('href="/einstellungen"');
     expect(html).not.toContain('href="/assistent"');
-    expect(html.indexOf('href="/kunden"')).toBeLessThan(html.indexOf('href="/synchronisation"'));
+    expect(html).toContain('href="/kunden"');
+    expect(html).not.toContain('href="/synchronisation"');
   });
 });
 
@@ -230,7 +234,7 @@ describe('UIUX-FOUNDATION-01C — Deep Links (G)', () => {
 
 describe('UIUX-FOUNDATION-01C — i18n (H)', () => {
   it('neue Navigationsbegriffe in de/tr/bg ohne stillen Rückfall', () => {
-    for (const key of ['nav.rechnungen', 'nav.finanzen', 'nav.secondaryTitle', 'nav.assistant.tool', 'mehr.group.work', 'mehr.group.system', 'finanzen.title', 'finanzen.steuerberater'] as const) {
+    for (const key of ['nav.rechnungen', 'nav.finanzen', 'nav.secondaryTitle', 'nav.assistant.tool', 'mehr.group.work', 'finanzen.title', 'finanzen.steuerberater'] as const) {
       expect(t(key, 'de').trim(), key).not.toBe('');
       expect(t(key, 'tr'), key).not.toBe(t(key, 'de'));
       expect(t(key, 'bg'), key).not.toBe(t(key, 'de'));

@@ -353,7 +353,9 @@ export function RechnungPage() {
    * die Freigabe deshalb gar nicht erst an; der Entwurf bleibt erhalten. Eine
    * ungeklärte Rolle sperrt nicht — dort entscheidet der Server.
    */
-  const approvalRoleDenied = useWorkspaceWriteAccess().reason === 'member';
+  const freigabeZugang = useWorkspaceWriteAccess();
+  // EINRICHTUNG-01 (AP2, Vertrag 1.11) — zusätzlich gesperrt, solange die Rechte nur aus dem Zwischenspeicher stammen.
+  const approvalRoleDenied = freigabeZugang.reason === 'member' || freigabeZugang.rightsUnconfirmed === true;
   /*
    * FINANZ-CORE-01A (RE-07) — ein bestätigter Auftrag gibt den Steuerstatus vor;
    * der Server lehnt eine abweichende Rechnung ab (`invoice_tax_status_mismatch`).

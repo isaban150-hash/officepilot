@@ -1,0 +1,36 @@
+{
+  "payload": {
+    "companyName": "Beispiel Haustechnik",
+    "legalForm": "GmbH",
+    "street": "Musterstraße 5",
+    "zip": "33602",
+    "city": "Bielefeld",
+    "country": "Deutschland",
+    "contactPerson": "A. Beispiel",
+    "phone": "+49 521 000000",
+    "email": "info@beispiel-haustechnik.example",
+    "website": "https://beispiel-haustechnik.example",
+    "taxNumber": "305/123/45678",
+    "vatId": "",
+    "bankName": "Beispielbank",
+    "iban": "DE89370400440532013000",
+    "bic": "COBADEFFXXX",
+    "defaultPaymentDays": 14,
+    "defaultPaymentTerms": "Zahlbar innerhalb von 14 Tagen ohne Abzug.",
+    "defaultSkonto": "",
+    "skontoEnabled": false,
+    "skontoPercent": 0,
+    "skontoDays": 0,
+    "managingDirector": "",
+    "taxFreeNotice": "Die Leistung ist ohne Umsatzsteuer.",
+    "invoiceFooterNotes": "",
+    "defaultTaxStatus": "standard_19",
+    "currency": "EUR",
+    "replyToEmail": "antwort@beispiel-haustechnik.example",
+    "senderDisplayName": "Beispiel Haustechnik GmbH",
+    "branding": {
+      "documentTemplate": "classic"
+    }
+  },
+  "profile_schema_version": 2
+}

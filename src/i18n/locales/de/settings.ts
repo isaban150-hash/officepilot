@@ -12,20 +12,6 @@ export const deSettings = {
   'settings.gear': 'Einstellungen öffnen',
   'settings.backToHub': 'Zu den Einstellungen',
 
-  'settings.group.company': 'Firma',
-  'settings.company.title': 'Firmenprofil',
-  'settings.company.description': 'Stammdaten, Adresse, Kontakt, Steuer- und Registerdaten',
-
-  'settings.group.documents': 'Rechnungen & Zahlungen',
-  'settings.payment.title': 'Zahlungsziel und Skonto',
-  'settings.payment.description': 'Standardwerte für neue Rechnungen — pro Rechnung änderbar',
-  'settings.documents.title': 'Rechnungstexte',
-  'settings.documents.description': 'Fußzeile und Hinweise auf Ihren Rechnungen',
-
-  'settings.group.design': 'Dokumente & Design',
-  'settings.design.title': 'Logo und Darstellung',
-  'settings.design.description': 'Firmenlogo, Dokumentvorlage und Vorschau',
-
   /* SETTINGS-01B3 — Design-Unterseite. */
   'settings.design.page.subtitle': 'Logo und Vorlage gelten für neue Dokumente. Bereits freigegebene Rechnungen bleiben unverändert.',
   'settings.design.section.logo': 'Firmenlogo',
@@ -50,12 +36,8 @@ export const deSettings = {
   'settings.design.preview.title': 'So sieht Ihr Dokument aus',
   'settings.design.preview.hint': 'Vorschau mit Beispieldaten — Kunde, Positionen und Nummer sind nicht echt.',
   'settings.design.saved': 'Design gespeichert.',
-  'settings.design.readOnly': 'Nur Administratoren können Logo und Darstellung ändern. Die Vorschau ist hier nur zur Ansicht.',
-
 
   /* SETTINGS-01B4 — Rechnungen & Zahlungen. */
-  'settings.invoices.title': 'Rechnungen & Zahlungen',
-  'settings.invoices.description': 'Zahlungsziel, Zahlungstext, Skonto, Steuerstatus und Standardtexte für neue Rechnungen',
   'settings.invoices.page.subtitle': 'Vorbelegungen für neue Rechnungen — pro Rechnung änderbar. Bestehende Entwürfe und freigegebene Rechnungen bleiben unverändert.',
   'settings.invoices.historicalHint': 'Diese Werte gelten nur für Rechnungen, die ab jetzt neu angelegt werden.',
   'settings.invoices.readOnly': 'Nur Administratoren können die Vorbelegungen für Rechnungen ändern.',
@@ -66,6 +48,8 @@ export const deSettings = {
   'settings.invoices.number.title': 'Rechnungsnummer',
   'settings.invoices.number.hint': 'Die Nummer wird beim Finalisieren vom Server vergeben. Hier legen Sie nur das Format fest.',
   'settings.invoices.number.prefix': 'Präfix (optional)',
+  // EINRICHTUNG-01 (AP9; 1.31) — Beispielwert; nur Buchstaben A–Z, Ziffern und Bindestrich sind erlaubt.
+  'settings.invoices.number.prefixPlaceholder': 'RE',
   'settings.invoices.number.yearInNumber': 'Jahr in der Rechnungsnummer',
   'settings.invoices.number.padding': 'Stellen der laufenden Nummer',
   'settings.invoices.number.preview': 'Vorschau',
@@ -111,25 +95,19 @@ export const deSettings = {
   'settings.invoices.preview.hint': 'So würde eine heute neu angelegte Rechnung vorbelegt. Es wird nichts angelegt und keine Nummer vergeben.',
   'settings.invoices.preview.due': 'Zahlungsziel',
   /* EMAIL-01B4 — Standard-E-Mail-Texte. */
-  'settings.group.communication': 'E-Mail & Kommunikation',
-  'settings.communication.title': 'E-Mail & Kommunikation',
-  'settings.communication.description': 'Absendername, Antwortadresse und Standardtexte für den Dokumentversand',
   'settings.communication.page.subtitle': 'Wie Ihre Dokumente per E-Mail beim Empfänger ankommen.',
-  'settings.communication.readOnly': 'Nur Inhaber und Administratoren können die Kommunikationseinstellungen ändern.',
   'settings.communication.historicalHint': 'Diese Werte gelten für neue Sendungen. Bereits versendete Dokumente bleiben unverändert.',
   'settings.communication.section.sender': 'Absender',
-  'settings.communication.sender.hint': 'Gilt für den E-Mail-Versand von Dokumenten (Briefe, Angebote, sonstige Dokumente): Der Empfänger sieht den Anzeigenamen und antwortet an die Antwortadresse. Rechnungen und Korrekturbelege verwenden Firmenname, Rechtsform und Firmen-E-Mail, wie sie bei der Freigabe der Rechnung festgehalten wurden. Die technische Absenderadresse wird vom Versanddienst von OfficeTakt gesetzt und ist nicht frei wählbar.',
+  'settings.communication.sender.hint': 'Anzeigename und Antwortadresse gelten für alle E-Mails aus OfficeTakt, auch für Rechnungen. Im Rechnungs-PDF stehen die Firmendaten vom Zeitpunkt der Freigabe. Die technische Absenderadresse setzt der Versanddienst von OfficeTakt; sie ist nicht frei wählbar.',
   'settings.communication.senderDisplayName': 'Absender-Anzeigename (optional)',
   'settings.communication.senderDisplayName.derived': 'Leer = Firmenname und Rechtsform: „{name}“',
   'settings.communication.senderDisplayName.custom': 'Eigener Anzeigename. Leer lassen, um Firmenname und Rechtsform zu verwenden.',
   'settings.communication.replyToEmail': 'Antwortadresse (Reply-To, optional)',
-  'settings.communication.replyToEmail.fallback': 'Leer = Firmen-E-Mail: {email}',
-  'settings.communication.replyToEmail.custom': 'Antworten gehen an diese Adresse. Leer lassen, um die Firmen-E-Mail zu verwenden.',
   'settings.communication.identity.from': 'Technischer Absender',
   'settings.communication.identity.fromValue': 'Versanddienst von OfficeTakt (nicht änderbar)',
   'settings.communication.identity.displayName': 'Anzeigename',
   'settings.communication.identity.replyTo': 'Antwortadresse',
-  'settings.communication.identity.hint': 'So erscheint der Absender beim Empfänger. Beim Versand einer Rechnung gelten die Firmendaten, die auf dieser Rechnung eingefroren sind.',
+  'settings.communication.identity.hint': 'So erscheint der Absender beim Empfänger — bei allen E-Mails aus OfficeTakt, auch bei Rechnungen.',
   'settings.communication.saved': 'Kommunikationseinstellungen gespeichert.',
   'settings.invoices.currency.title': 'Währung',
   'settings.invoices.currency.eurLabel': 'Euro',
@@ -143,29 +121,9 @@ export const deSettings = {
   'settings.invoices.email.fallbackHint': 'Leer = OfficeTakt-Standardtext in der eingestellten Sprache.',
   'settings.invoices.email.preview': 'Beispiel für Rechnung {invoiceNumber}',
 
-
-  /* SETTINGS-01B5 — Betriebsseite. */
-  'settings.operating.title': 'Betrieb',
-  'settings.operating.description': 'Sprache, Datensicherung, Synchronisation und Verwaltung',
-  'settings.operating.page.subtitle': 'Betriebliche Einstellungen und Verwaltungswege — keine Rechnungsdaten.',
-  'settings.operating.section.language': 'Sprache',
-  'settings.operating.language.hint': 'Die Sprache gilt für diese Einrichtung und wirkt sofort.',
-  'settings.operating.section.backup': 'Datensicherung',
-  'settings.operating.section.sync': 'Synchronisation',
-  'settings.operating.sync.manage': 'Synchronisation verwalten',
-  'settings.operating.section.admin': 'Benutzer & Zugänge',
-  'settings.operating.admin.users': 'Benutzer & Zugänge verwalten',
-  'settings.operating.admin.more': 'Weitere Bereiche',
-  'settings.operating.role.admin': 'Sie können Firmenprofil, Rechnungs-Vorbelegungen und Design für diesen Betrieb ändern.',
-  'settings.operating.role.member': 'Mit Ihrem Benutzerkonto sehen Sie die Einstellungen; ändern können sie nur Administratoren.',
+  /* SETTINGS-01B4 — Hinweis bei steuerfreien Rechnungen. */
   'settings.invoices.taxFreeNotice': 'Hinweis bei steuerfreien Rechnungen',
   'settings.invoices.taxFreeNotice.hint': 'Erscheint nur auf Rechnungen mit Steuerstatus „Steuerfrei / ohne USt". Leer = Standardhinweis.',
-
-  'settings.group.team': 'Betrieb',
-  'settings.team.operations.title': 'Betrieb und weitere Bereiche',
-  'settings.team.operations.description': 'Sprache, Datensicherung und alle übrigen Bereiche',
-  'settings.team.users.title': 'Benutzer & Zugänge',
-  'settings.team.users.description': 'Zugänge freigeben und verwalten',
 
   /* SETTINGS-01B2 — Firmenprofil-Unterseite. */
   'settings.company.page.subtitle': 'Diese Angaben erscheinen auf neuen Rechnungen und Dokumenten.',
@@ -176,12 +134,6 @@ export const deSettings = {
   'settings.company.section.register': 'Register',
   'settings.company.section.bank': 'Bankverbindung',
   'settings.company.saved': 'Firmenprofil gespeichert.',
-  'settings.company.unsavedHint': 'Ungespeicherte Änderungen',
-  'settings.company.noChanges': 'Keine Änderungen',
-  'settings.company.readOnly':
-    'Nur Administratoren können Firmendaten ändern. Die Angaben sind hier nur zur Ansicht.',
-  'settings.company.roleUnknown':
-    'Ihre Rolle in diesem Betrieb ist noch nicht bekannt. Firmendaten lassen sich erst nach dem nächsten Abgleich ändern.',
   'settings.company.historicalHint':
     'Änderungen gelten für neue Dokumente. Bereits freigegebene Rechnungen bleiben unverändert.',
   // BROWSER-ACCEPTANCE-FIX 01 / B2
@@ -202,4 +154,8 @@ export const deSettings = {
   'settings.communication.template.hint': 'Vorbelegung für neue E-Mails dieser Art. Leer: die Standardvorlage (Platzhaltertext). Änderungen im Versanddialog verändern diese Vorlage nicht.',
   'settings.communication.template.placeholders': 'Verfügbare Platzhalter: {list}',
   'settings.communication.template.preview': 'Vorschau mit Beispielwerten',
+  // EINRICHTUNG-01 (AP9; 1.31) — Beispielwerte der Vorschau, in der Sprache der Vorlage.
+  'settings.communication.previewSample.customerName': 'Beispiel Kunde GmbH',
+  'settings.communication.previewSample.offerTitle': 'Badsanierung',
+  'settings.communication.previewSample.letterTitle': 'Terminbestätigung',
 } as const;

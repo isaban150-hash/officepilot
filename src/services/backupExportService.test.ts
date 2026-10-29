@@ -36,7 +36,10 @@ describe('backupExportService', () => {
 
   it('buildBackupFilename is safe and deterministic for a fixed timestamp', () => {
     const when = new Date(2026, 6, 17, 14, 5, 30);
-    expect(buildBackupFilename(when)).toBe('OfficePilot_Backup_2026-07-17_14-05.zip');
+    // EINRICHTUNG-01 (AP7; 1.23, D-03.3) — OfficeTakt_Sicherung_<Betrieb>_…; ohne Firmennamen „Betrieb“.
+    expect(buildBackupFilename(when)).toBe('OfficeTakt_Sicherung_Betrieb_2026-07-17_14-05.zip');
+    expect(buildBackupFilename(when, '')).toBe('OfficeTakt_Sicherung_Betrieb_2026-07-17_14-05.zip');
+    expect(buildBackupFilename(when, 'Muster Bau GmbH')).toBe('OfficeTakt_Sicherung_Muster-Bau-GmbH_2026-07-17_14-05.zip');
   });
 
   it('sanitized app state excludes syncOutbox, inline blobs, and secret-like fields', () => {
@@ -105,7 +108,10 @@ describe('backupExportService', () => {
     expect(built.ok).toBe(true);
     if (!built.ok) return;
 
-    expect(built.artifacts.filename).toBe('OfficePilot_Backup_2026-01-15_09-30.zip');
+    // Der Testbestand heißt „Test GmbH“ (resetTestStores).
+    expect(built.artifacts.filename).toBe('OfficeTakt_Sicherung_Test-GmbH_2026-01-15_09-30.zip');
+    // EINRICHTUNG-01 (AP7; 1.23) — Dateien im Manifest = Dateien in der Zählung je Bereich.
+    expect(built.artifacts.manifest.areaCounts?.files).toBe(4);
     expect(built.artifacts.manifest.schemaVersion).toBe(BACKUP_SCHEMA_VERSION);
     expect(built.artifacts.manifest.fileCount).toBe(4);
     expect(built.artifacts.manifest.files).toHaveLength(4);
@@ -172,20 +178,7 @@ describe('backupExportService', () => {
       createObjectURL,
       revokeObjectURL,
     });
-
-    const click = vi.fn();
-    const realCreateElement = document.createElement.bind(document);
-    const createElement = vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
-      if (tagName === 'a') {
-        return {
-          href: '',
-          download: '',
-          rel: '',
-          click,
-        } as unknown as HTMLAnchorElement;
-      }
-      return realCreateElement(tagName);
-    });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
     expect(createObjectURL).not.toHaveBeenCalled();
 
@@ -195,30 +188,39 @@ describe('backupExportService', () => {
 
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(click).toHaveBeenCalledTimes(1);
-    expect(result.filename).toBe('OfficePilot_Backup_2026-03-01_12-00.zip');
-
-    await new Promise((r) => setTimeout(r, 10));
-    expect(revokeObjectURL).toHaveBeenCalled();
-
-    createElement.mockRestore();
+    expect(result.filename).toBe('OfficeTakt_Sicherung_Test-GmbH_2026-03-01_12-00.zip');
+    // EINRICHTUNG-01 (S-12.1) — die Adresse bleibt bis zur Freigabe nach 60 s gültig.
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    result.revokeObjectUrl();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
   });
 
-  it('downloadBackupBlob revokes object URL', async () => {
-    const revokeObjectURL = vi.fn();
-    const createObjectURL = vi.fn(() => 'blob:test');
-    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
+  it('downloadBackupBlob: Link hängt beim Klick im Dokument, Freigabe frühestens nach 60 s (S-12.1)', () => {
+    vi.useFakeTimers();
+    try {
+      const revokeObjectURL = vi.fn();
+      const createObjectURL = vi.fn(() => 'blob:test');
+      vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
 
-    const click = vi.fn();
-    vi.spyOn(document, 'createElement').mockReturnValue({
-      href: '',
-      download: '',
-      rel: '',
-      click,
-    } as unknown as HTMLAnchorElement);
+      let imDokumentBeimKlick = false;
+      let dateiname = '';
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        imDokumentBeimKlick = document.body.contains(this);
+        dateiname = this.download;
+      });
 
-    downloadBackupBlob(new Blob(['x']), 'OfficePilot_Backup_2026-01-01_00-00.zip');
-    await new Promise((r) => setTimeout(r, 10));
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:test');
+      downloadBackupBlob(new Blob(['x']), 'OfficeTakt_Sicherung_Betrieb_2026-01-01_00-00.zip');
+      expect(imDokumentBeimKlick).toBe(true);
+      expect(dateiname).toBe('OfficeTakt_Sicherung_Betrieb_2026-01-01_00-00.zip');
+      expect(document.body.querySelector('a[download]')).toBeNull();
+
+      vi.advanceTimersByTime(59_999);
+      expect(revokeObjectURL).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:test');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('stored blobs remain readable for backup inclusion', async () => {

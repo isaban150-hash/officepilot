@@ -51,10 +51,13 @@ describe('CUSTOMER-NAVIGATION-ENTRY-01', () => {
     const html = renderMehr();
     /* UIUX-FOUNDATION-01C — „Mehr“ ist eine gruppierte Zeilenliste (settings-row), keine Kartenwand. */
     const customersAt = html.indexOf('href="/kunden"');
-    const companyAt = html.indexOf('data-testid="mehr-link-synchronisation"');
     expect(customersAt).toBeGreaterThan(-1);
-    expect(companyAt).toBeGreaterThan(-1);
-    expect(customersAt).toBeLessThan(html.indexOf('href="/synchronisation"'));
+    /*
+     * EINRICHTUNG-01 (AP5; Vertrag 1.15) — die Gruppe „System“ ist entfallen: Die Synchronisation steht nicht mehr in
+     * „Mehr“, sondern unter „Einstellungen › Hilfe und Rechtliches“. Kunden bleiben bei den fachlichen Bereichen.
+     */
+    expect(html).not.toContain('data-testid="mehr-link-synchronisation"');
+    expect(html).not.toContain('href="/synchronisation"');
   });
 
   it('C: die Beschriftung liegt in allen drei Sprachen vor', () => {

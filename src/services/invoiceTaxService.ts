@@ -1,5 +1,6 @@
 import type { CompanyProfile, TaxStatus } from '../types/models';
 import { berechneFristFenster, type FristFenster, type FristLage } from './fristen/fristende';
+import { LEGACY_TAX_FREE_NOTICES, STANDARD_TAX_FREE_NOTICE } from './invoice/taxNoticeTexts';
 
 export function getTaxRateForStatus(status: TaxStatus | string): number {
   switch (status) {
@@ -30,6 +31,13 @@ export function hasPrivateRetentionNotice(notices: readonly string[] | undefined
   return (notices ?? []).some((text) => text.trim() === PRIVATE_RETENTION_NOTICE);
 }
 
+/** EINRICHTUNG-01 (AP6; V-04) — der Hinweis bei ungeklärtem Steuerstatus nennt den Ort der Einstellung. */
+export const UNCLEAR_TAX_NOTICE =
+  'Steuerhinweis: Bitte legen Sie den Steuerstatus unter Einstellungen › Dokumente und Zahlungen › Rechnungen und Zahlungen fest.';
+
+/** Frühere Fassung des Hinweises bei ungeklärtem Steuerstatus (wird weiter als Standardhinweis erkannt). */
+const LEGACY_UNCLEAR_TAX_NOTICES: readonly string[] = ['Steuerhinweis: Bitte ergänzen Sie den Steuerstatus in den Firmendaten.'];
+
 export function buildLegalNotices(
   taxStatus: TaxStatus,
   profile?: Pick<CompanyProfile, 'taxFreeNotice'>,
@@ -40,12 +48,11 @@ export function buildLegalNotices(
     case 'reverse_charge_13b':
       return ['Steuerschuldnerschaft des Leistungsempfängers gemäß § 13b UStG.'];
     case 'tax_free':
-      return [
-        profile?.taxFreeNotice?.trim() ||
-          'Die Leistung ist steuerfrei bzw. ohne Umsatzsteuer.',
-      ];
+      // EINRICHTUNG-01 (AP6; V-02) — ein eigener Text geht vor, sonst der eine Standardhinweis.
+      return [profile?.taxFreeNotice?.trim() || STANDARD_TAX_FREE_NOTICE];
     case 'unclear':
-      return ['Steuerhinweis: Bitte ergänzen Sie den Steuerstatus in den Firmendaten.'];
+      // EINRICHTUNG-01 (AP6; V-04) — der Steuerstatus wird unter „Rechnungen und Zahlungen“ festgelegt.
+      return [UNCLEAR_TAX_NOTICE];
     default:
       return [];
   }
@@ -73,6 +80,8 @@ export function normalizeLegalNoticesForTaxStatus(
   const standard = new Set(
     (['kleinunternehmer_19', 'reverse_charge_13b', 'tax_free', 'unclear'] as TaxStatus[])
       .flatMap((status) => [...buildLegalNotices(status, profile), ...buildLegalNotices(status)])
+      // EINRICHTUNG-01 (AP6; V-02, V-04) — frühere Standardfassungen bleiben Standardhinweise.
+      .concat(LEGACY_TAX_FREE_NOTICES, LEGACY_UNCLEAR_TAX_NOTICES)
       .map((text) => text.trim()),
   );
   const ownSet = new Set(own.map((text) => text.trim()));

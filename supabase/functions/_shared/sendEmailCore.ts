@@ -24,7 +24,13 @@ import {
   mimeTypeForExtension,
   parseEmailAttachmentStoragePath,
 } from './emailMessageRules.ts';
-import { STALE_SENDING_CLAIM_SECONDS, bytesToBase64, type TestRecipientAllowlist } from './sendDocumentCore.ts';
+import {
+  REPLY_TO_UNAVAILABLE_MESSAGE,
+  STALE_SENDING_CLAIM_SECONDS,
+  bytesToBase64,
+  type ReplyToResolution,
+  type TestRecipientAllowlist,
+} from './sendDocumentCore.ts';
 
 export type EmailMessageStatus = 'queued' | 'sending' | 'provider_accepted' | 'failed' | 'unknown';
 
@@ -64,6 +70,11 @@ export interface SendEmailDeps {
   testRecipientAllowlist?: TestRecipientAllowlist;
   userCanWrite(workspaceId: string, userId: string): Promise<boolean>;
   loadMessage(workspaceId: string, clientMessageId: string): Promise<EmailMessageRow | null>;
+  /**
+   * EINRICHTUNG-01 (AP6; E18, K4) — die Antwortadresse bestimmt der Server bei jedem Versand neu; die beim Anlegen
+   * gespeicherte Adresse (`reply_to_email`) gilt dafür nicht mehr.
+   */
+  resolveReplyTo(workspaceId: string): Promise<ReplyToResolution>;
   downloadAttachment(storagePath: string): Promise<Uint8Array | null>;
   sha256Hex(bytes: Uint8Array): Promise<string>;
   provider: EmailProviderAdapter;
@@ -185,9 +196,14 @@ export async function runSendEmail(
 
   // Absender-Snapshot aus der Anlage.
   const senderName = (message.sender_name ?? '').trim();
-  const replyTo = (message.reply_to_email ?? '').trim().toLowerCase();
-  if (!senderName || !isValidEmailAddress(replyTo)) {
+  if (!senderName) {
     return fail('failed', 'unknown', 'sender_snapshot_invalid', 'Absenderdaten des Betriebs sind unvollständig. Es wurde nichts gesendet.');
+  }
+  // EINRICHTUNG-01 (AP6; E18) — bestätigte Antwortadresse des Betriebs, sonst bestätigte Anmelde-E-Mail des Inhabers.
+  const replyToResolution = await deps.resolveReplyTo(message.workspace_id);
+  const replyTo = replyToResolution.ok ? replyToResolution.email.trim().toLowerCase() : '';
+  if (!replyToResolution.ok || !isValidEmailAddress(replyTo)) {
+    return fail('failed', 'unknown', 'reply_to_unavailable', REPLY_TO_UNAVAILABLE_MESSAGE);
   }
 
   // Anhänge: jeder einzeln geladen und geprüft.

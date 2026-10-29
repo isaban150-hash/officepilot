@@ -507,7 +507,8 @@ describe('EIN-03/EIN-08 — Einstellungen über dem aktuellen Firmenprofil', () 
     });
     await settle();
     // Das unberührte Feld zeigt den neuen Stand.
-    expect((container.querySelector('[data-testid="settings-company-iban"]') as HTMLInputElement).value).toBe(FREMDE_IBAN);
+    // EINRICHTUNG-01 (AP6; F-03) — angezeigt in Vierergruppen; gespeichert bleibt die elektronische Form.
+    expect((container.querySelector('[data-testid="settings-company-iban"]') as HTMLInputElement).value.replace(/\s+/g, '')).toBe(FREMDE_IBAN);
     await absenden(container, 'form.settings-form');
     const profil = getCompanyProfile();
     expect(profil.phone).toBe('+49 5222 1');

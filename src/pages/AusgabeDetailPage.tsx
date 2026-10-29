@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { resolveCloudConfirmedActionAccess } from '../services/workspace/workspaceRoleService';
 import { releaseReconciliationForPayment } from '../services/bank/bankReconciliationStore';
 import { persistAll } from '../services/persistenceService';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -66,10 +67,13 @@ export function AusgabeDetailPage() {
    * Server weist sie ohnehin ab (finance_forbidden_role).
    */
   const authUser = useOptionalAuth()?.user;
-  const darfFinanzen = resolveWorkspaceWriteAccess({
-    userId: authUser?.id,
-    cloudConfigured: isSupabaseConfigured(),
-  }).canWrite;
+  // EINRICHTUNG-01 (AP2, Vertrag 1.11) — zusätzlich gesperrt, solange die Rechte nur aus dem Zwischenspeicher stammen.
+  const darfFinanzen = resolveCloudConfirmedActionAccess(
+    resolveWorkspaceWriteAccess({
+      userId: authUser?.id,
+      cloudConfigured: isSupabaseConfigured(),
+    }),
+  );
   const [expense, setExpense] = useState<Expense | undefined>(() =>
     id ? getExpenseById(id) : undefined,
   );

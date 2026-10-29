@@ -1,17 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
 import { useApp } from '../../context/AppContext';
 import { INDUSTRY_OPTIONS } from '../../data/mockData';
 import { validateSetupStep } from '../../services/setupValidationService';
+import { reconcilePaymentTermsWithDays, standardPaymentTerms } from '../../services/invoice/invoiceDefaults';
+import type { SetupDraftNumericText } from '../../services/setupDraftService';
 import {
   SETUP_WIZARD_STEPS,
   type SetupWizardDraft,
   type SetupWizardStep,
 } from '../../types/setup';
-import type { AppLanguage, MaterialStandard, TaxStatus } from '../../types/models';
-import type { CommunicationChannel } from '../../types/communication';
+import type { AppLanguage, TaxStatus } from '../../types/models';
+import { CHANNEL_OPTIONS, MATERIAL_OPTIONS } from './setupOptions';
 import type { TranslationKey } from '../../i18n';
 import type { SetupCompletionResult } from '../../services/setupCompletionService';
+import { useLeaveGuard } from '../../hooks/useLeaveGuard';
 
 const LANGUAGES: { value: AppLanguage; labelKey: TranslationKey; code: string; preview?: boolean }[] = [
   { value: 'de', labelKey: 'language.de', code: 'DE' },
@@ -28,18 +31,7 @@ const TAX_OPTIONS: { value: TaxStatus; labelKey: TranslationKey }[] = [
   { value: 'unclear', labelKey: 'tax.unclear' },
 ];
 
-const MATERIAL_OPTIONS: { value: MaterialStandard; labelKey: TranslationKey }[] = [
-  { value: 'auftraggeber', labelKey: 'material.auftraggeber' },
-  { value: 'betrieb', labelKey: 'material.betrieb' },
-  { value: 'gemischt', labelKey: 'material.gemischt' },
-  { value: 'unclear', labelKey: 'material.unclear' },
-];
-
-const CHANNEL_OPTIONS: { value: CommunicationChannel; labelKey: TranslationKey }[] = [
-  { value: 'email', labelKey: 'communication.channel.email' },
-  { value: 'whatsapp', labelKey: 'communication.channel.whatsapp' },
-  { value: 'letter', labelKey: 'communication.channel.letter' },
-];
+/* EINRICHTUNG-01 (AP6; F-04) — Material und Kanal kommen aus `setupOptions` (gemeinsam mit den Firmendaten). */
 
 /**
  * ONBOARDING-INVOICE-NUMBER-EMPTY-01B — Rohtext eines Ganzzahlfelds.
@@ -56,28 +48,90 @@ function normalizeIntegerInput(raw: string): { text: string; value: number } | n
   return { text, value: Number(text) };
 }
 
-interface FirstRunWizardProps {
-  initialDraft: SetupWizardDraft;
-  onComplete: (draft: SetupWizardDraft) => SetupCompletionResult;
+/** EINRICHTUNG-01 (AP3, O-01) — der Stand, den die Einrichtungsseite als Entwurf merkt. */
+export interface FirstRunWizardState {
+  stepIndex: number;
+  draft: SetupWizardDraft;
+  numericText: SetupDraftNumericText;
 }
 
-export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps) {
-  const { translate, updateSetup } = useApp();
+interface FirstRunWizardProps {
+  initialDraft: SetupWizardDraft;
+  /** EINRICHTUNG-01 (AP3, O-01.1) — Fortsetzen am gespeicherten Schritt mit dem gespeicherten Rohtext. */
+  initialStepIndex?: number;
+  initialNumericText?: SetupDraftNumericText;
+  /** Ein fortgesetzter Entwurf wird angezeigt, damit niemand meint, es seien Altwerte. */
+  resumed?: boolean;
+  /**
+   * EINRICHTUNG-01 (AP3, O-04.3) — der Abschluss darf auf den Server warten (Nummernkreis). Bis dahin ist der
+   * Abschlussknopf gesperrt; scheitert er, bleibt der Assistent mit allen Eingaben stehen.
+   */
+  onComplete: (draft: SetupWizardDraft, next: SetupCompletionTarget) => SetupCompletionResult | Promise<SetupCompletionResult>;
+  /** Nach jeder Eingabe und jedem Schrittwechsel, nie für den unberührten Anfangsstand. */
+  onStateChange?: (state: FirstRunWizardState) => void;
+  /**
+   * EINRICHTUNG-01 (AP4, O-06.1) — im Cloud-Betrieb bietet der letzte Schritt zusätzlich „Abschließen und Team
+   * einladen“. Beide Wege schließen die Einrichtung ab; nur das Ziel danach unterscheidet sich (Teamseite oder
+   * Start). Überspringbar, kein Setup-Zwang.
+   */
+  teamInvite?: boolean;
+}
+
+/** Wohin es nach dem Abschluss geht. */
+export type SetupCompletionTarget = 'home' | 'team';
+
+function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
+  return typeof (value as Promise<T> | null)?.then === 'function';
+}
+
+export function FirstRunWizard({
+  initialDraft,
+  initialStepIndex = 0,
+  initialNumericText,
+  resumed = false,
+  onComplete,
+  onStateChange,
+  teamInvite = false,
+}: FirstRunWizardProps) {
+  const steps = SETUP_WIZARD_STEPS;
+  const { translate, updateLanguage } = useApp();
   const [draft, setDraft] = useState<SetupWizardDraft>(initialDraft);
-  const [stepIndex, setStepIndex] = useState(0);
+  const [stepIndex, setStepIndex] = useState(() =>
+    Number.isInteger(initialStepIndex) && initialStepIndex >= 0 && initialStepIndex < SETUP_WIZARD_STEPS.length
+      ? initialStepIndex
+      : 0,
+  );
   const [errors, setErrors] = useState<Partial<Record<string, TranslationKey>>>({});
   const [formError, setFormError] = useState<TranslationKey | null>(null);
+  const [formErrorRetryable, setFormErrorRetryable] = useState(false);
+  /** EINRICHTUNG-01 (AP3, O-04.3) — der Abschluss läuft; kein zweiter Auslöser. */
+  const [completing, setCompleting] = useState(false);
+  const completingRef = useRef(false);
   /**
    * Sichtbarer Rohtext der Ganzzahlfelder. Getrennt vom Draft, damit das Feld
    * während der Bearbeitung leer bleiben kann, ohne dass eine 0 zurückspringt.
    */
-  const [numericText, setNumericText] = useState({
-    lastInvoiceNumber: String(initialDraft.lastInvoiceNumber),
-    defaultPaymentDays: String(initialDraft.defaultPaymentDays),
-  });
+  const [numericText, setNumericText] = useState<SetupDraftNumericText>(
+    () =>
+      initialNumericText ?? {
+        lastInvoiceNumber: String(initialDraft.lastInvoiceNumber),
+        defaultPaymentDays: String(initialDraft.defaultPaymentDays),
+      },
+  );
+  /** EINRICHTUNG-01 (AP3, O-01) — erst nach der ersten Eingabe gilt der Stand als Entwurf. */
+  const [dirty, setDirty] = useState(false);
+  const onStateChangeRef = useRef(onStateChange);
+  onStateChangeRef.current = onStateChange;
+  // EINRICHTUNG-01 (AP8; 1.27) — Rückfrage beim Verlassen; der Entwurf bleibt wie in AP3 erhalten (Einrichtungsseite).
+  useLeaveGuard(dirty && !completing, Boolean(onStateChange));
 
-  const step = SETUP_WIZARD_STEPS[stepIndex];
-  const isLastStep = stepIndex === SETUP_WIZARD_STEPS.length - 1;
+  useEffect(() => {
+    if (!dirty) return;
+    onStateChangeRef.current?.({ stepIndex, draft, numericText });
+  }, [dirty, stepIndex, draft, numericText]);
+
+  const step = steps[stepIndex];
+  const isLastStep = stepIndex === steps.length - 1;
 
   const stepLabel = useMemo(
     () => translate(`setup.step.${step}` as TranslationKey),
@@ -85,15 +139,27 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
   );
 
   const updateDraft = <K extends keyof SetupWizardDraft>(key: K, value: SetupWizardDraft[K]) => {
+    setDirty(true);
+    /*
+     * EINRICHTUNG-01 (AP3, EIN-14; E6) — die Sprachwahl gilt der Person: im Cloud-Betrieb Profil und Gerät, ohne
+     * Firmen-Schreibauftrag; im lokalen Betrieb wie bisher das Setup des Geräts. Außerhalb des Zustands-Updaters,
+     * damit der Wechsel genau einmal geschieht.
+     */
+    if (key === 'language') updateLanguage(value as AppLanguage);
     setDraft((current) => {
       const next = { ...current, [key]: value };
-      if (key === 'language') {
-        updateSetup({ language: value as AppLanguage });
-      }
       if (key === 'defaultPaymentDays') {
         const days = Number(value);
         if (Number.isFinite(days) && days >= 0) {
-          next.defaultPaymentTerms = `Zahlbar innerhalb von ${Math.round(days)} Tagen ohne Abzug.`;
+          /*
+           * EINRICHTUNG-01 (AP3, O-04.1; EIN-34) — bisher ersetzte jede Änderung des Zahlungsziels den Zahlungstext,
+           * auch einen selbst formulierten. Jetzt dieselbe Regel wie auf der Einstellungsseite: Ein Standardsatz folgt
+           * der neuen Tageszahl, ein eigener Text bleibt wortgleich; ein leeres Feld bekommt den Standardsatz.
+           */
+          const rounded = Math.round(days);
+          next.defaultPaymentTerms = current.defaultPaymentTerms.trim()
+            ? reconcilePaymentTermsWithDays(current.defaultPaymentTerms, current.defaultPaymentDays, rounded)
+            : standardPaymentTerms(rounded, true);
         }
       }
       return next;
@@ -113,34 +179,58 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
   };
 
   const validateCurrentStep = (): boolean => {
-    const result = validateSetupStep(step, draft);
+    // P1-Abschluss-Rundgang (R-02) — der Assistent bearbeitet die USt-IdNr.: Formatprüfung wie in den Firmendaten.
+    const result = validateSetupStep(step, draft, { formatChecks: 'strict' });
     setErrors(result.errors);
     return result.valid;
   };
 
-  const handleNext = () => {
+  const applyCompletionResult = (result: SetupCompletionResult) => {
+    if (!result.success) {
+      setErrors(result.errors ?? {});
+      /**
+       * OFFICEPILOT-SETUP-CLOUD-PERSIST-01C — ein Fehler ohne Feldbezug (z. B.
+       * fehlgeschlagenes lokales Speichern) darf nicht stumm bleiben. Die
+       * Eingaben bleiben im Assistenten stehen.
+       */
+      setFormError(result.errorKey ?? null);
+      setFormErrorRetryable(result.retryable === true);
+      return;
+    }
+    setFormError(null);
+    setFormErrorRetryable(false);
+  };
+
+  const handleNext = (target: SetupCompletionTarget = 'home') => {
+    if (completingRef.current) return;
     if (!validateCurrentStep()) return;
     if (isLastStep) {
-      const result = onComplete(draft);
-      if (!result.success) {
-        setErrors(result.errors ?? {});
-        /**
-         * OFFICEPILOT-SETUP-CLOUD-PERSIST-01C — ein Fehler ohne Feldbezug (z. B.
-         * fehlgeschlagenes lokales Speichern) darf nicht stumm bleiben. Die
-         * Eingaben bleiben im Assistenten stehen.
-         */
-        setFormError(result.errorKey ?? null);
+      const result = onComplete(draft, target);
+      if (!isPromiseLike(result)) {
+        applyCompletionResult(result);
         return;
       }
+      completingRef.current = true;
+      setCompleting(true);
       setFormError(null);
+      void result
+        .catch((): SetupCompletionResult => ({ success: false, errorKey: 'setupFlow.numberRange.failed', retryable: true }))
+        .then((settled) => {
+          completingRef.current = false;
+          setCompleting(false);
+          applyCompletionResult(settled);
+        });
       return;
     }
     setErrors({});
+    setDirty(true);
     setStepIndex((value) => value + 1);
   };
 
   const handleBack = () => {
+    if (completingRef.current) return;
     setErrors({});
+    setDirty(true);
     setStepIndex((value) => Math.max(0, value - 1));
   };
 
@@ -150,7 +240,7 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
   const inputClassName = (field: string) =>
     `input ${errors[field] ? 'input--error' : ''}`.trim();
 
-  const progressPercent = ((stepIndex + 1) / SETUP_WIZARD_STEPS.length) * 100;
+  const progressPercent = ((stepIndex + 1) / steps.length) * 100;
 
   const renderStep = (currentStep: SetupWizardStep) => {
     switch (currentStep) {
@@ -186,6 +276,19 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
                 aria-invalid={errors.companyName ? true : undefined}
               />
               {renderFieldError('companyName')}
+            </fieldset>
+
+            {/* EINRICHTUNG-01 (AP3, O-02.2) — Rechtsform, Land und Telefon sind optional und landen im Firmenprofil. */}
+            <fieldset className="form-group">
+              <label htmlFor="setup-legalForm">{translate('setupFlow.field.legalForm')}</label>
+              <input
+                id="setup-legalForm"
+                className="input"
+                value={draft.legalForm ?? ''}
+                maxLength={120}
+                onChange={(event) => updateDraft('legalForm', event.target.value)}
+                data-testid="setup-legalForm"
+              />
             </fieldset>
 
             <fieldset className="form-group">
@@ -238,6 +341,18 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
             </div>
 
             <fieldset className="form-group">
+              <label htmlFor="setup-country">{translate('setupFlow.field.country')}</label>
+              <input
+                id="setup-country"
+                className="input"
+                value={draft.country}
+                maxLength={120}
+                onChange={(event) => updateDraft('country', event.target.value)}
+                data-testid="setup-country"
+              />
+            </fieldset>
+
+            <fieldset className="form-group">
               <label htmlFor="setup-email">{translate('companyProfile.email')}</label>
               <input
                 id="setup-email"
@@ -248,6 +363,19 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
                 data-testid="setup-email"
               />
               {renderFieldError('email')}
+            </fieldset>
+
+            <fieldset className="form-group">
+              <label htmlFor="setup-phone">{translate('setupFlow.field.phone')}</label>
+              <input
+                id="setup-phone"
+                type="tel"
+                className="input"
+                value={draft.phone}
+                maxLength={60}
+                onChange={(event) => updateDraft('phone', event.target.value)}
+                data-testid="setup-phone"
+              />
             </fieldset>
 
             <fieldset className="form-group">
@@ -288,11 +416,12 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
               <label htmlFor="setup-vatId">{translate('companyProfile.vatId')}</label>
               <input
                 id="setup-vatId"
-                className="input"
+                className={inputClassName('vatId')}
                 value={draft.vatId}
                 onChange={(event) => updateDraft('vatId', event.target.value)}
                 data-testid="setup-vatId"
               />
+              {renderFieldError('vatId')}
               {renderFieldError('taxIdentifier')}
             </fieldset>
             <fieldset className="form-group">
@@ -413,6 +542,7 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
                     key={value}
                     type="button"
                     className={`chip ${draft.communicationChannel === value ? 'chip--active' : ''}`}
+                    aria-pressed={draft.communicationChannel === value}
                     onClick={() => updateDraft('communicationChannel', value)}
                     data-testid={`setup-channel-${value}`}
                   >
@@ -458,12 +588,13 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
         </div>
       </header>
 
-      <div className="setup-progress" data-testid="setup-progress">
+      {/* EINRICHTUNG-01 (AP9; 1.32) — Ziel des Skip-Links der Einrichtungsseite. */}
+      <div className="setup-progress" id="setup-progress" tabIndex={-1} data-testid="setup-progress">
         <div className="setup-progress__header">
           <span className="setup-progress__label">
             {translate('setup.stepProgress')
               .replace('{current}', String(stepIndex + 1))
-              .replace('{total}', String(SETUP_WIZARD_STEPS.length))}
+              .replace('{total}', String(steps.length))}
           </span>
           <span className="setup-progress__step">{stepLabel}</span>
         </div>
@@ -473,7 +604,7 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
           role="progressbar"
           aria-valuenow={stepIndex + 1}
           aria-valuemin={1}
-          aria-valuemax={SETUP_WIZARD_STEPS.length}
+          aria-valuemax={steps.length}
           aria-label={stepLabel}
         >
           <div className="setup-progress__fill" style={{ width: `${progressPercent}%` }} />
@@ -487,21 +618,40 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
           handleNext();
         }}
       >
-        {formError ? (
-          <p className="form-error" role="alert" data-testid="setup-form-error">
-            {translate(formError)}
+        {resumed ? (
+          <p className="hint-text" role="status" data-testid="setup-draft-resumed">
+            {translate('setupFlow.resumed')}
           </p>
         ) : null}
+        {formError ? (
+          <div className="form-error" role="alert" data-testid="setup-form-error">
+            <p>{translate(formError)}</p>
+            {/* EINRICHTUNG-01 (AP3, O-04.3) — ein sichtbarer Weg zur Wiederholung; die Eingaben bleiben. */}
+            {formErrorRetryable && isLastStep ? (
+              <Button type="button" variant="outline" onClick={() => handleNext()} disabled={completing} data-testid="setup-retry">
+                {translate('setupFlow.retry')}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         {renderStep(step)}
+        {teamInvite && isLastStep ? (
+          <div className="setup-team-invite" data-testid="setup-team-invite">
+            <p className="hint-text">{translate('setupFlow.team.hint')}</p>
+            <Button type="button" variant="outline" fullWidth disabled={completing} onClick={() => handleNext('team')} data-testid="setup-finish-team">
+              {translate('setupFlow.team.finishAndInvite')}
+            </Button>
+          </div>
+        ) : null}
 
         <div className="setup-form-actions">
           {stepIndex > 0 && (
-            <Button type="button" variant="outline" onClick={handleBack} data-testid="setup-back">
+            <Button type="button" variant="outline" onClick={handleBack} disabled={completing} data-testid="setup-back">
               {translate('setup.back')}
             </Button>
           )}
-          <Button type="submit" fullWidth data-testid="setup-next">
-            {isLastStep ? translate('setup.finish') : translate('setup.next')}
+          <Button type="submit" fullWidth disabled={completing} aria-busy={completing || undefined} data-testid="setup-next">
+            {completing ? translate('setupFlow.completing') : isLastStep ? translate('setup.finish') : translate('setup.next')}
           </Button>
         </div>
       </form>

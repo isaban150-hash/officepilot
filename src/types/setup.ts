@@ -31,6 +31,8 @@ export interface SetupWizardDraft {
   materialStandard: MaterialStandard;
   communicationChannel: CommunicationChannel;
   companyName: string;
+  /** EINRICHTUNG-01 (AP3, O-02.2) — optional; landet im Firmenprofil. */
+  legalForm?: string;
   contactPerson: string;
   street: string;
   zip: string;
@@ -67,8 +69,11 @@ export function createDefaultSetupWizardDraft(
     industry: setup.industry || 'Handwerk',
     taxStatus: setup.taxStatus,
     materialStandard: setup.materialStandard,
-    communicationChannel: setup.communicationChannel ?? 'email',
+    // EINRICHTUNG-01 (AP3, O-04.2) — WhatsApp wird nicht mehr angeboten; ein Altwert beginnt mit E-Mail.
+    communicationChannel:
+      setup.communicationChannel && setup.communicationChannel !== 'whatsapp' ? setup.communicationChannel : 'email',
     companyName: profile?.companyName ?? setup.companyName ?? '',
+    legalForm: profile?.legalForm ?? '',
     contactPerson: profile?.contactPerson ?? '',
     street: profile?.street ?? '',
     zip: profile?.zip ?? '',

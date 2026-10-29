@@ -8,10 +8,16 @@ import type {
   WorkspaceSyncPullPayload,
 } from '../../types/workspace';
 import { getSupabaseClient } from '../../lib/supabase';
-import { isFinalBusinessRejectionMessage } from '../sync/syncRoleDenial';
+import {
+  isFinalBusinessRejectionMessage,
+  isSessionNotActiveMessage,
+  isWorkspaceAccessChangedMessage,
+} from '../sync/syncRoleDenial';
+import { reportSessionInvalid } from '../auth/sessionInvalidationService';
 import { stripLogoFromCompanyProfile } from './workspaceStore';
 import { applyBrandingContract } from '../branding/brandingProfileContract';
 import { COMPANY_PROFILE_SCHEMA_VERSION, applyCompanyProfileSettingsContract } from '../company/companyProfileSettingsContract';
+import { COMPANY_PROFILE_PATCH_DELETABLE_FIELDS } from '../company/companyProfileFieldCatalog';
 import type { WorkspaceVorgangRow } from '../vorgang/vorgangCloudService';
 import type { WorkspaceCustomerRow } from '../customer/customerCloudService';
 import type { WorkspaceVorgangNoteRow } from '../vorgang/vorgangNoteCloudService';
@@ -122,6 +128,19 @@ function mapSettingsRow(row: WorkspaceSettingsRow): WorkspaceSettings {
 
 function classifySupabaseError(error: { message?: string; code?: string }): WorkspaceCloudError {
   const message = error.message ?? 'Unbekannter Cloud-Fehler';
+  /*
+   * EINRICHTUNG-01 (AP1) — vor der allgemeinen 42501-Regel: Eine beendete Sitzung (Vertrag 1.8) ist eine
+   * Anmeldefrage, keine Rechteabweisung; eine gleichzeitige Rechteänderung (40001, Vertrag 1.9) entscheidet
+   * der nächste Versuch.
+   */
+  if (isSessionNotActiveMessage(message)) {
+    // EINRICHTUNG-01 (AP2, B3) — vom Server bestätigt: Diese Sitzung besteht nicht mehr. Die App verlangt die Anmeldung.
+    reportSessionInvalid('session_not_active');
+    return new WorkspaceCloudError(message, 'auth', false);
+  }
+  if (isWorkspaceAccessChangedMessage(message) || error.code === '40001') {
+    return new WorkspaceCloudError(message, 'unknown', true);
+  }
   if (message.includes('Nicht angemeldet') || error.code === 'PGRST301') {
     return new WorkspaceCloudError(message, 'auth', false);
   }
@@ -169,6 +188,18 @@ export async function rpcEnsurePersonalWorkspace(
     if (error) {
       const mapped = classifySupabaseError(error);
       return { success: false, error: mapped.message, errorCode: mapped.code === 'auth' ? 'auth' : mapped.code === 'rls' ? 'rls' : mapped.code === 'network' ? 'network' : 'unknown' };
+    }
+
+    /*
+     * EINRICHTUNG-01 (AP1, Z-03.1) — freigegeben, aber keine Mitgliedschaft zum Binden und keine wirksame eigene
+     * Lizenz für einen neuen Betrieb: Der Server legt nichts an und sagt das ausdrücklich. Kein technischer Fehler.
+     */
+    if ((data as { reason?: unknown } | null)?.reason === 'no_license' && !data?.workspace) {
+      return { success: false, error: 'no_license', errorCode: 'no_license' };
+    }
+    // EINRICHTUNG-01 (AP4, M-07.4) — offene Einladung: kein eigener Betrieb, die Einladung entscheidet.
+    if ((data as { reason?: unknown } | null)?.reason === 'invitation_pending' && !data?.workspace) {
+      return { success: false, error: 'invitation_pending', errorCode: 'invitation_pending' };
     }
 
     const workspaceRow = data?.workspace as WorkspaceRow | undefined;
@@ -342,9 +373,19 @@ export function buildCompanyProfileCloudPayload(profile: CompanyProfile): Record
    * `logoDataUrl` wird davon unabhängig weiterhin vollständig entfernt.
    */
   const stripped = stripLogoFromCompanyProfile(profile) as unknown as Record<string, unknown>;
+  // SETTINGS-01B1 — beide Verträge in beide Richtungen.
+  const payload = applyCompanyProfileSettingsContract(applyBrandingContract(stripped));
+  /*
+   * EINRICHTUNG-01 (EIN-06) — Schema 3 ist ein Patch: Ein fehlender Schlüssel bleibt am Server
+   * unverändert. Was dieser Client kennt und nicht (mehr) führt, löscht er deshalb ausdrücklich
+   * mit `null`. Pflichtfelder (nie leer) und Branding (eigener Vertrag) stehen nicht in der Liste;
+   * Felder, die erst ein neuerer Client kennt, sendet dieser Client nicht — sie bleiben erhalten.
+   */
+  for (const field of COMPANY_PROFILE_PATCH_DELETABLE_FIELDS) {
+    if (payload[field] === undefined) payload[field] = null;
+  }
   return {
-    // SETTINGS-01B1 — beide Verträge in beide Richtungen.
-    payload: applyCompanyProfileSettingsContract(applyBrandingContract(stripped)),
+    payload,
     /*
      * PRODUCT-BASIS-FIRMENPROFIL-01B — der Server bewahrt Felder spaeterer
      * Schema-Versionen, wenn ein aelterer Client sie nicht mitsendet, und liest
@@ -396,8 +437,17 @@ export function parseCompanyProfileFromCloud(
    * weg, aber der lokale Store würde einen gesetzten Schlüssel mit leerem Wert
    * tragen. Deshalb wird der Schlüssel gelöscht.
    */
+  /*
+   * EINRICHTUNG-01 (EIN-06) — `null` heisst „nicht gesetzt“: Der Server speichert seit Schema 3
+   * keine `null`-Werte mehr (der Patch löscht den Schlüssel); ältere Stände können sie noch
+   * tragen. Ein Textfeld mit `null` darf den lokalen Bestand nie erreichen.
+   */
+  const withoutNulls: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(inner as unknown as Record<string, unknown>)) {
+    if (value !== null) withoutNulls[key] = value;
+  }
   const withBranding = applyCompanyProfileSettingsContract(
-    applyBrandingContract(inner as unknown as Record<string, unknown>),
+    applyBrandingContract(withoutNulls),
   ) as unknown as CompanyProfile;
 
   if (existingLogo) {

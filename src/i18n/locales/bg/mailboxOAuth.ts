@@ -63,7 +63,7 @@ export const bgMailboxOAuth = {
   'mailboxOAuth.confirm.expired': 'Това потвърждение е изтекло или вече е обработено. Моля, свържете отново.',
 
   'mailboxOAuth.disconnect.title': 'Прекъсване на връзката?',
-  'mailboxOAuth.disconnect.text': 'Достъпът до {address} се изтрива; OfficeTakt вече няма да изтегля имейли. Вече изтеглените имейли и данните за клиенти се запазват. Можете да свържете отново по всяко време.',
+  'mailboxOAuth.disconnect.text': 'OfficeTakt изтрива запазения достъп до {address} и спира извличането. Вече прехвърлените имейли и данни за клиенти се запазват. Можете да се свържете отново по всяко време.',
   'mailboxOAuth.disconnect.failed': 'Връзката не можа да бъде прекъсната в момента.',
 
   'mailboxOAuth.error.generic': 'Връзката с Microsoft не беше осъществена. Моля, опитайте отново.',
@@ -84,4 +84,8 @@ export const bgMailboxOAuth = {
   'mailboxOAuth.error.provider_not_available': 'Този доставчик на пощенска кутия все още не е наличен.',
   'mailboxOAuth.error.invalid_import_window': 'Моля, изберете валиден период.',
   'mailboxOAuth.error.server_unavailable': 'Връзката в момента не беше възможна. Моля, опитайте по-късно.',
+
+  'mailboxOAuth.disconnect.microsoft': 'Разрешението в Microsoft остава, докато не го премахнете там:',
+  'mailboxOAuth.disconnect.linkPersonal': 'Разрешения на приложения (личен акаунт в Microsoft)',
+  'mailboxOAuth.disconnect.linkWork': 'Моите приложения (служебен или учебен акаунт)',
 } as const;

@@ -488,10 +488,20 @@ begin
   perform pg_temp.erwarte_abweisung('I8 Rechnung ist ein Entwurf',
     pg_temp.bindung_sql(pg_temp.ws(), 'doc-e-entwurf', 'file-x-inhaber', 'structured', 'xrechnung-cii'), 'einvoice_binding_pending: Rechnung ist in der Cloud nicht festgeschrieben', 'P0001');
   perform pg_temp.zurueck();
+  /*
+   * EINRICHTUNG-01 (E3a, Katalog V3 N-Z2 Zeile E-Rechnungs-Bindung) -- bewusst geaenderte Erwartung: Die Lizenz
+   * des Betriebs zaehlt, nicht die eigene. Der Admin mit eigener abgelaufener Lizenz besteht den Waechter (I9a);
+   * abgewiesen wird bei abgelaufener Betriebslizenz, mit dem unveraenderten Code (I9).
+   */
   perform pg_temp.als(pg_temp.abgelaufen());
-  perform pg_temp.erwarte_abweisung('I9 Admin mit abgelaufener Lizenz',
+  perform public.assert_financial_action_allowed(pg_temp.ws());
+  perform pg_temp.zurueck();
+  update public.profiles set license_status = 'expired' where id = pg_temp.inhaber();
+  perform pg_temp.als(pg_temp.abgelaufen());
+  perform pg_temp.erwarte_abweisung('I9 abgelaufene Betriebslizenz',
     pg_temp.bindung_sql(pg_temp.ws(), 'doc-e-typ', 'file-x-inhaber', 'structured', 'xrechnung-cii'), 'finance_license_expired', 'P0001');
   perform pg_temp.zurueck();
+  update public.profiles set license_status = 'active' where id = pg_temp.inhaber();
   if pg_temp.bindungen() is distinct from v_vorher then
     raise exception 'I7-I9 -- Bindung trotz Abweisung';
   end if;

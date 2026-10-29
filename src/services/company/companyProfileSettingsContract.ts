@@ -1,4 +1,5 @@
-import type { CompanyProfile, TaxStatus } from '../../types/models';
+import type { CommunicationLanguage, CompanyProfile, TaxStatus } from '../../types/models';
+import { composeSenderLegalName, senderDisplayNameProblem } from './senderDisplayName';
 import { DEFAULT_DOCUMENT_TEMPLATE, isDocumentTemplateId, type DocumentTemplateId } from '../../types/branding';
 
 /**
@@ -30,7 +31,103 @@ export const COMPANY_PROFILE_TEXT_LIMITS = {
   defaultLetterEmailSubject: 255,
   defaultLetterEmailBody: 20000,
   emailSignature: 2000,
+  /** EINRICHTUNG-01 (AP6; Vertrag 1.21) — Fußzeile und Hinweis „steuerfrei“ wie die Standardtexte (Client und Server). */
+  invoiceFooterNotes: 2000,
+  taxFreeNotice: 2000,
+  /** EINRICHTUNG-01 (AP6; 1.21) — Vorgaben für neue Angebote, Aufträge und Briefe. */
+  offerIntroText: 2000,
+  offerClosingText: 2000,
+  orderIntroText: 2000,
+  orderClosingText: 2000,
+  letterSalutation: 2000,
+  letterClosing: 2000,
 } as const;
+
+export type CompanyProfileTextLimitField = keyof typeof COMPANY_PROFILE_TEXT_LIMITS;
+
+/**
+ * EINRICHTUNG-01 (EIN-06, S-08) — Textgrenzen zählen **Unicode-Codepunkte**, genau
+ * wie der Server (`length()` in PostgreSQL). `String.length` zählt UTF-16-Einheiten:
+ * „👷" wäre dort zwei Zeichen, „ä" und „€" je eines — Client und Server zählten
+ * verschieden.
+ */
+export function countTextCodePoints(value: string): number {
+  let count = 0;
+  for (const _codePoint of value) count += 1;
+  return count;
+}
+
+/**
+ * Eingabefelder begrenzen über `maxLength` UTF-16-Einheiten. Ein Codepunkt belegt
+ * höchstens zwei davon; mit der doppelten Grenze blockiert der Browser deshalb nie
+ * einen gültigen Wert. Die eigentliche Grenze prüft {@link findCompanyProfileTextLimitViolation}.
+ */
+export function textInputMaxLength(limit: number): number {
+  return limit * 2;
+}
+
+/** Betreffe sind einzeilig: kein Zeilenumbruch, kein anderes Steuerzeichen (wie der Server). */
+const SUBJECT_FORBIDDEN_CHARACTERS = /[\u0000-\u001f\u007f\u2028\u2029]/;
+
+const SUBJECT_FIELDS: ReadonlySet<CompanyProfileTextLimitField> = new Set([
+  'defaultInvoiceEmailSubject',
+  'defaultOfferEmailSubject',
+  'defaultLetterEmailSubject',
+]);
+
+const TEXT_LIMIT_ERROR_KEYS: Record<CompanyProfileTextLimitField, string> = {
+  accountHolder: 'companyProfile.accountHolderTooLong',
+  senderDisplayName: 'companyProfile.senderDisplayNameTooLong',
+  defaultIntroText: 'companyProfile.defaultIntroTextTooLong',
+  defaultClosingText: 'companyProfile.defaultClosingTextTooLong',
+  defaultInvoiceEmailSubject: 'companyProfile.defaultInvoiceEmailSubjectInvalid',
+  defaultInvoiceEmailBody: 'companyProfile.defaultInvoiceEmailBodyTooLong',
+  defaultOfferEmailSubject: 'companyProfile.emailSubjectInvalid',
+  defaultOfferEmailBody: 'companyProfile.emailBodyTooLong',
+  defaultLetterEmailSubject: 'companyProfile.emailSubjectInvalid',
+  defaultLetterEmailBody: 'companyProfile.emailBodyTooLong',
+  emailSignature: 'companyProfile.emailSignatureTooLong',
+  invoiceFooterNotes: 'companyProfile.invoiceFooterNotesTooLong',
+  taxFreeNotice: 'companyProfile.taxFreeNoticeTooLong',
+  offerIntroText: 'companyProfile.templateTextTooLong',
+  offerClosingText: 'companyProfile.templateTextTooLong',
+  orderIntroText: 'companyProfile.templateTextTooLong',
+  orderClosingText: 'companyProfile.templateTextTooLong',
+  letterSalutation: 'companyProfile.templateTextTooLong',
+  letterClosing: 'companyProfile.templateTextTooLong',
+};
+
+export interface CompanyProfileTextLimitViolation {
+  field: CompanyProfileTextLimitField;
+  errorKey: string;
+}
+
+/**
+ * Alle Verstösse eines Profils oder Teilprofils gegen die Textgrenzen, gezählt wie
+ * beim Server: der getrimmte Wert (so wird er gespeichert) in Codepunkten; Betreffe
+ * zusätzlich ohne Zeilenumbruch. Nicht-Texte prüft der Vertrag an anderer Stelle.
+ */
+export function findCompanyProfileTextLimitViolations(
+  profileLike: Readonly<Record<string, unknown>>,
+): CompanyProfileTextLimitViolation[] {
+  const violations: CompanyProfileTextLimitViolation[] = [];
+  for (const field of Object.keys(COMPANY_PROFILE_TEXT_LIMITS) as CompanyProfileTextLimitField[]) {
+    const value = profileLike[field];
+    if (typeof value !== 'string') continue;
+    const text = value.trim();
+    const tooLong = countTextCodePoints(text) > COMPANY_PROFILE_TEXT_LIMITS[field];
+    const lineBreak = SUBJECT_FIELDS.has(field) && SUBJECT_FORBIDDEN_CHARACTERS.test(text);
+    if (tooLong || lineBreak) violations.push({ field, errorKey: TEXT_LIMIT_ERROR_KEYS[field] });
+  }
+  return violations;
+}
+
+/** Der erste Verstoss oder `null`. */
+export function findCompanyProfileTextLimitViolation(
+  profileLike: Readonly<Record<string, unknown>>,
+): CompanyProfileTextLimitViolation | null {
+  return findCompanyProfileTextLimitViolations(profileLike)[0] ?? null;
+}
 
 export const TAX_STATUS_VALUES: readonly TaxStatus[] = [
   'standard_19',
@@ -58,6 +155,13 @@ const TEXT_FIELDS = [
   'defaultLetterEmailSubject',
   'defaultLetterEmailBody',
   'emailSignature',
+  // EINRICHTUNG-01 (AP6; 1.21)
+  'offerIntroText',
+  'offerClosingText',
+  'orderIntroText',
+  'orderClosingText',
+  'letterSalutation',
+  'letterClosing',
 ] as const;
 
 /**
@@ -85,8 +189,15 @@ const EMPTY_MEANS_UNSET_FIELDS: ReadonlySet<string> = new Set([
  * behandelt das Weglassen durch einen Client dieser Version als bewusstes
  * Loeschen. Wer ein neues Profilfeld einfuehrt, erhoeht die Version hier und
  * traegt das Feld serverseitig mit derselben Version in den Katalog ein.
+ *
+ * EINRICHTUNG-01 (EIN-06, Vertrag 1.10) — Version 3 ist ein **Patch**: Ein
+ * fehlender Schlüssel bleibt am Server unverändert, `null` löscht ein optionales
+ * Feld, Pflichtfelder lassen sich nicht leeren. Der Client sendet deshalb jedes
+ * ihm bekannte, löschbare Feld — mit Wert oder ausdrücklich `null`
+ * (`buildCompanyProfileCloudPayload`). Den Feldkatalog führt
+ * `companyProfileFieldCatalog.ts`.
  */
-export const COMPANY_PROFILE_SCHEMA_VERSION = 2;
+export const COMPANY_PROFILE_SCHEMA_VERSION = 3;
 
 /** ISO 4217: drei Grossbuchstaben. Fachlich unterstuetzt ist derzeit EUR. */
 export const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
@@ -155,6 +266,15 @@ export function applyCompanyProfileSettingsContract<T extends Record<string, unk
       delete next.senderDisplayName;
     }
   }
+  // EINRICHTUNG-01 (AP6; E-05) — leer heißt Deutsch: kein Schlüssel. Ungültig bleibt stehen (Schreibgrenze weist ab).
+  if ('communicationLanguage' in next) {
+    if (next.communicationLanguage === '' || next.communicationLanguage === null || next.communicationLanguage === undefined) {
+      delete next.communicationLanguage;
+    }
+  }
+  if ('offerValidityDays' in next && (next.offerValidityDays === null || next.offerValidityDays === undefined)) {
+    delete next.offerValidityDays;
+  }
 
   return next as T;
 }
@@ -164,14 +284,36 @@ export type CompanyProfileOptionalFieldError =
   | 'companyProfile.currencyUnsupported'
   | 'companyProfile.replyToEmailInvalid'
   | 'companyProfile.senderDisplayNameTooLong'
-  | 'companyProfile.taxStatusInvalid';
+  | 'companyProfile.senderDisplayNameInvalid'
+  | 'companyProfile.taxStatusInvalid'
+  | 'companyProfile.offerValidityDaysInvalid'
+  | 'companyProfile.communicationLanguageInvalid';
+
+/** EINRICHTUNG-01 (AP6; 1.21) — Angebotsgültigkeit in ganzen Tagen. */
+export const OFFER_VALIDITY_DAYS_MIN = 1;
+export const OFFER_VALIDITY_DAYS_MAX = 365;
+export const DEFAULT_OFFER_VALIDITY_DAYS = 30;
+
+export function isOfferValidityDays(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= OFFER_VALIDITY_DAYS_MIN && value <= OFFER_VALIDITY_DAYS_MAX;
+}
+
+/** EINRICHTUNG-01 (AP6; E-05) — Sprachen der Kommunikationsvorgaben. */
+export const COMMUNICATION_LANGUAGES: readonly CommunicationLanguage[] = ['de', 'tr', 'bg'];
+export const DEFAULT_COMMUNICATION_LANGUAGE: CommunicationLanguage = 'de';
+
+export function isCommunicationLanguage(value: unknown): value is CommunicationLanguage {
+  return typeof value === 'string' && (COMMUNICATION_LANGUAGES as readonly string[]).includes(value);
+}
 
 /**
  * 01B2 — die Schreibgrenze: Was hier abgelehnt wird, erreicht weder Store noch
  * Payload. Leer (`''`) ist erlaubt und bedeutet bewusstes Loeschen.
  */
 export function validateCompanyProfileOptionalFields(
-  partial: Partial<Pick<CompanyProfile, 'currency' | 'replyToEmail' | 'senderDisplayName' | 'defaultTaxStatus'>>,
+  partial: Partial<
+    Pick<CompanyProfile, 'currency' | 'replyToEmail' | 'senderDisplayName' | 'defaultTaxStatus' | 'offerValidityDays' | 'communicationLanguage'>
+  >,
 ): CompanyProfileOptionalFieldError | null {
   if (partial.currency !== undefined && partial.currency !== '') {
     const code = String(partial.currency).trim().toUpperCase();
@@ -181,8 +323,23 @@ export function validateCompanyProfileOptionalFields(
   if (partial.replyToEmail !== undefined && String(partial.replyToEmail).trim() !== '' && !isProfileEmail(partial.replyToEmail)) {
     return 'companyProfile.replyToEmailInvalid';
   }
-  if (partial.senderDisplayName !== undefined && String(partial.senderDisplayName).trim().length > COMPANY_PROFILE_TEXT_LIMITS.senderDisplayName) {
+  // EINRICHTUNG-01 (S-08) — in Codepunkten, wie der Server.
+  if (partial.senderDisplayName !== undefined && countTextCodePoints(String(partial.senderDisplayName).trim()) > COMPANY_PROFILE_TEXT_LIMITS.senderDisplayName) {
     return 'companyProfile.senderDisplayNameTooLong';
+  }
+  // EINRICHTUNG-01 (AP6; E-04, 1.19) — dieselbe Regel wie der Server (`display_name_invalid`).
+  if (partial.senderDisplayName !== undefined && senderDisplayNameProblem(String(partial.senderDisplayName)) !== null) {
+    return 'companyProfile.senderDisplayNameInvalid';
+  }
+  if (partial.offerValidityDays !== undefined && !isOfferValidityDays(partial.offerValidityDays)) {
+    return 'companyProfile.offerValidityDaysInvalid';
+  }
+  if (
+    partial.communicationLanguage !== undefined &&
+    (partial.communicationLanguage as unknown) !== '' &&
+    !isCommunicationLanguage(partial.communicationLanguage)
+  ) {
+    return 'companyProfile.communicationLanguageInvalid';
   }
   if (partial.defaultTaxStatus !== undefined && (partial.defaultTaxStatus as unknown) !== '' && !isTaxStatus(partial.defaultTaxStatus)) {
     return 'companyProfile.taxStatusInvalid';
@@ -201,13 +358,28 @@ export function resolveProfileReplyToEmail(profile: Pick<CompanyProfile, 'email'
   return isProfileEmail(explicit) ? explicit : (profile.email ?? '').trim().toLowerCase();
 }
 
-/** Fehlend/leer → „Firmenname Rechtsform" (dieselbe Ableitung wie der Versand). */
+/**
+ * Fehlend/leer → Firmenname mit Rechtsform nach der einen Regel aus 1.19 (EINRICHTUNG-01 AP6; F-05): Endet der Name
+ * schon auf die Rechtsform, bleibt er unverändert — dieselbe Regel wie der Versandserver (`sendDocumentCore`).
+ */
 export function resolveProfileSenderDisplayName(
   profile: Pick<CompanyProfile, 'companyName' | 'legalForm' | 'senderDisplayName'>,
 ): string {
   const explicit = (profile.senderDisplayName ?? '').trim();
   if (explicit) return explicit;
-  return [profile.companyName?.trim(), profile.legalForm?.trim()].filter(Boolean).join(' ');
+  return composeSenderLegalName(profile.companyName, profile.legalForm);
+}
+
+/** EINRICHTUNG-01 (AP6; 1.21) — fehlend oder ungültig → 30 Tage. */
+export function resolveProfileOfferValidityDays(profile: Pick<CompanyProfile, 'offerValidityDays'>): number {
+  return isOfferValidityDays(profile.offerValidityDays) ? profile.offerValidityDays : DEFAULT_OFFER_VALIDITY_DAYS;
+}
+
+/** EINRICHTUNG-01 (AP6; E-05) — fehlend oder ungültig → Deutsch. */
+export function resolveProfileCommunicationLanguage(
+  profile: Pick<CompanyProfile, 'communicationLanguage'>,
+): CommunicationLanguage {
+  return isCommunicationLanguage(profile.communicationLanguage) ? profile.communicationLanguage : DEFAULT_COMMUNICATION_LANGUAGE;
 }
 
 /** Fehlend/leer → keine Vorgabe; der Aufrufer nimmt den Legacy-Fallback. */

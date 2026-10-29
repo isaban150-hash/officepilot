@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { resolveCloudConfirmedActionAccess } from '../../services/workspace/workspaceRoleService';
 import { Card, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
 import { SendDocumentDialog } from './SendDocumentDialog';
 import { DeliveryHistoryList } from './DeliveryHistoryList';
 import { useApp } from '../../context/AppContext';
+import { MailTestModeNotice } from '../communication/MailTestModeNotice';
+import { resolveProfileCommunicationLanguage } from '../../services/company/companyProfileSettingsContract';
 import { useOptionalAuth } from '../../context/AuthContext';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
@@ -75,7 +78,7 @@ const CLIENT_ERROR_KEYS: Record<SendDocumentClientError, TranslationKey> = {
 };
 
 export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, documentKind = 'invoice' }: Props) {
-  const { translate, language, showToast, companyProfile } = useApp();
+  const { translate, showToast, companyProfile } = useApp();
   const isCorrection = documentKind === 'invoice_correction';
   const user = useOptionalAuth()?.user ?? null;
   const identity = useMemo<DeliveryDocumentIdentity>(() => ({ kind: documentKind, clientInvoiceId: invoice.id }), [documentKind, invoice.id]);
@@ -84,7 +87,8 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
   const documentAvailable = isCorrection
     ? invoice.cancellationKind === 'correction' && Boolean(invoice.correctionDocumentId)
     : !invoice.cancelledAt;
-  const canSend = cloud && access.canWrite && isFinalizedInvoice(invoice) && documentAvailable;
+  // EINRICHTUNG-01 (AP2, Vertrag 1.11) — zusätzlich gesperrt, solange die Rechte nur aus dem Zwischenspeicher stammen.
+  const canSend = cloud && resolveCloudConfirmedActionAccess(access) && isFinalizedInvoice(invoice) && documentAvailable;
 
   const [deliveries, setDeliveries] = useState<DocumentDelivery[] | null>(null);
   const [dialog, setDialog] = useState<{ mode: 'send' | 'retry' | 'resume' | 'retry_uncertain'; draft?: SendDraftState; retryOf?: DocumentDelivery; resendAcknowledged?: boolean } | null>(null);
@@ -108,8 +112,9 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
    */
   const defaults = useMemo(
     // E-MAIL-07C — Rechnungsvorlage (bzw. Korrekturtext) + zentrale Signatur genau einmal.
-    () => composeInvoiceDeliveryDraft(invoice, language, { profile: companyProfile, kind: documentKind }),
-    [invoice, language, companyProfile, documentKind],
+    // EINRICHTUNG-01 (AP6; E-05) — Vorgabetexte in der Kommunikationssprache des Betriebs.
+    () => composeInvoiceDeliveryDraft(invoice, resolveProfileCommunicationLanguage(companyProfile), { profile: companyProfile, kind: documentKind }),
+    [invoice, companyProfile, documentKind],
   );
 
   const refresh = useCallback(async () => {
@@ -262,6 +267,8 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
       <Card>
         <CardTitle>{translate((isCorrection ? 'delivery.correction.panel.title' : 'delivery.panel.title') as TranslationKey)}</CardTitle>
         <p className="hint-text">{translate((isCorrection ? 'delivery.correction.panel.hint' : 'delivery.panel.hint') as TranslationKey)}</p>
+        {/* EINRICHTUNG-01 (AP6; E-06) */}
+        <MailTestModeNotice testId="invoice-delivery-test-mode" />
 
         {isCorrection ? null : (
         <div className="data-row" data-testid="invoice-delivery-source">

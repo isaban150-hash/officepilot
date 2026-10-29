@@ -474,13 +474,24 @@ end $$;
 do $$
 begin
   -- R6 abgelaufene Lizenz und gesperrtes Konto (Admin-Rolle).
+  /*
+   * EINRICHTUNG-01 (E3a, Katalog V3 Z-07.1/Z-07.2) -- bewusst geaenderte Erwartung: Die eigene abgelaufene Lizenz
+   * des Admins hindert nicht mehr (Waechter besteht); abgewiesen wird bei abgelaufener Betriebslizenz (Inhaber),
+   * mit dem unveraenderten Code.
+   */
   perform pg_temp.als(pg_temp.lizenz());
-  perform pg_temp.erwarte_abweisung('R6a Lizenz abgelaufen: Leistungszeitraum',
+  perform public.assert_financial_action_allowed(pg_temp.ws());
+  perform pg_temp.zurueck();
+  update public.profiles set license_status = 'expired' where id = pg_temp.inhaber();
+  perform pg_temp.als(pg_temp.lizenz());
+  perform pg_temp.erwarte_abweisung('R6a Betriebslizenz abgelaufen: Leistungszeitraum',
     format('select public.confirm_workspace_invoice_service_period(%L, %L)', pg_temp.ws(), 'inv-c-offen'),
     'finance_license_expired', null);
-  perform pg_temp.erwarte_abweisung('R6b Lizenz abgelaufen: Versandvermerk',
+  perform pg_temp.erwarte_abweisung('R6b Betriebslizenz abgelaufen: Versandvermerk',
     format('select public.update_workspace_invoice_sent(%L, %L, %L, %L, null)', pg_temp.ws(), 'inv-c-matrix', '2026-10-05', 'email'),
     'finance_license_expired', null);
+  perform pg_temp.zurueck();
+  update public.profiles set license_status = 'active' where id = pg_temp.inhaber();
   -- Gesperrtes Konto: Seit 20261109 ist es kein aktives Mitglied mehr; die Mitgliedschaftspruefung
   -- vor der Finanzpruefung weist es ab (Kontosperre im Einzelnen: account_block_enforcement_01.sql).
   perform pg_temp.als(pg_temp.gesperrt());
@@ -649,6 +660,11 @@ begin
     end loop;
   end loop;
 
+  /*
+   * EINRICHTUNG-01 (E3a, Katalog V3 Z-07.1) -- bewusst geaenderte Erwartung fuer "lizenz": Der Admin mit eigener
+   * abgelaufener Lizenz arbeitet in einem Betrieb mit wirksamer Betriebslizenz; massgeblich ist allein die Lizenz des
+   * Betriebs. Die abgelaufene Betriebslizenz prueft supabase/tests/einrichtung01_ap1_zugriff.sql (N-Z1, N-Z2).
+   */
   v_soll := '{
     "inhaber":       {"lesen":"ok","eingang":"ok","zahlung":"ok","storno":"ok","versand":"ok","zeitraum":"ok","erechnung":"ok","loeschen":"ok"},
     "admin":         {"lesen":"ok","eingang":"ok","zahlung":"ok","storno":"ok","versand":"ok","zeitraum":"ok","erechnung":"ok","loeschen":"ok"},
@@ -657,7 +673,7 @@ begin
     "entfernt":      {"lesen":"kein_zugriff","eingang":"kein_zugriff","zahlung":"kein_zugriff","storno":"kein_zugriff","versand":"kein_zugriff","zeitraum":"kein_zugriff","erechnung":"kein_zugriff","loeschen":"kein_zugriff"},
     "fremdmitglied": {"lesen":"kein_zugriff","eingang":"kein_zugriff","zahlung":"kein_zugriff","storno":"kein_zugriff","versand":"kein_zugriff","zeitraum":"kein_zugriff","erechnung":"kein_zugriff","loeschen":"kein_zugriff"},
     "fremdinhaber":  {"lesen":"kein_zugriff","eingang":"kein_zugriff","zahlung":"kein_zugriff","storno":"kein_zugriff","versand":"kein_zugriff","zeitraum":"kein_zugriff","erechnung":"kein_zugriff","loeschen":"kein_zugriff"},
-    "lizenz":        {"lesen":"ok","eingang":"ok","zahlung":"lizenz","storno":"lizenz","versand":"lizenz","zeitraum":"lizenz","erechnung":"lizenz","loeschen":"ok"},
+    "lizenz":        {"lesen":"ok","eingang":"ok","zahlung":"ok","storno":"ok","versand":"ok","zeitraum":"ok","erechnung":"ok","loeschen":"ok"},
     "gesperrt":      {"lesen":"kein_zugriff","eingang":"kein_zugriff","zahlung":"gesperrt","storno":"gesperrt","versand":"kein_zugriff","zeitraum":"kein_zugriff","erechnung":"kein_zugriff","loeschen":"kein_zugriff"},
     "anon":          {"lesen":"nicht_angemeldet","eingang":"nicht_angemeldet","zahlung":"nicht_angemeldet","storno":"nicht_angemeldet","versand":"nicht_angemeldet","zeitraum":"nicht_angemeldet","erechnung":"nicht_angemeldet","loeschen":"nicht_angemeldet"}
   }'::jsonb;
@@ -667,7 +683,7 @@ begin
       select jsonb_object_agg(k, jsonb_build_object('ist', v_ist->k, 'soll', v_soll->k))
       from jsonb_object_keys(v_soll) k where v_ist->k is distinct from v_soll->k);
   end if;
-  raise notice 'OK  M1 Rollenmatrix: 10 Akteure x 8 Schutzaktionen wie erwartet (Kontosperre auf allen Wegen, seit 20261109; Lizenz nur bei Finanz- und Rechnungsaktionen)';
+  raise notice 'OK  M1 Rollenmatrix: 10 Akteure x 8 Schutzaktionen wie erwartet (Kontosperre auf allen Wegen, seit 20261109; Lizenzquelle ist der Betrieb, E3a)';
 end $$;
 
 do $$

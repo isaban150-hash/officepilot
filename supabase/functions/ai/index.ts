@@ -30,7 +30,7 @@ import {
   AI_MODEL_BY_OPERATION,
   AI_UPSTREAM_TIMEOUT_MS,
   buildGeminiEndpoint,
-  evaluateProfileAccess,
+  evaluateWorkspaceAccessDenial,
   extractGeminiText,
   mapUpstreamStatus,
   resolveRateLimitConfig,
@@ -91,7 +91,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  if (!supabaseUrl || !serviceRoleKey || !geminiApiKey) {
+  if (!supabaseUrl || !serviceRoleKey) {
     return fail('server_misconfigured');
   }
 
@@ -148,52 +148,40 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   /*
-   * Der Fehler der Abfrage wird ausgewertet, nicht verworfen.
+   * EINRICHTUNG-01 (AP1, E3) — die zentrale Zugriffsregel des Servers in einem Aufruf: Sperre, Freigabe, aktive
+   * Mitgliedschaft im **angegebenen** Workspace und die Betriebslizenz — die Lizenz des Inhabers, nicht die eigene.
+   * Eine fremde Kennung im Rumpf funktioniert nicht. Für das Verstehen von Dokumenten genügt aktive Mitgliedschaft
+   * jeder Rolle; Schreibrechte zu verlangen wäre hier zu streng.
    *
-   * Ein Datenbank- oder Berechtigungsfehler sieht sonst aus wie ein fehlendes
-   * Profil — und ein freigeschalteter Nutzer bekäme „Ihr Zugang ist derzeit
-   * nicht freigeschaltet". Genau das ist im Realtest passiert. Fail closed
-   * bleibt es, aber mit dem technischen Code statt einer erfundenen Sperre.
+   * Der Fehler der Abfrage wird ausgewertet, nicht verworfen: Ein Datenbank- oder Berechtigungsfehler ist keine
+   * Sperre (Realtest SECURITY-GEMINI-KEY-01B-R3). Fail closed, aber mit dem technischen Code.
    */
-  const { data: profile, error: profileError } = await admin
-    .from('profiles')
-    .select('status, license_status, license_expires_at')
-    .eq('id', userId)
-    .maybeSingle();
+  const { data: denial, error: accessError } = await admin.rpc('workspace_user_access_denial', {
+    p_workspace_id: workspaceId,
+    p_user_id: userId,
+    p_action: 'member',
+  });
 
-  if (profileError) {
+  if (accessError) {
     // Keine Supabase-Meldung und keine SQL-Details nach aussen.
-    logUsage({ operation, userId, outcome: 'profile_read_failed' });
+    logUsage({ operation, userId, outcome: 'access_check_failed' });
     return fail('server_misconfigured');
   }
 
-  const access = evaluateProfileAccess(profile, new Date());
+  const access = evaluateWorkspaceAccessDenial(denial);
   if (!access.allowed) {
     logUsage({ operation, userId, outcome: access.error });
     return fail(access.error);
   }
 
   /*
-   * Mitgliedschaft im **angegebenen** Workspace. Eine fremde Kennung im Rumpf
-   * darf nicht funktionieren. Für das Verstehen von Dokumenten genügt aktive
-   * Mitgliedschaft — Schreibrechte zu verlangen wäre hier zu streng.
+   * EINRICHTUNG-01 (Z-02.2, Z-04.8) — der Schlüssel wird erst nach Anmeldung und Zugriffsregel geprüft: Wer nicht
+   * angemeldet ist oder abgewiesen wird, erfährt nichts über die Konfiguration. Vor der Zählung, damit ein Aufruf,
+   * der nicht ausgeführt werden kann, das Limit nicht verbraucht.
    */
-  const { data: membership, error: membershipError } = await admin
-    .from('workspace_members')
-    .select('status')
-    .eq('workspace_id', workspaceId)
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (membershipError) {
-    // Dieselbe Trennung wie beim Profil: technischer Fehler, keine Sperre.
-    logUsage({ operation, userId, outcome: 'membership_read_failed' });
+  if (!geminiApiKey) {
+    logUsage({ operation, userId, outcome: 'not_configured' });
     return fail('server_misconfigured');
-  }
-
-  if (!membership || membership.status !== 'active') {
-    logUsage({ operation, userId, outcome: 'workspace_forbidden' });
-    return fail('workspace_forbidden');
   }
 
   /*

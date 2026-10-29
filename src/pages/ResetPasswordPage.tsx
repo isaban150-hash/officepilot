@@ -175,6 +175,17 @@ export function ResetPasswordPage() {
             ? translate('auth.resetPassword.submitting')
             : translate('auth.resetPassword.submit')}
         </Button>
+        {/* EINRICHTUNG-01 (AP2, A-11.4) — Abbrechen: abgemeldet, Merker gelöscht, Passwort unverändert. */}
+        <Button
+          type="button"
+          variant="ghost"
+          fullWidth
+          disabled={loading}
+          onClick={() => void logout()}
+          data-testid="reset-password-cancel"
+        >
+          {translate('auth.logout.cancel')}
+        </Button>
       </form>
     </AuthLayout>
   );

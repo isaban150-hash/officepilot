@@ -23,6 +23,12 @@ values ('00000000-0000-0000-0000-0000000007b1', '00000000-0000-0000-0000-0000000
        ('00000000-0000-0000-0000-0000000007b2', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
         'kollege-07b@example.invalid', 'x', now(), now(), now(), '{}'::jsonb, '{}'::jsonb);
 
+-- EINRICHTUNG-01 (AP1, Vertrag 1.1 Stufen 3 und 6): Der Server verlangt jetzt fuer jeden
+-- Weg ein freigegebenes Konto und fuer Schreibwege die wirksame Betriebslizenz. handle_new_user legt Profile mit
+-- pending/inactive an; die synthetischen Testnutzer erhalten den Zustand eines produktiv arbeitenden Betriebs.
+update public.profiles set status = 'approved', license_status = 'active', license_expires_at = null
+where id in ('00000000-0000-0000-0000-0000000007b1'::uuid, '00000000-0000-0000-0000-0000000007b2'::uuid);
+
 insert into public.workspaces (id, name, owner_user_id)
 values ('00000000-0000-0000-0000-0000000c07b1', 'Versand-07B', '00000000-0000-0000-0000-0000000007b1');
 insert into public.workspace_members (workspace_id, user_id, role, status)
@@ -357,6 +363,12 @@ select pg_temp.nein('P3 sending ohne sending_started_at',
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
 values ('00000000-0000-0000-0000-0000000007bf', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
         'fremd-07b@example.invalid', 'x', now(), now(), now(), '{}'::jsonb, '{}'::jsonb);
+
+-- EINRICHTUNG-01 (AP1, Vertrag 1.1 Stufen 3 und 6): Der Server verlangt jetzt fuer jeden
+-- Weg ein freigegebenes Konto und fuer Schreibwege die wirksame Betriebslizenz. handle_new_user legt Profile mit
+-- pending/inactive an; die synthetischen Testnutzer erhalten den Zustand eines produktiv arbeitenden Betriebs.
+update public.profiles set status = 'approved', license_status = 'active', license_expires_at = null
+where id in ('00000000-0000-0000-0000-0000000007bf'::uuid);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000007bf","role":"authenticated"}', true);
 select pg_temp.nein('P4 fremder Nutzer', $q$select pg_temp.lege_an('cd-07b-p4')$q$, 'Kein Zugriff auf Workspace');
 

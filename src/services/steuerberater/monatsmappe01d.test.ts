@@ -261,7 +261,7 @@ describe('01D — Paket', () => {
     const ok = await buildMonatsmappeExport({ monthKey: '2026-09', userId: 'u', collect: () => input({ invoices: [{ invoice: invoice(), vorgangId: null }] }), loaders: loaders(), skipGate: true });
     expect(ok.outcome).toBe('exported');
     if (ok.outcome !== 'exported') return;
-    expect(ok.summary).toMatchObject({ monthKey: '2026-09', filename: 'OfficePilot_Steuerberater_2026-09.zip', ausgangsrechnungen: 1, eingangsbelege: 0, stornos: 0, zahlungen: 0, dokumente: 1, fehlendeDokumente: [], stornosOhneDatum: [] });
+    expect(ok.summary).toMatchObject({ monthKey: '2026-09', filename: 'OfficeTakt_Steuerberater_2026-09.zip', ausgangsrechnungen: 1, eingangsbelege: 0, stornos: 0, zahlungen: 0, dokumente: 1, fehlendeDokumente: [], stornosOhneDatum: [] });
   });
 });
 

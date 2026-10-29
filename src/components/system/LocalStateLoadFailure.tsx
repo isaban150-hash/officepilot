@@ -24,6 +24,7 @@ export function LocalStateLoadFailure() {
 
   return (
     <AuthLayout
+      language={lang}
       title={t('localState.loadFailed.title', lang)}
       subtitle={t('localState.loadFailed.hint', lang)}
       testId="local-state-load-failure"

@@ -13,6 +13,7 @@
  * das Ziel nicht.
  */
 import { useCallback, useMemo, useState } from 'react';
+import { resolveCloudConfirmedActionAccess } from '../services/workspace/workspaceRoleService';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -61,7 +62,8 @@ export function MitarbeiterzahlungenPage() {
     () => resolveWorkspaceWriteAccess({ userId: user?.id, cloudConfigured }),
     [user?.id, cloudConfigured],
   );
-  const canWrite = access.canWrite === true;
+  // EINRICHTUNG-01 (AP2, Vertrag 1.11) — zusätzlich gesperrt, solange die Rechte nur aus dem Zwischenspeicher stammen.
+  const canWrite = resolveCloudConfirmedActionAccess(access);
   const uploadDeps = useMemo(() => ({ access }), [access]);
 
   const refresh = useCallback(() => setVersion((v) => v + 1), []);

@@ -1,15 +1,18 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/ui/Button';
-import { PageHeader } from '../../components/ui/Card';
-import { ReadOnlyNotice } from '../../components/ui/ReadOnlyNotice';
+import { SimpleConfirmDialog } from '../../components/ui/SimpleConfirmDialog';
+import { SettingsAccessNotice, resolveSettingsNoticeVariant } from '../../components/settings/SettingsAccessNotice';
+import { SettingsPageHeader } from '../../components/settings/SettingsPageHeader';
+import { SettingsSaveBar } from '../../components/settings/SettingsSaveBar';
 import { InvoiceDocumentView } from '../../components/invoice/InvoiceDocumentView';
 import { useApp } from '../../context/AppContext';
-import { useAuth } from '../../context/AuthContext';
+import { useOptionalAuth } from '../../context/AuthContext';
 import { useCompanyLogoObjectUrl } from '../../hooks/useCompanyLogoObjectUrl';
 import { useFormResume } from '../../hooks/useFormResume';
-import { getCompanyProfile } from '../../services/companyProfileService';
+import { useSettingsAccess } from '../../hooks/useSettingsAccess';
 import { isSupabaseConfigured } from '../../lib/supabase';
-import { uploadBrandingAsset } from '../../services/branding/brandingAssetCloudService';
+import { getCompanyProfile } from '../../services/companyProfileService';
+import { uploadBrandingAsset, type BrandingAssetError } from '../../services/branding/brandingAssetCloudService';
 import {
   prepareBrandingLogo,
   type BrandingLogoPrepareError,
@@ -34,11 +37,22 @@ import type { TranslationKey } from '../../i18n';
  * **Speichern** (Upload, Referenz, Profil, Sync). Ein bereits hochgeladenes
  * Asset wird beim Retry wiederverwendet (`pendingLogoRef`, auch über einen
  * Neuaufbau). Historische Assets werden nie gelöscht.
+ *
+ * EINRICHTUNG-01 (AP6; Vertrag 1.20, F-06/F-07, K7):
+ *  - Das gespeicherte Logo zeigt „wird geladen“, „konnte nicht geladen werden“ mit „Erneut versuchen“, „Noch kein Logo“
+ *    oder die Vorschau — ein Ladefehler ist nie „kein Logo“.
+ *  - Der Speichervorgang ist an Konto und Betrieb vom Beginn gebunden. Wechselt eines davon zwischen Upload und
+ *    Referenz, unterbleibt der Patch; die Auswahl wird verworfen (keine Vermischung zweier Betriebe).
+ *  - Wird der Patch abgewiesen (Rechte entzogen, Prüfregel), bleibt die Auswahl; die Wiederholung setzt nur die
+ *    Referenz auf dasselbe, inhaltsadressierte Objekt.
+ *  - „Verwerfen“ verwirft die Auswahl ohne Upload.
  */
 export const DESIGN_SETTINGS_ROUTE = '/einstellungen/design';
 
 const PENDING_LOGO_ASSET_KEY = 'pendingLogoAssetId';
 const PENDING_LOGO_MIME_KEY = 'pendingLogoMimeType';
+/** EINRICHTUNG-01 (AP6; K7) — der Betrieb, in dessen Pfad das ausstehende Objekt liegt. */
+const PENDING_LOGO_WORKSPACE_KEY = 'pendingLogoWorkspaceId';
 
 /** Innere Breite des Vorschaudokuments — eine A4-ähnliche Seite bei 96 dpi. */
 export const PREVIEW_SHEET_WIDTH_PX = 794;
@@ -56,9 +70,19 @@ const PREPARE_ERROR_KEYS: Record<BrandingLogoPrepareError, TranslationKey> = {
   too_large_after_processing: 'settings.design.logo.error.tooLargeAfterProcessing',
 };
 
+function uploadErrorKey(error: BrandingAssetError): TranslationKey {
+  return error === 'forbidden' ? 'settings.design.logo.error.uploadForbidden' : 'companyProfile.logoError.uploadFailed';
+}
+
 interface DesignResumeState {
   /** Entfernen ist eine Entscheidung, die den Neuaufbau überleben darf. */
   pendingLogoRemoval: boolean;
+}
+
+/** Ein hochgeladenes, noch nicht referenziertes Objekt — mit dem Betrieb, in dessen Pfad es liegt. */
+interface PendingLogoUpload {
+  reference: LogoAssetReference;
+  workspaceId: string;
 }
 
 /** Skaliert die A4-breite Vorschau proportional in die verfügbare Breite. */
@@ -90,23 +114,28 @@ function useScaledPreview(): { hostRef: React.RefObject<HTMLDivElement | null>; 
   return { hostRef, scale, height };
 }
 
+function currentWorkspaceId(): string | null {
+  return getSyncClient().serverWorkspaceId ?? null;
+}
+
 export function DesignSettingsPage() {
   const { companyProfile, setup, updateCompanyProfile, translate, showToast } = useApp();
-  const { user } = useAuth();
   const workspaceId = getSyncClient().serverWorkspaceId;
+  const userId = useOptionalAuth()?.user?.id ?? null;
+  /** Das Konto des letzten Renders — für den Abgleich nach dem Upload (K7). */
+  const liveUserIdRef = useRef<string | null>(userId);
+  liveUserIdRef.current = userId;
 
-  const access = useMemo(
-    () => resolveWorkspaceWriteAccess({ userId: user?.id, cloudConfigured: isSupabaseConfigured() }),
-    [user?.id],
-  );
-  const editable = access.canWrite;
+  // EINRICHTUNG-01 (AP5; 1.16) — reaktiv: Rolle, Lizenz und Löschantrag wirken ohne Neuladen.
+  const { access, canEdit: editable } = useSettingsAccess();
+  const noticeVariant = resolveSettingsNoticeVariant(access);
 
   const resume = useFormResume<DesignResumeState>({
     namespace: 'designSettings',
     fields: ['pendingLogoRemoval'],
     saved: { pendingLogoRemoval: false },
     workspaceType: 'other',
-    extraKeys: [PENDING_LOGO_ASSET_KEY, PENDING_LOGO_MIME_KEY],
+    extraKeys: [PENDING_LOGO_ASSET_KEY, PENDING_LOGO_MIME_KEY, PENDING_LOGO_WORKSPACE_KEY],
   });
 
   const [pendingRemoval, setPendingRemoval] = useState<boolean>(
@@ -114,23 +143,30 @@ export function DesignSettingsPage() {
   );
   const [prepared, setPrepared] = useState<PreparedBrandingLogo | null>(null);
   const [preparedUrl, setPreparedUrl] = useState<string | null>(null);
-  const [pendingLogoRef, setPendingLogoRef] = useState<LogoAssetReference | null>(() => {
+  const [pendingUpload, setPendingUpload] = useState<PendingLogoUpload | null>(() => {
     const assetId = resume.restoredExtras[PENDING_LOGO_ASSET_KEY];
     const mimeType = resume.restoredExtras[PENDING_LOGO_MIME_KEY];
+    const uploadWorkspace = resume.restoredExtras[PENDING_LOGO_WORKSPACE_KEY];
     if (typeof assetId !== 'string' || !assetId.trim()) return null;
     if (typeof mimeType !== 'string' || !isLogoMimeType(mimeType)) return null;
-    return { assetId, mimeType };
+    // K7 — nur ein Objekt aus dem Pfad des aktuellen Betriebs wird wieder aufgenommen.
+    if (typeof uploadWorkspace !== 'string' || !uploadWorkspace || uploadWorkspace !== currentWorkspaceId()) return null;
+    return { reference: { assetId, mimeType }, workspaceId: uploadWorkspace };
   });
+  const pendingLogoRef = pendingUpload?.reference ?? null;
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
   const [processing, setProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
+  // EINRICHTUNG-01 (AP9; 1.30) — Speicherfehler als bleibender Hinweis an der Speicherleiste, nicht als Toast.
+  const [saveError, setSaveError] = useState<TranslationKey | null>(null);
   const inFlight = useRef(false);
 
   resume.observe(
     { pendingLogoRemoval: pendingRemoval },
     {
-      [PENDING_LOGO_ASSET_KEY]: pendingLogoRef?.assetId ?? null,
-      [PENDING_LOGO_MIME_KEY]: pendingLogoRef?.mimeType ?? null,
+      [PENDING_LOGO_ASSET_KEY]: pendingUpload?.reference.assetId ?? null,
+      [PENDING_LOGO_MIME_KEY]: pendingUpload?.reference.mimeType ?? null,
+      [PENDING_LOGO_WORKSPACE_KEY]: pendingUpload?.workspaceId ?? null,
     },
   );
 
@@ -192,7 +228,7 @@ export function DesignSettingsPage() {
       }
       // Eine neue Auswahl ersetzt einen früheren Pending-Upload und hebt eine Entfernung auf.
       setPrepared(result.logo);
-      setPendingLogoRef(null);
+      setPendingUpload(null);
       setPendingRemoval(false);
     } finally {
       setProcessing(false);
@@ -203,7 +239,7 @@ export function DesignSettingsPage() {
     if (!editable) return;
     setErrorKey(null);
     setPrepared(null);
-    setPendingLogoRef(null);
+    setPendingUpload(null);
     setPendingRemoval(true);
   };
 
@@ -211,44 +247,87 @@ export function DesignSettingsPage() {
     setPendingRemoval(false);
   };
 
+  // EINRICHTUNG-01 (AP8; 1.28) — „Logo entfernen“ erst nach Rückfrage; wirksam wird es weiterhin mit „Speichern“.
+  const [entfernenFragen, setEntfernenFragen] = useState(false);
+
+  /** F-07.2 — „Verwerfen“: Auswahl und Entfernung zurücknehmen, ohne Upload. */
+  const handleDiscard = () => {
+    if (saving) return;
+    setErrorKey(null);
+    setPrepared(null);
+    setPendingUpload(null);
+    setPendingRemoval(false);
+    // EINRICHTUNG-01 (AP9; 1.30) — mit dem Verwerfen gilt auch der Hinweis des letzten Speicherversuchs nicht mehr.
+    setSaveError(null);
+    resume.clearResume();
+  };
+
   const handleSave = async () => {
     if (!editable || !dirty || inFlight.current) return;
     inFlight.current = true;
     setSaving(true);
+    setSaveError(null);
     setErrorKey(null);
+    // K7 — Konto und Betrieb vom Beginn dieses Speichervorgangs.
+    const bound = { userId: liveUserIdRef.current, workspaceId: currentWorkspaceId() };
+    const bindingChanged = () => liveUserIdRef.current !== bound.userId || currentWorkspaceId() !== bound.workspaceId;
     try {
-      // FINANZ-CORE-01A (EIN-03) — das Branding im Augenblick des Speicherns, nicht vom Seitenstart.
-      let branding = getCompanyProfile().branding;
       // Entfernen nimmt auch das Alt-Bild mit — sonst erschiene es überraschend wieder (D-023).
       const removal = pendingRemoval && !prepared && !pendingLogoRef;
-      let newAssetSaved = false;
+      let branding: ReturnType<typeof getCompanyProfile>['branding'];
 
       if (removal) {
-        branding = withoutLogoReference(branding) ?? {};
+        // FINANZ-CORE-01A (EIN-03) — das Branding im Augenblick des Speicherns, nicht vom Seitenstart.
+        branding = withoutLogoReference(getCompanyProfile().branding) ?? {};
       } else {
-        let reference = pendingLogoRef;
+        let reference: LogoAssetReference | null = null;
+        if (pendingUpload) {
+          if (pendingUpload.workspaceId === bound.workspaceId) {
+            reference = pendingUpload.reference;
+          } else {
+            // Das ausstehende Objekt liegt im Pfad eines anderen Betriebs — nie hier referenzieren.
+            setPendingUpload(null);
+            if (!prepared) {
+              setErrorKey('settings.design.logo.error.bindingChanged');
+              return;
+            }
+          }
+        }
         if (!reference && prepared) {
-          if (!workspaceId) {
+          if (!bound.workspaceId) {
             setErrorKey('companyProfile.logoError.noWorkspace');
             return;
           }
           const uploaded = await uploadBrandingAsset({
-            workspaceId,
+            workspaceId: bound.workspaceId,
             blob: prepared.blob,
             mimeType: prepared.mimeType,
           });
           if (!uploaded.ok) {
-            setErrorKey('companyProfile.logoError.uploadFailed');
+            setErrorKey(uploadErrorKey(uploaded.error));
             return;
           }
           reference = uploaded.reference;
-          // Merken: ein Fehlschlag beim Speichern darf keinen zweiten Upload auslösen.
-          setPendingLogoRef(uploaded.reference);
-          setPrepared(null);
+          // Merken (mit dem Betrieb): Eine Wiederholung setzt nur noch die Referenz auf dasselbe Objekt.
+          setPendingUpload({ reference: uploaded.reference, workspaceId: bound.workspaceId });
         }
         if (!reference) return;
-        branding = withLogoReference(branding, reference);
-        newAssetSaved = true;
+
+        // K7 — Konto oder Betrieb gewechselt: kein Patch, keine Referenz im anderen Betrieb; die Auswahl gehört nicht dorthin.
+        if (bindingChanged()) {
+          setPrepared(null);
+          setPendingUpload(null);
+          setPendingRemoval(false);
+          setErrorKey('settings.design.logo.error.bindingChanged');
+          return;
+        }
+        // K7 — Rechte während des Uploads entzogen (Rolle, Lizenz, Löschantrag): kein Patch, die Auswahl bleibt.
+        const accessNow = resolveWorkspaceWriteAccess({ userId: bound.userId ?? undefined, cloudConfigured: isSupabaseConfigured() });
+        if (!accessNow.canWrite) {
+          setErrorKey('settings.design.logo.error.notApplied');
+          return;
+        }
+        branding = withLogoReference(getCompanyProfile().branding, reference);
       }
 
       /*
@@ -257,17 +336,18 @@ export function DesignSettingsPage() {
        * aus dem Profil genommen, damit er nicht in neue Rechnungs-Snapshots
        * weitergeschrieben wird. Bestehende Snapshots tragen ihre eigene Kopie.
        */
-      const result = updateCompanyProfile(removal || newAssetSaved ? { branding, logoDataUrl: '' } : { branding });
+      const result = updateCompanyProfile({ branding, logoDataUrl: '' });
       if (!result.success) {
+        // Abgewiesen: Fehlertext, die Auswahl bleibt für einen weiteren Versuch (F-07.3).
         setErrorKey(result.errorKey as TranslationKey);
         return;
       }
       setPrepared(null);
-      setPendingLogoRef(null);
+      setPendingUpload(null);
       setPendingRemoval(false);
       resume.clearResume();
       if (!getLastPersistSuccess()) {
-        showToast(translate('persist.failed.userAction'));
+        setSaveError('persist.failed.userAction');
         return;
       }
       showToast(translate('settings.design.saved'));
@@ -279,31 +359,48 @@ export function DesignSettingsPage() {
 
   const showPendingLogo = Boolean(prepared && preparedUrl);
   const showSavedLogo = !showPendingLogo && !pendingLogoRef && !pendingRemoval && hasSavedLogo;
+  /* F-06 — Zustand des gespeicherten Logos: lädt, Fehler, vorhanden. */
+  const savedView: 'loading' | 'error' | 'ready' | 'none' = !showSavedLogo
+    ? 'none'
+    : savedLogo.status === 'error'
+      ? 'error'
+      : savedLogo.status === 'ready' && savedLogo.url
+        ? 'ready'
+        : savedLogo.status === 'missing'
+          ? 'none'
+          : 'loading';
+  const notApplied = Boolean(errorKey && pendingLogoRef && prepared);
 
   return (
     <div className="page settings-page settings-subpage" data-testid="settings-design-page">
-      <PageHeader
-        title={translate('settings.design.title')}
-        subtitle={translate('settings.design.page.subtitle')}
-        backLabel={translate('settings.backToHub')}
-        backHref="/einstellungen"
-        backTestId="settings-design-back"
-      />
+      <SettingsPageHeader target="logo" subtitle={translate('settings.design.page.subtitle')} backTestId="settings-design-back" />
 
-      {!editable ? (
-        <ReadOnlyNotice message={translate(access.reason === 'member' ? 'settings.design.readOnly' : 'settings.company.roleUnknown')} testId="settings-design-readonly" />
-      ) : null}
+      {!editable && noticeVariant ? <SettingsAccessNotice variant={noticeVariant} testId="settings-design-readonly" /> : null}
 
       {/* ---------------- Firmenlogo ---------------- */}
       <section className="settings-form__section settings-design__section" data-testid="settings-design-logo">
         <h2 className="settings-form__legend">{translate('settings.design.section.logo')}</h2>
 
         <div className="settings-design__logo-row">
-          <div className="settings-design__logo-frame" data-testid="settings-design-logo-frame">
+          <div className="settings-design__logo-frame" data-testid="settings-design-logo-frame" aria-busy={savedView === 'loading'}>
             {showPendingLogo ? (
               <img src={preparedUrl ?? undefined} alt="" className="settings-design__logo-img" data-testid="settings-design-logo-pending" />
-            ) : showSavedLogo && savedLogo.url ? (
-              <img src={savedLogo.url} alt="" className="settings-design__logo-img" data-testid="settings-design-logo-current" />
+            ) : savedView === 'ready' || (savedView === 'error' && savedLogo.url) ? (
+              <img
+                src={savedLogo.url}
+                alt=""
+                className="settings-design__logo-img"
+                data-testid="settings-design-logo-current"
+                data-source={savedLogo.source}
+              />
+            ) : savedView === 'loading' ? (
+              <span className="settings-design__logo-empty" role="status" data-testid="settings-design-logo-loading">
+                {translate('settings.design.logo.loading')}
+              </span>
+            ) : savedView === 'error' ? (
+              <span className="settings-design__logo-empty" data-testid="settings-design-logo-unavailable">
+                {translate('settings.design.logo.loadError')}
+              </span>
             ) : pendingLogoRef ? (
               <span className="settings-design__logo-empty" data-testid="settings-design-logo-uploaded">
                 {translate('settings.design.logo.pending')}
@@ -328,13 +425,28 @@ export function DesignSettingsPage() {
               <p className="hint-text" data-testid="settings-design-logo-removed-hint">
                 {translate('settings.design.logo.removedPending')}
               </p>
-            ) : showSavedLogo ? (
+            ) : savedView === 'ready' ? (
               <p className="hint-text">{translate('settings.design.logo.current')}</p>
+            ) : null}
+            {savedView === 'error' ? (
+              <div className="form-error" role="alert" data-testid="settings-design-logo-load-error">
+                <p>
+                  {translate(savedLogo.url ? 'settings.design.logo.loadErrorFallback' : 'settings.design.logo.loadError')}
+                </p>
+                <Button type="button" variant="outline" onClick={savedLogo.retry} data-testid="settings-design-logo-retry">
+                  {translate('settings.design.logo.retry')}
+                </Button>
+              </div>
             ) : null}
             <p className="hint-text">{translate('settings.design.logo.hint')}</p>
             {errorKey ? (
-              <p className="form-error" data-testid="settings-design-logo-error">
+              <p className="form-error" role="alert" data-testid="settings-design-logo-error">
                 {translate(errorKey)}
+              </p>
+            ) : null}
+            {notApplied ? (
+              <p className="hint-text" data-testid="settings-design-logo-not-applied">
+                {translate('settings.design.logo.notAppliedHint')}
               </p>
             ) : null}
           </div>
@@ -356,7 +468,7 @@ export function DesignSettingsPage() {
               />
             </label>
             {(hasSavedLogo || showPendingLogo || pendingLogoRef) && !pendingRemoval ? (
-              <Button type="button" variant="outline" onClick={handleRemove} disabled={processing || saving} data-testid="settings-design-logo-remove">
+              <Button type="button" variant="outline" onClick={() => setEntfernenFragen(true)} disabled={processing || saving} data-testid="settings-design-logo-remove">
                 {translate('settings.design.logo.remove')}
               </Button>
             ) : null}
@@ -395,15 +507,33 @@ export function DesignSettingsPage() {
         </div>
       </section>
 
+      <SimpleConfirmDialog
+        open={entfernenFragen}
+        title={translate('confirm.logoRemove.title')}
+        message={translate('confirm.logoRemove.text')}
+        confirmLabel={translate('confirm.logoRemove.action')}
+        cancelLabel={translate('common.cancel')}
+        confirmTestId="settings-design-logo-remove-confirm"
+        cancelTestId="settings-design-logo-remove-cancel"
+        dialogTestId="settings-design-logo-remove-dialog"
+        onConfirm={() => {
+          setEntfernenFragen(false);
+          handleRemove();
+          return true;
+        }}
+        onCancel={() => setEntfernenFragen(false)}
+      />
       {editable ? (
-        <div className="settings-form__actions" data-testid="settings-design-actions">
-          <span className="settings-form__dirty" data-testid="settings-design-dirty">
-            {dirty ? translate('settings.company.unsavedHint') : translate('settings.company.noChanges')}
-          </span>
-          <Button type="button" onClick={() => void handleSave()} disabled={!dirty || saving || processing} loading={saving} data-testid="settings-design-save">
-            {translate('common.save')}
-          </Button>
-        </div>
+        <SettingsSaveBar
+          dirty={dirty}
+          saving={saving}
+          saveDisabled={processing}
+          onDiscard={handleDiscard}
+          onSave={() => void handleSave()}
+          testIdPrefix="settings-design"
+          draftKept
+          error={saveError ? translate(saveError) : null}
+        />
       ) : null}
     </div>
   );

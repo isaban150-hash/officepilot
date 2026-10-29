@@ -18,6 +18,8 @@ export interface ProfileRow {
   accepted_privacy_version: string | null;
   accepted_license_version: string | null;
   legal_accepted_at: string | null;
+  /** EINRICHTUNG-01 (AP3, K-04.3) — Oberflächensprache der Person (`set_own_ui_language`). */
+  ui_language?: string | null;
   created_at: string;
   updated_at: string;
 }

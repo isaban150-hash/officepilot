@@ -12,6 +12,9 @@ interface ImportMetaEnv {
   readonly VITE_ALLOW_DEFAULT_ADMIN?: string;
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
+  /** EINRICHTUNG-01 (AP5; N-06.1) — optionale Build-Kennung für die Versionsseite (kein Geheimnis). */
+  readonly VITE_APP_BUILD_ID?: string;
+  readonly VITE_APP_ENVIRONMENT?: string;
 }
 
 interface ImportMeta {

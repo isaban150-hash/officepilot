@@ -205,8 +205,11 @@ describe('EMAIL-01B4 — Settings „E-Mail-Versand" (seit 01D unter E-Mail & Ko
     await mount(<CommunicationSettingsPage />);
     expect((q('settings-communication-defaultInvoiceEmailSubject') as HTMLInputElement).value).toBe('Ihre Rechnung {invoiceNumber} von {companyName}');
     // Längenschutz in der UI (maxLength) + zentrale Validierung (siehe emailDefaults01b4 M2).
-    expect((q('settings-communication-defaultInvoiceEmailSubject') as HTMLInputElement).maxLength).toBe(255);
-    expect((q('settings-communication-defaultInvoiceEmailBody') as HTMLTextAreaElement).maxLength).toBe(20000);
+    // EINRICHTUNG-01 (AP0, Vertrag 1.10): Die Grenzen 255 bzw. 20000 zählen Unicode-Codepunkte wie der Server.
+    // `maxLength` zählt UTF-16-Einheiten und steht deshalb auf der doppelten Grenze; die Prüfung beim Speichern
+    // setzt die eigentliche Grenze durch (companyProfileSettingsContract.textInputMaxLength).
+    expect((q('settings-communication-defaultInvoiceEmailSubject') as HTMLInputElement).maxLength).toBe(510);
+    expect((q('settings-communication-defaultInvoiceEmailBody') as HTMLTextAreaElement).maxLength).toBe(40000);
     expect(getCompanyProfile().defaultInvoiceEmailSubject).toBe('Ihre Rechnung {invoiceNumber} von {companyName}');
     await act(async () => root.unmount());
     host.remove();

@@ -51,13 +51,23 @@ const sperreAus = {
 language sql stable security definer set search_path = public as $$ select false $$;`,
 };
 
+/*
+ * EINRICHTUNG-01 (AP1) -- zwei Fundstellen verschieben sich, weil weitere Stufen gesperrte Konten zusaetzlich
+ * abweisen; beide Mutationen werden weiterhin erkannt:
+ *   S1   Die Mitgliedschaftshelfer verlangen jetzt die Freigabe; ein gesperrtes Konto ist nicht freigegeben, K1 haelt
+ *        deshalb stand. Sichtbar wird die neutralisierte Sperre an K9a: ensure meldet account_not_approved statt
+ *        des Sperrcodes account_blocked.
+ *   S5a  Die alte ensure-Fassung kann fuer ein gesperrtes Konto keinen Betrieb mehr anlegen: der Schreibschutz weist
+ *        das Anlegen der Einstellungen mit account_blocked ab (K9a haelt). Die fehlende Sperrpruefung zeigt sich an
+ *        K9c, wo der gesperrte Inhaber an seinen Betrieb gebunden wird.
+ */
 const mutationen = [
-  ['S1 Sperrpruefung neutralisiert', sperreAus, 'K1'],
+  ['S1 Sperrpruefung neutralisiert', sperreAus, 'K9a'],
   ['S2a is_active_workspace_member vorher', vorher('is_active_workspace_member'), 'K1'],
   ['S2b workspace_member_role vorher', vorher('workspace_member_role'), 'K1'],
   ['S3 workspace_user_can_write vorher (Edge-Bruecke)', vorher('workspace_user_can_write'), 'K1 workspace_user_can_write'],
   ['S4 assert_is_admin vorher', vorher('assert_is_admin'), 'K8a'],
-  ['S5a ensure_personal_workspace vorher', vorher('ensure_personal_workspace'), 'K9a'],
+  ['S5a ensure_personal_workspace vorher', vorher('ensure_personal_workspace'), 'K9c'],
   ['S5b get_active_workspace vorher', vorher('get_active_workspace'), 'K9b'],
   ['S6 assert_financial_action_allowed vorher', vorher('assert_financial_action_allowed'), 'K5c'],
   ['S7 get_workspace_mailbox_oauth_pending vorher', vorher('get_workspace_mailbox_oauth_pending'), 'K10'],

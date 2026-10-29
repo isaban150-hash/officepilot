@@ -23,6 +23,7 @@ import { resetInvoiceNumberSequence } from '../services/invoiceNumberService';
 import { resetCommunicationHistoryStore } from '../services/communicationHistoryStore';
 import { resetKnowledgeStore } from '../services/knowledgeStore';
 import { loginAsDefaultAdmin } from '../test/authFixtures';
+import { alsInhaber } from '../test/workspaceRoleTestUtils';
 
 type Mount = { container: HTMLDivElement; root: Root };
 
@@ -128,6 +129,7 @@ describe('betaTestMode – routing', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
     if (mounted) {
       act(() => {
         mounted!.root.unmount();
@@ -140,6 +142,12 @@ describe('betaTestMode – routing', () => {
 
   it('ohne Beta-Flag: Setup-Wizard erscheint bei unvollständigem Setup', async () => {
     vi.stubEnv('VITE_BETA_TEST_MODE', '');
+    /*
+     * EINRICHTUNG-01 (AP3, O-05.4) — den Assistenten bedienen im Cloud-Betrieb nur Inhaber und Admins; ohne geladene
+     * Mitgliedschaft sperrt er fail-closed. Diese Tests prüfen den Assistenten selbst und laufen deshalb als Inhaber
+     * (dasselbe Muster wie GO-LIVE-SECURITY-01, `alsInhaber`). Die Sperre selbst prüft einrichtung01OnboardingAp3.
+     */
+    alsInhaber();
     mounted = await renderAppAt('/setup', { ...DEFAULT_SETUP, setupComplete: false });
     expect(mounted.container.querySelector('[data-testid="first-run-wizard"]')).not.toBeNull();
   });

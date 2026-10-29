@@ -13,6 +13,7 @@
  * Drift, Freigabe-UX — kommt aus denselben Diensten.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { resolveCloudConfirmedActionAccess } from '../services/workspace/workspaceRoleService';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CustomerDecisionChoice, type CustomerDecisionMode } from '../components/customer/CustomerDecisionChoice';
 import { CustomerDuplicateDecision } from '../components/customer/CustomerDuplicateDecision';
@@ -177,7 +178,8 @@ export function ManualInvoicePage() {
    * ungeklärte Rolle sperrt nicht — dort entscheidet der Server.
    */
   // SYS-04 — auch eine unbekannte Mitgliedschaft bei eingerichteter Cloud gibt nicht frei (nicht nur das bekannte Mitglied).
-  const approvalRoleDenied = !useWorkspaceWriteAccess().canWrite;
+  // EINRICHTUNG-01 (AP2, Vertrag 1.11) — zusätzlich gesperrt, solange die Rechte nur aus dem Zwischenspeicher stammen.
+  const approvalRoleDenied = !resolveCloudConfirmedActionAccess(useWorkspaceWriteAccess());
   const session = useInvoiceDraftDurabilitySession({
     locator,
     createDraft,

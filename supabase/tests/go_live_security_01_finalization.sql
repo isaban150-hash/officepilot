@@ -473,17 +473,25 @@ begin
     pg_temp.bindung_sql(pg_temp.ws(), 'doc-f-ok2', 'file-f-z-inhaber', 'structured', 'zugferd-en16931', 2), 'Kein Zugriff auf Workspace', null);
   perform pg_temp.zurueck();
 
-  -- Abgelaufene Lizenz des Inhabers: nichts Neues, Aufräumen bleibt.
+  -- Abgelaufene Lizenz des Inhabers: nichts Neues.
   update public.profiles set license_status = 'expired' where id = pg_temp.inhaber();
   perform pg_temp.als(pg_temp.inhaber());
   perform pg_temp.erwarte_abweisung('R4a Inhaber mit abgelaufener Lizenz legt an',
     pg_temp.bindung_sql(pg_temp.ws(), 'doc-f-ok', 'file-f-x-inhaber2', 'structured', null, 1), 'finance_license_expired', 'P0001');
-  v := pg_temp.bindung(pg_temp.ws(), 'doc-f-ok2', 'file-f-z-inhaber', 'structured', 'zugferd-en16931', 2, true, 'extracted');
+  /*
+   * EINRICHTUNG-01 (Katalog V3, Vertrag 1.3 Nur-Lesen) -- bewusst geaenderte Erwartung: Bei nicht wirksamer
+   * Betriebslizenz ist jedes Schreiben im Betrieb abgewiesen, auch das Aufraeumen per Grabstein (bisher erlaubt).
+   * Die Bindung bleibt unveraendert bestehen.
+   */
+  perform pg_temp.erwarte_abweisung('R4b Grabstein bei abgelaufener Betriebslizenz',
+    pg_temp.bindung_sql(pg_temp.ws(), 'doc-f-ok2', 'file-f-z-inhaber', 'structured', 'zugferd-en16931', 2, true, 'extracted'),
+    'license_not_effective', '42501');
   perform pg_temp.zurueck();
-  if not (pg_temp.b('doc-f-ok2', 'structured', 'zugferd-en16931')).deleted then
-    raise exception 'R4b Grabstein trotz abgelaufener Lizenz';
+  if (pg_temp.b('doc-f-ok2', 'structured', 'zugferd-en16931')).deleted then
+    raise exception 'R4b Grabstein trotz abgelaufener Betriebslizenz';
   end if;
-  raise notice 'OK  R1-R4 Rolle zum Schreibzeitpunkt: herabgestuft nein, aufgestiegen ja, entfernt kein Zugang, abgelaufene Lizenz legt nichts an, räumt aber auf';
+  update public.profiles set license_status = 'active' where id = pg_temp.inhaber();
+  raise notice 'OK  R1-R4 Rolle zum Schreibzeitpunkt: herabgestuft nein, aufgestiegen ja, entfernt kein Zugang, abgelaufene Betriebslizenz legt nichts an und raeumt nicht auf (Nur-Lesen)';
 end $$;
 
 /* ------------------------------------------------------------------ */

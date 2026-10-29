@@ -117,10 +117,11 @@ describe('SUPABASE-AUTH-03 profiles', () => {
     expect((await adminExpireLicense(pending.id)).success).toBe(true);
   });
 
-  it('Freischaltung über Fixture aktiviert approved + Lizenz', async () => {
+  it('Freischaltung über Fixture setzt nur approved, wie das RPC (EINRICHTUNG-01, EIN-20); die App öffnet sich ohne eigene Lizenz (E3)', async () => {
     const user = await registerPendingTestUser('fixture-approve@example.com');
     const approved = await approveUser(user.id);
     expect(approved?.status).toBe('approved');
+    expect(approved?.licenseStatus).toBe('inactive');
     expect(isUserAllowedToUseApp(approved!)).toBe(true);
   });
 });

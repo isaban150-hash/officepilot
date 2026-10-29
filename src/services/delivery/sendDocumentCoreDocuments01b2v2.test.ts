@@ -18,6 +18,7 @@ import {
   type DocumentContext,
   type InvoiceContext,
   type LoadedDelivery,
+  type ReplyToResolution,
   type SendDocumentDeps,
 } from '../../../supabase/functions/_shared/sendDocumentCore';
 
@@ -63,13 +64,17 @@ const doc = (overrides: Partial<DocumentContext> = {}): DocumentContext => ({
 });
 const company = (overrides: Partial<CompanyContext> = {}): CompanyContext => ({ companyName: 'Betrieb', legalForm: 'GmbH', email: 'Info@Betrieb.invalid', ...overrides });
 
-function deps(loaded: LoadedDelivery, options: { bytes?: Uint8Array | null } = {}) {
+/** EINRICHTUNG-01 (AP6; E18) — Antwortadresse vom Server (hier die bestätigte Anmelde-E-Mail des Inhabers). */
+const OWNER_REPLY_TO: ReplyToResolution = { ok: true, email: 'inhaber@betrieb.invalid', source: 'owner_login' };
+
+function deps(loaded: LoadedDelivery, options: { bytes?: Uint8Array | null; replyTo?: ReplyToResolution } = {}) {
   const calls = { accepted: [] as unknown[], status: [] as unknown[], sent: [] as unknown[] };
   const stub = createStubEmailProvider();
   const d: SendDocumentDeps = {
     senderEmail: SENDER,
     userCanWrite: vi.fn(async () => true),
     loadDelivery: vi.fn(async (ws, id) => (ws === loaded.delivery.workspace_id && id === loaded.delivery.client_delivery_id ? loaded : null)),
+    resolveReplyTo: vi.fn(async () => options.replyTo ?? OWNER_REPLY_TO),
     downloadAttachment: vi.fn(async () => (options.bytes === undefined ? PDF : options.bytes)),
     sha256Hex,
     provider: { provider: 'stub', async sendTransactionalEmail(input) { calls.sent.push(input); return stub.sendTransactionalEmail(input); } },
@@ -91,7 +96,7 @@ function deps(loaded: LoadedDelivery, options: { bytes?: Uint8Array | null } = {
 const run = (d: SendDocumentDeps, id = 'cd-doc-1') => runSendDocument({ userId: 'u-1', workspaceId: WS, clientDeliveryId: id }, d);
 
 describe('V1-B2 — Send-Kern normale Dokumente', () => {
-  it('D1: other/letter/offer → provider_accepted; From/Reply-To aus dem Firmenprofil; keine Rechnungskopplung', async () => {
+  it('D1: other/letter/offer → provider_accepted; From aus dem Firmenprofil, Reply-To vom Server (E18); keine Rechnungskopplung', async () => {
     for (const kind of ['other', 'letter', 'offer'] as const) {
       const row = await documentDelivery(kind);
       const { d, calls } = deps({ delivery: row, invoice: null, document: doc(), company: company() });
@@ -99,7 +104,7 @@ describe('V1-B2 — Send-Kern normale Dokumente', () => {
       expect(outcome, kind).toMatchObject({ ok: true, action: 'sent', coupling: 'none', delivery: { status: 'provider_accepted' } });
       const sent = calls.sent[0] as { from: { email: string; name: string }; replyTo: { email: string }; attachment: { filename: string } };
       expect(sent.from).toEqual({ email: SENDER, name: 'Betrieb GmbH' });
-      expect(sent.replyTo.email).toBe('info@betrieb.invalid');
+      expect(sent.replyTo.email).toBe('inhaber@betrieb.invalid');
       expect(sent.attachment.filename).toBe('Dokument.pdf');
       expect(calls.status).toHaveLength(0);
     }
@@ -127,13 +132,15 @@ describe('V1-B2 — Send-Kern normale Dokumente', () => {
     expect(calls.sent).toHaveLength(0);
   });
 
-  it('D4: Firmenprofil ohne E-Mail oder Name → fail-closed, keine erfundene Adresse', async () => {
-    expect(resolveCompanySenderIdentity(null)).toEqual({ ok: false, code: 'sender_company_missing' });
-    expect(resolveCompanySenderIdentity({ companyName: '', email: 'a@b.de' })).toEqual({ ok: false, code: 'sender_company_missing' });
-    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', email: '' })).toEqual({ ok: false, code: 'sender_reply_to_missing' });
+  it('D4: Firmenprofil ohne Name → fail-closed; ohne bestätigte Antwortadresse (Server) → reply_to_unavailable, keine erfundene Adresse', async () => {
+    expect(resolveCompanySenderIdentity(null, 'inhaber@betrieb.invalid')).toEqual({ ok: false, code: 'sender_company_missing' });
+    expect(resolveCompanySenderIdentity({ companyName: '', email: 'a@b.de' }, 'inhaber@betrieb.invalid')).toEqual({ ok: false, code: 'sender_company_missing' });
+    // EINRICHTUNG-01 (AP6; E18) — die Firmen-E-Mail ist keine Antwortadresse mehr; ohne sie bleibt der Versand möglich.
+    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', email: '' }, 'inhaber@betrieb.invalid')).toEqual({ ok: true, fromName: 'Betrieb', replyTo: 'inhaber@betrieb.invalid' });
+    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', email: 'info@betrieb.invalid' }, '')).toEqual({ ok: false, code: 'reply_to_unavailable' });
     const row = await documentDelivery();
-    const { d, calls } = deps({ delivery: row, invoice: null, document: doc(), company: company({ email: '' }) });
-    expect(await run(d)).toMatchObject({ ok: true, action: 'failed', delivery: { status: 'failed', errorCode: 'sender_reply_to_missing' } });
+    const { d, calls } = deps({ delivery: row, invoice: null, document: doc(), company: company() }, { replyTo: { ok: false, code: 'reply_to_unavailable' } });
+    expect(await run(d)).toMatchObject({ ok: true, action: 'failed', delivery: { status: 'failed', errorCode: 'reply_to_unavailable' } });
     expect(calls.sent).toHaveLength(0);
   });
 
@@ -145,6 +152,7 @@ describe('V1-B2 — Send-Kern normale Dokumente', () => {
     expect(await run(d, 'cd-inv')).toMatchObject({ ok: true, action: 'sent', coupling: 'linked' });
     const sent = calls.sent[0] as { from: { name: string }; replyTo: { email: string } };
     expect(sent.from.name).toBe('Alt e.K.');
-    expect(sent.replyTo.email).toBe('alt@betrieb.invalid');
+    // EINRICHTUNG-01 (AP6; E18) — Name aus dem Snapshot; die Antwortadresse bestimmt der Server, auch für Rechnungen.
+    expect(sent.replyTo.email).toBe('inhaber@betrieb.invalid');
   });
 });

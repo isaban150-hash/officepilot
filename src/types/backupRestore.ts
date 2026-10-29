@@ -28,9 +28,12 @@ export type BackupRestoreFailureReason =
   | 'commit_failed'
   | 'verify_failed'
   | 'rollback_failed'
+  /** EINRICHTUNG-01 (S-10.3, E9) — im Cloud-Betrieb keine lokale Wiederherstellung. */
+  | 'cloud_workspace'
   | 'failed';
 
 export type BackupRestoreErrorKey =
+  | 'backup.restore.error.cloudWorkspace'
   | 'backup.restore.error.notValidated'
   | 'backup.restore.error.notConfirmed'
   | 'backup.restore.error.safety'

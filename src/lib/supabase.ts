@@ -46,6 +46,26 @@ export function getSupabaseClient(): SupabaseClient | null {
   return client;
 }
 
+/**
+ * EINRICHTUNG-01 (AP3, K-03.3) — ein Client nur zum Prüfen von Zugangsdaten (etwa des aktuellen Passworts vor einem
+ * Wechsel): ohne gespeicherte Sitzung, ohne Token-Erneuerung, mit eigenem Speicherschlüssel und damit ohne Abgleich mit
+ * anderen Tabs. Die Anmeldung dieses Geräts bleibt unberührt — kein Sitzungswechsel, kein Ereignis, kein Bootstrap.
+ * Jeder Aufruf erzeugt einen frischen Client; der Aufrufer beendet dessen Sitzung nach der Prüfung beim Server.
+ */
+export function createIsolatedAuthClient(): SupabaseClient | null {
+  const url = getSupabaseUrl();
+  const anonKey = getSupabaseAnonKey();
+  if (!url || !anonKey) return null;
+  return createClient(url, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: 'officetakt-credential-check',
+    },
+  });
+}
+
 /** Nur für Tests: Client-Cache zurücksetzen. */
 export function resetSupabaseClientCache(): void {
   client = undefined;

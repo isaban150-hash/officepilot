@@ -113,6 +113,39 @@ export function mockRpc(name: string, args: Record<string, unknown>): unknown {
   if (extra) return extra(args);
 
   switch (name) {
+    /* EINRICHTUNG-01 (AP3, K-04) — Sprache am eigenen Profil. */
+    case 'set_own_ui_language': {
+      if (!currentUserId) throw new Error('Nicht angemeldet');
+      const sprache = String(args.p_language ?? '');
+      if (!['de', 'tr', 'bg', 'ro', 'ru'].includes(sprache)) throw new Error('ui_language_invalid: Diese Sprache gibt es nicht');
+      updateProfile(currentUserId, { ui_language: sprache });
+      return sprache;
+    }
+    /* EINRICHTUNG-01 (AP3, K-05) — ohne eigenen Handler keine Mitgliedschaften. */
+    case 'list_own_memberships': {
+      if (!currentUserId) throw new Error('Nicht angemeldet');
+      return [];
+    }
+    /* EINRICHTUNG-01 (AP2, EIN-19) — wie die Serverfunktion: eigenes Konto, geltende Fassung, Serverzeit. */
+    case 'accept_current_legal_terms': {
+      if (!currentUserId) throw new Error('Nicht angemeldet');
+      if (args.p_user_id !== currentUserId) throw new Error('consent_account_mismatch: Zustimmung gehört zu einem anderen Konto');
+      const own = profilesById.get(currentUserId);
+      if (!own) throw new Error('Kein Profil');
+      if (own.status === 'blocked') throw new Error('account_blocked: Konto ist gesperrt');
+      const updated = updateProfile(currentUserId, {
+        accepted_terms_version: String(args.p_terms_version ?? ''),
+        accepted_privacy_version: String(args.p_privacy_version ?? ''),
+        accepted_license_version: String(args.p_license_version ?? ''),
+        legal_accepted_at: nowIso(),
+      });
+      return {
+        accepted_terms_version: updated?.accepted_terms_version,
+        accepted_privacy_version: updated?.accepted_privacy_version,
+        accepted_license_version: updated?.accepted_license_version,
+        legal_accepted_at: updated?.legal_accepted_at,
+      };
+    }
     case 'update_own_profile': {
       if (!currentUserId) throw new Error('Nicht angemeldet');
       return updateProfile(currentUserId, {
@@ -164,12 +197,21 @@ export function mockRpc(name: string, args: Record<string, unknown>): unknown {
   }
 }
 
-export function mockApproveProfile(userId: string, daysValid = 90): ProfileRow | null {
+/**
+ * EINRICHTUNG-01 (EIN-20) — „Freischalten“ setzt wie `admin_approve_user` nur den Status. Bisher vergab das Mock
+ * zusätzlich eine Lizenz und bestätigte so ein Verhalten, das es in Produktion nicht gibt. Eine Lizenz erteilt
+ * `mockGrantProfileLicense` (wie `admin_activate_license`).
+ */
+export function mockApproveProfile(userId: string): ProfileRow | null {
+  if (!profilesById.has(userId)) return null;
+  return updateProfile(userId, { status: 'approved' });
+}
+
+export function mockGrantProfileLicense(userId: string, daysValid = 90): ProfileRow | null {
   if (!profilesById.has(userId)) return null;
   const expires = new Date();
   expires.setDate(expires.getDate() + daysValid);
   return updateProfile(userId, {
-    status: 'approved',
     license_status: 'active',
     license_expires_at: expires.toISOString(),
   });
@@ -220,4 +262,16 @@ export function mockUpdateProfileRole(userId: string, role: ProfileRow['role']):
 export function mockUpdateProfileStatus(userId: string, status: ProfileRow['status']): ProfileRow | null {
   if (!profilesById.has(userId)) return null;
   return updateProfile(userId, { status });
+}
+
+/** EINRICHTUNG-01 (AP3, K-02.2) — wie der Server-Trigger: profiles.email folgt dem bestätigten Wechsel. */
+export function mockUpdateProfileEmail(userId: string, email: string): ProfileRow | null {
+  if (!profilesById.has(userId)) return null;
+  return updateProfile(userId, { email });
+}
+
+/** EINRICHTUNG-01 (AP2) — Profilfelder für einen Testfall setzen (etwa eine veraltete Zustimmung). */
+export function patchMockProfile(userId: string, patch: Partial<ProfileRow>): ProfileRow | null {
+  if (!profilesById.has(userId)) return null;
+  return updateProfile(userId, patch);
 }

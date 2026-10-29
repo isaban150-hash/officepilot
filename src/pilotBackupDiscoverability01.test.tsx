@@ -9,7 +9,8 @@ import { BackupExportPanel } from './components/settings/BackupExportPanel';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider } from './context/AuthContext';
 import { DEFAULT_SETUP } from './data/mockData';
-import { OperatingSettingsPage } from './pages/settings/OperatingSettingsPage';
+import { alsInhaber } from './test/workspaceRoleTestUtils';
+import { BackupSettingsPage } from './pages/settings/BackupSettingsPage';
 import { resolveFirmendatenLegacyTarget } from './pages/settings/FirmendatenLegacyRoute';
 import { MehrPage } from './pages/MehrPage';
 import {
@@ -40,8 +41,8 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
 
   it('backup section anchor id is stable and unique', () => {
     expect(BACKUP_SECTION_ID).toBe('datensicherung');
-    // SETTINGS-01B5 — kanonisch ist die Betriebsseite; die alte URL bleibt nur redirectfähig.
-    expect(SETTINGS_BACKUP_HREF).toBe('/einstellungen/betrieb#datensicherung');
+    // EINRICHTUNG-01 (AP5; 1.15) — kanonisch ist die eigene Seite „Daten › Sicherung“; die alte URL bleibt redirectfähig.
+    expect(SETTINGS_BACKUP_HREF).toBe('/einstellungen/daten/sicherung');
     // Die Legacy-URL bleibt redirectfähig — ohne eigene Konstante.
     expect(resolveFirmendatenLegacyTarget('#datensicherung')).toBe(SETTINGS_BACKUP_HREF);
   });
@@ -65,7 +66,8 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
     const html = container.innerHTML;
     /* UIUX-01C — Einstellungen nur über Zahnrad/Benutzermenü; Mehr verlinkt Synchronisation, nicht die Datensicherung. */
     expect(html).not.toContain('href="/einstellungen"');
-    expect(html).toContain('href="/synchronisation"');
+    // EINRICHTUNG-01 (AP5; 1.15) — die Synchronisation steht unter „Einstellungen › Hilfe und Rechtliches“, nicht in „Mehr“.
+    expect(html).not.toContain('href="/synchronisation"');
     expect(html).not.toContain('/firmendaten');
     expect(container.querySelector('[data-testid="language-switcher"]')).toBeNull();
 
@@ -76,6 +78,8 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
   });
 
   it('BackupExportPanel exposes stable backup section anchor', () => {
+    // EINRICHTUNG-01 (E9) — den Sicherungsknopf sehen nur Inhaber und Admins (bzw. der lokale Betrieb).
+    alsInhaber();
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -130,9 +134,12 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
     container.remove();
   });
 
-  it('OperatingSettingsPage with backup hash scrolls and focuses backup section', async () => {
-    const scrollIntoView = vi.fn();
-    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+  /*
+   * EINRICHTUNG-01 (AP5; 1.15) — die Datensicherung ist eine eigene Seite: Der Link aus dem Speicherfehler-Hinweis landet
+   * direkt bei ihr, ein Sprung innerhalb der Seite entfällt. Der Abschnitt behält seine Kennung für Altverweise.
+   */
+  it('BackupSettingsPage: der Tiefenlink öffnet die Sicherungsseite mit dem Abschnitt', async () => {
+    alsInhaber();
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -144,7 +151,7 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
           <AuthProvider>
             <AppProvider initialSetup={completeSetup}>
               <Routes>
-                <Route path="/einstellungen/betrieb" element={<OperatingSettingsPage />} />
+                <Route path={SETTINGS_BACKUP_HREF} element={<BackupSettingsPage />} />
               </Routes>
             </AppProvider>
           </AuthProvider>
@@ -152,19 +159,10 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
       );
     });
 
+    expect(container.querySelector('[data-testid="settings-backup-page"]')).toBeTruthy();
     expect(container.querySelector(`#${BACKUP_SECTION_ID}`)).toBeTruthy();
     expect(container.querySelector('[data-testid="backup-section"]')).toBeTruthy();
-
-    await act(async () => {
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      });
-    });
-
-    expect(scrollIntoView).toHaveBeenCalled();
-    expect(document.activeElement?.id === BACKUP_SECTION_ID || scrollIntoView.mock.calls.length > 0).toBe(
-      true,
-    );
+    expect(container.querySelector('[data-testid="backup-export-download"]')).toBeTruthy();
 
     await act(async () => {
       root.unmount();

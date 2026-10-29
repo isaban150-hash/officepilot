@@ -1,6 +1,6 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { DEFAULT_SETUP } from '../data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
@@ -14,6 +14,7 @@ import { resetCommunicationHistoryStore } from '../services/communicationHistory
 import { resetKnowledgeStore } from '../services/knowledgeStore';
 import { loginAsDefaultAdmin } from '../test/authFixtures';
 import { createDefaultSetupWizardDraft } from '../types/setup';
+import { alsInhaber } from '../test/workspaceRoleTestUtils';
 
 const incompleteSetup = { ...DEFAULT_SETUP, setupComplete: false };
 const completeSetup = {
@@ -105,9 +106,16 @@ describe('FirstRunWizard / SetupPage', () => {
     resetCommunicationHistoryStore();
     resetKnowledgeStore();
     await loginAsDefaultAdmin();
+    /*
+     * EINRICHTUNG-01 (AP3, O-05.4) — den Assistenten bedienen im Cloud-Betrieb nur Inhaber und Admins; ohne geladene
+     * Mitgliedschaft sperrt er fail-closed. Diese Tests prüfen den Assistenten selbst und laufen deshalb als Inhaber
+     * (dasselbe Muster wie GO-LIVE-SECURITY-01, `alsInhaber`). Die Sperre selbst prüft einrichtung01OnboardingAp3.
+     */
+    alsInhaber();
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     if (mounted) {
       act(() => {
         mounted!.root.unmount();

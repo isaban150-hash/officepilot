@@ -2,7 +2,7 @@ import { LegalPageLayout } from '../../components/legal/LegalPageLayout';
 
 export function ImpressumPage() {
   return (
-    <LegalPageLayout title="Impressum" testId="impressum-page">
+    <LegalPageLayout target="imprint" testId="impressum-page">
       <p>
         <strong>Platzhalter – Anbieterkennzeichnung</strong>
       </p>

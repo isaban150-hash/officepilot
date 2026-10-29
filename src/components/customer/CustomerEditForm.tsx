@@ -5,7 +5,11 @@
  * persistence. Saving happens exclusively through the onSave callback, never
  * while typing. The technical customer id is never rendered as visible text.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { useInRouterContext } from 'react-router-dom';
+import { useLeaveGuard } from '../../hooks/useLeaveGuard';
+import { useResumeOffer, type ResumeOffer } from '../../hooks/useResumeOffer';
+import { FormResumeOffer } from '../forms/FormResumeOffer';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
@@ -68,20 +72,128 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function CustomerEditForm({
+/**
+ * EINRICHTUNG-01 (AP8; Vertrag 1.27) — der Entwurf als einfache Werte für die UI-Sitzung: alle Textfelder und die
+ * Feiertagsangabe als JSON-Text (`useFormResume` trägt nur Grundwerte).
+ */
+const CUSTOMER_DRAFT_FIELDS = [
+  'name', 'contactPerson', 'street', 'zip', 'city', 'email', 'phone', 'countryCode', 'vatId', 'buyerReferenceDefault',
+  'leitwegId', 'holidayLocationJson',
+] as const;
+type CustomerDraftView = Record<(typeof CUSTOMER_DRAFT_FIELDS)[number], string>;
+
+function draftViewOf(values: CustomerEditValues): CustomerDraftView {
+  return {
+    name: values.name,
+    contactPerson: values.contactPerson,
+    street: values.street,
+    zip: values.zip,
+    city: values.city,
+    email: values.email,
+    phone: values.phone,
+    countryCode: values.countryCode ?? '',
+    vatId: values.vatId ?? '',
+    buyerReferenceDefault: values.buyerReferenceDefault,
+    leitwegId: values.leitwegId ?? '',
+    holidayLocationJson: values.holidayLocation ? JSON.stringify(values.holidayLocation) : '',
+  };
+}
+
+function valuesFromDraft(draft: Partial<CustomerDraftView>, base: CustomerEditValues): CustomerEditValues {
+  let holidayLocation = base.holidayLocation;
+  if (draft.holidayLocationJson !== undefined) {
+    try {
+      holidayLocation = draft.holidayLocationJson ? normalizeHolidayLocation(JSON.parse(draft.holidayLocationJson)) ?? null : null;
+    } catch {
+      holidayLocation = base.holidayLocation;
+    }
+  }
+  const { holidayLocationJson: _ignored, ...texte } = draft;
+  void _ignored;
+  return { ...base, ...texte, holidayLocation };
+}
+
+/**
+ * EINRICHTUNG-01 (AP8; Vertrag 1.27) — im Router mit Entwurfsaufnahme je Konto, Betrieb und Kunde („Fortsetzen“ oder
+ * „Verwerfen“); ohne Router (Komponententests) das Formular allein. Speichern bleibt Sache des Aufrufers.
+ */
+export function CustomerEditForm(props: CustomerEditFormProps) {
+  return useInRouterContext() ? <CustomerEditFormMitEntwurf key={props.customer.id} {...props} /> : <CustomerEditFormFelder {...props} />;
+}
+
+function CustomerEditFormMitEntwurf(props: CustomerEditFormProps) {
+  const [savedValues] = useState(() => valuesOf(props.customer));
+  const [values, setValues] = useState<CustomerEditValues>(savedValues);
+  const offer = useResumeOffer<CustomerDraftView>({
+    namespace: `customer-form.${props.customer.id || 'neu'}`,
+    fields: CUSTOMER_DRAFT_FIELDS,
+    saved: draftViewOf(savedValues),
+    current: draftViewOf(values),
+    workspaceType: 'customer',
+  });
+  return <CustomerEditFormFelder {...props} gesteuert={{ savedValues, values, setValues, offer }} />;
+}
+
+interface GesteuerterKunde {
+  savedValues: CustomerEditValues;
+  values: CustomerEditValues;
+  setValues: Dispatch<SetStateAction<CustomerEditValues>>;
+  offer: ResumeOffer<CustomerDraftView>;
+}
+
+function CustomerEditFormFelder({
   customer,
   busy,
   error,
   onSave,
   onCancel,
-}: CustomerEditFormProps) {
+  gesteuert,
+}: CustomerEditFormProps & { gesteuert?: GesteuerterKunde }) {
   const { translate } = useApp();
-  const [values, setValues] = useState<CustomerEditValues>(() => valuesOf(customer));
+  const [eigeneWerte, setEigeneWerte] = useState<CustomerEditValues>(() => valuesOf(customer));
+  const values = gesteuert?.values ?? eigeneWerte;
+  const setValues = gesteuert?.setValues ?? setEigeneWerte;
+  const offer = gesteuert?.offer;
 
   // Switching to another customer loads that customer's values; nothing is carried over.
   useEffect(() => {
-    setValues(valuesOf(customer));
+    if (!gesteuert) setEigeneWerte(valuesOf(customer));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Kundenwechsel (die Hülle hängt je Kunde neu ein)
   }, [customer.id]);
+
+  /*
+   * 1.27 — Rückfrage beim Verlassen, solange etwas geändert ist. Beim Absenden sofort freigegeben (der Aufrufer schließt
+   * das Formular bei Erfolg); meldet er einen Fehler, ist der Schutz wieder aktiv. Wird das Formular nach dem Absenden
+   * ohne Fehler geschlossen, gilt das Speichern als erfolgt: kein Entwurf bleibt zurück.
+   */
+  const ausgang = gesteuert?.savedValues ?? valuesOf(customer);
+  const dirty = JSON.stringify(draftViewOf(values)) !== JSON.stringify(draftViewOf(ausgang));
+  const [abgesendet, setAbgesendet] = useState(false);
+  const abgesendetRef = useRef(false);
+  useEffect(() => {
+    if (error) {
+      abgesendetRef.current = false;
+      setAbgesendet(false);
+    }
+  }, [error]);
+  // Bleibt das Formular nach dem Speichern offen (etwa Dublettenentscheidung), schützt es wieder.
+  const warBeschaeftigt = useRef(busy);
+  useEffect(() => {
+    if (warBeschaeftigt.current && !busy && abgesendetRef.current) {
+      abgesendetRef.current = false;
+      setAbgesendet(false);
+    }
+    warBeschaeftigt.current = busy;
+  }, [busy]);
+  const leaveGuard = useLeaveGuard(dirty && !abgesendet, Boolean(offer));
+  const offerRef = useRef(offer);
+  offerRef.current = offer;
+  useEffect(
+    () => () => {
+      if (abgesendetRef.current) offerRef.current?.clear();
+    },
+    [],
+  );
 
   const set = (field: Exclude<keyof CustomerEditValues, 'holidayLocation'>) => (value: string) =>
     setValues((prev) => ({ ...prev, [field]: value }));
@@ -129,9 +241,25 @@ export function CustomerEditForm({
         onSubmit={(event) => {
           event.preventDefault();
           if (busy) return;
+          abgesendetRef.current = true;
+          setAbgesendet(true);
+          leaveGuard.release();
           onSave(values);
         }}
       >
+        {offer ? (
+          <FormResumeOffer
+            pending={offer.pending}
+            stale={offer.stale}
+            onContinue={() => {
+              const entwurf = offer.continueDraft();
+              setValues((prev) => valuesFromDraft(entwurf, prev));
+            }}
+            onDiscard={offer.discardDraft}
+            onDismissStale={offer.dismissStale}
+            testIdPrefix="kunden-edit"
+          />
+        ) : null}
         <fieldset className="invoice-edit__section" disabled={busy}>
           <legend>{translate('kunden.edit.title')}</legend>
 
@@ -309,7 +437,12 @@ export function CustomerEditForm({
             type="button"
             variant="secondary"
             disabled={busy}
-            onClick={onCancel}
+            onClick={() => {
+              // „Abbrechen“ verwirft ausdrücklich: kein Entwurf, keine Rückfrage.
+              offer?.clear();
+              leaveGuard.release();
+              onCancel();
+            }}
             data-testid="kunden-edit-cancel"
           >
             {translate('common.cancel')}

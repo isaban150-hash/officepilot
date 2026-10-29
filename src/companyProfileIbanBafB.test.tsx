@@ -198,7 +198,9 @@ describe('BROWSER-ACCEPTANCE-FIX 01 / B2 — Firmendaten-Seite', () => {
     mounted = mountFirma();
 
     const input = mounted.container.querySelector('#settings-company-iban') as HTMLInputElement;
-    expect(input.value).toBe(TOO_LONG_DE);
+    // EINRICHTUNG-01 (AP6; F-03) — angezeigt in Vierergruppen, Inhalt unverändert.
+    expect(input.value.replace(/\s+/g, '')).toBe(TOO_LONG_DE);
+    expect(input.value).toMatch(/^(\S{4} )+\S{1,4}$/);
     expect(byTestId(mounted, 'settings-company-iban-check')?.textContent).toBe(
       'Die gespeicherte IBAN ist nicht gültig. Eine deutsche IBAN hat genau 22 Zeichen. Bitte die Eingabe prüfen.',
     );

@@ -58,7 +58,6 @@ import { createOrderFromDraftWithCloud } from '../services/order/createOrderClou
 import type { CustomerBilling, OrderUnit, TaxStatus } from '../types/models';
 import type { OrderDraft, OrderDraftPosition } from '../types/orderDraft';
 import type { TranslationKey } from '../i18n';
-import { DEFAULT_SETUP } from '../data/mockData';
 
 const ORDER_UNITS: OrderUnit[] = ['Stück', 'Stunden', 'Meter', 'm²', 'Pauschal'];
 const TAX_STATUSES: TaxStatus[] = ['standard_19', 'standard_7', 'kleinunternehmer_19', 'reverse_charge_13b', 'tax_free'];
@@ -128,7 +127,7 @@ function billingOf(customer: Partial<CustomerBilling>): CustomerBilling {
 }
 
 export function AuftragEditorPage() {
-  const { translate, showToast } = useApp();
+  const { translate, showToast, setup } = useApp();
   const navigate = useNavigate();
   const { draftId } = useParams<{ draftId: string }>();
   const [params] = useSearchParams();
@@ -169,7 +168,8 @@ export function AuftragEditorPage() {
   const [titel, setTitel] = useState(vorhandener?.title ?? '');
   const [baustelle, setBaustelle] = useState(vorhandener?.baustelle ?? '');
   const [taxStatus, setTaxStatus] = useState<TaxStatus>(
-    vorhandener?.taxStatus ?? resolveDefaultTaxStatus(profile, DEFAULT_SETUP),
+    // EINRICHTUNG-01 (AP6; V-05.1) — wie im Angebotseditor: Profil-Standard, sonst das Setup des Betriebs.
+    vorhandener?.taxStatus ?? resolveDefaultTaxStatus(profile, setup),
   );
   const [positionen, setPositionen] = useState<OrderDraftPosition[]>(
     vorhandener?.positions?.length ? vorhandener.positions : [neuePosition()],
@@ -177,8 +177,9 @@ export function AuftragEditorPage() {
   const [konditionen, setKonditionen] = useState(
     vorhandener?.paymentTermsText ?? buildDefaultPaymentTerms(profile),
   );
-  const [einleitung, setEinleitung] = useState(vorhandener?.introText ?? '');
-  const [schluss, setSchluss] = useState(vorhandener?.closingText ?? '');
+  // EINRICHTUNG-01 (AP6; V-01.3) — neue Aufträge: Einleitung und Schluss aus den Vorgaben des Betriebs.
+  const [einleitung, setEinleitung] = useState(vorhandener?.introText ?? (profile.orderIntroText ?? '').trim());
+  const [schluss, setSchluss] = useState(vorhandener?.closingText ?? (profile.orderClosingText ?? '').trim());
   const [gespeicherteId, setGespeicherteId] = useState<string | null>(vorhandener?.id ?? null);
   const [fehler, setFehler] = useState<string | null>(null);
   const [anlegenOffen, setAnlegenOffen] = useState(false);

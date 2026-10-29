@@ -17,6 +17,7 @@ import { formatCompanyLegalName } from '../company/companyLegalName';
 import fontkit from '@pdf-lib/fontkit';
 import { loadInvoicePdfFont } from '../invoice/invoicePdfFonts';
 import { toPdfSafeText, downloadInvoicePdfBytes } from '../invoicePdfService';
+import { loadCompanySnapshotLogoBytes } from '../branding/brandingLogoEmbedBytes';
 import type { BusinessLetter } from '../../types/businessLetter';
 import type { CompanyProfile } from '../../types/models';
 
@@ -241,38 +242,24 @@ function drawBody(cursor: Cursor, body: string): void {
   }
 }
 
-/** Nur Base64-Bilder, die `pdf-lib` auch wirklich einbetten kann. */
-function parseLogoDataUrl(dataUrl: string): { bytes: Uint8Array; png: boolean } | null {
-  const treffer = /^data:(image\/(?:png|jpeg));base64,([A-Za-z0-9+/=\s]+)$/.exec(dataUrl.trim());
-  if (!treffer) return null;
-  try {
-    const binaer = atob(treffer[2].replace(/\s+/g, ''));
-    const bytes = new Uint8Array(binaer.length);
-    for (let i = 0; i < binaer.length; i += 1) bytes[i] = binaer.charCodeAt(i);
-    if (bytes.length === 0) return null;
-    return { bytes, png: treffer[1] === 'image/png' };
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Das Logo oben rechts, eingepasst und nie verzerrt.
  *
- * Es stammt aus den **eingefrorenen** Firmendaten des Briefes. Schlägt das
- * Einbetten fehl, entsteht der Brief trotzdem — nur ohne Bild.
+ * Es stammt aus den **eingefrorenen** Firmendaten des Briefes. EINRICHTUNG-01
+ * (EIN-11) — auch ein über die Design-Seite hochgeladenes Logo (Asset-Referenz
+ * in `branding.logo`) wird eingebettet, nicht nur das Alt-Bild in
+ * `logoDataUrl`. Schlägt Laden oder Einbetten fehl, entsteht der Brief
+ * trotzdem — nur ohne Bild.
  */
 async function drawLogo(cursor: Cursor, profil: CompanyProfile): Promise<number> {
-  const quelle = profil.logoDataUrl?.trim();
-  if (!quelle) return 0;
-  const geparst = parseLogoDataUrl(quelle);
-  if (!geparst) return 0;
+  const logo = await loadCompanySnapshotLogoBytes(profil);
+  if (!logo) return 0;
 
   let bild;
   try {
-    bild = geparst.png
-      ? await cursor.pdfDoc.embedPng(geparst.bytes)
-      : await cursor.pdfDoc.embedJpg(geparst.bytes);
+    bild = logo.mimeType === 'image/png'
+      ? await cursor.pdfDoc.embedPng(logo.bytes)
+      : await cursor.pdfDoc.embedJpg(logo.bytes);
   } catch {
     return 0;
   }

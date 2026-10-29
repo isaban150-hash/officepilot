@@ -15,8 +15,8 @@
  *   G2 Ein vorübergehender Netzwerkfehler bleibt `error` und wird erneut gesendet.
  *   G3 Eine abgewiesene Neuanlage lädt kein Backfill nach dem Entsperren hoch; eine neue
  *      bewusste Änderung schon.
- *   G4 Finanzmeldung der Sperre (ohne 42501) ist endgültig; abgelaufene Lizenz bleibt wie bisher
- *      wiederholbar.
+ *   G4 Finanzmeldung der Sperre (ohne 42501) ist endgültig; seit EINRICHTUNG-01 (AP1, Vertrag 1.7,
+ *      N-Z4.5) auch die abgelaufene Lizenz: Eine Verlängerung führt den Auftrag nicht mehr aus.
  *   G5 „Erneut versuchen" belebt keinen endgültig abgewiesenen Auftrag; die Zusammenführung nach
  *      dem Abzug ebenfalls nicht.
  *   G6 Einstufung, Anzeige und Zahlungsweg.
@@ -279,7 +279,7 @@ describe('KONTOSPERRE — abgewiesene Aktionen werden nach dem Entsperren nicht 
     expect(s.papier()).toHaveLength(2);
   });
 
-  it('G4: finance_account_blocked ist endgültig, auch ohne 42501; abgelaufene Lizenz bleibt wiederholbar', async () => {
+  it('G4: finance_account_blocked ist endgültig, auch ohne 42501; seit EINRICHTUNG-01 auch die abgelaufene Lizenz', async () => {
     const s = server();
     lokalLoeschen(3);
     // Der generische Schreibweg stuft finance_* als 'unknown'/wiederholbar ein — entscheidend ist die Meldung.
@@ -291,7 +291,9 @@ describe('KONTOSPERRE — abgewiesene Aktionen werden nach dem Entsperren nicht 
     lokalLoeschen(3);
     s.gesperrt('finance_license_expired: Lizenz ist abgelaufen', 'unknown', true);
     await s.lauf();
-    expect(papierAuftraege()[0]).toMatchObject({ status: 'error' });
+    // EINRICHTUNG-01 (AP1, Vertrag 1.7, N-Z4.5) — bis dahin blieb dieser Auftrag `error` und wurde nach einer
+    // Lizenzverlängerung nachgeholt. Der abgestimmte Katalog V3 schliesst das aus.
+    expect(papierAuftraege()[0]).toMatchObject({ status: 'failed', lastErrorRetryable: false });
   });
 
   it('G5: „Erneut versuchen" und die Zusammenführung nach dem Abzug beleben keine endgültige Abweisung', () => {
@@ -320,7 +322,7 @@ describe('KONTOSPERRE — abgewiesene Aktionen werden nach dem Entsperren nicht 
 });
 
 describe('KONTOSPERRE — Einstufung, Anzeige, Zahlungsweg', () => {
-  it('G6a: endgültig sind Sperre, fehlende Mitgliedschaft und Rolle — nicht Lizenz, Netz oder Konflikt', () => {
+  it('G6a: endgültig sind Sperre, fehlende Mitgliedschaft, Rolle, Freigabe und (seit EINRICHTUNG-01) Lizenz — nicht Sitzung, Netz oder Konflikt', () => {
     for (const meldung of [
       'Kein Zugriff auf Workspace',
       'Keine Schreibberechtigung',
@@ -328,10 +330,25 @@ describe('KONTOSPERRE — Einstufung, Anzeige, Zahlungsweg', () => {
       'finance_account_blocked: Konto ist gesperrt',
       'finance_forbidden_role: Finanzaktion erfordert Inhaber- oder Verwaltungsrecht',
       'finance_account_not_approved: Konto ist nicht freigegeben',
+      // EINRICHTUNG-01 (AP1, Vertrag 1.7, N-Z4.4/N-Z4.5) — Betriebslizenz und Freigabe der zentralen Zugriffsregel.
+      'finance_license_expired: Lizenz ist abgelaufen',
+      'finance_license_inactive: Keine aktive Lizenz',
+      'license_not_effective: Die Lizenz des Betriebs ist nicht wirksam',
+      'account_not_approved: Konto ist nicht freigegeben',
+      'workspace_not_member: Kein Zugriff auf Workspace',
+      'workspace_forbidden_role: Keine Schreibberechtigung',
     ]) {
       expect(isFinalPermissionDenialMessage(meldung), meldung).toBe(true);
     }
-    for (const meldung of ['finance_license_expired: Lizenz ist abgelaufen', 'Failed to fetch', 'Versionskonflikt', '', undefined]) {
+    for (const meldung of [
+      // EINRICHTUNG-01 (AP1) — beendete Sitzung (Vertrag 1.8) und gleichzeitige Rechteänderung (Vertrag 1.9).
+      'session_not_active: Die Sitzung ist beendet',
+      'workspace_access_changed: Die Rechte wurden gleichzeitig geaendert',
+      'Failed to fetch',
+      'Versionskonflikt',
+      '',
+      undefined,
+    ]) {
       expect(isFinalPermissionDenialMessage(meldung), String(meldung)).toBe(false);
     }
   });

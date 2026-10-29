@@ -15,12 +15,16 @@
  * zeigen ist besser als eine leere Fläche. In einer historischen Rechnung wäre
  * genau das eine stille Fälschung — dort bleibt die strenge Regel aus
  * `brandingAssetResolver` gültig (D-023).
+ *
+ * EINRICHTUNG-01 (AP6; Vertrag 1.20, F-06) — ein Fehlschlag ist ein eigener Zustand `error`, nie „kein Logo“: Die
+ * Referenz liegt vor, das Bild kam aber nicht an. Ein vorhandenes Legacy-Logo springt weiter für die Anzeige ein
+ * (`fallbackUsed`), der Fehler bleibt trotzdem benannt. `retry()` lädt erneut.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { LogoAssetReference } from '../types/branding';
 import { resolveBrandingAsset } from '../services/branding/brandingAssetResolver';
 
-export type CompanyLogoStatus = 'idle' | 'loading' | 'ready' | 'missing';
+export type CompanyLogoStatus = 'idle' | 'loading' | 'ready' | 'missing' | 'error';
 
 /** Woher das angezeigte Logo stammt — für Anzeige und Tests gleichermaßen. */
 export type CompanyLogoSource = 'branding_asset' | 'legacy' | 'none';
@@ -37,6 +41,11 @@ export interface CompanyLogoState {
   fallbackUsed: boolean;
 }
 
+export interface CompanyLogoResult extends CompanyLogoState {
+  /** Lädt eine nicht auflösbare Referenz erneut (F-06.2). */
+  retry: () => void;
+}
+
 export interface CompanyLogoInput {
   workspaceId: string | undefined;
   logo: LogoAssetReference | undefined;
@@ -50,21 +59,30 @@ const EMPTY: CompanyLogoState = {
   fallbackUsed: false,
 };
 
-function legacyState(logoDataUrl: string | undefined, fallbackUsed: boolean): CompanyLogoState {
+function legacyState(logoDataUrl: string | undefined): CompanyLogoState {
   if (!logoDataUrl) {
-    return { status: 'missing', url: undefined, source: 'none', fallbackUsed };
+    return { status: 'missing', url: undefined, source: 'none', fallbackUsed: false };
   }
   // Eine Data-URL ist bereits eine gültige Quelle — nichts zu erzeugen, nichts freizugeben.
-  return { status: 'ready', url: logoDataUrl, source: 'legacy', fallbackUsed };
+  return { status: 'ready', url: logoDataUrl, source: 'legacy', fallbackUsed: false };
 }
 
-export function useCompanyLogoObjectUrl(input: CompanyLogoInput): CompanyLogoState {
+/** Die Referenz war nicht auflösbar: Fehler, mit dem Legacy-Logo als Anzeige, falls vorhanden. */
+function failedState(logoDataUrl: string | undefined): CompanyLogoState {
+  return logoDataUrl
+    ? { status: 'error', url: logoDataUrl, source: 'legacy', fallbackUsed: true }
+    : { status: 'error', url: undefined, source: 'none', fallbackUsed: true };
+}
+
+export function useCompanyLogoObjectUrl(input: CompanyLogoInput): CompanyLogoResult {
   const { workspaceId, logo, logoDataUrl } = input;
   const assetId = logo?.assetId;
   const mimeType = logo?.mimeType;
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   const [state, setState] = useState<CompanyLogoState>(() =>
-    assetId ? { ...EMPTY, status: 'loading' } : legacyState(logoDataUrl, false),
+    assetId ? { ...EMPTY, status: 'loading' } : legacyState(logoDataUrl),
   );
 
   useEffect(() => {
@@ -73,7 +91,7 @@ export function useCompanyLogoObjectUrl(input: CompanyLogoInput): CompanyLogoSta
 
     void (async () => {
       if (!assetId || !mimeType) {
-        if (!cancelled) setState(legacyState(logoDataUrl, false));
+        if (!cancelled) setState(legacyState(logoDataUrl));
         return;
       }
 
@@ -83,7 +101,7 @@ export function useCompanyLogoObjectUrl(input: CompanyLogoInput): CompanyLogoSta
          * nicht kaputt. Der Legacy-Weg springt ein; als Fehlschlag gilt das
          * trotzdem, damit die Seite es benennen kann.
          */
-        if (!cancelled) setState(legacyState(logoDataUrl, true));
+        if (!cancelled) setState(failedState(logoDataUrl));
         return;
       }
 
@@ -93,13 +111,13 @@ export function useCompanyLogoObjectUrl(input: CompanyLogoInput): CompanyLogoSta
       try {
         resolved = await resolveBrandingAsset(workspaceId, { assetId, mimeType });
       } catch {
-        if (!cancelled) setState(legacyState(logoDataUrl, true));
+        if (!cancelled) setState(failedState(logoDataUrl));
         return;
       }
       if (cancelled) return;
 
       if (!resolved.ok) {
-        setState(legacyState(logoDataUrl, true));
+        setState(failedState(logoDataUrl));
         return;
       }
 
@@ -119,8 +137,8 @@ export function useCompanyLogoObjectUrl(input: CompanyLogoInput): CompanyLogoSta
       }
     };
     // Ein Wechsel der `assetId` ist zugleich der Cache-Wechsel: Assets sind
-    // unveränderlich, eine neue Kennung bedeutet ein anderes Bild.
-  }, [workspaceId, assetId, mimeType, logoDataUrl]);
+    // unveränderlich, eine neue Kennung bedeutet ein anderes Bild. `attempt` lädt dieselbe Referenz erneut.
+  }, [workspaceId, assetId, mimeType, logoDataUrl, attempt]);
 
-  return state;
+  return { ...state, retry };
 }

@@ -38,7 +38,9 @@
   /* Schrift — warmes Dunkelgrau, kein Blauschwarz */
   --op-text: #1f2430;
   --op-text-muted: #545a66;
-  --op-text-subtle: #767b86;
+  /* EINRICHTUNG-01 (1.32, axe-core): #767b86 erreichte nur 4,24:1 auf Weiß bzw. 4,06:1 auf dem Seitengrund; jetzt
+     ≥ 4,8:1 auf beiden (WCAG 2.1 AA, Fließtext). */
+  --op-text-subtle: #6b6f79;
 
   /* Linien */
   --op-border: #e3ddd2;
@@ -56,7 +58,8 @@
   --op-focus-ring: 0 0 0 3px rgba(18, 58, 115, 0.2);
 
   /* Bedeutungsfarben — unverändert in der Sache, nur mit weniger Fläche */
-  --op-warning: #a8630d;
+  /* EINRICHTUNG-01 (1.32, axe-core): #a8630d erreichte auf --op-warning-subtle nur 4,27:1; jetzt ≥ 4,9:1. */
+  --op-warning: #9a5a0b;
   --op-warning-subtle: #fbf3e4;
   --op-success: #1f7a45;
   --op-success-subtle: #e9f5ee;
@@ -135,6 +138,23 @@
   color: var(--op-text-subtle);
 }
 
+/* EINRICHTUNG-01 Abschluss 22 (E-1, Kontrast-Nachmessung): Der Synchronisationsstand im Kopf trug noch die Farbe für
+   dunklen Grund (Weiß 85 %) und stand damit auf der hellen Kopfzeile bei etwa 1,1:1; der Punkt „wird abgeglichen“
+   war weiß auf weiß. Wie die übrigen Kopfwerkzeuge in gedämpftem Text (≥ 6,9:1). */
+.app-shell__sync-indicator {
+  color: var(--op-text-muted);
+}
+
+.app-shell__sync-indicator:hover,
+.app-shell__sync-indicator:focus-visible {
+  color: var(--op-text);
+  background: var(--op-surface-sunken);
+}
+
+.app-shell__sync-indicator--syncing .app-shell__sync-indicator-dot {
+  background: var(--op-text-subtle);
+}
+
 /* Benutzermenü auf hellem Grund */
 .app-shell__top .user-menu__name,
 .app-shell__top .user-menu__trigger {
@@ -203,7 +223,26 @@
   border-radius: var(--radius-sm);
   box-shadow: none;
   padding: 0.7rem 1.15rem;
-  min-height: 42px;
+  /* EINRICHTUNG-01 (AP9; 1.33) — Bedienflächen mindestens 44 × 44 px (vorher 42 px). */
+  min-height: 44px;
+}
+
+/* EINRICHTUNG-01 (AP9-Nacharbeit; 1.33) — Kontrollkästchen mit Beschriftung (nur Einstellungsseiten: Nummernkreise,
+   Rechnungen, Sicherung, Gerät, Betrieb löschen) und der Aufklapper der Vorschausprachen: die ganze Zeile ist
+   Klickfläche, mindestens 44 px hoch (vorher Texthöhe 20–25 px). Das Dreieck des Aufklappers bleibt erhalten. */
+label.checkbox-row,
+label.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+}
+
+.language-switcher__preview > summary {
+  min-height: 44px;
+  padding-block: 0.625rem;
+  box-sizing: border-box;
+  cursor: pointer;
 }
 
 .btn--primary {
@@ -1063,7 +1102,9 @@
   --pilot-nav-bg: #f1eee8;
   --pilot-nav-border: #e3ddd2;
   --pilot-nav-text: #4a5260;
-  --pilot-nav-muted: #7b8290;
+  /* EINRICHTUNG-01 Abschluss 22 (E-1, Kontrast-Nachmessung): #7b8290 erreichte auf dem Verlauf der Navigation nur
+     3,5:1 („Weitere Bereiche“, 11 px). #5f636c (Wert der F3-Navigation) erreicht ≥ 5,1:1 auf beiden Verlaufsenden. */
+  --pilot-nav-muted: #5f636c;
   --shadow-panel: 0 1px 2px rgba(23, 32, 44, 0.05), 0 6px 20px -8px rgba(23, 32, 44, 0.12);
   --shadow-focus: 0 2px 4px rgba(23, 32, 44, 0.06), 0 24px 48px -20px rgba(22, 61, 110, 0.28);
 }

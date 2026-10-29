@@ -5,7 +5,7 @@
  * AuthProvider, kein BusinessStateGate, kein Cloud-Zugriff, kein Schreibvorgang.
  * Alle Prüfungen laufen ohne Netzwerk.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import JSZip from 'jszip';
@@ -13,6 +13,7 @@ import { RootShell, isLocalRecoveryPath } from './RootShell';
 import { readLocalScopeInventory } from './services/storage/localScopeInventoryService';
 import { clearMockRpcHandlers, registerMockRpcHandler } from './test/mockProfileStore';
 import { resetTestStores } from './test/resetStores';
+import { alsBestaetigtesKonto } from './test/recoveryIdentityTestUtils';
 
 const CIRMAK_KEY = 'officepilot-state:user:recovery-user';
 const CLOUD_TEST_KEY = 'officepilot-state:workspace:recovery-ws';
@@ -95,6 +96,10 @@ async function renderRoot(pathname: string): Promise<HTMLDivElement> {
 
 describe('OFFICEPILOT-LOCAL-SCOPE-RECOVERY-01B', () => {
   beforeEach(() => {
+    // EINRICHTUNG-01 (AP1, E8) — gebundene Bestände gibt die Notfallseite erst nach vom Server bestätigter
+    // Anmeldung frei. Diese Abläufe gelten unverändert für das bestätigte Konto, dem die Bestände gehören
+    // (recovery-user, Inhaber der alten Betriebsbestände). Die Freigaberegel selbst prüft localRecoveryE8Ap1.test.tsx.
+    alsBestaetigtesKonto('recovery-user');
     localStorage.clear();
     sessionStorage.clear();
     rpcCalls.length = 0;
@@ -143,6 +148,7 @@ describe('OFFICEPILOT-LOCAL-SCOPE-RECOVERY-01B', () => {
     resetTestStores();
     localStorage.clear();
     window.history.pushState({}, '', '/');
+    vi.restoreAllMocks();
   });
 
   it('R1: /local-recovery rendert ohne BusinessStateGate und ohne AppProvider', async () => {
@@ -180,8 +186,10 @@ describe('OFFICEPILOT-LOCAL-SCOPE-RECOVERY-01B', () => {
     const text = container.textContent ?? '';
     expect(text).toContain('Cirmak Haustechnik GmbH');
     expect(text).toContain('OfficePilot Cloud Test');
-    expect(text).toContain(CIRMAK_KEY);
-    expect(text).toContain(CLOUD_TEST_KEY);
+    // EINRICHTUNG-01 (E8) — Speicherschlüssel enthalten Konto- und Betriebskennungen und stehen nicht mehr auf der Seite.
+    expect(text).not.toContain(CIRMAK_KEY);
+    expect(text).not.toContain(CLOUD_TEST_KEY);
+    expect(text).not.toContain('recovery-ws');
     expect(container.querySelectorAll('[data-testid^="local-recovery-copy-"]').length).toBe(2);
   });
 
@@ -263,7 +271,9 @@ describe('OFFICEPILOT-LOCAL-SCOPE-RECOVERY-01B', () => {
     );
     expect(entry, 'Legacy-Setup fehlt in der Liste').not.toBeNull();
     expect(entry?.textContent).toContain('Cirmak Haustechnik GmbH');
-    expect(entry?.textContent).toContain('legacy_setup');
+    // EINRICHTUNG-01 (E8) — übersetzte Bereichsbezeichnung statt des technischen Typs.
+    expect(entry?.getAttribute('data-scope')).toBe('legacy_setup');
+    expect(entry?.textContent).toContain('Altformat der Einrichtung');
     expect(entry?.textContent).toContain('Altes Format');
 
     const inventory = readLocalScopeInventory();

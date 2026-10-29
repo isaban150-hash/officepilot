@@ -14,6 +14,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { runMailboxOAuthStart } from '../_shared/oauth/mailboxOAuth.ts';
 import { resolveMailboxOAuthBinding } from '../_shared/oauth/providers.ts';
+import { readWorkspaceAccessDenial, workspaceAccessErrorCode } from '../_shared/workspaceAccess.ts';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -61,6 +62,19 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const { data: userData, error: userError } = await admin.auth.getUser(authorization.slice('bearer '.length).trim());
   const userId = userData?.user?.id ?? null;
   if (userError || !userId) return json({ ok: false, error: 'unauthenticated' }, 401);
+
+  // EINRICHTUNG-01 (AP1, Vertrag 1.1, Z-05.6) — zentrale Zugriffsregel; nicht wirksame Betriebslizenz eigens benannt.
+  // Eine ungueltige Betriebskennung weist der Ablauf selbst ab (invalid_workspace).
+  const startWorkspaceId = typeof body.workspaceId === 'string' ? body.workspaceId.trim() : '';
+  if (/^[0-9a-f-]{36}$/i.test(startWorkspaceId)) {
+    const access = await readWorkspaceAccessDenial(admin, startWorkspaceId, userId, 'write');
+    if (!access.ok) return json({ ok: false, error: 'server_error' }, 500);
+    if (access.denial) {
+      const code = workspaceAccessErrorCode(access.denial);
+      log({ outcome: code, provider: providerType });
+      return json({ ok: false, error: code }, code === 'invalid_request' ? 400 : 403);
+    }
+  }
 
   const result = await runMailboxOAuthStart(
     {

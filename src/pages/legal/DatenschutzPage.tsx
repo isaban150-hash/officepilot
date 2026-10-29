@@ -3,7 +3,7 @@ import { PRIVACY_VERSION } from '../../config/legalVersions';
 
 export function DatenschutzPage() {
   return (
-    <LegalPageLayout title="Datenschutzerklärung" testId="datenschutz-page">
+    <LegalPageLayout target="privacy" testId="datenschutz-page">
       <p>
         <strong>Platzhalter – Datenschutzerklärung (Version {PRIVACY_VERSION})</strong>
       </p>

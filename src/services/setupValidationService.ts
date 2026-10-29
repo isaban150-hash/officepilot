@@ -3,9 +3,13 @@ import type { SetupWizardDraft, SetupWizardStep } from '../types/setup';
 import type { TranslationKey } from '../i18n';
 import { isDocumentTemplateId } from '../types/branding';
 import {
-  COMPANY_PROFILE_TEXT_LIMITS,
+  findCompanyProfileTextLimitViolations,
+  isCommunicationLanguage,
+  isOfferValidityDays,
   isTaxStatus,
 } from './company/companyProfileSettingsContract';
+import { COMPANY_FORMAT_ERROR_KEYS, checkCompanyProfileFormats } from './company/companyProfileFormatRules';
+import { isPlausibleVatId } from './customer/customerFieldFormat';
 import { checkIban } from '../utils/iban';
 
 export type SetupValidationErrors = Partial<Record<string, TranslationKey>>;
@@ -41,6 +45,11 @@ function hasIbanShape(value: string): boolean {
  */
 export interface SetupValidationOptions {
   ibanCheck?: 'strict' | 'shape';
+  /**
+   * EINRICHTUNG-01 (AP6; F-02) — Formatprüfungen für USt-IdNr., PLZ, BIC, Ländercode, Telefon und Website. `strict`
+   * nur dort, wo die Felder bearbeitet werden (Firmendaten); andere Seiten blockiert ein älterer Wert nicht.
+   */
+  formatChecks?: 'strict' | 'off';
 }
 
 export function ibanErrorKey(value: string): TranslationKey | null {
@@ -85,6 +94,15 @@ export function validateSetupStep(
 
   if (step === 'tax') {
     if (!hasTaxIdentifier(draft)) errors.taxIdentifier = 'setup.error.taxIdentifierRequired';
+    /*
+     * P1 A-04/A-02 Abschluss-Rundgang (R-02) — dieselbe Plausibilitätsregel wie in den Firmendaten
+     * (`checkCompanyProfileFormats`), aber nur wo das Feld bearbeitet wird (`formatChecks: 'strict'`, z. B. der
+     * Einrichtungsassistent): Der Assistent nahm „DE12“ an, die Firmendaten wiesen denselben Wert danach ab.
+     */
+    const vatId = draft.vatId.trim();
+    if (options.formatChecks === 'strict' && vatId && !isPlausibleVatId(vatId)) {
+      errors.vatId = COMPANY_FORMAT_ERROR_KEYS.vatId;
+    }
   }
 
   if (step === 'bank') {
@@ -154,10 +172,13 @@ export function validateCompanyProfileForSettings(
     lastInvoiceNumber: lastInvoiceNumber ?? 0,
   };
   const result = validateSetupWizard(draft, options);
-  return {
-    ...result,
-    ...mergeSettingsFieldErrors(profile, mergeSkontoErrors(profile, result)),
-  };
+  const merged = mergeSettingsFieldErrors(profile, mergeSkontoErrors(profile, result));
+  if (options.formatChecks !== 'strict') return { ...result, ...merged };
+  const errors: SetupValidationErrors = { ...merged.errors };
+  for (const [field, key] of Object.entries(checkCompanyProfileFormats(profile))) {
+    if (!errors[field]) errors[field] = key;
+  }
+  return { valid: Object.keys(errors).length === 0, errors };
 }
 
 /**
@@ -172,23 +193,36 @@ function mergeSettingsFieldErrors(
 ): SetupValidationResult {
   const errors: SetupValidationErrors = { ...result.errors };
 
-  const accountHolder = profile.accountHolder ?? '';
-  if (accountHolder.trim().length > COMPANY_PROFILE_TEXT_LIMITS.accountHolder) {
-    errors.accountHolder = 'companyProfile.accountHolderTooLong';
+  /*
+   * EMAIL-01B4 — Standard-E-Mail-Texte: Betreff einzeilig, Grenzen wie der Versandserver.
+   * EINRICHTUNG-01 (EIN-06, S-08) — alle Textgrenzen aus einer Quelle und in Codepunkten
+   * gezählt wie beim Server (bisher `String.length`, also UTF-16-Einheiten).
+   */
+  for (const violation of findCompanyProfileTextLimitViolations(profile as unknown as Record<string, unknown>)) {
+    if (
+      violation.field === 'accountHolder' ||
+      violation.field === 'defaultIntroText' ||
+      violation.field === 'defaultClosingText' ||
+      violation.field === 'defaultInvoiceEmailSubject' ||
+      violation.field === 'defaultInvoiceEmailBody' ||
+      // EINRICHTUNG-01 (AP6; 1.21) — Fußzeile, Hinweis „steuerfrei“ und die Vorlagen für Angebote, Aufträge und Briefe.
+      violation.field === 'invoiceFooterNotes' ||
+      violation.field === 'taxFreeNotice' ||
+      violation.field === 'offerIntroText' ||
+      violation.field === 'offerClosingText' ||
+      violation.field === 'orderIntroText' ||
+      violation.field === 'orderClosingText' ||
+      violation.field === 'letterSalutation' ||
+      violation.field === 'letterClosing'
+    ) {
+      errors[violation.field] = violation.errorKey as TranslationKey;
+    }
   }
-  if ((profile.defaultIntroText ?? '').trim().length > COMPANY_PROFILE_TEXT_LIMITS.defaultIntroText) {
-    errors.defaultIntroText = 'companyProfile.defaultIntroTextTooLong';
+  if (profile.offerValidityDays !== undefined && !isOfferValidityDays(profile.offerValidityDays)) {
+    errors.offerValidityDays = 'companyProfile.offerValidityDaysInvalid';
   }
-  if ((profile.defaultClosingText ?? '').trim().length > COMPANY_PROFILE_TEXT_LIMITS.defaultClosingText) {
-    errors.defaultClosingText = 'companyProfile.defaultClosingTextTooLong';
-  }
-  // EMAIL-01B4 — Standard-E-Mail-Texte: Betreff einzeilig, Grenzen wie der Versandserver.
-  const emailSubject = (profile.defaultInvoiceEmailSubject ?? '').trim();
-  if (emailSubject.length > COMPANY_PROFILE_TEXT_LIMITS.defaultInvoiceEmailSubject || emailSubject.includes('\n') || emailSubject.includes('\r')) {
-    errors.defaultInvoiceEmailSubject = 'companyProfile.defaultInvoiceEmailSubjectInvalid';
-  }
-  if ((profile.defaultInvoiceEmailBody ?? '').trim().length > COMPANY_PROFILE_TEXT_LIMITS.defaultInvoiceEmailBody) {
-    errors.defaultInvoiceEmailBody = 'companyProfile.defaultInvoiceEmailBodyTooLong';
+  if (profile.communicationLanguage !== undefined && !isCommunicationLanguage(profile.communicationLanguage)) {
+    errors.communicationLanguage = 'companyProfile.communicationLanguageInvalid';
   }
   if (profile.defaultTaxStatus !== undefined && !isTaxStatus(profile.defaultTaxStatus)) {
     errors.defaultTaxStatus = 'companyProfile.defaultTaxStatusInvalid';

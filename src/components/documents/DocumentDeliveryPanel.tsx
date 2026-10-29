@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { resolveCloudConfirmedActionAccess } from '../../services/workspace/workspaceRoleService';
 import { Card, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
 import { SendDocumentDialog } from '../invoice/SendDocumentDialog';
 import { DeliveryHistoryList } from '../invoice/DeliveryHistoryList';
 import { useApp } from '../../context/AppContext';
+import { MailTestModeNotice } from '../communication/MailTestModeNotice';
+import { resolveProfileCommunicationLanguage } from '../../services/company/companyProfileSettingsContract';
 import { useOptionalAuth } from '../../context/AuthContext';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
@@ -85,7 +88,7 @@ export function isArchivedDocumentEmailSendable(document: CompanyDocument): bool
 }
 
 export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccepted }: Props) {
-  const { translate, language, showToast, companyProfile } = useApp();
+  const { translate, showToast, companyProfile } = useApp();
   const user = useOptionalAuth()?.user ?? null;
   const kind = resolveArchivedDocumentDeliveryKind(document);
   const identity = useMemo<DeliveryDocumentIdentity>(() => ({ kind, clientDocumentId: document.id }), [kind, document.id]);
@@ -94,7 +97,8 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
   const sendable = isArchivedDocumentEmailSendable(document);
   // 07B-FIX2 — ungeklärter Sync-Konflikt am Dokument: kein Versand (fail-closed), mit Grund.
   const syncBlocked = isArchivedDocumentSyncBlocked(document);
-  const canSend = cloud && access.canWrite && sendable && !syncBlocked;
+  // EINRICHTUNG-01 (AP2, Vertrag 1.11) — zusätzlich gesperrt, solange die Rechte nur aus dem Zwischenspeicher stammen.
+  const canSend = cloud && resolveCloudConfirmedActionAccess(access) && sendable && !syncBlocked;
 
   const [deliveries, setDeliveries] = useState<DocumentDelivery[] | null>(null);
   const [dialog, setDialog] = useState<{ mode: 'send' | 'retry' | 'resume' | 'retry_uncertain'; draft?: SendDraftState; retryOf?: DocumentDelivery; resendAcknowledged?: boolean } | null>(null);
@@ -131,9 +135,10 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
         vorgangCustomerEmail: letterCustomerEmail ?? vorgang?.customerBilling?.email ?? recipientEmail ?? null,
         profile: companyProfile,
       },
-      language,
+      // EINRICHTUNG-01 (AP6; E-05) — Vorgabetexte in der Kommunikationssprache des Betriebs.
+      resolveProfileCommunicationLanguage(companyProfile),
     );
-  }, [document, companyProfile, language, recipientEmail, kind]);
+  }, [document, companyProfile, recipientEmail, kind]);
 
   const refresh = useCallback(async () => {
     if (!cloud) return;
@@ -275,6 +280,8 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
       <Card>
         <CardTitle>{translate('delivery.document.panel.title' as TranslationKey)}</CardTitle>
         <p className="hint-text">{translate('delivery.document.panel.hint' as TranslationKey)}</p>
+        {/* EINRICHTUNG-01 (AP6; E-06) */}
+        <MailTestModeNotice testId="document-delivery-test-mode" />
 
         {!sendable ? (
           <p className="hint-text" data-testid="document-delivery-not-sendable">{translate('delivery.document.panel.notSendable' as TranslationKey)}</p>

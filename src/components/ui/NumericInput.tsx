@@ -32,6 +32,11 @@ export interface NumericInputProps {
   onChange: (value: number) => void;
   mode: NumericInputMode;
   className?: string;
+  /**
+   * EINRICHTUNG-01 (1.32, axe-core „aria-allowed-attr“) — nur noch Angabe der Aufrufer, nicht mehr als
+   * `aria-valuemin`/`aria-valuemax` ausgegeben: Für ein Textfeld (Rolle textbox) sind sie nicht erlaubt. Geprüft hat die
+   * Komponente die Grenzen nie; das tun wie bisher das jeweilige Formular bzw. der Dienst.
+   */
   min?: number;
   max?: number;
   disabled?: boolean;
@@ -181,8 +186,6 @@ export function NumericInput({
   onChange,
   mode,
   className,
-  min,
-  max,
   disabled,
   'data-testid': testId,
   strict = false,
@@ -249,8 +252,6 @@ export function NumericInput({
       value={displayed}
       disabled={disabled}
       data-testid={testId}
-      aria-valuemin={min}
-      aria-valuemax={max}
       onFocus={() => setDraftText(formatNumericValue(value, mode))}
       onChange={(event) => handleChange(event.target.value)}
       /*

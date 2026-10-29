@@ -208,7 +208,12 @@ function saveButton(): HTMLButtonElement {
   return q('settings-invoices-save') as HTMLButtonElement;
 }
 
-describe('SETTINGS-01B4 — Rechnungen & Zahlungen', () => {
+/*
+ * EINRICHTUNG-01 (AP6) — Zeitbudget wie in anderen Shell-Tests (30 s): Vollständige Renders mit Hub und Shell brauchen
+ * unter Last mehr als die 5 s der Grundeinstellung; ein überschrittener Fall lief sonst neben dem nächsten weiter und
+ * riss die übrigen Fälle über die gemeinsame Wurzel mit.
+ */
+describe('SETTINGS-01B4 — Rechnungen & Zahlungen', { timeout: 30_000 }, () => {
   beforeEach(async () => {
     resetTestStores();
     resetAuthForTests();
@@ -233,10 +238,12 @@ describe('SETTINGS-01B4 — Rechnungen & Zahlungen', () => {
 
   /* ---------------- Routing (1–5) ---------------- */
 
-  it('T1–T5: Hub-Eintrag, kanonische Route, Legacy-Hashes → neue Seite ohne Loop, #datensicherung → Betrieb', async () => {
+  it('T1–T5: Hub-Eintrag, kanonische Route, Legacy-Hashes → neue Seite ohne Loop, #datensicherung → Sicherung', async () => {
     await renderAt('/einstellungen');
     expect(q('settings-entry-invoices')?.getAttribute('href')).toBe(ROUTE);
-    expect(q('settings-group-documents')?.textContent).toContain('Rechnungen & Zahlungen');
+    // EINRICHTUNG-01 (AP5; 1.15): Gruppe „Dokumente und Zahlungen“, Ziel „Rechnungen und Zahlungen“.
+    expect(q('settings-group-documents')?.textContent).toContain('Dokumente und Zahlungen');
+    expect(q('settings-entry-invoices')?.textContent).toContain('Rechnungen und Zahlungen');
     expect(q('settings-entry-payment-terms')).toBeNull();
     expect(q('settings-entry-invoice-texts')).toBeNull();
     await unmount();
@@ -260,7 +267,7 @@ describe('SETTINGS-01B4 — Rechnungen & Zahlungen', () => {
 
     // SETTINGS-01B5 — die alte Seite existiert nicht mehr; keine zweiten Rechnungsdefaults irgendwo.
     await renderAt('/firmendaten#datensicherung');
-    expect(pathNow()).toBe('/einstellungen/betrieb');
+    expect(pathNow()).toBe('/einstellungen/daten/sicherung'); // EINRICHTUNG-01 (AP5; 1.15)
     expect(host.querySelector('#profile-payment-days')).toBeNull();
     expect(host.querySelector('[name="defaultPaymentTerms"]')).toBeNull();
   });
@@ -323,7 +330,7 @@ describe('SETTINGS-01B4 — Rechnungen & Zahlungen', () => {
     vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(true);
     seedWorkspace('member');
     await renderAt(ROUTE);
-    expect(q('settings-invoices-readonly')?.textContent).toContain('Nur Administratoren');
+    expect(q('settings-invoices-readonly')?.textContent).toContain('nur Inhaber und Administratoren'); // EINRICHTUNG-01 (AP5; 1.16)
     expect(q('settings-invoices-save')).toBeNull();
     expect(field('defaultPaymentDays').disabled).toBe(true);
     expect(field('defaultPaymentDays').value).toBe('14');

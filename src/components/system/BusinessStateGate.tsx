@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Route, Routes } from 'react-router-dom';
 import type { CompanySetup } from '../../types/models';
 import { useAuth } from '../../context/AuthContext';
 import { AppProvider } from '../../context/AppContext';
@@ -11,26 +12,60 @@ import {
   bootstrapWorkspaceCloudSyncIfNeeded,
   getLastSuccessfulWorkspaceBootstrap,
   prepareWorkspaceCloudBootstrapRetry,
+  readRememberedWorkspaceBinding,
   setLastSuccessfulWorkspaceBootstrap,
   type WorkspaceCloudBootstrapResult,
 } from '../../services/workspace/workspaceCloudBootstrapService';
 import { resetCompanySession } from '../../services/brain/companySessionService';
 import { isSupabaseConfigured } from '../../lib/supabase';
+import { hasCurrentLegalConsent } from '../../services/auth/legalConsentService';
 import { getCachedSetup } from '../../services/persistenceService';
-import { t } from '../../i18n';
+import { genericErrorText, t } from '../../i18n';
 import { getWorkspaceStoreSnapshot } from '../../services/workspace/workspaceStore';
 import { startAutomaticSync } from '../../services/sync/syncSchedulerRuntime';
 import { runInvoiceDraftCloudBackfillOnce } from '../../services/invoice/invoiceDraftCloudBridge';
-import { WorkspaceRestoreFailure, WorkspaceSetupNotFound } from './WorkspaceRestoreFailure';
+import {
+  WorkspaceInvitationPending,
+  WorkspaceNoLicense,
+  WorkspaceRestoreFailure,
+  WorkspaceSetupNotFound,
+} from './WorkspaceRestoreFailure';
+import { AdminUsersPage } from '../../pages/AdminUsersPage';
+import { InvitationPage } from '../../pages/InvitationPage';
+import {
+  clearWorkspaceRevoked,
+  handleConfirmedWorkspaceRevocation,
+  isWorkspaceRevoked,
+} from '../../services/workspace/workspaceMembershipChangeService';
+import { watchPageCacheWorkspace } from '../../services/workspace/pageCacheWorkspaceGuard';
 import { LocalStateLoadFailure } from './LocalStateLoadFailure';
+import { DocumentLanguage } from './DocumentLanguage';
 import { WorkspaceCompanyConflict } from './WorkspaceCompanyConflict';
 import { applyConfirmedCloudCompany, applyConfirmedLocalCompany } from '../../services/workspace/workspaceCompanyRecoveryService';
 import type { CompanyConflictInfo } from '../../services/workspace/workspaceCompanyConflictService';
+import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
+import { resolveSetupWizardAccess, type SetupWizardAccess } from '../../services/setupAccessService';
+import { readSetupDraft, resolveSetupDraftBinding } from '../../services/setupDraftService';
+
+/**
+ * EINRICHTUNG-01 (AP9; 1.30, EIN-27) — Fehler der Firmenkonflikt-Auflösung für die Anzeige: bekannte Codes mit eigenem
+ * Text, alles andere (Ausnahmen, Serverantworten, Listen nicht übertragener Teile) als allgemeiner Text mit
+ * Kurzreferenz. Nie der Rohtext.
+ */
+function conflictErrorText(code: string): string {
+  const lang = getCachedSetup()?.language ?? 'de';
+  if (code === 'local_changed') return t('companyConflict.changed', lang);
+  if (code === 'local_persist_failed') return t('persist.failed.userAction', lang);
+  if (code === 'pull_failed') return t('companyConflict.error.pullFailed', lang);
+  if (code === 'local_candidate_missing') return t('companyConflict.error.localMissing', lang);
+  return genericErrorText(lang, code);
+}
 
 function BootstrapLoading() {
   const lang = getCachedSetup()?.language ?? 'de';
   return (
     <div className="bootstrap-loading" data-testid="bootstrap-loading">
+      <DocumentLanguage language={lang} />
       <p className="bootstrap-loading__text">{t('common.loading.app', lang)}</p>
     </div>
   );
@@ -41,7 +76,11 @@ interface BusinessStateGateProps {
 }
 
 export function BusinessStateGate({ children }: BusinessStateGateProps) {
-  const { user, isAuthReady, isAuthenticated, isAllowed, logout } = useAuth();
+  const { user, isAuthReady, isAuthenticated, isAllowed, isAdmin, logout, passwordRecoveryPending, profileConfirmed } = useAuth();
+  /** EINRICHTUNG-01 (AP4, P-01.1) — Plattform-Verwaltung aus einer Hinweisseite ohne Betrieb geöffnet. */
+  const [platformAdminOpen, setPlatformAdminOpen] = useState(false);
+  /* EINRICHTUNG-01 (AP2, EIN-19; A-13.3) — ohne gültige Zustimmung keine Geschäftsdaten und kein Abgleich. */
+  const legalConsented = hasCurrentLegalConsent(user);
   const [setup, setSetup] = useState<CompanySetup | null>(null);
   const [bootstrapKey, setBootstrapKey] = useState('guest');
   const bootstrappedUserRef = useRef<string | null | undefined>(undefined);
@@ -57,6 +96,8 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
    */
   const [localStateLoadFailed, setLocalStateLoadFailed] = useState(false);
   const [setupNotFound, setSetupNotFound] = useState(false);
+  /** EINRICHTUNG-01 (AP3, O-05.1) — darf diese Person die Einrichtung fortsetzen? Festgestellt nach dem Abzug. */
+  const [setupNotFoundAccess, setSetupNotFoundAccess] = useState<SetupWizardAccess>('unknown');
   const [companyConflict, setCompanyConflict] = useState<CompanyConflictInfo | null>(null);
   const [conflictBusy, setConflictBusy] = useState(false);
   const [conflictChanged, setConflictChanged] = useState(false);
@@ -77,6 +118,11 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
    * lädt sie neu, statt den Bestand des früheren Kontos zu zeigen.
    */
   useEffect(() => watchPageCacheAccount(() => bootstrappedUserRef.current), []);
+  /*
+   * EINRICHTUNG-01 (AP4; M-10.3, M-13.5) — dasselbe für den Betrieb: Wurde inzwischen gewechselt oder der Zugang
+   * entzogen, zeigt die Rückkehr aus dem Seiten-Cache nicht den alten Bestand, sondern lädt neu.
+   */
+  useEffect(() => watchPageCacheWorkspace(() => bootstrappedUserRef.current, () => getWorkspaceStoreSnapshot()?.id ?? null), []);
 
   useEffect(() => {
     if (!isAuthReady) return;
@@ -134,7 +180,15 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
        * Optimierung: Ohne ihn würde nach einem Kontowechsel der Workspace des
        * vorherigen Nutzers weiterverwendet.
        */
-      const lastBootstrap = getLastSuccessfulWorkspaceBootstrap();
+      /*
+       * EINRICHTUNG-01 (AP2; A-02.1, A-02.2) — ein Offline-Start (Profil unbestätigt) desselben Kontos lädt den zuletzt
+       * bestätigten kontogebundenen Betriebsbestand, nie einen anderen Bereich und nie den Gaststand.
+       */
+      const offlineStart = Boolean(nextUserId) && isAuthenticated && profileConfirmed === false && isSupabaseConfigured();
+      const rememberedRaw = offlineStart ? readRememberedWorkspaceBinding(nextUserId) : null;
+      // EINRICHTUNG-01 (AP4, M-10.3) — ein bestätigt entzogener Betrieb kommt auch offline nicht zurück.
+      const remembered = rememberedRaw && !isWorkspaceRevoked(nextUserId, rememberedRaw.workspaceId) ? rememberedRaw : null;
+      const lastBootstrap = remembered ?? getLastSuccessfulWorkspaceBootstrap();
       const preservedWorkspaceId =
         nextUserId && lastBootstrap?.userId === nextUserId ? lastBootstrap.workspaceId : null;
 
@@ -159,8 +213,22 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
       }
       setLocalStateLoadFailed(false);
 
+      /*
+       * EINRICHTUNG-01 (AP2; A-02, Vertrag 1.11) — offline mit bekanntem Kontobestand: kein Cloud-Bootstrap (er
+       * scheiterte ohnehin), sondern der lokale Stand dieses Kontos; Änderungen bleiben „lokal gespeichert, nicht
+       * bestätigt“, cloudbestätigte Aktionen sind gesperrt. Sobald das Profil bestätigt ist, läuft dieser Effekt erneut
+       * und bootstrapt normal.
+       */
+      if (offlineStart && remembered && result.setup.setupComplete && legalConsented && !passwordRecoveryPending) {
+        setRestoreFailure(null);
+        setSetup(result.setup);
+        setBootstrapKey(`${nextUserId}:${remembered.workspaceId}:offline`);
+        return;
+      }
+
+      // EINRICHTUNG-01 (AP2, A-11.1) — während einer Passwort-Wiederherstellung kein Bootstrap und kein Abgleich.
       const needsWorkspaceBootstrap =
-        Boolean(nextUserId) && isAuthenticated && isAllowed && isSupabaseConfigured();
+        Boolean(nextUserId) && isAuthenticated && isAllowed && isSupabaseConfigured() && !passwordRecoveryPending && legalConsented;
 
       if (needsWorkspaceBootstrap) {
         /**
@@ -183,6 +251,42 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
             conflictRawRef.current = null;
           }
           setSetup(null);
+          return;
+        }
+
+        if (result.status === 'failed' && result.reason === 'revoked' && result.revokedWorkspaceId && nextUserId) {
+          /*
+           * EINRICHTUNG-01 (AP4, M-10.3) — während die App geschlossen war, wurde die Mitgliedschaft im gemerkten Betrieb
+           * beendet. Derselbe Weg wie beim bestätigten Entzug in der Sitzung: Betrieb isolieren, Bindung vergessen, neu
+           * binden; danach erscheint der Hinweis „Zugang entzogen“.
+           */
+          const store = getWorkspaceStoreSnapshot();
+          handleConfirmedWorkspaceRevocation({
+            userId: nextUserId,
+            workspaceId: result.revokedWorkspaceId,
+            workspaceName: (store?.id === result.revokedWorkspaceId ? store?.name : '') || getCachedSetup()?.companyName || '',
+          });
+          setSetup(null);
+          return;
+        }
+
+        if (result.status === 'failed' && result.reason === 'invitation_pending') {
+          // EINRICHTUNG-01 (AP4, M-07.4) — keine Mitgliedschaft, aber eine offene Einladung: Die Person entscheidet.
+          setRestoreFailure('invitation_pending');
+          setSetup(null);
+          setLastSuccessfulWorkspaceBootstrap(null);
+          return;
+        }
+
+        if (result.status === 'failed' && result.reason === 'no_license') {
+          /*
+           * EINRICHTUNG-01 (AP1, Z-03.1) — eine bestätigte Antwort des Servers, kein technischer Fehler: Es gibt
+           * weder einen Betrieb zum Binden noch eine Lizenz für einen eigenen. Kein Rückfall auf einen lokalen
+           * Bestand und keine Einrichtung, deren Eingaben nicht gespeichert werden könnten.
+           */
+          setRestoreFailure('no_license');
+          setSetup(null);
+          setLastSuccessfulWorkspaceBootstrap(null);
           return;
         }
 
@@ -214,11 +318,29 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
          * falsches Konto). Nur ein serverseitig neu angelegter Workspace darf
          * ohne Rückfrage in den Assistenten führen.
          */
+        /*
+         * EINRICHTUNG-01 (AP3; EIN-13, O-05.1) — die Rolle aus dem eben gezogenen Mitgliederstand: Nur Inhaber und
+         * Admins mit Schreibrecht bekommen „Einrichtung fortsetzen“.
+         */
+        const setupAccess = cloudSetup.setupComplete
+          ? 'allowed'
+          : resolveSetupWizardAccess(resolveWorkspaceWriteAccess({ userId: nextUserId, cloudConfigured: true }));
+        /*
+         * EINRICHTUNG-01 (AP3, O-01.1) — ein gespeicherter Entwurf genau dieses Kontos in genau diesem Betrieb löst die
+         * Mehrdeutigkeit auf: Es ist die eigene, abgebrochene Einrichtung. Dann geht es ohne Rückfrage dort weiter.
+         */
+        const resumableDraft =
+          !cloudSetup.setupComplete &&
+          setupAccess === 'allowed' &&
+          Boolean(workspaceId) &&
+          readSetupDraft(resolveSetupDraftBinding(nextUserId, workspaceId)) !== null;
         if (
           !cloudSetup.setupComplete &&
           result.status !== 'new_workspace' &&
-          !continueSetupRef.current
+          !continueSetupRef.current &&
+          !resumableDraft
         ) {
+          setSetupNotFoundAccess(setupAccess);
           setSetupNotFound(true);
           setSetup(null);
           /*
@@ -231,6 +353,8 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
         setSetupNotFound(false);
         setSetup(cloudSetup);
         setBootstrapKey(workspaceId ? `${nextUserId}:${workspaceId}` : (nextUserId ?? 'guest'));
+        // EINRICHTUNG-01 (AP4, M-10.3) — der Server hat die Mitgliedschaft eben bestätigt; eine alte Entzugsmarke gilt nicht mehr.
+        if (nextUserId && workspaceId) clearWorkspaceRevoked(nextUserId, workspaceId);
         /*
          * BUSINESS-CONTEXT-FLASH-01B — erst hier, nach erfolgreicher Freigabe,
          * gilt die Verknüpfung Nutzer ↔ Workspace. Ein gescheiterter oder
@@ -257,7 +381,7 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
     return () => {
       cancelled = true;
     };
-  }, [isAuthReady, isAuthenticated, isAllowed, user?.id, retryToken]);
+  }, [isAuthReady, isAuthenticated, isAllowed, user?.id, retryToken, passwordRecoveryPending, legalConsented, profileConfirmed]);
 
   /*
    * SYNC-AUTOMATIK-01A — automatische Synchronisation, solange ein angemeldeter
@@ -269,8 +393,9 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
    * beenden den Planer über das Aufräumen dieses Effekts — mit allen
    * Zeitgebern, Ereignissen und Kanälen.
    */
+  // EINRICHTUNG-01 (AP2, B3) — ohne bestätigtes Profil (Offline-Start) kein automatischer Abgleich.
   const automaticSyncReady =
-    setup !== null && isAuthenticated && isAllowed && !localStateLoadFailed && !companyConflict;
+    setup !== null && isAuthenticated && isAllowed && !localStateLoadFailed && !companyConflict && !passwordRecoveryPending && legalConsented && profileConfirmed !== false;
   useEffect(() => {
     if (!automaticSyncReady || !isSupabaseConfigured()) return;
     const separator = bootstrapKey.indexOf(':');
@@ -371,7 +496,7 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
                 return;
               }
               if (outcome.status === 'failed') {
-                setConflictError(outcome.message);
+                setConflictError(conflictErrorText(outcome.message));
                 return;
               }
               // Gesichert und freigegeben: derselbe Neustart wie im Gegenweg.
@@ -436,12 +561,12 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
                   conflictRawRef.current = null;
                 }
                 setConflictError(
-                  outcome.persistFailed ? 'local_persist_failed' : outcome.failed.join(', '),
+                  conflictErrorText(outcome.persistFailed ? 'local_persist_failed' : `partial:${outcome.failed.join(',')}`),
                 );
                 return;
               }
               if (outcome.status === 'failed') {
-                setConflictError(outcome.message ?? 'unknown');
+                setConflictError(conflictErrorText(outcome.message ?? 'unknown'));
                 return;
               }
               // Vollständig übertragen: lokalen Bestand aktivieren und freigeben.
@@ -458,6 +583,60 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
             });
         }}
       />
+    );
+  }
+
+  /*
+   * EINRICHTUNG-01 (AP4; P-01.1) — Plattform-Admins erreichen die Plattform-Verwaltung auch ohne eigenen Betrieb, ohne
+   * Setup und ohne Lizenz. Die Seite hängt nicht am Betriebskontext.
+   */
+  if (platformAdminOpen && isAuthenticated && isAdmin) {
+    return <AdminUsersPage onClose={() => setPlatformAdminOpen(false)} />;
+  }
+
+  /*
+   * EINRICHTUNG-01 (AP0–AP4-Abschluss, N1; Vertrag 1.5, Weg C) — auch ohne Betrieb gilt die Einladungsadresse: Die
+   * Einladungsseite prüft genau dieses Token und meldet „ungültig“, „abgelaufen“ oder „widerrufen“, statt der
+   * Hinweisseite. Jede andere Adresse zeigt weiter den Hinweis.
+   */
+  const withInvitationRoute = (hint: ReactNode) => (
+    <Routes>
+      <Route path="/einladung/:token" element={<InvitationPage />} />
+      <Route path="*" element={hint} />
+    </Routes>
+  );
+
+  if (restoreFailure === 'invitation_pending' && isAuthenticated) {
+    return withInvitationRoute(
+      <WorkspaceInvitationPending
+        userId={user?.id ?? null}
+        onRecheck={() => {
+          prepareWorkspaceCloudBootstrapRetry();
+          setRestoreFailure(null);
+          setRetryToken((value) => value + 1);
+        }}
+        onLogout={() => {
+          void logout();
+        }}
+        onOpenPlatform={isAdmin ? () => setPlatformAdminOpen(true) : undefined}
+      />,
+    );
+  }
+
+  if (restoreFailure === 'no_license' && isAuthenticated) {
+    return withInvitationRoute(
+      <WorkspaceNoLicense
+        userId={user?.id ?? null}
+        onRecheck={() => {
+          prepareWorkspaceCloudBootstrapRetry();
+          setRestoreFailure(null);
+          setRetryToken((value) => value + 1);
+        }}
+        onLogout={() => {
+          void logout();
+        }}
+        onOpenPlatform={isAdmin ? () => setPlatformAdminOpen(true) : undefined}
+      />,
     );
   }
 
@@ -479,6 +658,8 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
   if (setupNotFound && isAuthenticated) {
     return (
       <WorkspaceSetupNotFound
+        access={setupNotFoundAccess}
+        userId={user?.id ?? null}
         onRecheck={() => {
           prepareWorkspaceCloudBootstrapRetry();
           setSetupNotFound(false);
@@ -488,6 +669,12 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
           void logout();
         }}
         onContinueSetup={() => {
+          // EINRICHTUNG-01 (AP3, O-05.1) — auch der Weg selbst prüft die Rolle, nicht nur die Anzeige.
+          if (
+            resolveSetupWizardAccess(resolveWorkspaceWriteAccess({ userId: user?.id, cloudConfigured: true })) !== 'allowed'
+          ) {
+            return;
+          }
           continueSetupRef.current = true;
           setSetupNotFound(false);
           setSetup(getCachedSetup());
@@ -498,7 +685,14 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
     );
   }
 
-  if (!isAuthReady || !setup) {
+  /*
+   * EINRICHTUNG-01 (AP2, A-12.1; N-A1.1) — zwischen Anmeldung bzw. Kontowechsel und der Bindung des neuen Kontos gilt
+   * noch der Stand des vorigen (meist der leere Gaststand). Die App darf in diesem Takt nicht rendern: Sie leitete
+   * sonst auf die Einrichtung um und verlöre das Rücksprungziel, oder zeigte kurz den Bestand des vorigen Kontos.
+   */
+  const accountPending = isAuthReady && (user?.id ?? null) !== (bootstrappedUserRef.current ?? null);
+
+  if (!isAuthReady || !setup || accountPending) {
     return <BootstrapLoading />;
   }
 

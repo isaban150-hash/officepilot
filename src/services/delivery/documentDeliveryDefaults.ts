@@ -134,6 +134,8 @@ const DELIVERY_ERROR_CODE_LABELS = new Set([
   'test_recipient_not_allowed',
   'test_recipient_allowlist_invalid',
   'sender_reply_to_invalid',
+  // EINRICHTUNG-01 (AP6; E18) — keine bestätigte Antwortadresse: Hinweis mit Weg.
+  'reply_to_unavailable',
 ]);
 
 export function deliveryErrorLabelKey(delivery: Pick<DocumentDelivery, 'errorCategory'> & { errorCode?: string }): TranslationKey {

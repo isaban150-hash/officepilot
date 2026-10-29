@@ -419,3 +419,143 @@ Storage-Regel.
 
 **Nachweis:** `src/hooks/useCompanyLogoObjectUrl.ts`, `src/pages/FirmendatenPage.tsx`,
 `src/brandingLogoAssetUpload01.test.tsx`.
+
+---
+
+## D-024 – Team und Einladung
+
+**Typ:** Produktentscheidung · **Status:** gültig (EINRICHTUNG-01, Entscheidung E1; lokal umgesetzt, Veröffentlichung mit
+RELEASE-01)
+
+**Entscheidung:** Das Team im Betrieb gehört zu V1. Es gibt drei Rollen: Inhaber, Admin, Mitglied. Inhaber und Admins
+laden per Link (immer kopierbar) und zusätzlich per E-Mail ein; Admins laden nur Mitglieder ein. Angenommen wird nur mit
+der bestätigten E-Mail-Adresse, an die die Einladung ging; eine angenommene Einladung gilt als Freigabe (E3). Dazu
+gehören Rollenwechsel, Entfernen, Verlassen, Inhaberwechsel mit Zustimmung der Zielperson und die Betriebswahl bei
+mehreren Mitgliedschaften. Kann der bisherige Inhaber nicht mehr handeln, beantragt ein Plattform-Admin die Übergabe,
+und ausschließlich die Zielperson stimmt zu (E15).
+
+**Begründung:** Ohne Team bleibt ein Handwerksbetrieb eine Ein-Personen-Anwendung, und ohne Betriebswahl blieben
+Mitarbeitende mit eigenem Betrieb dauerhaft ausgesperrt. Die Zustimmung der Zielperson verhindert, dass Verantwortung
+ungefragt übertragen wird.
+
+**Nachweis:** `supabase/migrations/20261201120000_einrichtung01_ap4_team.sql`, `src/services/team/teamService.ts`,
+`src/pages/settings/TeamSettingsPage.tsx`, `src/pages/InvitationPage.tsx`, `src/components/layout/UserMenu.tsx`;
+Tests `src/einrichtung01TeamAp4.test.tsx`, `src/services/team/einrichtung01TeamDiensteAp4.test.ts`.
+
+---
+
+## D-025 – Lizenzmodell und Nur-Lesen
+
+**Typ:** Produktentscheidung · **Status:** gültig (EINRICHTUNG-01, E3, E3a, E4, E5, E16; lokal umgesetzt,
+Veröffentlichung mit RELEASE-01)
+
+**Entscheidung:** Die Lizenz gehört zum Betrieb; maßgeblich ist die Lizenz seines Inhabers. Mitglieder brauchen weder
+eine eigene Plattformfreigabe noch eine eigene Lizenz. Der Server prüft die Betriebslizenz bei Sync, Storage und in den
+Edge Functions; der Finanzwächter verlangt Betriebslizenz **und** Finanzrolle (Inhaber oder Admin). Läuft die Lizenz ab,
+wechselt der Betrieb in den Nur-Lesen-Betrieb mit Hinweis statt auf eine Sperrseite: Lesen, Export und Abmelden bleiben
+möglich; Schreiben, Versand und KI sind gesperrt. Ausnahmen sind rechtemindernde Teamaktionen und die normale Übergabe an
+eine Person mit wirksamer Lizenz. Kontosperren wirken unabhängig von der Lizenz.
+
+**Begründung:** Ein abgelaufenes Abo darf einem Betrieb nicht den Zugriff auf die eigenen Unterlagen nehmen. Eine
+Lizenzprüfung nur im Browser wäre umgehbar; deshalb prüft der Server.
+
+**Nachweis:** `supabase/migrations/20261128120000_einrichtung01_ap1_zugriff.sql`,
+`src/services/workspace/workspaceAccessService.ts`, `src/hooks/useWorkspaceWriteAccess.ts`,
+`src/components/system/WorkspaceReadOnlyBanner.tsx`; Test `src/einrichtung01NurLesenAp1.test.tsx`.
+
+---
+
+## D-026 – Konto- und Betriebslöschung
+
+**Typ:** Produktentscheidung · **Status:** gültig (EINRICHTUNG-01, E11, E19, E20; ergänzt D-017; lokal umgesetzt,
+Veröffentlichung mit RELEASE-01)
+
+**Entscheidung:** Jede Löschung verlangt eine serverseitige Bestätigung mit dem Passwort (Nachweis fünf Minuten gültig,
+einmal verwendbar, begrenzte Fehlversuche).
+- **Konto:** Ein Mitglied verlässt alle Betriebe; das Konto wird gesperrt und pseudonymisiert statt physisch gelöscht,
+  damit Verweise in Finanz- und Versanddaten gültig bleiben. Inhaber eines Betriebs müssen zuerst übergeben oder den
+  Betrieb löschen. Auch ein noch wartendes Konto kann sich selbst löschen.
+- **Betrieb:** nur durch den Inhaber, nach Angebot des Exports, mit genauem Firmennamen und dem Hinweis, dass die
+  Aufbewahrungspflicht beim Betrieb liegt (D-017, keine Rechtsberatung). Nach 30 Tagen Wartefrist mit Widerruf löscht der
+  Server vollständig (Datenbank, Speicher, Vault).
+
+**Begründung:** Personenbezogene Daten müssen gelöscht werden können, Geschäftsunterlagen dürfen aber nicht unbemerkt
+verschwinden. Die Wartefrist fängt Irrtümer und Missbrauch ab; die Pseudonymisierung hält die Buchhaltung anderer
+Betriebe korrekt.
+
+**Nachweis:** `supabase/migrations/20261203120000_einrichtung01_ap7_daten_loeschung.sql`, Edge Functions
+`confirm-destructive-action`, `delete-account`, `account-deletion-resume`, `workspace-deletion-run`;
+`src/services/account/accountDeletionService.ts`, `src/services/workspace/workspaceDeletionService.ts`; Tests
+`supabase/tests/einrichtung01_ap7_loeschung.sql`, `src/services/account/einrichtung01LoeschKerneAp7.test.ts`,
+`src/services/account/einrichtung01LoeschDiensteAp7.test.ts`. Der Lösch-Planer und der Wiederanlauf der Kontolöschung
+werden erst mit RELEASE-01 aktiviert.
+
+---
+
+## D-027 – Sprache je Person und je Betrieb
+
+**Typ:** Produktentscheidung · **Status:** gültig (EINRICHTUNG-01, E6, E7; lokal umgesetzt, Veröffentlichung mit
+RELEASE-01)
+
+**Entscheidung:** Die Oberflächensprache gehört der Person (Profil und Gerät); die Sprache von Dokumenten und E-Mails
+gehört dem Betrieb (Kommunikationssprache, Standard Deutsch). Deutsch, Türkisch und Bulgarisch sind Produktsprachen; die
+Einrichtungs-, Konto-, Team-, Plattform- und Einstellungsflächen sind in allen drei vollständig. Fehlt zur Laufzeit ein
+Text, gilt Deutsch und danach ein allgemeiner Text — nie ein Schlüssel; unbekannte Fehler zeigen einen allgemeinen Text
+mit vierstelliger Referenz. `<html lang>` folgt der Oberflächensprache. Die fachkundige Prüfung der türkischen und
+bulgarischen Texte durch eine muttersprachliche Person steht aus (E7).
+
+**Begründung:** Im selben Betrieb arbeiten Menschen mit unterschiedlicher Sprache; der Kunde des Betriebs bekommt seine
+Unterlagen aber in einer festen Sprache.
+
+**Nachweis:** `src/services/auth/personalUiLanguage.ts`, `src/context/AppContext.tsx`, `src/i18n/translate.ts`,
+`src/i18n/index.ts` (`failureText`, `genericErrorText`); Tests `src/i18n/einrichtung01SprachenAp9.test.ts`,
+`src/einrichtung01FesteTexteAp9.test.ts`, `src/einrichtung01QualitaetAp9.test.tsx`.
+
+---
+
+## D-028 – Notfallseite
+
+**Typ:** Produktentscheidung · **Status:** gültig (EINRICHTUNG-01, E8; lokal umgesetzt, Veröffentlichung mit RELEASE-01)
+
+**Entscheidung:** Die Notfallseite `/local-recovery` steht vor Anmeldung und App-Rahmen. Ohne Anmeldung zeigt sie nur
+Bestände ohne Kontobindung und eine Übersicht ohne Kennungen; kontogebundene Bestände lassen sich erst nach der Anmeldung
+genau dieses Kontos exportieren.
+
+**Begründung:** Die Seite muss auch dann helfen, wenn die App nicht startet — darf aber auf einem geteilten Gerät keine
+Daten eines anderen Kontos preisgeben.
+
+**Nachweis:** `src/RootShell.tsx`, `src/pages/LocalRecoveryPage.tsx`,
+`src/services/storage/localRecoveryAccessService.ts`; Test `src/localRecoveryE8Ap1.test.tsx`.
+
+---
+
+## D-029 – Sicherung, Export und Gerätedaten im Cloud-Betrieb
+
+**Typ:** Produktentscheidung · **Status:** gültig (EINRICHTUNG-01, E9, E10; lokal umgesetzt, Veröffentlichung mit
+RELEASE-01)
+
+**Entscheidung:** Sicherung, Export und Wiederherstellung sind Inhabern und Admins vorbehalten. Im Cloud-Betrieb gibt es
+keine Wiederherstellung über eine lokale Sicherung, weil die Cloud führend ist (`restoreLocalBackupBundle` lehnt dort ab).
+Die Sicherung ist eine Kopie; ein Wiederherstellungsweg ist **nicht nachgewiesen** — weder im Cloud-Betrieb noch im
+lokalen Betrieb, der im Browser derzeit nicht startbar ist. D-04.1 (nachgewiesene Wiederherstellung) bleibt eine
+zurückgestellte, **nicht bestandene** Anforderung. Der lesbare Export ist ein ZIP mit Übersicht, CSV je Bereich (gegen
+Formel-Einschleusung geschützt) und Originaldateien; er sendet nichts und nennt Lücken (offene Änderungen, nicht ladbare
+Dateien) ausdrücklich. Mitarbeiterzahlungen erscheinen nur für Inhaber und Admins. „Daten von diesem Gerät entfernen“
+löscht nur die Bestände dieses Kontos auf diesem Gerät und meldet danach lokal ab — und nur, wenn nichts davon allein auf
+diesem Gerät liegt.
+
+**Ergänzung 27.10.2026 (EINRICHTUNG-01 Abschluss 22, WEISS E-13):** Nicht synchronisierte Daten werden nicht entfernt,
+solange ihre tatsächliche Wiederherstellbarkeit nicht nachgewiesen ist. Eine Sicherungsdatei oder eine Bestätigung
+schaltet das Entfernen nicht mehr frei (bis Abschluss 21 war das für Inhaber und Admins möglich). Gesperrt wird bei
+offenen oder abgewiesenen Aufträgen, unbestätigten oder abgewiesenen Rechnungszahlungen, begonnenen Freigaben, nie
+abgeglichenen Daten (Kontobereich ohne Betrieb, früherer Mailimport), Entwürfen nur auf diesem Gerät, unlesbaren
+Beständen und wenn für einen Betriebsbestand in dieser Sitzung kein vollständiger Abgleich nachgewiesen ist. Die
+Prüfung läuft auf der Seite, unter der Kontosperre vor der Abmeldung und danach noch einmal am gespeicherten Stand.
+
+**Begründung:** Eine lokale Wiederherstellung könnte den gemeinsamen Cloud-Stand eines Teams überschreiben. Ein Betrieb
+muss seine Daten trotzdem jederzeit lesbar mitnehmen und ein geteiltes Gerät sauber verlassen können. Solange keine
+Wiederherstellung nachgewiesen ist, wäre eine Sicherung als Ersatz für den Abgleich ein Weg in den Datenverlust.
+
+**Nachweis:** `src/components/settings/BackupExportPanel.tsx`, `src/services/export/dataExportService.ts`,
+`src/services/storage/deviceDataService.ts`; Tests `src/services/einrichtung01SicherungAp7.test.ts`,
+`src/services/export/einrichtung01DatenexportAp7.test.ts`, `src/services/storage/einrichtung01GeraetedatenAp8.test.tsx`.

@@ -113,7 +113,12 @@ Dieses Dokument trifft **keine** rechtliche Bewertung und ersetzt keine Rechtsbe
 
 ## Backup / Restore
 
-- [x] Lokaler Backup-Export mit Prüfung und Wiederherstellungsweg
+- [x] Lokaler Backup-Export mit Prüfung (Erstellung, Vollständigkeit, Prüfsummen)
+- [ ] **Wiederherstellungsweg** — im Cloud-Betrieb nicht vorhanden (`restoreLocalBackupBundle` lehnt dort ab); im
+      lokalen Betrieb im Code angelegt, aber nicht erreichbar und nicht nachgewiesen. D-04.1 ist zurückgestellt und
+      **nicht bestanden** (D-029)
+- [ ] Gerätedaten nur entfernbar, wenn nichts davon allein auf dem Gerät liegt — lokal umgesetzt (EINRICHTUNG-01
+      Abschluss 22, WEISS E-13), unabhängige Abnahme und Veröffentlichung offen
 - [ ] **Wiederherstellungstest tatsächlich durchgeführt** — das Backup ist bislang
       unbewiesen
 - [ ] Sicherung der Cloud-Daten geregelt
@@ -133,14 +138,19 @@ Dieses Dokument trifft **keine** rechtliche Bewertung und ersetzt keine Rechtsbe
 ## Fehlerbehandlung
 
 - [x] KI-Fehler werden auf verständliche deutsche Meldungen abgebildet
-- [x] Keine technischen Fremdtexte in der Oberfläche
+- [ ] Keine technischen Fremdtexte in der Oberfläche — war fälschlich abgehakt (EIN-27). Für die Einrichtungs-, Konto-,
+  Team-, Plattform- und Einstellungsflächen mit EINRICHTUNG-01 umgesetzt (Fehlerkatalog, allgemeiner Text mit
+  Kurzreferenz, Test auf feste Texte; lokal, Veröffentlichung mit RELEASE-01). Offen: übrige Bereiche, u. a. der
+  Notfallimport (`/local-recovery/import`, nur Deutsch, technische Begriffe)
 - [ ] Verhalten bei Verbindungsverlust in allen Kernwegen geprüft
 - [ ] Nutzer erfährt bei fehlgeschlagenem Sync, was zu tun ist
 
 ## Mobilgeräte
 
 - [x] Mobile-First-Layout, Kamera-Upload, Draft-Durability für Rechnungen
-- [ ] Formular-Durability für die übrigen Masken (Firmendaten verliert heute Entwürfe)
+- [ ] Formular-Durability für die übrigen Masken — Einstellungsseiten (u. a. Firmendaten), Kunde, Ausgabe,
+  Nummernkreise und Einrichtungsassistent behalten Entwürfe und fragen vor dem Verlassen nach (EINRICHTUNG-01 AP8; lokal,
+  Veröffentlichung mit RELEASE-01); weitere Masken offen
 - [ ] Installierbarkeit als PWA geklärt
 - [ ] Kernwege auf iOS und Android real geprüft
 

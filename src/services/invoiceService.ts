@@ -41,6 +41,7 @@ import type {
 import type { BrandingSnapshot } from '../types/branding';
 import { BRANDING_SNAPSHOT_VERSION, DEFAULT_DOCUMENT_TEMPLATE } from '../types/branding';
 import { buildBrandingSnapshot } from './branding/brandingSnapshotService';
+import { COMPANY_SNAPSHOT_KEYS } from './invoice/companySnapshotFieldCatalog';
 import { isStandardPaymentTerms, resolveDefaultTaxStatus, resolveInvoiceDefaults, standardPaymentTerms } from './invoice/invoiceDefaults';
 import {
   isFixedAmountAbschlag,
@@ -1610,30 +1611,31 @@ function cloneCompanySnapshot(profile: CompanyProfile): CompanyProfile {
 
 /**
  * SETTINGS-01B1 — was vom Profil in den `companySnapshot` eines Entwurfs
- * gehört. Entfernt werden die reinen Vorbelegungen `defaultTaxStatus`/
- * `defaultIntroText`/`defaultClosingText`: Ihr konkreter Wert lebt auf dem
- * Entwurf; im Snapshot und damit im Fingerprint hätten sie nichts zu suchen,
- * und eine geänderte Vorgabe darf keinen Drift für einen alten Entwurf
- * erzeugen. `accountHolder` bleibt — er ist Bankidentität. `branding` bleibt
+ * gehört. `accountHolder` bleibt — er ist Bankidentität. `branding` bleibt
  * hier wie bisher am Entwurf und fällt erst bei der Finalisierung weg (01F-1).
+ *
+ * EINRICHTUNG-01 (EIN-01) — **Positivliste statt Ausschlussliste.** Bisher
+ * wurden einzelne Vorbelegungen herausgenommen; jedes neue Profilfeld rutschte
+ * damit ungefragt in den eingefrorenen Firmenblock. So geschah es mit Signatur
+ * und Angebots-/Briefvorlagen (E-MAIL-07C): Der Freigabe-Validator kennt nur
+ * `COMPANY_SNAPSHOT_KEYS` und lehnte jede danach angelegte Rechnung mit
+ * `unknown_field` ab. Jetzt gelangen ausschließlich die Schlüssel des
+ * Rechnungsvertrags in den Block — dazu `branding` (nur am Entwurf) und wie
+ * bisher immer `logoDataUrl`. Die Reihenfolge der Schlüssel bleibt die des
+ * Profils, damit Fingerabdrücke unverändert entstehen.
+ *
+ * Für bestehende Entwürfe gilt dasselbe beim Freigeben (`cloneCompanySnapshot`):
+ * unzulässige Schlüssel fallen weg, die eingefrorenen erlaubten Werte bleiben.
  */
+const INVOICE_COMPANY_SNAPSHOT_KEY_SET: ReadonlySet<string> = new Set<string>(COMPANY_SNAPSHOT_KEYS);
+
 export function toInvoiceCompanySnapshot(profile: CompanyProfile): CompanyProfile {
-  const {
-    defaultTaxStatus: _defaultTaxStatus,
-    defaultIntroText: _defaultIntroText,
-    defaultClosingText: _defaultClosingText,
-    // EMAIL-01B4 — Mail-Vorbelegungen sind keine Rechnungsdaten.
-    defaultInvoiceEmailSubject: _defaultInvoiceEmailSubject,
-    defaultInvoiceEmailBody: _defaultInvoiceEmailBody,
-    // PRODUCT-BASIS-FIRMENPROFIL-01B — Waehrung/Antwortadresse/Absendername sind
-    // Profil-Vorbelegungen, keine historischen Rechnungsdaten (nicht im
-    // COMPANY_SNAPSHOT_KEYS-Vertrag). Sie sickern nie in einen Snapshot.
-    currency: _currency,
-    replyToEmail: _replyToEmail,
-    senderDisplayName: _senderDisplayName,
-    ...rest
-  } = profile;
-  return { ...rest, logoDataUrl: profile.logoDataUrl };
+  const snapshot: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(profile)) {
+    if (INVOICE_COMPANY_SNAPSHOT_KEY_SET.has(key) || key === 'branding') snapshot[key] = value;
+  }
+  snapshot.logoDataUrl = profile.logoDataUrl;
+  return snapshot as unknown as CompanyProfile;
 }
 
 /**

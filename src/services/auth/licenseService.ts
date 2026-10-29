@@ -30,12 +30,17 @@ export function getLicenseFromProfileUser(user: UserAccount): License | undefine
   return getLicenseFromUserAccount(user);
 }
 
+/**
+ * EINRICHTUNG-01 (AP1; E3, E5, Vertrag 1.1) — die App öffnet sich für jedes freigegebene Konto.
+ *
+ * Die Lizenz gehört dem Betrieb (der Lizenz seines Inhabers), nicht der Person: Admins und Mitglieder brauchen keine
+ * eigene. Ob ein Betrieb schreiben darf, meldet der Server (`get_workspace_access`); ist seine Lizenz nicht wirksam,
+ * gilt Nur-Lesen statt einer Sperrseite (E5). Wer noch keinen Betrieb hat, erfährt bei der Betriebsbindung, dass
+ * für einen eigenen Betrieb eine Lizenz fehlt (Z-03.1). Gesperrt und wartend bleiben eigene Seiten.
+ */
 export function isUserAllowedToUseApp(user: UserAccount | undefined): boolean {
   if (!user) return false;
-  if (user.status !== 'approved') return false;
-  if (user.licenseStatus === 'inactive' || user.licenseStatus === 'expired') return false;
-  const license = getLicenseFromUserAccount(user);
-  return isLicenseActive(license);
+  return user.status === 'approved';
 }
 
 export function getLicenseBlockReason(

@@ -19,6 +19,7 @@ import {
   provisionWorkspaceForAuthenticatedUser,
 } from './workspaceProvisioningService';
 import { rpcPullWorkspaceSyncState, WorkspaceCloudError } from './workspaceCloudService';
+import { isWorkspaceNoAccessMessage } from '../sync/syncRoleDenial';
 import {
   buildCloudCompanySnapshot,
   detectCompanyConflict,
@@ -61,6 +62,83 @@ export function getLastSuccessfulWorkspaceBootstrap(): WorkspaceBootstrapBinding
 
 export function setLastSuccessfulWorkspaceBootstrap(value: WorkspaceBootstrapBinding | null): void {
   lastSuccessfulBootstrap = value ? { ...value } : null;
+  if (value) rememberWorkspaceBinding(value);
+}
+
+/**
+ * EINRICHTUNG-01 (AP2; A-02.1, Vertrag 1.11) — die zuletzt erfolgreich bestätigte Bindung je Konto, auch über einen
+ * Neustart. Nur der Offline-Start desselben Kontos nutzt sie (Profil unbestätigt): Er zeigt genau den kontogebundenen
+ * Bestand des zuletzt bestätigten Betriebs, nie einen anderen Bereich. Online entscheidet weiter der Server.
+ */
+const WORKSPACE_BINDING_KEY_PREFIX = 'officetakt-workspace-binding:';
+
+function rememberWorkspaceBinding(value: WorkspaceBootstrapBinding): void {
+  try {
+    localStorage.setItem(
+      `${WORKSPACE_BINDING_KEY_PREFIX}${value.userId}`,
+      JSON.stringify({ workspaceId: value.workspaceId, access: value.access ?? null }),
+    );
+  } catch {
+    // ohne Speicher kein Offline-Start dieses Kontos
+  }
+}
+
+export function readRememberedWorkspaceBinding(userId: string | null | undefined): WorkspaceBootstrapBinding | null {
+  if (!userId) return null;
+  try {
+    const raw = localStorage.getItem(`${WORKSPACE_BINDING_KEY_PREFIX}${userId}`);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as { workspaceId?: unknown; access?: unknown } | null;
+    if (typeof value?.workspaceId !== 'string' || !value.workspaceId) return null;
+    const access = value.access === 'full' || value.access === 'member' ? value.access : undefined;
+    return { userId, workspaceId: value.workspaceId, ...(access ? { access } : {}) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * EINRICHTUNG-01 (AP4; M-10.3, M-13) — nach Betriebswechsel, Verlassen, Annahme, Übergabe oder Entzug fragt der nächste
+ * Start den Server (`ensure_personal_workspace`), statt die gespeicherte Provisionierung des bisherigen Betriebs zu
+ * nutzen. Die Markierung gilt je Konto und erlischt erst mit einer erfolgreichen Bindung.
+ */
+const WORKSPACE_REBIND_KEY_PREFIX = 'officetakt-workspace-rebind:';
+
+export function requestWorkspaceRebind(userId: string | null | undefined): void {
+  if (!userId) return;
+  try {
+    localStorage.setItem(`${WORKSPACE_REBIND_KEY_PREFIX}${userId}`, '1');
+  } catch {
+    // ohne Speicher: der Start fragt ohnehin, sobald keine Provisionierung gespeichert ist
+  }
+}
+
+export function isWorkspaceRebindRequested(userId: string | null | undefined): boolean {
+  if (!userId) return false;
+  try {
+    return localStorage.getItem(`${WORKSPACE_REBIND_KEY_PREFIX}${userId}`) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function clearWorkspaceRebindRequest(userId: string | null | undefined): void {
+  if (!userId) return;
+  try {
+    localStorage.removeItem(`${WORKSPACE_REBIND_KEY_PREFIX}${userId}`);
+  } catch {
+    // nichts zu tun
+  }
+}
+
+/** Beim ausdrücklichen Abmelden: kein Offline-Start mehr für dieses Konto. */
+export function forgetRememberedWorkspaceBinding(userId: string | null | undefined): void {
+  if (!userId) return;
+  try {
+    localStorage.removeItem(`${WORKSPACE_BINDING_KEY_PREFIX}${userId}`);
+  } catch {
+    // nichts zu tun
+  }
 }
 
 /**
@@ -135,6 +213,12 @@ export type WorkspaceCloudBootstrapReason =
   | 'network'
   | 'auth'
   | 'rls'
+  /** EINRICHTUNG-01 (Z-03.1) — freigegeben, aber ohne Betrieb und ohne Lizenz für einen eigenen. */
+  | 'no_license'
+  /** EINRICHTUNG-01 (AP4, M-07.4) — ohne Betrieb, aber mit offener Einladung an die bestätigte E-Mail. */
+  | 'invitation_pending'
+  /** EINRICHTUNG-01 (AP4, M-10.3) — im gemerkten Betrieb laut Server keine aktive Mitgliedschaft mehr. */
+  | 'revoked'
   | 'provision'
   | 'pull'
   | 'persist'
@@ -152,6 +236,8 @@ export interface WorkspaceCloudBootstrapResult {
    * Fehler darf dann nicht ersatzweise ein anderer Scope freigegeben werden.
    */
   localWorkspaceCandidate?: boolean;
+  /** Nur bei reason 'revoked': der Betrieb, in dem die Mitgliedschaft nicht mehr besteht. */
+  revokedWorkspaceId?: string;
 }
 
 export async function bootstrapWorkspaceCloudSyncIfNeeded(
@@ -183,7 +269,10 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(
       ? hasRealLocalWorkspaceCompany(knownWorkspaceId, sessionUserId)
       : false;
 
-    if (!client.cloudProvisionedAt || !state.workspace) {
+    const rebindRequested = isWorkspaceRebindRequested(sessionUserId);
+    /** EINRICHTUNG-01 (AP4) — hat der Server die Bindung in genau diesem Lauf bestätigt? */
+    let provisionedThisRun = false;
+    if (rebindRequested || !client.cloudProvisionedAt || !state.workspace) {
       const provision = await provisionWorkspaceForAuthenticatedUser(state);
       if (!provision.success || !provision.state) {
         // Provisioning failed — never fall through to a local default.
@@ -194,10 +283,15 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(
               ? 'auth'
               : provision.errorCode === 'rls'
                 ? 'rls'
-                : 'provision';
+                : provision.errorCode === 'no_license'
+                  ? 'no_license'
+                  : provision.errorCode === 'invitation_pending'
+                    ? 'invitation_pending'
+                    : 'provision';
         return { status: 'failed', reason, localWorkspaceCandidate: hasLocalWorkspaceCompany };
       }
       createdWorkspace = provision.created === true;
+      provisionedThisRun = true;
       state = provision.state;
       provisionedMembers = provision.state.workspaceMembers ?? [];
       applyPersistedStateFromSync(state);
@@ -221,6 +315,16 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(
     try {
       pull = await rpcPullWorkspaceSyncState(workspaceId);
     } catch (error) {
+      /*
+       * EINRICHTUNG-01 (AP4, M-10.3) — der Server bestätigt: In dem gemerkten Betrieb ist das Konto kein aktives
+       * Mitglied mehr (entfernt oder verlassen, während die App geschlossen war). Das ist ein Entzug, kein technischer
+       * Abzugsfehler; das Gate isoliert den Betrieb und bindet neu wie beim Entzug in der laufenden Sitzung.
+       */
+      // Nur für einen gespeicherten Betrieb: Hat ensure ihn in diesem Lauf bestätigt, wäre ein „Entzug“ ein Widerspruch
+      // (und das Neubinden eine Schleife) — dann bleibt es beim Abzugsfehler.
+      if (!provisionedThisRun && sessionUserId && error instanceof WorkspaceCloudError && isWorkspaceNoAccessMessage(error.message)) {
+        return { status: 'failed', reason: 'revoked', revokedWorkspaceId: workspaceId, localWorkspaceCandidate: hasLocalWorkspaceCompany };
+      }
       /**
        * OFFICEPILOT-…-02B-K2 — existiert lokal ein echter Workspace-Bestand,
        * darf ein Pull-Fehler nicht dazu führen, dass ein anderer Scope als
@@ -334,6 +438,7 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(
     }
 
     bootstrapCompleted = true;
+    clearWorkspaceRebindRequest(sessionUserId);
     return { status: createdWorkspace ? 'new_workspace' : 'ready', createdWorkspace };
   })();
 

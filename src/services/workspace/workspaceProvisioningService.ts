@@ -128,7 +128,7 @@ export interface WorkspaceProvisioningResult {
   workspaceId?: string;
   created?: boolean;
   error?: string;
-  errorCode?: 'auth' | 'rls' | 'network' | 'unknown';
+  errorCode?: 'auth' | 'rls' | 'network' | 'unknown' | 'no_license' | 'invitation_pending';
 }
 
 export interface WorkspaceInitialMigrationResult {

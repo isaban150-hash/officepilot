@@ -8,6 +8,7 @@ import { AuthProvider } from '../context/AuthContext';
 import { DEFAULT_SETUP } from '../data/mockData';
 import { SyncPage } from './SyncPage';
 import { MehrPage } from './MehrPage';
+import { EinstellungenPage } from './EinstellungenPage';
 import { resetSyncClientForTests, createSyncClient } from '../services/sync/syncClientService';
 import { resetSyncOutboxForTests } from '../services/sync/syncOutboxService';
 import { resetSyncCoordinatorForTests } from '../services/sync/syncCoordinator';
@@ -260,19 +261,26 @@ describe('SyncPage', () => {
   });
 });
 
-describe('MehrPage sync link', () => {
-  it('zeigt Link zur Synchronisation', () => {
-    const html = renderToStaticMarkup(
-      <MemoryRouter>
-        <AuthProvider>
-          <AppProvider initialSetup={completeSetup}>
-            <MehrPage />
-          </AppProvider>
-        </AuthProvider>
-      </MemoryRouter>,
-    );
+/*
+ * EINRICHTUNG-01 (AP5; Vertrag 1.15) — „Mehr“ enthält keine Einstellungsziele mehr; die Synchronisation hat ihren einen
+ * Einstieg unter „Einstellungen › Hilfe und Rechtliches“ (für jede Rolle im Cloud-Betrieb).
+ */
+describe('Einstieg zur Synchronisation', () => {
+  it('steht im Hub unter „Hilfe und Rechtliches“, nicht mehr in „Mehr“', () => {
+    const render = (page: JSX.Element) =>
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <AuthProvider>
+            <AppProvider initialSetup={completeSetup}>{page}</AppProvider>
+          </AuthProvider>
+        </MemoryRouter>,
+      );
 
-    expect(html).toContain('Synchronisation');
-    expect(html).toContain('/synchronisation');
+    expect(render(<MehrPage />)).not.toContain('/synchronisation');
+    const hub = render(<EinstellungenPage />);
+    expect(hub).toContain('data-testid="settings-group-help"');
+    const tag = hub.match(/<a[^>]*data-testid="settings-entry-sync"[^>]*>/)?.[0] ?? '';
+    expect(tag).toContain('href="/synchronisation"');
+    expect(hub).toContain('Synchronisation');
   });
 });

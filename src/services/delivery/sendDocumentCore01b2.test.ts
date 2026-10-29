@@ -9,8 +9,10 @@ import { createStubEmailProvider } from '../../../supabase/functions/_shared/ema
 import {
   resolveSenderIdentity,
   runSendDocument,
+  type CompanyContext,
   type DeliveryRow,
   type InvoiceContext,
+  type ReplyToResolution,
   type SendDocumentDeps,
 } from '../../../supabase/functions/_shared/sendDocumentCore';
 
@@ -66,7 +68,10 @@ function invoice(overrides: Partial<InvoiceContext> = {}): InvoiceContext {
   };
 }
 
-function deps(row: DeliveryRow, inv: InvoiceContext | null, options: { canWrite?: boolean; bytes?: Uint8Array | null; provider?: SendDocumentDeps['provider'] } = {}) {
+/** EINRICHTUNG-01 (AP6; E18) — die Antwortadresse bestimmt der Server: hier die bestätigte Anmelde-E-Mail des Inhabers. */
+const OWNER_REPLY_TO: ReplyToResolution = { ok: true, email: 'inhaber@betrieb.invalid', source: 'owner_login' };
+
+function deps(row: DeliveryRow, inv: InvoiceContext | null, options: { canWrite?: boolean; bytes?: Uint8Array | null; provider?: SendDocumentDeps['provider']; replyTo?: ReplyToResolution; company?: CompanyContext | null } = {}) {
   const calls = { accepted: [] as unknown[], status: [] as unknown[], sent: [] as unknown[], logs: [] as unknown[] };
   const provider = options.provider ?? createStubEmailProvider();
   const wrapped: SendDocumentDeps['provider'] = {
@@ -79,7 +84,8 @@ function deps(row: DeliveryRow, inv: InvoiceContext | null, options: { canWrite?
   const d: SendDocumentDeps = {
     senderEmail: SENDER,
     userCanWrite: vi.fn(async () => options.canWrite ?? true),
-    loadDelivery: vi.fn(async (ws, id) => (ws === row.workspace_id && id === row.client_delivery_id ? { delivery: row, invoice: inv } : null)),
+    loadDelivery: vi.fn(async (ws, id) => (ws === row.workspace_id && id === row.client_delivery_id ? { delivery: row, invoice: inv, company: options.company } : null)),
+    resolveReplyTo: vi.fn(async () => options.replyTo ?? OWNER_REPLY_TO),
     downloadAttachment: vi.fn(async () => (options.bytes === undefined ? PDF : options.bytes)),
     sha256Hex,
     provider: wrapped,
@@ -100,7 +106,7 @@ function deps(row: DeliveryRow, inv: InvoiceContext | null, options: { canWrite?
 }
 
 describe('EMAIL-01B2 — Send-Kern', () => {
-  it('K1: queued → Provider → provider_accepted mit Kopplung; From/Reply-To aus dem Snapshot; Log ohne Empfänger/Key', async () => {
+  it('K1: queued → Provider → provider_accepted mit Kopplung; From aus dem Snapshot, Reply-To vom Server (E18); Log ohne Empfänger/Key', async () => {
     const row = await delivery();
     const { d, calls } = deps(row, invoice());
     const outcome = await runSendDocument({ userId: 'u-1', workspaceId: WS, clientDeliveryId: 'cd-1' }, d);
@@ -109,7 +115,9 @@ describe('EMAIL-01B2 — Send-Kern', () => {
     expect(calls.sent).toHaveLength(1);
     const sent = calls.sent[0] as { from: { email: string; name: string }; replyTo: { email: string }; to: { email: string }; attachment: { filename: string; contentBase64: string }; idempotencyKey: string };
     expect(sent.from).toEqual({ email: SENDER, name: 'Betrieb GmbH' });
-    expect(sent.replyTo.email).toBe('info@betrieb.invalid');
+    // EINRICHTUNG-01 (AP6; E18) — nicht die Firmen-E-Mail des Snapshots, sondern die vom Server bestimmte Adresse.
+    expect(sent.replyTo.email).toBe('inhaber@betrieb.invalid');
+    expect(d.resolveReplyTo).toHaveBeenCalledWith(WS);
     expect(sent.to.email).toBe('kunde@example.invalid');
     expect(sent.attachment.filename).toBe('Rechnung_2026-0001.pdf');
     expect(atob(sent.attachment.contentBase64)).toBe('%PDF-1.4 test-document');
@@ -179,14 +187,29 @@ describe('EMAIL-01B2 — Send-Kern', () => {
     }
   });
 
-  it('K6: Absender-Wahrheit — Snapshot ohne E-Mail oder ohne Firma → fail-closed, kein Versand; nie aus aktuellem Profil', async () => {
-    expect(resolveSenderIdentity(invoice())).toEqual({ ok: true, fromName: 'Betrieb GmbH', replyTo: 'info@betrieb.invalid' });
-    expect(resolveSenderIdentity(invoice({ company_snapshot: { companyName: 'Betrieb', email: '' } }))).toEqual({ ok: false, code: 'sender_reply_to_missing' });
-    expect(resolveSenderIdentity(invoice({ company_snapshot: null }))).toEqual({ ok: false, code: 'sender_snapshot_missing' });
-    expect(resolveSenderIdentity(null)).toEqual({ ok: false, code: 'sender_snapshot_missing' });
-    const { d, calls } = deps(await delivery(), invoice({ company_snapshot: { companyName: 'Betrieb', email: 'kein-mail' } }));
-    expect(await runSendDocument({ userId: 'u-1', workspaceId: WS, clientDeliveryId: 'cd-1' }, d)).toMatchObject({ ok: true, action: 'failed', delivery: { errorCode: 'sender_reply_to_missing' } });
-    expect(calls.sent).toHaveLength(0);
+  it('K6: Absender-Wahrheit — Name aus dem Snapshot, Antwortadresse vom Server (E18); ohne Snapshot oder ohne bestätigte Adresse fail-closed', async () => {
+    // EINRICHTUNG-01 (AP6; E18) — die Antwortadresse kommt nie aus Snapshot oder Profil, sondern aus `resolveReplyTo`.
+    expect(resolveSenderIdentity(invoice(), null, 'Inhaber@Betrieb.invalid')).toEqual({ ok: true, fromName: 'Betrieb GmbH', replyTo: 'inhaber@betrieb.invalid' });
+    expect(resolveSenderIdentity(invoice({ company_snapshot: { companyName: 'Betrieb', email: '' } }), null, 'inhaber@betrieb.invalid')).toEqual({ ok: true, fromName: 'Betrieb', replyTo: 'inhaber@betrieb.invalid' });
+    expect(resolveSenderIdentity(invoice(), null, '')).toEqual({ ok: false, code: 'reply_to_unavailable' });
+    expect(resolveSenderIdentity(invoice({ company_snapshot: null }), null, 'inhaber@betrieb.invalid')).toEqual({ ok: false, code: 'sender_snapshot_missing' });
+    expect(resolveSenderIdentity(null, null, 'inhaber@betrieb.invalid')).toEqual({ ok: false, code: 'sender_snapshot_missing' });
+
+    // E-03.11 — keine bestätigte Adresse: kein Versand, verständlicher Hinweis, nie ein Rückfall auf eine Wunschadresse.
+    const unavailable = deps(await delivery(), invoice(), { replyTo: { ok: false, code: 'reply_to_unavailable' }, company: { companyName: 'Betrieb', email: 'info@betrieb.invalid', replyToEmail: 'wunsch@betrieb.invalid' } });
+    expect(await runSendDocument({ userId: 'u-1', workspaceId: WS, clientDeliveryId: 'cd-1' }, unavailable.d)).toMatchObject({ ok: true, action: 'failed', delivery: { errorCode: 'reply_to_unavailable' } });
+    expect(unavailable.calls.sent).toHaveLength(0);
+    expect(unavailable.calls.status[0]).toMatchObject({ status: 'failed', error: { code: 'reply_to_unavailable', message: expect.stringContaining('bestätigen') } });
+  });
+
+  it('K6b (E-03.9): eine unbestätigte Wunschadresse, die Firmen-E-Mail oder die Adresse der sendenden Person werden nie Antwortadresse', async () => {
+    const { d, calls } = deps(await delivery(), invoice(), {
+      company: { companyName: 'Betrieb', email: 'info@betrieb.invalid', senderDisplayName: 'Meister Müller', replyToEmail: 'wunsch@betrieb.invalid' },
+    });
+    expect(await runSendDocument({ userId: 'u-1', workspaceId: WS, clientDeliveryId: 'cd-1' }, d)).toMatchObject({ ok: true, action: 'sent' });
+    const sent = calls.sent[0] as { from: { name: string }; replyTo: { email: string } };
+    expect(sent.from.name).toBe('Meister Müller');
+    expect(sent.replyTo.email).toBe('inhaber@betrieb.invalid');
   });
 
   it('K7: Rechnungskontext — storniert/Entwurf/fehlend → failed; Korrekturbeleg nur mit Korrektur, Kopplung nicht für das Original', async () => {

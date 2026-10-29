@@ -8,6 +8,7 @@ import { RowList, RowListItem } from '../components/ui/Lists';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
 import { Checkbox } from '../components/ui/Checkbox';
 import { useApp } from '../context/AppContext';
+import { SETTINGS_HUB_ROUTE, settingsTargetTitleKey } from './settings/settingsHubConfig';
 import type { SyncOutboxEntry, SyncState } from '../types/sync';
 import type { SyncFailureKind } from '../services/sync/syncOutboxDescriptionService';
 import type { TranslationKey } from '../i18n';
@@ -378,10 +379,10 @@ export function SyncPage() {
   return (
     <Page className="sync-page" testId="sync-page">
       <PageHeader
-        title={translate('sync.title')}
+        title={translate(settingsTargetTitleKey('sync'))}
         subtitle={translate('sync.subtitle')}
-        backLabel={translate('common.back')}
-        backHref="/mehr"
+        backLabel={translate('settings.backToHub')}
+        backHref={SETTINGS_HUB_ROUTE}
         backTestId="sync-back"
       />
 

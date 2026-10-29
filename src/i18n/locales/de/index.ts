@@ -13,6 +13,13 @@ import { deDocumentOriginal } from './documentOriginal';
 import { deBackup } from './backup';
 import { dePilot } from './pilot';
 import { deSettings } from './settings';
+import { deSettingsHub } from './settingsHub';
+import { deSettingsProfile } from './settingsProfile';
+import { deDataDeletion } from './dataDeletion';
+import { deDataExport } from './dataExport';
+import { deLeaveGuard } from './leaveGuard';
+import { deDeviceData } from './deviceData';
+import { deErrors } from './errors';
 import { deDelivery } from './delivery';
 import { deFreeEmail } from './freeEmail';
 import { deInboundEmail } from './inboundEmail';
@@ -30,6 +37,14 @@ import { deWorkspaceRole } from './workspaceRole';
 import { deDocumentRetention } from './documentRetention';
 import { deSyncHeldOrders } from './syncHeldOrders';
 import { deVorgangsbindung } from './vorgangsbindung';
+import { deWorkspaceAccess } from './workspaceAccess';
+import { deLocalRecoveryAccess } from './localRecoveryAccess';
+import { deLocalRecoveryImport } from './localRecoveryImport';
+import { deAuthSession } from './authSession';
+import { deAccount } from './account';
+import { deSetupFlow } from './setupFlow';
+import { dePlatform } from './platform';
+import { deTeam } from './team';
 
 export const deModules = {
   ...deAuth,
@@ -49,6 +64,13 @@ export const deModules = {
   ...deBackup,
   ...dePilot,
   ...deSettings,
+  ...deSettingsHub,
+  ...deSettingsProfile,
+  ...deDataDeletion,
+  ...deDataExport,
+  ...deLeaveGuard,
+  ...deDeviceData,
+  ...deErrors,
   ...deDelivery,
   ...deFreeEmail,
   ...deInboundEmail,
@@ -66,4 +88,12 @@ export const deModules = {
   ...deDocumentRetention,
   ...deSyncHeldOrders,
   ...deVorgangsbindung,
+  ...deWorkspaceAccess,
+  ...deLocalRecoveryAccess,
+  ...deLocalRecoveryImport,
+  ...deAuthSession,
+  ...deAccount,
+  ...deSetupFlow,
+  ...dePlatform,
+  ...deTeam,
 } as const;

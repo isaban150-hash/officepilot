@@ -8,6 +8,7 @@
  * Dadurch ist die Logik in Vitest vollständig prüfbar.
  */
 import type { DeliveryErrorCategory, EmailProviderAdapter, SendTransactionalEmailResult } from './emailProvider.ts';
+import { composeSenderLegalName, senderDisplayNameProblem } from './senderDisplayName.ts';
 
 /**
  * BREVO-LIVE-CONFIG-01 — die technische Absenderadresse ist Serverkonfiguration
@@ -110,9 +111,24 @@ export interface CompanyContext {
   email?: unknown;
   /** Kommunikations-Einstellungen: eigener Anzeigename (leer = Firmenname Rechtsform). */
   senderDisplayName?: unknown;
-  /** Kommunikations-Einstellungen: Antwortadresse (leer = Firmen-E-Mail). */
+  /**
+   * Kommunikations-Einstellungen: gewünschte Antwortadresse. EINRICHTUNG-01 (AP6; E18) — sie gilt erst nach ihrer
+   * Bestätigung; welche Adresse ein Versand nutzt, bestimmt allein `resolveReplyTo` (Server).
+   */
   replyToEmail?: unknown;
 }
+
+/**
+ * EINRICHTUNG-01 (AP6; E18, K4) — die Antwortadresse eines Versands, vom Server bei jedem Versand neu bestimmt
+ * (`resolve_workspace_reply_to`): die bestätigte Antwortadresse des Betriebs, sonst die bestätigte Anmelde-E-Mail des
+ * aktuellen Inhabers. Fehlt beides: `reply_to_unavailable` (fail-closed).
+ */
+export type ReplyToResolution =
+  | { ok: true; email: string; source: 'confirmed_reply_to' | 'owner_login' }
+  | { ok: false; code: 'reply_to_unavailable' };
+
+export const REPLY_TO_UNAVAILABLE_MESSAGE =
+  'Für diesen Betrieb gibt es keine bestätigte Antwortadresse: Bitte die Antwortadresse unter Einstellungen › Kommunikation › E-Mail-Absender und Vorlagen bestätigen oder die Anmelde-E-Mail des Inhabers bestätigen. Es wurde nichts gesendet.';
 
 export interface LoadedDelivery {
   delivery: DeliveryRow;
@@ -130,6 +146,8 @@ export interface SendDocumentDeps {
   testRecipientAllowlist?: TestRecipientAllowlist;
   userCanWrite(workspaceId: string, userId: string): Promise<boolean>;
   loadDelivery(workspaceId: string, clientDeliveryId: string): Promise<LoadedDelivery | null>;
+  /** EINRICHTUNG-01 (AP6; E18) — Antwortadresse dieses Versands (Server); eine Adresse aus Anfrage oder Profil gilt nie. */
+  resolveReplyTo(workspaceId: string): Promise<ReplyToResolution>;
   downloadAttachment(storagePath: string): Promise<Uint8Array | null>;
   sha256Hex(bytes: Uint8Array): Promise<string>;
   provider: EmailProviderAdapter;
@@ -202,15 +220,19 @@ function text(value: unknown): string {
  * ausdrücklich eine Adresse gewählt, und Antworten an eine andere Adresse
  * wären ein stiller Fehler. Dann: fail-closed, kein Versand.
  */
-function resolveCommunicationOverrides(company: CompanyContext | null | undefined):
-  | { ok: true; displayName: string; replyTo: string }
-  | { ok: false; code: 'sender_reply_to_invalid' } {
+function resolveCommunicationDisplayName(company: CompanyContext | null | undefined): string {
+  /*
+   * EINRICHTUNG-01 (AP6; E-04) — ein eigener Anzeigename gilt nur, wenn er die Regel erfüllt (höchstens 120
+   * Codepunkte, ohne Zeilenumbruch, ohne < > " @). Ein älterer gespeicherter Wert, der sie verletzt, fällt auf die
+   * Ableitung aus Firmenname und Rechtsform zurück.
+   */
   const displayName = text(company?.senderDisplayName);
-  const replyTo = text(company?.replyToEmail).toLowerCase();
-  if (replyTo && (replyTo.length > 254 || !SENDER_EMAIL_PATTERN.test(replyTo))) {
-    return { ok: false, code: 'sender_reply_to_invalid' };
-  }
-  return { ok: true, displayName, replyTo };
+  return displayName && senderDisplayNameProblem(displayName) === null ? displayName : '';
+}
+
+function validReplyTo(replyTo: string): string | null {
+  const normalized = replyTo.trim().toLowerCase();
+  return normalized && normalized.length <= 254 && SENDER_EMAIL_PATTERN.test(normalized) ? normalized : null;
 }
 
 /**
@@ -224,17 +246,16 @@ function resolveCommunicationOverrides(company: CompanyContext | null | undefine
  * Fehlt die Firmen-E-Mail im Snapshot und ist keine Antwortadresse
  * eingestellt: fail-closed (kein Versand).
  */
-export function resolveSenderIdentity(invoice: InvoiceContext | null, company?: CompanyContext | null):
+export function resolveSenderIdentity(invoice: InvoiceContext | null, company: CompanyContext | null | undefined, replyToEmail: string):
   | { ok: true; fromName: string; replyTo: string }
-  | { ok: false; code: 'sender_snapshot_missing' | 'sender_reply_to_missing' | 'sender_reply_to_invalid' } {
+  | { ok: false; code: 'sender_snapshot_missing' | 'reply_to_unavailable' } {
   const snapshot = invoice?.company_snapshot;
   if (!snapshot) return { ok: false, code: 'sender_snapshot_missing' };
-  const overrides = resolveCommunicationOverrides(company);
-  if (!overrides.ok) return overrides;
-  const name = overrides.displayName || [text(snapshot.companyName), text(snapshot.legalForm)].filter(Boolean).join(' ');
-  const replyTo = overrides.replyTo || text(snapshot.email).toLowerCase();
+  // EINRICHTUNG-01 (AP6; 1.19) — Name und Rechtsform nach einer Regel (keine Doppelung „GmbH GmbH“).
+  const name = resolveCommunicationDisplayName(company) || composeSenderLegalName(snapshot.companyName, snapshot.legalForm);
+  const replyTo = validReplyTo(replyToEmail);
   if (!name) return { ok: false, code: 'sender_snapshot_missing' };
-  if (!replyTo || !SENDER_EMAIL_PATTERN.test(replyTo)) return { ok: false, code: 'sender_reply_to_missing' };
+  if (!replyTo) return { ok: false, code: 'reply_to_unavailable' };
   return { ok: true, fromName: name, replyTo };
 }
 
@@ -244,16 +265,14 @@ export function resolveSenderIdentity(invoice: InvoiceContext | null, company?: 
  * Kommunikations-Einstellungen gehen vor. Fail-closed ohne Name oder gueltige
  * E-Mail; es wird nie eine technische Adresse erfunden.
  */
-export function resolveCompanySenderIdentity(company: CompanyContext | null | undefined):
+export function resolveCompanySenderIdentity(company: CompanyContext | null | undefined, replyToEmail: string):
   | { ok: true; fromName: string; replyTo: string }
-  | { ok: false; code: 'sender_company_missing' | 'sender_reply_to_missing' | 'sender_reply_to_invalid' } {
+  | { ok: false; code: 'sender_company_missing' | 'reply_to_unavailable' } {
   if (!company) return { ok: false, code: 'sender_company_missing' };
-  const overrides = resolveCommunicationOverrides(company);
-  if (!overrides.ok) return overrides;
-  const name = overrides.displayName || [text(company.companyName), text(company.legalForm)].filter(Boolean).join(' ');
-  const replyTo = overrides.replyTo || text(company.email).toLowerCase();
+  const name = resolveCommunicationDisplayName(company) || composeSenderLegalName(company.companyName, company.legalForm);
+  const replyTo = validReplyTo(replyToEmail);
   if (!name) return { ok: false, code: 'sender_company_missing' };
-  if (!replyTo || !SENDER_EMAIL_PATTERN.test(replyTo)) return { ok: false, code: 'sender_reply_to_missing' };
+  if (!replyTo) return { ok: false, code: 'reply_to_unavailable' };
   return { ok: true, fromName: name, replyTo };
 }
 
@@ -397,14 +416,21 @@ export async function runSendDocument(
     return fail('failed', 'attachment', 'attachment_sha256_mismatch', 'Der Anhang entspricht nicht dem hinterlegten Prüfwert.');
   }
 
+  /*
+   * EINRICHTUNG-01 (AP6; E18, K4) — die Antwortadresse bestimmt der Server bei jedem Versand neu; keine Adresse aus der
+   * Anfrage, keine Firmen- oder Profiladresse, keine Adresse der sendenden Person. Fehlt sie: fail-closed.
+   */
+  const replyToResolution = await deps.resolveReplyTo(delivery.workspace_id);
+  if (!replyToResolution.ok) return fail('failed', 'unknown', 'reply_to_unavailable', REPLY_TO_UNAVAILABLE_MESSAGE);
+
   // (N) Absender: Rechnung aus dem historischen Snapshot; normales Dokument aus dem aktuellen Firmenprofil.
-  // 07B: Anzeigename/Antwortadresse aus den Kommunikations-Einstellungen gehen vor.
-  const sender = isDocumentKind ? resolveCompanySenderIdentity(company) : resolveSenderIdentity(invoice, company);
+  // 07B: der Anzeigename aus den Kommunikations-Einstellungen geht vor.
+  const sender = isDocumentKind
+    ? resolveCompanySenderIdentity(company, replyToResolution.email)
+    : resolveSenderIdentity(invoice, company, replyToResolution.email);
   if (!sender.ok) {
-    if (sender.code === 'sender_reply_to_invalid') {
-      return fail('failed', 'unknown', sender.code, 'Die eingestellte Antwortadresse ist ungültig. Bitte in den Einstellungen korrigieren. Es wurde nichts gesendet.');
-    }
-    return fail('failed', 'unknown', sender.code, isDocumentKind ? 'Absenderdaten des Betriebs sind unvollständig (Firmenname oder E-Mail fehlt).' : 'Absenderdaten der Rechnung sind unvollständig.');
+    if (sender.code === 'reply_to_unavailable') return fail('failed', 'unknown', sender.code, REPLY_TO_UNAVAILABLE_MESSAGE);
+    return fail('failed', 'unknown', sender.code, isDocumentKind ? 'Absenderdaten des Betriebs sind unvollständig (Firmenname fehlt).' : 'Absenderdaten der Rechnung sind unvollständig.');
   }
 
   /*

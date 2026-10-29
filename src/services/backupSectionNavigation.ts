@@ -1,12 +1,14 @@
-/** Stable DOM id / URL hash for the backup panel (heute auf der Betriebsseite). */
+import { SETTINGS_TARGET_PATHS } from '../pages/settings/settingsHubConfig';
+
+/** Stable DOM id / URL hash for the backup panel (seit EINRICHTUNG-01 AP5 auf der Seite „Daten › Sicherung“). */
 export const BACKUP_SECTION_ID = 'datensicherung';
 
 /**
- * SETTINGS-01B5 — kanonischer Tiefenlink zur Datensicherung auf der
- * Betriebsseite. `/firmendaten#datensicherung` bleibt als Legacy-URL
- * redirectfähig (FirmendatenLegacyRoute), ist aber kein Linkziel mehr.
+ * SETTINGS-01B5 / EINRICHTUNG-01 (AP5; Vertrag 1.15) — kanonische Adresse der Datensicherung: die eigene Seite
+ * „Daten › Sicherung“. `/firmendaten#datensicherung` bleibt als Legacy-URL redirectfähig (FirmendatenLegacyRoute),
+ * ist aber kein Linkziel mehr.
  */
-export const SETTINGS_BACKUP_HREF = `/einstellungen/betrieb#${BACKUP_SECTION_ID}`;
+export const SETTINGS_BACKUP_HREF = SETTINGS_TARGET_PATHS.backup;
 
 /*
  * SETTINGS-01B5 — die Abschnitts-Ids der abgelösten Firmendaten-Seite leben

@@ -26,13 +26,19 @@ export function ForgotPasswordPage() {
     setError(null);
     setSuccess(false);
     setLoading(true);
-    const result = await requestPasswordReset(formEmail, buildPasswordResetRedirectTo());
-    setLoading(false);
-    if (!result.success) {
-      setError(translate('auth.error.invalidEmail'));
-      return;
+    try {
+      const result = await requestPasswordReset(formEmail, buildPasswordResetRedirectTo());
+      if (!result.success) {
+        setError(translate('auth.error.invalidEmail'));
+        return;
+      }
+      setSuccess(true);
+    } catch {
+      // EINRICHTUNG-01 (EIN-26, A-09.3) — eine Ausnahme lässt das Formular nie im Ladezustand.
+      setError(translate('auth.error.unknown'));
+    } finally {
+      setLoading(false);
     }
-    setSuccess(true);
   }
 
   return (

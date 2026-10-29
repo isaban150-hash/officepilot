@@ -10,7 +10,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { alsInhaber } from '../test/workspaceRoleTestUtils';
+import { alsInhaber, alsMitglied } from '../test/workspaceRoleTestUtils';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { DEFAULT_SETUP } from '../data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
@@ -144,7 +144,8 @@ function seedCustomer(): Customer {
 }
 
 /** Kunde wählen, eine Position eintragen, Leistungszeitraum setzen — bis zur Prüfung. */
-async function walkToReview(mount: Mount, customer: Customer): Promise<void> {
+/** Bis zur Prüfung (Schritt 4). Ohne Freigaberecht steht dort statt der Freigabe der Rollenhinweis. */
+async function walkToReview(mount: Mount, customer: Customer, options: { erwarteFreigabe?: boolean } = {}): Promise<void> {
   await waitFor(() => q(mount, 'manual-invoice-step-customer') !== null);
   await selectRadio(mount, 'customer-decision-existing');
   await selectRadio(mount, `customer-option-${customer.id}`);
@@ -161,6 +162,7 @@ async function walkToReview(mount: Mount, customer: Customer): Promise<void> {
   await type(mount, 'invoice-edit-service-to', '2026-09-05');
   await click(mount, 'manual-invoice-next');
   await waitFor(() => q(mount, 'manual-invoice-step-review') !== null);
+  if (options.erwarteFreigabe === false) return;
   // Der gespeicherte Stand ist die Wahrheit für die Freigabe.
   await waitFor(() => q(mount, 'invoice-approve') !== null);
 }
@@ -360,6 +362,16 @@ describe('01B1B — Schritt 2 Positionen', () => {
 });
 
 describe('01B1B — Schritt 3/4 Details, Prüfung, Freigabe', () => {
+  /*
+   * EINRICHTUNG-01 (Nacharbeit) — diese Fälle bedienen die verbindliche Freigabe. Die Testumgebung meldet Supabase als
+   * eingerichtet; ohne geladene Mitgliedschaft ist die Rolle unbekannt und die Seite bietet die Freigabe fail-closed nicht
+   * an (seit GO-LIVE-SECURITY-01, an HEAD identisch). Die Fälle laufen deshalb ausdrücklich als Inhaber; die
+   * Gegenprobe als Mitglied steht in L33. Die Berechtigungsprüfung der Seite bleibt unverändert.
+   */
+  beforeEach(() => {
+    alsInhaber();
+  });
+
   it('L15–L21: Details bleiben erhalten; die Prüfung zeigt Summen und keinen Projektblock', async () => {
     const customer = seedCustomer();
     const mount = await renderPage();
@@ -487,6 +499,18 @@ describe('01B1B — Schritt 3/4 Details, Prüfung, Freigabe', () => {
     expect(q(mount, 'manual-invoice-failure')?.textContent).toContain('Internetverbindung');
     expect(q(mount, 'manual-invoice-failure')?.textContent).not.toMatch(/vorgangId|clientInvoiceId|not_committed/);
     await waitFor(() => q<HTMLButtonElement>(mount, 'invoice-approve')?.disabled === false);
+  });
+
+  it('L33: als Mitglied steht statt der Freigabe der Rollenhinweis, und es startet keine Finalisierung', async () => {
+    alsMitglied();
+    const customer = seedCustomer();
+    const start = vi.spyOn(coordinator, 'startInvoiceDraftFinalization');
+    const mount = await renderPage();
+    await walkToReview(mount, customer, { erwarteFreigabe: false });
+    await waitFor(() => q(mount, 'invoice-approve-role-hint') !== null);
+    expect(q(mount, 'invoice-approve')).toBeNull();
+    expect(q(mount, 'invoice-approve-role-hint')?.textContent).toContain('Inhaber und Verwaltung');
+    expect(start).not.toHaveBeenCalled();
   });
 
   it('L32: ein bereits finalisierter Entwurf erzeugt keine zweite Rechnung', async () => {

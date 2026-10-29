@@ -12,8 +12,9 @@
  * Geprüft mit den echten Modulen (mergeRemoteWorkspacePullIntoState, SupabaseSyncAdapter, RPC gemockt):
  *   W1–W3  der WEISS-Befund je Weg (Abgleich nach dem Entsperren reiht nichts neu ein; zulässiger
  *          Backfill anderer Vorgänge bleibt),
- *   U1–U5  Unterscheidung: Netzwerkfehler und Lizenzabweisung bleiben wiederholbar, eine bewusste
- *          neue Aktion löst die alte Abweisung ab und geht durch,
+ *   U1–U5  Unterscheidung: Netzwerkfehler bleiben wiederholbar, eine bewusste neue Aktion löst die
+ *          alte Abweisung ab und geht durch; eine Lizenzabweisung ist seit EINRICHTUNG-01 (AP1,
+ *          Vertrag 1.7) endgültig, ein älterer offener Auftrag wird nicht umgedeutet,
  *   A1–A3  vollständiger Ablauf je Weg: Sperren → Aktion abgewiesen → Entsperren → automatischer
  *          Abgleich → kein neuer Auftrag → bewusste neue Aktion → erfolgreich,
  *   V1     Vertrag über das ganze Repository: automatische Wege nutzen nur den gesperrten
@@ -181,7 +182,9 @@ describe('U — Netzwerkfehler, Lizenz und bewusste Aktion bleiben, wie sie sind
     expect(offen('company_profile')).toEqual([expect.objectContaining({ status: 'pending' })]);
   });
 
-  it('U2 eine Lizenzabweisung bleibt wie vereinbart wiederholbar (nach Lizenzverlängerung)', () => {
+  it('U2 ein älterer offener Auftrag mit Lizenzmeldung wird vom Abgleich nicht umgedeutet', () => {
+    // EINRICHTUNG-01 (AP1, Vertrag 1.7) — der Sendeweg stuft eine Lizenzabweisung seither endgültig ein (`failed`,
+    // U5). Ein `error` dieser Art stammt aus der Zeit davor; ohne Ursprung hält ihn DOKUMENTE-01 R2 ohnehin an.
     resetSyncOutboxForTests([eintrag('vorgang', 'vorgang-sperre-1', { status: 'error', lastErrorMessage: LIZENZ, lastErrorRetryable: true })]);
     abgleichen();
     expect(offen('vorgang', 'vorgang-sperre-1')).toEqual([expect.objectContaining({ status: 'pending' })]);
@@ -210,13 +213,19 @@ describe('U — Netzwerkfehler, Lizenz und bewusste Aktion bleiben, wie sie sind
     expect(enqueueBackfillSyncOutbox({ entityType: 'vorgang', entityId: 'vorgang-sperre-1', operation: 'update', version: 2 })?.id).toBe('out-neu');
   });
 
-  it('U5 Lizenz- und Netzwerkfehler sperren keinen automatischen Weg', () => {
+  it('U5 Netzwerkfehler und ältere offene Aufträge sperren keinen automatischen Weg; eine endgültige Lizenzabweisung schon', () => {
     resetSyncOutboxForTests([
       eintrag('company_setup', WS, { status: 'error', lastErrorMessage: LIZENZ, lastErrorRetryable: true }),
       eintrag('vorgang', 'vorgang-sperre-1', { status: 'failed', lastErrorMessage: 'Failed to fetch' }),
     ]);
     expect(hasFinallyDeniedOutboxEntry('company_setup', WS)).toBe(false);
     expect(hasFinallyDeniedOutboxEntry('vorgang', 'vorgang-sperre-1')).toBe(false);
+    // EINRICHTUNG-01 (AP1, Vertrag 1.7, N-Z4.5) — endgültig abgewiesen wegen der Betriebslizenz: kein Nachmelden.
+    for (const meldung of [LIZENZ, 'license_not_effective: Die Lizenz des Betriebs ist nicht wirksam']) {
+      resetSyncOutboxForTests([eintrag('company_setup', WS, { status: 'failed', lastErrorMessage: meldung, lastErrorRetryable: false })]);
+      expect(hasFinallyDeniedOutboxEntry('company_setup', WS), meldung).toBe(true);
+      expect(enqueueBackfillSyncOutbox({ entityType: 'company_setup', entityId: WS, operation: 'update', version: 1 }), meldung).toBeNull();
+    }
   });
 });
 

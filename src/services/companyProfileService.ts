@@ -1,6 +1,10 @@
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { getCachedSetup, persistAll } from './persistenceService';
-import { applyCompanyProfileSettingsContract, validateCompanyProfileOptionalFields } from './company/companyProfileSettingsContract';
+import {
+  applyCompanyProfileSettingsContract,
+  findCompanyProfileTextLimitViolation,
+  validateCompanyProfileOptionalFields,
+} from './company/companyProfileSettingsContract';
 import type { CompanyProfile } from '../types/models';
 
 let companyProfile: CompanyProfile = { ...DEFAULT_COMPANY_PROFILE };
@@ -59,6 +63,13 @@ export function updateCompanyProfile(
    */
   const optionalError = validateCompanyProfileOptionalFields(partial);
   if (optionalError) return { success: false, errorKey: optionalError };
+  /*
+   * EINRICHTUNG-01 (EIN-06, S-08) — dieselben Textgrenzen wie der Server, in Codepunkten
+   * gezählt. Geprüft wird nur, was sich ändert: Ein Wert über der Grenze erreicht weder
+   * Store noch Sync-Auftrag, statt erst am Server abgewiesen zu werden.
+   */
+  const textLimitViolation = findCompanyProfileTextLimitViolation(partial as Record<string, unknown>);
+  if (textLimitViolation) return { success: false, errorKey: textLimitViolation.errorKey };
   if ((partial.defaultTaxStatus as unknown) === '') delete (merged as { defaultTaxStatus?: unknown }).defaultTaxStatus;
 
   if (partial.defaultPaymentDays !== undefined) {

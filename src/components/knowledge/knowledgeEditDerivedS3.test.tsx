@@ -398,6 +398,8 @@ describe('S3-ORANGE — Cloud, zweites Gerät, Lebenszyklus, Verbraucher', () =>
     resetSyncOutboxForTests([]);
 
     click(knopf(karten()[0]!, 'Löschen'));
+    // EINRICHTUNG-01 (AP8; 1.28) — Löschen erst nach der Rückfrage.
+    click(document.querySelector('[data-testid="knowledge-delete-confirm"]') as HTMLElement);
 
     expect(getKnowledgeFacts()).toEqual([]);
     expect(karten()).toHaveLength(0);

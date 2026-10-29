@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Badge, Card, CardMeta, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
 import { useApp } from '../../context/AppContext';
 import {
   addKnowledgeFact,
@@ -160,6 +161,9 @@ export function KnowledgePanel() {
     bump();
   };
 
+  // EINRICHTUNG-01 (AP8; 1.28) — Löschen erst nach Rückfrage; „Abbrechen“ ändert nichts.
+  const [loeschId, setLoeschId] = useState<string | null>(null);
+
   const handleDelete = (id: string) => {
     const result = deleteKnowledgeFact(id);
     if (!result.success) {
@@ -182,6 +186,22 @@ export function KnowledgePanel() {
 
   return (
     <div className="knowledge-panel" data-testid="knowledge-panel">
+      <SimpleConfirmDialog
+        open={loeschId !== null}
+        title={translate('confirm.knowledgeDelete.title')}
+        message={translate('confirm.knowledgeDelete.text')}
+        confirmLabel={translate('confirm.knowledgeDelete.action')}
+        cancelLabel={translate('common.cancel')}
+        confirmTestId="knowledge-delete-confirm"
+        cancelTestId="knowledge-delete-cancel"
+        dialogTestId="knowledge-delete-dialog"
+        onConfirm={() => {
+          if (loeschId) handleDelete(loeschId);
+          setLoeschId(null);
+          return true;
+        }}
+        onCancel={() => setLoeschId(null)}
+      />
       <div className="knowledge-toolbar">
         <input
           type="search"
@@ -425,7 +445,7 @@ export function KnowledgePanel() {
                 <Button type="button" variant="outline" onClick={() => handleToggleActive(fact)}>
                   {translate(fact.active ? 'knowledge.deactivate' : 'knowledge.activate')}
                 </Button>
-                <Button type="button" variant="danger" onClick={() => handleDelete(fact.id)}>
+                <Button type="button" variant="danger" onClick={() => setLoeschId(fact.id)} data-testid={`knowledge-delete-${fact.id}`}>
                   {translate('knowledge.delete')}
                 </Button>
               </div>

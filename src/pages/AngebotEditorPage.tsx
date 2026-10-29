@@ -27,6 +27,7 @@ import { useApp } from '../context/AppContext';
 import { getCustomerById, getCustomerStoreSnapshot } from '../services/customerStoreService';
 import { createCustomer } from '../services/customerService';
 import { getCompanyProfileStoreSnapshot } from '../services/companyProfileService';
+import { resolveProfileOfferValidityDays } from '../services/company/companyProfileSettingsContract';
 import { buildDefaultPaymentTerms, resolveDefaultTaxStatus } from '../services/invoice/invoiceDefaults';
 import { getTaxStatusLabel } from '../services/invoiceTaxService';
 import { getBusinessDay } from '../services/businessDateService';
@@ -153,15 +154,16 @@ export function AngebotEditorPage() {
   const [titel, setTitel] = useState(vorhandenes?.title ?? '');
   const [baustelle, setBaustelle] = useState(vorhandenes?.baustelle ?? '');
   const [angebotsdatum, setAngebotsdatum] = useState(vorhandenes?.offerDate ?? inDays(0));
-  const [gueltigBis, setGueltigBis] = useState(vorhandenes?.validUntil ?? inDays(30));
+  // EINRICHTUNG-01 (AP6; V-01.1) — neue Angebote: Gültigkeit, Einleitung und Schluss aus den Vorgaben des Betriebs.
+  const [gueltigBis, setGueltigBis] = useState(vorhandenes?.validUntil ?? inDays(resolveProfileOfferValidityDays(profile)));
   const [taxStatus, setTaxStatus] = useState<TaxStatus>(
     vorhandenes?.taxStatus ?? resolveDefaultTaxStatus(profile, setup),
   );
   const [positionen, setPositionen] = useState<OfferPosition[]>(
     vorhandenes?.positions.length ? vorhandenes.positions : [neuePosition()],
   );
-  const [einleitung, setEinleitung] = useState(vorhandenes?.introText ?? '');
-  const [schluss, setSchluss] = useState(vorhandenes?.closingText ?? '');
+  const [einleitung, setEinleitung] = useState(vorhandenes?.introText ?? (profile.offerIntroText ?? '').trim());
+  const [schluss, setSchluss] = useState(vorhandenes?.closingText ?? (profile.offerClosingText ?? '').trim());
   const [konditionen, setKonditionen] = useState(
     vorhandenes?.paymentTermsText ?? buildDefaultPaymentTerms(profile),
   );

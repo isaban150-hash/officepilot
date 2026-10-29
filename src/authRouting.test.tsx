@@ -85,7 +85,10 @@ describe('SUPABASE-AUTH-02 routing', () => {
     await approveUser(user.id);
     await login('user-admin@example.com', 'TestPasswort1');
     mounted = await renderAppAt('/admin/users', completeSetup);
-    expect(mounted.container.querySelector('[data-testid="admin-users-denied"]')).not.toBeNull();
+    /* EINRICHTUNG-01 (AP4, P-01.2): Für Nicht-Admins leitet die Adresse um, statt eine Sperrseite zu zeigen. */
+    expect(mounted.container.querySelector('[data-testid="admin-users-page"]')).toBeNull();
+    expect(mounted.container.querySelector('[data-testid="admin-users-denied"]')).toBeNull();
+    expect(mounted.container.querySelector('[data-testid="heute-page"]')).not.toBeNull();
   });
 
   it('admin sieht user list', async () => {

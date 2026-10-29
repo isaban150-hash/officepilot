@@ -30,6 +30,12 @@ values ('00000000-0000-0000-0000-0000000d5301'::uuid, '00000000-0000-0000-0000-0
        ('00000000-0000-0000-0000-0000000d5303'::uuid, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
         'fremd-s3@example.invalid', 'x', now(), now(), now(), '{}'::jsonb, '{}'::jsonb);
 
+-- EINRICHTUNG-01 (AP1, Vertrag 1.1 Stufen 3 und 6): Der Server verlangt jetzt fuer jeden
+-- Weg ein freigegebenes Konto und fuer Schreibwege die wirksame Betriebslizenz. handle_new_user legt Profile mit
+-- pending/inactive an; die synthetischen Testnutzer erhalten den Zustand eines produktiv arbeitenden Betriebs.
+update public.profiles set status = 'approved', license_status = 'active', license_expires_at = null
+where id in ('00000000-0000-0000-0000-0000000d5301'::uuid, '00000000-0000-0000-0000-0000000d5302'::uuid, '00000000-0000-0000-0000-0000000d5303'::uuid);
+
 insert into public.workspaces (id, name, owner_user_id)
 values ('00000000-0000-0000-0000-00000000d301'::uuid, 'S3 Betrieb', '00000000-0000-0000-0000-0000000d5301'::uuid),
        ('00000000-0000-0000-0000-00000000d302'::uuid, 'S3 Fremd',   '00000000-0000-0000-0000-0000000d5303'::uuid);

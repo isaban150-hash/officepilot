@@ -174,4 +174,12 @@ export const deDelivery = {
   'delivery.state.hint.complained': 'Der Empfänger hat die E-Mail als unerwünscht gemeldet. OfficeTakt sendet nicht automatisch erneut.',
   'delivery.state.history.title': 'Zustellverlauf',
   'delivery.state.history.hint': 'Rückmeldungen des E-Mail-Dienstes. Öffnen oder Lesen wird nicht erfasst.',
+
+  /* EINRICHTUNG-01 (AP6; E18, K4) — keine bestätigte Antwortadresse: Hinweis und Weg. */
+  'delivery.error.code.reply_to_unavailable': 'Für diesen Betrieb gibt es keine bestätigte Antwortadresse. Bitte unter Einstellungen › Kommunikation › E-Mail-Absender und Vorlagen die Antwortadresse bestätigen oder die Anmelde-E-Mail des Inhabers bestätigen. Es wurde nichts gesendet.',
+
+  /* EINRICHTUNG-01 (AP6; E-06) — Testmodus des Versandservers (Quelle: Edge Function mail-status). */
+  'delivery.testMode.stub': 'Testmodus: E-Mails werden nicht zugestellt.',
+  'delivery.testMode.recipients': 'Testmodus: E-Mails gehen nur an freigegebene Testempfänger.',
+  'delivery.testMode.misconfigured': 'Der Testmodus ist fehlerhaft eingerichtet: Es wird nichts gesendet.',
 } as const;

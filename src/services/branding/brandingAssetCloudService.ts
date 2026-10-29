@@ -5,7 +5,8 @@
  *
  *  - **Unveränderlich.** Ein Logo wird nie überschrieben. Ein neues Logo ist
  *    ein neues Asset mit neuer Kennung; das alte bleibt, damit ein historisches
- *    Dokument seine Referenz behält. Der Client sendet `upsert: false`, und der
+ *    Dokument seine Referenz behält. Seit EINRICHTUNG-01 (AP6) ist die Kennung
+ *    die SHA-256-Prüfsumme der Bytes: gleicher Inhalt, gleiches Objekt. Der Client sendet `upsert: false`, und der
  *    Bucket hat keine UPDATE-Policy — selbst ein versehentliches `upsert: true`
  *    könnte serverseitig nichts ersetzen.
  *  - **Streng geprüft, bevor geschrieben wird.** Was einmal im Bucket liegt,
@@ -24,12 +25,8 @@ import {
   MAX_BRANDING_LOGO_SIZE_BYTES,
   validateBrandingLogoBlob,
 } from './brandingLogoValidation';
-import {
-  buildBrandingAssetPath,
-  generateBrandingAssetId,
-  isValidBrandingWorkspaceId,
-  SecureRandomUnavailableError,
-} from './brandingAssetPath';
+import { buildBrandingAssetPath, isValidBrandingWorkspaceId } from './brandingAssetPath';
+import { digestSha256 } from '../sha256Digest';
 
 export const BRANDING_ASSET_BUCKET = 'branding-assets';
 
@@ -41,8 +38,6 @@ export type BrandingAssetError =
   | 'file_too_large'
   | 'signature_mismatch'
   | 'mime_mismatch'
-  /** Weder `crypto.randomUUID` noch `crypto.getRandomValues` verfügbar. */
-  | 'secure_random_unavailable'
   | 'forbidden'
   | 'conflict'
   | 'not_found'
@@ -50,8 +45,18 @@ export type BrandingAssetError =
   | 'unknown';
 
 export type BrandingAssetUploadResult =
-  | { ok: true; reference: LogoAssetReference }
+  /** `reused`: dasselbe Objekt lag schon im Pfad des Betriebs (gleicher Inhalt, z. B. Wiederholung nach F-07.3). */
+  | { ok: true; reference: LogoAssetReference; reused: boolean }
   | { ok: false; error: BrandingAssetError };
+
+function toHex(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** EINRICHTUNG-01 (AP6; F-07) — Kennung eines Branding-Assets: SHA-256 der Bytes (64 Hexzeichen). */
+export async function brandingAssetIdForBlob(blob: Blob): Promise<string> {
+  return toHex(await digestSha256(new Uint8Array(await blob.arrayBuffer())));
+}
 
 export type BrandingAssetDownloadResult =
   | { ok: true; blob: Blob }
@@ -84,6 +89,11 @@ function resolveClient(client?: SupabaseClient | null): SupabaseClient | null {
 /**
  * Lädt ein neues Asset hoch. Die Kennung entsteht **hier** — sie ist von aussen
  * nicht wählbar, damit niemand einen vorhandenen Pfad ansteuern kann.
+ *
+ * EINRICHTUNG-01 (AP6; Vertrag 1.20, F-07, K7) — die Kennung ist die Prüfsumme der Bytes (inhaltsadressiert, statt
+ * einer Zufallskennung): Ein erneutes Hochladen derselben Bytes trifft dasselbe Objekt. Liegt es schon im Pfad des
+ * Betriebs (Storage meldet einen Konflikt), wird sein Inhalt geprüft und die Referenz wiederverwendet — höchstens ein
+ * Objekt je Inhalt und Betrieb, keine unkontrollierten Duplikate. Weicht der vorhandene Inhalt ab, wird abgewiesen.
  */
 export async function uploadBrandingAsset(
   input: { workspaceId: string; blob: Blob; mimeType: LogoMimeType },
@@ -117,27 +127,13 @@ export async function uploadBrandingAsset(
 
   /*
    * Der Workspace wird geprüft, **bevor** eine Kennung entsteht: Für einen
-   * ungültigen Workspace soll gar keine Zufallskennung erzeugt werden.
+   * ungültigen Workspace wird weder eine Prüfsumme berechnet noch Storage berührt.
    */
   if (!isValidBrandingWorkspaceId(workspaceId)) {
     return { ok: false, error: 'invalid_workspace' };
   }
 
-  /*
-   * `generateBrandingAssetId` wirft absichtlich, wenn keine sichere
-   * Zufallsquelle da ist. Das ist ein erwartbarer Infrastrukturfall — er
-   * gehört in den Ergebnisvertrag und nicht als abgelehntes Promise nach
-   * aussen. Andere Ausnahmen werden bewusst **nicht** verschluckt.
-   */
-  let assetId: string;
-  try {
-    assetId = generateBrandingAssetId();
-  } catch (error) {
-    if (error instanceof SecureRandomUnavailableError) {
-      return { ok: false, error: 'secure_random_unavailable' };
-    }
-    throw error;
-  }
+  const assetId = await brandingAssetIdForBlob(blob);
 
   const path = buildBrandingAssetPath(workspaceId, assetId);
   if (!path.ok) {
@@ -154,13 +150,19 @@ export async function uploadBrandingAsset(
       .from(BRANDING_ASSET_BUCKET)
       .upload(path.path, blob, { contentType: mimeType, upsert: false });
     if (error) {
-      return { ok: false, error: mapStorageError(error) };
+      const mapped = mapStorageError(error);
+      if (mapped !== 'conflict') return { ok: false, error: mapped };
+      // Dasselbe Objekt (gleiche Prüfsumme) liegt schon im Pfad dieses Betriebs: Inhalt prüfen, dann wiederverwenden.
+      const existing = await downloadBrandingAsset(workspaceId, { assetId, mimeType }, supabase);
+      if (!existing.ok) return { ok: false, error: 'conflict' };
+      if ((await brandingAssetIdForBlob(existing.blob)) !== assetId) return { ok: false, error: 'conflict' };
+      return { ok: true, reference: { assetId, mimeType }, reused: true };
     }
   } catch (error) {
     return { ok: false, error: mapStorageError((error ?? {}) as { message?: string }) };
   }
 
-  return { ok: true, reference: { assetId, mimeType } };
+  return { ok: true, reference: { assetId, mimeType }, reused: false };
 }
 
 /**

@@ -8,9 +8,17 @@
  * Bestehende Kontierungen werden dadurch **nicht** umgeschrieben; jede trägt
  * den Rahmen, mit dem sie angelegt wurde. Der Hinweis darunter sagt das, damit
  * niemand eine Umstellung für eine Umbuchung hält.
+ *
+ * EINRICHTUNG-01 (AP0–AP4-Abschluss, Z1; Z-08.1, F-04.2) — wählen darf nur, wer
+ * schreiben darf, nach derselben Regel wie die übrigen Einstellungsformulare
+ * (`canWrite`: Inhaber und Admins bei wirksamer Betriebslizenz, der lokale
+ * Betrieb). Mitglieder und der Nur-Lesen-Betrieb sehen den Wert, die Auswahl
+ * ist gesperrt. Der Server prüft unabhängig davon selbst.
  */
 import { useState } from 'react';
 import { Select } from '../ui/Select';
+import { SettingsAccessNotice, resolveSettingsNoticeVariant } from '../settings/SettingsAccessNotice';
+import { useWorkspaceWriteAccess } from '../../hooks/useWorkspaceWriteAccess';
 import {
   CHART_OF_ACCOUNTS_SETTING_KEY,
   getChartOfAccounts,
@@ -26,6 +34,9 @@ interface Props {
 }
 
 export function ChartOfAccountsSetting({ translate }: Props) {
+  const access = useWorkspaceWriteAccess();
+  const editable = access.canWrite;
+  const noticeVariant = resolveSettingsNoticeVariant(access);
   const [value, setValue] = useState<ChartOfAccounts>(() => getChartOfAccounts());
   const [chosen, setChosen] = useState(() => hasChosenChartOfAccounts());
   const [errorKey, setErrorKey] = useState<string | null>(null);
@@ -40,6 +51,7 @@ export function ChartOfAccountsSetting({ translate }: Props) {
   );
 
   const handleChange = (next: string) => {
+    if (!editable) return;
     const chart = next as ChartOfAccounts;
     const result = setChartOfAccounts(chart);
     if (!result.success) {
@@ -56,6 +68,7 @@ export function ChartOfAccountsSetting({ translate }: Props) {
       <Select
         label={translate('accounting.chart')}
         value={value}
+        disabled={!editable}
         onChange={(event) => handleChange(event.target.value)}
         data-testid="settings-chart-of-accounts-select"
       >
@@ -65,6 +78,11 @@ export function ChartOfAccountsSetting({ translate }: Props) {
           </option>
         ))}
       </Select>
+
+      {/* EINRICHTUNG-01 (AP5; 1.16) — der einheitliche Hinweis mit Grund (Rolle, Lizenz, Löschung). */}
+      {!editable && noticeVariant ? (
+        <SettingsAccessNotice variant={noticeVariant} testId="settings-chart-of-accounts-readonly" />
+      ) : null}
 
       {konfliktOffen ? (
         <p className="hint-text" data-testid="settings-chart-of-accounts-conflict">

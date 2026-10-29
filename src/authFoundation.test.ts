@@ -74,12 +74,13 @@ describe('SUPABASE-AUTH-02', () => {
       expect(getLicenseBlockReason(blocked!)).toBe('blocked');
     });
 
-    it('expired license zeigt license-expired Zustand', async () => {
+    it('abgelaufene eigene Lizenz: Zustand bleibt lesbar, sperrt die App aber nicht (EINRICHTUNG-01, E3/E5)', async () => {
       const user = await registerAndApproveUser('expired@example.com');
       await expireLicense(user.id);
       const refreshed = findUserByEmail('expired@example.com');
       expect(getLicenseBlockReason(refreshed!)).toBe('license_expired');
-      expect(isUserAllowedToUseApp(refreshed!)).toBe(false);
+      // Die Lizenz gehört dem Betrieb; ist sie nicht wirksam, gilt dort Nur-Lesen statt einer Sperrseite.
+      expect(isUserAllowedToUseApp(refreshed!)).toBe(true);
     });
   });
 

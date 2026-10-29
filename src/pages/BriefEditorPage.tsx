@@ -28,6 +28,8 @@ import { resolveCloudWorkspaceId } from '../services/workspace/workspaceSyncPayl
 import type { BusinessLetterRecipient } from '../types/businessLetter';
 import type { TranslationKey } from '../i18n';
 import { getBusinessDay } from '../services/businessDateService';
+import { getCompanyProfileStoreSnapshot } from '../services/companyProfileService';
+import { buildLetterBodyTemplate } from '../services/letter/letterTemplate';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
 import { recordMarkedAnswered } from '../services/communicationHistoryService';
 import { isReplyNeedPending, resolveDocumentReplyNeed } from '../services/documentReplyNeedService';
@@ -132,7 +134,10 @@ export function BriefEditorPage() {
     return LEERER_EMPFAENGER;
   });
   const [betreff, setBetreff] = useState(vorhandener?.subject ?? vorbelegung?.subject ?? '');
-  const [text, setText] = useState(vorhandener?.body ?? vorbelegung?.body ?? '');
+  // EINRICHTUNG-01 (AP6; V-01.4) — ein neuer Brief beginnt mit Anrede und Gruß des Betriebs (ohne Vorgaben leer).
+  const [text, setText] = useState(
+    () => vorhandener?.body ?? vorbelegung?.body ?? buildLetterBodyTemplate(getCompanyProfileStoreSnapshot()),
+  );
   const [briefdatum, setBriefdatum] = useState(
     vorhandener?.letterDate ?? getBusinessDay(),
   );

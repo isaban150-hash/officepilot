@@ -34,7 +34,11 @@ Damit funktionieren Direktaufrufe und Browser-Refresh auf Unterseiten (z. B. `/d
 | Variable | Production | Beschreibung |
 |----------|------------|--------------|
 | `VITE_BETA_TEST_MODE` | **leer / nicht gesetzt** | Demo-Modus, Auto-Login, Musterbetrieb – darf in Production nicht aktiv sein |
-| `VITE_ALLOW_DEFAULT_ADMIN` | **nur Ersteinrichtung** | Legt `admin@officepilot.local` an; nach erstem Admin-Login wieder entfernen |
+| `VITE_ALLOW_DEFAULT_ADMIN` | **nicht setzen** | ohne Funktion (es gibt kein Standardkonto); in Production erscheint nur der Konfigurationshinweis |
+
+Weitere Variablen und Server-Secrets, die mit EINRICHTUNG-01 hinzukommen (Antwortadresse, Löschungen, Versandstatus,
+erlaubte Ursprünge), stehen mit Reihenfolge und Prüfungen in
+[RELEASE_01_EINRICHTUNG.md](./RELEASE_01_EINRICHTUNG.md).
 
 > **`VITE_GEMINI_API_KEY` und `VITE_GEMINI_MODEL` werden nicht mehr verwendet.**
 > Sie dürfen in Vercel und in lokalen `.env`-Dateien **nicht** gesetzt sein – siehe
@@ -45,7 +49,6 @@ Damit funktionieren Direktaufrufe und Browser-Refresh auf Unterseiten (z. B. `/d
 ```env
 # .env.local (nicht committen)
 VITE_BETA_TEST_MODE=true
-VITE_ALLOW_DEFAULT_ADMIN=true
 ```
 
 ### Sicherheits-Hinweise
@@ -95,26 +98,29 @@ Kein Schlüssel, Token oder Service-Role-Wert gehört in diese Dokumentation.
 
 ## Auth & Zugang (geschlossene Beta)
 
-Vor jedem App-Zugriff:
+Vor jedem App-Zugriff (Reihenfolge wie in `src/App.tsx`):
 
-| Status | Weiterleitung |
-|--------|---------------|
-| Nicht angemeldet | `/login` |
-| `pending` | `/waiting-approval` |
-| `blocked` | `/access-blocked` |
-| Lizenz abgelaufen | `/license-expired` |
-| Aktiv + Setup | App |
+| Zustand | Ansicht |
+|---------|---------|
+| Nicht angemeldet | `/login` (Registrierung, Passwort vergessen, Einladungslink) |
+| Konto wartet auf Freigabe (`pending`) | `/waiting-approval` — prüft alle 30 s, zeigt offene Einladungen, Selbstlöschung |
+| Konto gesperrt (`blocked`) | `/access-blocked` |
+| Zustimmung zur geltenden Fassung der Rechtstexte fehlt | Zustimmungsseite |
+| Unbekannter Kontostatus | `/license-expired` (Rückfallseite) |
+| Einrichtung des Betriebs offen | `/setup` |
+| Sonst | App |
 
-Öffentlich erreichbar (ohne Login): `/impressum`, `/datenschutz`, `/agb`, `/lizenzbedingungen`.
+Die Lizenz gehört zum Betrieb (E3): Läuft sie ab, wechselt der Betrieb in den Nur-Lesen-Betrieb mit Hinweis; es gibt
+keinen Sperrbildschirm; Lesen, Export und Abmelden bleiben möglich.
 
-### Ersteinrichtung Admin (Production)
+Öffentlich erreichbar (ohne Login): `/impressum`, `/datenschutz`, `/agb`, `/lizenzbedingungen`, die Bestätigung der
+Antwortadresse (`/antwortadresse-bestaetigen`) und die Notfallseiten (`/local-recovery`).
 
-1. `VITE_ALLOW_DEFAULT_ADMIN=true` in Vercel setzen und redeployen.
-2. Als Admin anmelden: `admin@officepilot.local` / `OfficePilot-Admin-2026`
-3. Benutzer unter `/admin/users` freischalten.
-4. `VITE_ALLOW_DEFAULT_ADMIN` wieder entfernen und redeployen.
+### Erster Plattform-Admin
 
-**Hinweis:** Auth ist aktuell ein lokaler Stub (localStorage pro Browser). Freischaltungen gelten nur im jeweiligen Browser/Profil, bis ein Backend-Sync existiert.
+Es gibt **kein Standardkonto und kein Standardpasswort**. Der erste Plattform-Admin wird vom Betreiber einmalig per SQL
+aus einem normal registrierten Konto gemacht: [FIRST_ADMIN.md](./FIRST_ADMIN.md). Weitere Freigaben, Sperren und
+Lizenzen erfolgen danach in der Plattform-Verwaltung (`/admin/users`, Einstieg über das Benutzermenü).
 
 ## Fehlerseiten
 
@@ -153,8 +159,9 @@ npx vercel --prod
 - Rechtstexte: Draft-Platzhalter
 - Kein E-Mail-Versand
 - Kein Fehler-Monitoring, kein automatisierter Testlauf
-- Allgemeiner serverseitiger Lizenzschutz nur für den KI-Endpunkt, nicht für Sync und
-  Storage – siehe [../OFFICEPILOT_ROADMAP.md](../OFFICEPILOT_ROADMAP.md), Bereich 15
+- Serverseitiger Lizenzschutz in der veröffentlichten Fassung nur für den KI-Endpunkt. EINRICHTUNG-01 (lokal umgesetzt,
+  Veröffentlichung mit RELEASE-01) prüft die Betriebslizenz auch in Sync, Storage und den Edge Functions — siehe
+  [../OFFICEPILOT_ROADMAP.md](../OFFICEPILOT_ROADMAP.md), Bereich 15
 - Build-Warnungen: große Chunks, CSS-Minify (P2, nicht blockierend)
 
 Auth und Fachdaten werden über Supabase synchronisiert (Konten, Workspace-Isolation,

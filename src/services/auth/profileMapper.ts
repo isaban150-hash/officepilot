@@ -5,10 +5,19 @@ import type {
   UserStatus,
 } from '../../types/auth';
 import type { ProfileLicenseStatus, ProfileRow } from '../../types/profile';
+import { LEGAL_DOCUMENT_VERSIONS } from '../../config/legalVersions';
+
+/**
+ * EINRICHTUNG-01 (AP2, EIN-09; A-01, A-10) — warum ein Profilabruf scheiterte. Nur `not_found` (der Server bestätigt:
+ * kein Profil) und `session_invalid` (der Server weist die Sitzung ab) beenden die Anmeldung. `temporary` (Netz,
+ * Zeitüberschreitung, 5xx, unbekannt) ist keine Abmeldung: Das letzte Profil bleibt, die App versucht es erneut.
+ * `query_failed` bleibt als Sammelwert für ältere Aufrufer erhalten und gilt wie `temporary`.
+ */
+export type ProfileLoadError = 'not_found' | 'session_invalid' | 'temporary' | 'query_failed';
 
 export type ProfileLoadResult =
   | { success: true; profile: ProfileRow }
-  | { success: false; error: 'not_found' | 'query_failed' };
+  | { success: false; error: ProfileLoadError };
 
 export function mapProfileRowToUserAccount(profile: ProfileRow): UserAccount {
   return {
@@ -27,6 +36,7 @@ export function mapProfileRowToUserAccount(profile: ProfileRow): UserAccount {
     acceptedPrivacyVersion: profile.accepted_privacy_version ?? undefined,
     acceptedLicenseVersion: profile.accepted_license_version ?? undefined,
     legalAcceptedAt: profile.legal_accepted_at ?? undefined,
+    uiLanguage: profile.ui_language ?? undefined,
     acceptedAt: profile.legal_accepted_at ?? undefined,
     licenseStatus: mapProfileLicenseStatus(profile.license_status),
     licenseExpiresAt: profile.license_expires_at ?? undefined,
@@ -84,6 +94,10 @@ export function createPendingProfileFromRegistration(
   metadata: ReturnType<typeof buildRegistrationMetadata>,
 ): ProfileRow {
   const now = new Date().toISOString();
+  const consented =
+    metadata.acceptedTermsVersion === LEGAL_DOCUMENT_VERSIONS.terms &&
+    metadata.acceptedPrivacyVersion === LEGAL_DOCUMENT_VERSIONS.privacy &&
+    metadata.acceptedLicenseVersion === LEGAL_DOCUMENT_VERSIONS.license;
   return {
     id: userId,
     company_name: metadata.companyName,
@@ -96,10 +110,11 @@ export function createPendingProfileFromRegistration(
     role: 'user',
     license_status: 'inactive',
     license_expires_at: null,
-    accepted_terms_version: metadata.acceptedTermsVersion,
-    accepted_privacy_version: metadata.acceptedPrivacyVersion,
-    accepted_license_version: metadata.acceptedLicenseVersion,
-    legal_accepted_at: metadata.legalAcceptedAt,
+    // EINRICHTUNG-01 (EIN-19) — wie der Server: nur die geltende Fassung zählt, der Zeitpunkt ist die Serverzeit.
+    accepted_terms_version: consented ? metadata.acceptedTermsVersion : null,
+    accepted_privacy_version: consented ? metadata.acceptedPrivacyVersion : null,
+    accepted_license_version: consented ? metadata.acceptedLicenseVersion : null,
+    legal_accepted_at: consented ? now : null,
     created_at: now,
     updated_at: now,
   };

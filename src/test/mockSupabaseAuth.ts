@@ -10,9 +10,11 @@ import {
   mockExpireProfileLicense,
   mockExtendProfileLicense,
   mockGrantBetaProfileLicense,
+  mockGrantProfileLicense,
   mockProfileSelectOwn,
   mockRpc,
   mockUpdateProfileRole,
+  mockUpdateProfileEmail,
   mockUpdateProfileStatus,
   resetMockProfileStore,
   seedMockAdminProfile,
@@ -123,7 +125,80 @@ export function resetMockSupabaseAuth(): void {
   lastResetPasswordCall = null;
   updateUserCallCount = 0;
   mockRecoveryActive = false;
+  getUserFailure = null;
+  getUserCallCount = 0;
+  profileFetchMode = null;
+  profileFetchCount = 0;
+  releaseHeld = [];
+  signInFailure = null;
+  resendCalls = [];
+  lastSignUpOptions = null;
+  lastSignOutScope = null;
+  pendingEmailChange = null;
+  isolatedSignInCount = 0;
+  isolatedSignOutCount = 0;
   resetMockProfileStore();
+}
+
+/**
+ * EINRICHTUNG-01 (AP1, E8) — `auth.getUser` fragt in Produktion den Server. Im Test lässt sich die Antwort steuern:
+ * `network` (vorübergehend unbekannt), `invalid` (Server bestätigt die Sitzung nicht, etwa widerrufen).
+ */
+let getUserFailure: null | 'network' | 'invalid' = null;
+let getUserCallCount = 0;
+
+export function setMockGetUserFailure(mode: null | 'network' | 'invalid'): void {
+  getUserFailure = mode;
+}
+
+/**
+ * EINRICHTUNG-01 (AP2, A-07) — Anmeldefehler des Auth-Servers nachstellen (Code, Status, Fehlerart wie supabase-js).
+ */
+type MockAuthError = { name?: string; code?: string; status?: number; message: string };
+let signInFailure: MockAuthError | 'throw' | null = null;
+let resendCalls: Array<{ type: string; email: string; emailRedirectTo?: string }> = [];
+let lastSignUpOptions: Record<string, unknown> | null = null;
+let lastSignOutScope: string | null = null;
+
+export function setMockSignInFailure(failure: MockAuthError | 'throw' | null): void {
+  signInFailure = failure;
+}
+
+export function getMockResendCalls(): Array<{ type: string; email: string; emailRedirectTo?: string }> {
+  return resendCalls;
+}
+
+export function getMockLastSignUpOptions(): Record<string, unknown> | null {
+  return lastSignUpOptions;
+}
+
+export function getMockLastSignOutScope(): string | null {
+  return lastSignOutScope;
+}
+
+/** EINRICHTUNG-01 (AP3, K-02) — angeforderter, noch nicht bestätigter E-Mail-Wechsel. */
+let pendingEmailChange: { userId: string; email: string; redirect?: string } | null = null;
+
+export function getMockPendingEmailChange(): { userId: string; email: string; redirect?: string } | null {
+  return pendingEmailChange;
+}
+
+/** Beide Bestätigungslinks benutzt: Die neue Adresse gilt (wie der Server-Trigger profiles.email nachzieht). */
+export function confirmMockEmailChange(): void {
+  if (!pendingEmailChange) return;
+  const record = usersById.get(pendingEmailChange.userId);
+  if (!record) return;
+  usersByEmail.delete(record.user.email ?? '');
+  record.user = { ...record.user, email: pendingEmailChange.email };
+  usersByEmail.set(pendingEmailChange.email, record);
+  mockUpdateProfileEmail(pendingEmailChange.userId, pendingEmailChange.email);
+  if (currentSession?.user.id === pendingEmailChange.userId) currentSession = { ...currentSession, user: record.user };
+  pendingEmailChange = null;
+}
+
+/** Wie oft `auth.getUser` (die Bestätigung beim Server) aufgerufen wurde — über alle Client-Instanzen. */
+export function getMockGetUserCallCount(): number {
+  return getUserCallCount;
 }
 
 export function getMockLastResetPasswordCall(): { email: string; redirectTo: string } | null {
@@ -135,6 +210,11 @@ export function getMockUpdateUserCallCount(): number {
 }
 
 /** Establish a recovery session and emit PASSWORD_RECOVERY (test helper). */
+/** EINRICHTUNG-01 (AP2, N-A1.6) — ein Auth-Ereignis mit der aktuellen Sitzung auslösen (etwa TOKEN_REFRESHED). */
+export function emitMockAuthEvent(event: string): void {
+  notifyAuthChange(event);
+}
+
 export function startMockPasswordRecovery(email: string): Session {
   const record = usersByEmail.get(email.trim().toLowerCase());
   if (!record) {
@@ -188,8 +268,13 @@ export function mockManipulateUserMetadata(userId: string, patch: Record<string,
   usersById.set(userId, record);
 }
 
-export function mockApproveUser(userId: string, daysValid = 90) {
-  return mockApproveProfile(userId, daysValid);
+export function mockApproveUser(userId: string) {
+  return mockApproveProfile(userId);
+}
+
+/** EINRICHTUNG-01 (EIN-20) — Lizenz getrennt von der Freischaltung, wie in Produktion. */
+export function mockGrantLicense(userId: string, daysValid = 90) {
+  return mockGrantProfileLicense(userId, daysValid);
 }
 
 export function mockBlockUser(userId: string) {
@@ -225,11 +310,45 @@ export function mockListUsersForAdmin() {
 
 export { getMockProfile, setMockProfileCurrentUser } from './mockProfileStore';
 
+/**
+ * EINRICHTUNG-01 (AP2, A-01, A-10) — Profilabruf nachstellen: Netzfehler (wirft), Zeitüberschreitung (hängt bis zur
+ * Freigabe), abgewiesene Sitzung (401), bestätigt fehlendes Profil. Zählt die Abrufe.
+ */
+type MockProfileFetchMode = null | 'network' | 'unauthorized' | 'missing' | 'hold';
+let profileFetchMode: MockProfileFetchMode = null;
+let profileFetchCount = 0;
+let releaseHeld: Array<() => void> = [];
+
+export function setMockProfileFetchMode(mode: MockProfileFetchMode): void {
+  profileFetchMode = mode;
+}
+
+export function getMockProfileFetchCount(): number {
+  return profileFetchCount;
+}
+
+/** EINRICHTUNG-01 (Eigenprüfung, B-2) — gibt nur den ältesten gehaltenen Abruf frei (Antwortreihenfolge nachstellen). */
+export function releaseOldestMockProfileFetch(): void {
+  releaseHeld.shift()?.();
+}
+
+/** Gibt gehaltene Abrufe frei (Modus `hold`); sie liefern danach den aktuellen Stand. */
+export function releaseMockProfileFetches(): void {
+  const offen = releaseHeld;
+  releaseHeld = [];
+  for (const freigeben of offen) freigeben();
+}
+
 function createMockFrom() {
   return {
     select: () => ({
       eq: (_column: string, value: string) => ({
         maybeSingle: async () => {
+          profileFetchCount += 1;
+          if (profileFetchMode === 'hold') await new Promise<void>((resolve) => releaseHeld.push(resolve));
+          if (profileFetchMode === 'network') throw new TypeError('Failed to fetch');
+          if (profileFetchMode === 'unauthorized') return { data: null, error: { message: 'JWT expired', code: 'PGRST301', status: 401 } };
+          if (profileFetchMode === 'missing') return { data: null, error: null };
           const profile = mockProfileSelectOwn(value);
           if (!profile) {
             return { data: null, error: null };
@@ -244,9 +363,14 @@ function createMockFrom() {
 function createMockAuth() {
   return {
     signInWithPassword: async ({ email, password }: { email: string; password: string }) => {
+      if (signInFailure === 'throw') throw new TypeError('Failed to fetch');
+      if (signInFailure) return { data: { session: null, user: null }, error: signInFailure };
       const record = usersByEmail.get(email.trim().toLowerCase());
       if (!record || record.password !== password) {
-        return { data: { session: null, user: null }, error: { message: 'Invalid login credentials' } };
+        return {
+          data: { session: null, user: null },
+          error: { name: 'AuthApiError', code: 'invalid_credentials', status: 400, message: 'Invalid login credentials' },
+        };
       }
       currentSession = createSession(record.user);
       setMockProfileCurrentUser(record.user.id);
@@ -263,8 +387,12 @@ function createMockAuth() {
       options?: { data?: Record<string, string> };
     }) => {
       const normalizedEmail = email.trim().toLowerCase();
+      lastSignUpOptions = (options as Record<string, unknown> | undefined) ?? null;
       if (usersByEmail.has(normalizedEmail)) {
-        return { data: { session: null, user: null }, error: { message: 'User already registered' } };
+        return {
+          data: { session: null, user: null },
+          error: { name: 'AuthApiError', code: 'user_already_exists', status: 422, message: 'User already registered' },
+        };
       }
       const metadata = options?.data ?? {};
       const user = upsertMockUser(normalizedEmail, password, metadata);
@@ -277,7 +405,10 @@ function createMockAuth() {
       notifyAuthChange('SIGNED_UP');
       return { data: { session: currentSession, user }, error: null };
     },
-    signOut: async () => {
+    signOut: async (options?: { scope?: string }) => {
+      lastSignOutScope = options?.scope ?? 'global';
+      // EINRICHTUNG-01 (AP3, K-03.4) — „others“ beendet nur die anderen Sitzungen; diese bleibt.
+      if (options?.scope === 'others') return { error: null };
       currentSession = null;
       setMockProfileCurrentUser(null);
       mockRecoveryActive = false;
@@ -292,6 +423,20 @@ function createMockAuth() {
       }
       return { data: { session: currentSession }, error: null };
     },
+    getUser: async () => {
+      getUserCallCount += 1;
+      if (getUserFailure === 'network') {
+        return { data: { user: null }, error: { name: 'AuthRetryableFetchError', message: 'Failed to fetch', status: 0 } };
+      }
+      if (getUserFailure === 'invalid' || !currentSession) {
+        return { data: { user: null }, error: { name: 'AuthSessionMissingError', message: 'Auth session missing!', status: 401 } };
+      }
+      return { data: { user: currentSession.user }, error: null };
+    },
+    resend: async (input: { type: string; email: string; options?: { emailRedirectTo?: string } }) => {
+      resendCalls.push({ type: input.type, email: input.email, emailRedirectTo: input.options?.emailRedirectTo });
+      return { data: {}, error: null };
+    },
     resetPasswordForEmail: async (email: string, options?: { redirectTo?: string }) => {
       lastResetPasswordCall = {
         email: email.trim().toLowerCase(),
@@ -299,9 +444,28 @@ function createMockAuth() {
       };
       return { data: {}, error: null };
     },
-    updateUser: async (attributes: { password?: string }) => {
+    updateUser: async (attributes: { password?: string; email?: string }, options?: { emailRedirectTo?: string }) => {
       if (!currentSession) {
         return { data: { user: null }, error: { message: 'Auth session missing' } };
+      }
+      // EINRICHTUNG-01 (AP3, K-02) — E-Mail-Wechsel: erst nach beiden Bestätigungen wirksam.
+      if (typeof attributes.email === 'string') {
+        pendingEmailChange = { userId: currentSession.user.id, email: attributes.email, redirect: options?.emailRedirectTo };
+        return { data: { user: currentSession.user }, error: null };
+      }
+      // EINRICHTUNG-01 (AP3, K-03) — regulärer Passwortwechsel einer angemeldeten Sitzung (ohne Wiederherstellung).
+      if (!mockRecoveryActive && typeof attributes.password === 'string') {
+        const record = usersById.get(currentSession.user.id);
+        if (!record) return { data: { user: null }, error: { message: 'User not found' } };
+        if (attributes.password.length < 8) return { data: { user: null }, error: { name: 'AuthApiError', code: 'weak_password', status: 422, message: 'weak' } };
+        if (attributes.password === record.password) {
+          return { data: { user: null }, error: { name: 'AuthApiError', code: 'same_password', status: 422, message: 'same' } };
+        }
+        record.password = attributes.password;
+        // Beide Indizes zeigen auf dasselbe Konto (das Admin-Konto wird mit zwei Einträgen angelegt).
+        usersByEmail.set(record.user.email ?? '', record);
+        usersById.set(record.user.id, record);
+        return { data: { user: record.user }, error: null };
       }
       if (!mockRecoveryActive) {
         return { data: { user: null }, error: { message: 'Not in recovery' } };
@@ -331,6 +495,41 @@ function createMockAuth() {
       };
     },
   };
+}
+
+/**
+ * EINRICHTUNG-01 (AP3, K-03.3) — wie `createIsolatedAuthClient`: prüft Zugangsdaten gegen dieselben Konten, ohne die
+ * Sitzung dieses Geräts zu ändern und ohne Ereignis an die App. Zählt Prüfungen und beendete Prüfsitzungen.
+ */
+let isolatedSignInCount = 0;
+let isolatedSignOutCount = 0;
+
+export function getMockIsolatedAuthCounts(): { signIn: number; signOut: number } {
+  return { signIn: isolatedSignInCount, signOut: isolatedSignOutCount };
+}
+
+export function createMockIsolatedAuthClient(): SupabaseClient {
+  return {
+    auth: {
+      signInWithPassword: async ({ email, password }: { email: string; password: string }) => {
+        isolatedSignInCount += 1;
+        if (signInFailure === 'throw') throw new TypeError('Failed to fetch');
+        if (signInFailure) return { data: { session: null, user: null }, error: signInFailure };
+        const record = usersByEmail.get(email.trim().toLowerCase());
+        if (!record || record.password !== password) {
+          return {
+            data: { session: null, user: null },
+            error: { name: 'AuthApiError', code: 'invalid_credentials', status: 400, message: 'Invalid login credentials' },
+          };
+        }
+        return { data: { session: createSession(record.user), user: record.user }, error: null };
+      },
+      signOut: async () => {
+        isolatedSignOutCount += 1;
+        return { error: null };
+      },
+    },
+  } as unknown as SupabaseClient;
 }
 
 export function createMockSupabaseClient(): SupabaseClient {

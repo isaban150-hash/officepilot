@@ -88,7 +88,8 @@ describe('01B — A/G Vertrag der neuen Felder', () => {
     expect('senderDisplayName' in after).toBe(false);
     expect(resolveProfileReplyToEmail(after)).toBe('info@cirmak.example');
     expect(resolveProfileSenderDisplayName(after)).toBe('Cirmak Haustechnik GmbH');
-    expect('replyToEmail' in (buildCompanyProfileCloudPayload(after).payload as object)).toBe(false);
+    // EINRICHTUNG-01 (EIN-06) — Schema 3 ist ein Patch: Gelöscht wird ausdrücklich mit `null`.
+    expect((buildCompanyProfileCloudPayload(after).payload as Record<string, unknown>).replyToEmail).toBeNull();
     resetTestStores();
   });
 
@@ -102,13 +103,14 @@ describe('01B — A/G Vertrag der neuen Felder', () => {
     expect(resolveProfileSenderDisplayName(explicit)).toBe('Cirmak Service');
   });
 
-  it('Cloud-Payload traegt profile_schema_version 2 und ohne die Felder, wenn geloescht; Pull liest sie zurueck', () => {
+  // EINRICHTUNG-01 (EIN-06) — seit Schema 3 löscht der Payload geleerte Felder ausdrücklich mit `null`.
+  it('Cloud-Payload traegt profile_schema_version und loescht geleerte Felder ausdruecklich; Pull liest sie zurueck', () => {
     const payload = buildCompanyProfileCloudPayload(profile({ currency: 'EUR', replyToEmail: 'x@y.de', senderDisplayName: 'S' }));
     expect(payload.profile_schema_version).toBe(COMPANY_PROFILE_SCHEMA_VERSION);
     expect(payload.payload).toMatchObject({ currency: 'EUR', replyToEmail: 'x@y.de', senderDisplayName: 'S' });
     const cleared = buildCompanyProfileCloudPayload(profile({ currency: 'EUR', replyToEmail: '', senderDisplayName: '' }));
-    expect('replyToEmail' in (cleared.payload as object)).toBe(false);
-    expect('senderDisplayName' in (cleared.payload as object)).toBe(false);
+    expect((cleared.payload as Record<string, unknown>).replyToEmail).toBeNull();
+    expect((cleared.payload as Record<string, unknown>).senderDisplayName).toBeNull();
     const parsed = parseCompanyProfileFromCloud(payload as Record<string, unknown>);
     expect(parsed).toMatchObject({ currency: 'EUR', replyToEmail: 'x@y.de', senderDisplayName: 'S' });
   });

@@ -30,14 +30,15 @@ body {
   min-height: 100dvh;
 }
 
-/* App Shell */
+/* App Shell — EINRICHTUNG-01 (AP5, EIN-37): volle Breite in genau einer Definition (früher 480 px hier, aufgehoben in shell.css). */
 .app-shell {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
-  max-width: 480px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
   background: var(--color-bg);
 }
 
@@ -133,14 +134,13 @@ body {
   display: block;
 }
 
-/* Bottom Nav */
+/* Bottom Nav — EINRICHTUNG-01 (AP5, EIN-37): volle Breite in genau einer Definition (früher 480 px, aufgehoben in shell.css). */
 .bottom-nav {
   position: fixed;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   width: 100%;
-  max-width: 480px;
   display: flex;
   align-items: stretch;
   background: rgba(255, 255, 255, 0.94);
@@ -669,6 +669,46 @@ body {
   color: var(--color-text-muted, #6b7280);
 }
 
+/*
+ * EINRICHTUNG-01 (AP5; Vertrag 1.17) — Speicherleiste der Einstellungen (`SettingsSaveBar` auf `PrimaryActionBar`).
+ * Unter 1024 px klebt sie, sobald das Formular geändert ist, über der Bottom-Navigation; „Verwerfen“ und „Speichern“
+ * stehen nebeneinander. Sie bleibt im Fluss ihres Formulars und verdeckt am Ende nichts. Fokussierte Felder halten so
+ * viel Abstand, dass sie nie unter Leiste und Navigation liegen. Ab 1024 px steht sie still (Design-System).
+ */
+.settings-save-bar {
+  margin-top: var(--space-4, 1rem);
+}
+
+/* P1 A-04/A-02 Abschluss-Rundgang (R-19) — Fehlerhinweis und „Ungespeicherte Änderungen“ standen ohne Abstand
+   aneinander („…Felder.Ungespeicherte Änderungen“). */
+.settings-save-bar__error + .settings-form__dirty {
+  margin-left: 0.5rem;
+}
+
+@media (max-width: 1023px) {
+  .settings-save-bar .primary-action-bar__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .settings-save-bar .primary-action-bar__secondary,
+  .settings-save-bar .primary-action-bar__primary {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .settings-save-bar .primary-action-bar__secondary .btn,
+  .settings-save-bar .primary-action-bar__primary .btn {
+    width: 100%;
+  }
+
+  .settings-page .input,
+  .settings-page .select,
+  .settings-page textarea {
+    scroll-margin-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 8rem);
+  }
+}
+
 @media (max-width: 767px) {
   .settings-form__actions {
     flex-direction: column;
@@ -678,6 +718,16 @@ body {
   .settings-form__actions .btn {
     width: 100%;
   }
+}
+
+/*
+ * EINRICHTUNG-01 (K-06; Teil 2 Q-05) — Bedienflächen der Einstellungs- und Kontoseiten mindestens 44 px. Die globale
+ * Pilot-Höhe von 42 px (visual-pilot-02b.css, zuletzt geladen) gilt hier nicht; die höhere Spezifität wirkt unabhängig
+ * von der Ladereihenfolge. Die app-weite Vereinheitlichung folgt in AP9.
+ */
+.settings-page .btn,
+.settings-page .chip {
+  min-height: 44px;
 }
 
 /* SETTINGS-01B3 — Design-Seite: Logo, Vorlage, skalierte Dokumentvorschau. */
@@ -1110,11 +1160,6 @@ body {
 @media (min-width: 1024px) {
   :root {
     --sidebar-width: 220px;
-  }
-
-  .app-shell {
-    max-width: none;
-    margin: 0;
   }
 
   .app-shell__body {
@@ -1736,7 +1781,9 @@ body {
   font-weight: 600;
   color: var(--color-text);
   cursor: pointer;
-  min-height: 42px;
+  /* EINRICHTUNG-01 (AP9; 1.33) — Bedienflächen mindestens 44 × 44 px (vorher 42 px). */
+  min-height: 44px;
+  min-width: 44px;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
@@ -4534,6 +4581,32 @@ body {
   border: 0;
 }
 
+/* EINRICHTUNG-01 (AP9; 1.32) — Skip-Link: außerhalb des Bildes, bis er den Tastaturfokus hat. */
+.skip-link {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.75rem;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.6rem 1rem;
+  border-radius: var(--op-radius-md, 8px);
+  background: var(--op-surface, #fff);
+  color: var(--op-text, #1f2937);
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: none;
+  outline: 2px solid var(--op-primary, #2563eb);
+  outline-offset: 2px;
+}
+
 /* Toast */
 .toast {
   position: fixed;
@@ -4668,6 +4741,14 @@ body {
   margin: 0;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* EINRICHTUNG-01 (AP7; 1.23) — Zählung je Bereich: auf dem Telefon einspaltig, ab Tablet zweispaltig. */
+@media (min-width: 640px) {
+  .backup-export-panel__counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 1.5rem;
+  }
 }
 
 .backup-export-panel__replace-hint {

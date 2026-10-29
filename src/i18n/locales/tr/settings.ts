@@ -5,24 +5,7 @@ export const trSettings = {
   'settings.gear': 'Ayarları aç',
   'settings.backToHub': 'Ayarlara dön',
 
-  'settings.group.company': 'Firma',
-  'settings.company.title': 'Firma profili',
-  'settings.company.description': 'Temel bilgiler, adres, iletişim, vergi ve sicil bilgileri',
-
-  'settings.group.documents': 'Faturalar ve ödemeler',
-  'settings.payment.title': 'Vade ve iskonto',
-  'settings.payment.description': 'Yeni faturalar için varsayılanlar — fatura bazında değiştirilebilir',
-  'settings.documents.title': 'Fatura metinleri',
-  'settings.documents.description': 'Faturalarındaki alt bilgi ve notlar',
-
-  'settings.group.design': 'Belgeler ve tasarım',
-  'settings.design.title': 'Logo ve görünüm',
-  'settings.design.description': 'Firma logosu, belge şablonu ve önizleme',
-
-
   /* SETTINGS-01B4 — Faturalar ve ödemeler. */
-  'settings.invoices.title': 'Faturalar ve ödemeler',
-  'settings.invoices.description': 'Yeni faturalar için vade, ödeme metni, iskonto, vergi durumu ve standart metinler',
   'settings.invoices.page.subtitle': 'Yeni faturalar için varsayılanlar — fatura bazında değiştirilebilir. Mevcut taslaklar ve onaylanmış faturalar değişmez.',
   'settings.invoices.historicalHint': 'Bu değerler yalnızca bundan sonra oluşturulan faturalar için geçerlidir.',
   'settings.invoices.readOnly': 'Fatura varsayılanlarını yalnızca yöneticiler değiştirebilir.',
@@ -33,6 +16,8 @@ export const trSettings = {
   'settings.invoices.number.title': 'Fatura numarası',
   'settings.invoices.number.hint': 'Numara kesinleştirmede sunucu tarafından verilir. Burada yalnızca biçimi belirlersiniz.',
   'settings.invoices.number.prefix': 'Ön ek (isteğe bağlı)',
+  // EINRICHTUNG-01 (AP9; 1.31) — Beispielwert; nur Buchstaben A–Z, Ziffern und Bindestrich sind erlaubt.
+  'settings.invoices.number.prefixPlaceholder': 'FT',
   'settings.invoices.number.yearInNumber': 'Fatura numarasında yıl',
   'settings.invoices.number.padding': 'Sıra numarası basamak sayısı',
   'settings.invoices.number.preview': 'Önizleme',
@@ -77,25 +62,19 @@ export const trSettings = {
   'settings.invoices.preview.title': 'Yeni fatura örneği',
   'settings.invoices.preview.hint': 'Bugün oluşturulan yeni bir fatura böyle ön doldurulurdu. Hiçbir şey oluşturulmaz, numara verilmez.',
   'settings.invoices.preview.due': 'Vade',
-  'settings.group.communication': 'E-posta ve iletişim',
-  'settings.communication.title': 'E-posta ve iletişim',
-  'settings.communication.description': 'Gönderen adı, yanıt adresi ve belge gönderimi için standart metinler',
   'settings.communication.page.subtitle': 'Belgeleriniz alıcıya e-posta ile nasıl ulaşır.',
-  'settings.communication.readOnly': 'İletişim ayarlarını yalnızca sahipler ve yöneticiler değiştirebilir.',
   'settings.communication.historicalHint': 'Bu değerler yeni gönderimler için geçerlidir. Gönderilmiş belgeler değişmez.',
   'settings.communication.section.sender': 'Gönderen',
-  'settings.communication.sender.hint': 'Belgelerin e-posta ile gönderimi için geçerlidir (mektuplar, teklifler, diğer belgeler): Alıcı görünen adı görür ve yanıt adresine yanıt verir. Faturalar ve düzeltme belgeleri, faturanın onayında kaydedilen firma adı, hukuki biçim ve firma e-postasını kullanır. Teknik gönderen adresi OfficeTakt gönderim hizmeti tarafından belirlenir ve serbestçe seçilemez.',
+  'settings.communication.sender.hint': 'Görünen ad ve yanıt adresi, faturalar dahil OfficeTakt\'tan gönderilen tüm e-postalar için geçerlidir. Fatura PDF\'inde onay anındaki firma bilgileri yer alır. Teknik gönderen adresini OfficeTakt gönderim hizmeti belirler; serbestçe seçilemez.',
   'settings.communication.senderDisplayName': 'Gönderen görünen adı (isteğe bağlı)',
   'settings.communication.senderDisplayName.derived': 'Boş = firma adı ve hukuki şekil: „{name}“',
   'settings.communication.senderDisplayName.custom': 'Özel görünen ad. Firma adı ve hukuki şekli kullanmak için boş bırakın.',
   'settings.communication.replyToEmail': 'Yanıt adresi (Reply-To, isteğe bağlı)',
-  'settings.communication.replyToEmail.fallback': 'Boş = firma e-postası: {email}',
-  'settings.communication.replyToEmail.custom': 'Yanıtlar bu adrese gider. Firma e-postasını kullanmak için boş bırakın.',
   'settings.communication.identity.from': 'Teknik gönderen',
   'settings.communication.identity.fromValue': 'OfficeTakt gönderim hizmeti (değiştirilemez)',
   'settings.communication.identity.displayName': 'Görünen ad',
   'settings.communication.identity.replyTo': 'Yanıt adresi',
-  'settings.communication.identity.hint': 'Gönderen alıcıda böyle görünür. Bir fatura gönderilirken o faturada dondurulmuş firma verileri geçerlidir.',
+  'settings.communication.identity.hint': 'Gönderen alıcıda böyle görünür — faturalar dahil OfficeTakt\'tan gönderilen tüm e-postalarda.',
   'settings.communication.saved': 'İletişim ayarları kaydedildi.',
   'settings.invoices.currency.title': 'Para birimi',
   'settings.invoices.currency.eurLabel': 'Euro',
@@ -109,29 +88,9 @@ export const trSettings = {
   'settings.invoices.email.fallbackHint': 'Boş = ayarlanan dilde OfficeTakt standart metni.',
   'settings.invoices.email.preview': '{invoiceNumber} numaralı fatura için örnek',
 
-
-  /* SETTINGS-01B5 — İşletme sayfası. */
-  'settings.operating.title': 'İşletme',
-  'settings.operating.description': 'Dil, veri yedekleme, senkronizasyon ve yönetim',
-  'settings.operating.page.subtitle': 'İşletme ayarları ve yönetim yolları — fatura verileri değil.',
-  'settings.operating.section.language': 'Dil',
-  'settings.operating.language.hint': 'Dil bu kurulum için geçerlidir ve hemen etkili olur.',
-  'settings.operating.section.backup': 'Veri yedekleme',
-  'settings.operating.section.sync': 'Senkronizasyon',
-  'settings.operating.sync.manage': 'Senkronizasyonu yönet',
-  'settings.operating.section.admin': 'Kullanıcılar ve erişimler',
-  'settings.operating.admin.users': 'Kullanıcıları ve erişimleri yönet',
-  'settings.operating.admin.more': 'Diğer alanlar',
-  'settings.operating.role.admin': 'Bu işletme için şirket profilini, fatura varsayılanlarını ve tasarımı değiştirebilirsin.',
-  'settings.operating.role.member': 'Kullanıcı hesabınla ayarları görürsün; değiştirmek yalnızca yöneticilere açıktır.',
+  /* SETTINGS-01B4 — Hinweis bei steuerfreien Rechnungen. */
   'settings.invoices.taxFreeNotice': 'Vergiden muaf faturalar için not',
   'settings.invoices.taxFreeNotice.hint': 'Yalnızca vergi durumu „Vergiden muaf / KDV yok" olan faturalarda görünür. Boş = standart not.',
-
-  'settings.group.team': 'İşletme',
-  'settings.team.operations.title': 'İşletme ve diğer alanlar',
-  'settings.team.operations.description': 'Dil, yedekleme ve diğer tüm alanlar',
-  'settings.team.users.title': 'Kullanıcılar ve erişimler',
-  'settings.team.users.description': 'Erişimleri onayla ve yönet',
 
   'settings.company.page.subtitle': 'Bu bilgiler yeni faturalarda ve belgelerde görünür.',
   'settings.company.section.company': 'Şirket',
@@ -141,10 +100,6 @@ export const trSettings = {
   'settings.company.section.register': 'Sicil',
   'settings.company.section.bank': 'Banka bilgileri',
   'settings.company.saved': 'Firma profili kaydedildi.',
-  'settings.company.unsavedHint': 'Kaydedilmemiş değişiklikler',
-  'settings.company.noChanges': 'Değişiklik yok',
-  'settings.company.readOnly': 'Firma bilgilerini yalnızca yöneticiler değiştirebilir. Bilgiler burada yalnızca görüntülenir.',
-  'settings.company.roleUnknown': 'Bu işletmedeki rolün henüz bilinmiyor. Firma bilgileri bir sonraki eşitlemeden sonra değiştirilebilir.',
   'settings.company.historicalHint': 'Değişiklikler yeni belgeler için geçerlidir. Onaylanmış faturalar değişmez.',
   // BROWSER-ACCEPTANCE-FIX 01 / B2
   'settings.company.iban.storedInvalid': 'Kayıtlı IBAN geçerli değil.',
@@ -175,7 +130,6 @@ export const trSettings = {
   'settings.design.preview.title': 'Belgeniz böyle görünüyor',
   'settings.design.preview.hint': 'Örnek verilerle önizleme — müşteri, kalemler ve numara gerçek değildir.',
   'settings.design.saved': 'Tasarım kaydedildi.',
-  'settings.design.readOnly': 'Logo ve görünümü yalnızca yöneticiler değiştirebilir. Önizleme burada yalnızca görüntülenir.',
   // E-MAIL-07C — Signatur und Vorlagen
   'settings.communication.signature.title': 'İmza',
   'settings.communication.signature.hint': 'OfficeTakt ile gönderilen her e-postanın altına bir kez eklenir. Gönderim penceresinde metin göndermeden önce değiştirilebilir.',
@@ -188,4 +142,8 @@ export const trSettings = {
   'settings.communication.template.hint': 'Bu türdeki yeni e-postalar için ön doldurma. Boş: standart şablon (yer tutucu metin). Gönderim penceresindeki değişiklikler bu şablonu değiştirmez.',
   'settings.communication.template.placeholders': 'Kullanılabilir yer tutucular: {list}',
   'settings.communication.template.preview': 'Örnek değerlerle önizleme',
+  // EINRICHTUNG-01 (AP9; 1.31) — önizlemenin örnek değerleri, şablonun dilinde.
+  'settings.communication.previewSample.customerName': 'Örnek Müşteri Ltd. Şti.',
+  'settings.communication.previewSample.offerTitle': 'Banyo yenileme',
+  'settings.communication.previewSample.letterTitle': 'Randevu teyidi',
 } as const;

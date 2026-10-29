@@ -25,6 +25,9 @@ import {
 import type { AppPersistedState } from '../types/models';
 import type { DocumentFileRef } from '../types/documentFileRef';
 import type { DocumentFileRepresentationBinding } from '../types/documentFileRepresentationBinding';
+import type { BackupMissingFileEntry } from '../types/backupExport';
+import { findBackupCredentialPaths } from './backupCredentialScan';
+import { buildBackupAreaCounts, parseBackupAreaCounts, sameBackupAreaCounts } from './backupAreaCounts';
 
 export { BACKUP_VALIDATE_LIMITS, BACKUP_SCHEMA_VERSION };
 
@@ -115,20 +118,12 @@ export function detectNonImportableBackupAppStateFields(state: unknown): string[
     found.push('documentFileBlobs');
   }
 
-  const raw = JSON.stringify(state);
-  const secretNeedles = [
-    'accessToken',
-    'refreshToken',
-    'Authorization',
-    'supabase.auth',
-    '"password"',
-    'sb-',
-  ] as const;
-  for (const needle of secretNeedles) {
-    if (raw.includes(needle)) {
-      found.push('secrets');
-      break;
-    }
+  /*
+   * EINRICHTUNG-01 (EIN-04) — nur echte Zugangsstrukturen zählen, keine
+   * Teilzeichenketten in Geschäftstexten (siehe backupCredentialScan).
+   */
+  if (findBackupCredentialPaths(state).length > 0) {
+    found.push('secrets');
   }
 
   return found;
@@ -247,6 +242,9 @@ function parseManifest(raw: unknown): BackupManifest | null {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return null;
     recordCounts[key] = value;
   }
+  // EINRICHTUNG-01 (AP7; 1.23) — Bereichszählung: ältere Sicherungen tragen sie nicht; vorhanden muss sie gültig sein.
+  const areaCounts = parseBackupAreaCounts(raw.areaCounts);
+  if (areaCounts === null) return null;
   if (!Array.isArray(raw.files)) return null;
   if (raw.files.length !== raw.fileCount) return null;
 
@@ -284,6 +282,28 @@ function parseManifest(raw: unknown): BackupManifest | null {
 
   if (sizeSum !== raw.totalFileBytes) return null;
 
+  /*
+   * EINRICHTUNG-01 (S-13) — Teilsicherung. Fehlende Dateien sind nur erlaubt,
+   * wenn sie ausdrücklich vermerkt sind: `incomplete: true` UND eine Liste mit
+   * gültigen, eindeutigen Kennungen, die nicht zugleich als Datei vorliegen.
+   */
+  let missingFiles: BackupMissingFileEntry[] | undefined;
+  if (raw.incomplete !== undefined || raw.missingFiles !== undefined) {
+    if (raw.incomplete !== true || !Array.isArray(raw.missingFiles) || raw.missingFiles.length === 0) return null;
+    missingFiles = [];
+    const seenMissing = new Set<string>();
+    for (const entry of raw.missingFiles) {
+      if (!isPlainObject(entry)) return null;
+      if (typeof entry.fileRefId !== 'string' || !FILE_REF_ID_PATTERN.test(entry.fileRefId)) return null;
+      if (seenIds.has(entry.fileRefId) || seenMissing.has(entry.fileRefId)) return null;
+      seenMissing.add(entry.fileRefId);
+      missingFiles.push({
+        fileRefId: entry.fileRefId,
+        ...(typeof entry.originalFileName === 'string' ? { originalFileName: entry.originalFileName.slice(0, 300) } : {}),
+      });
+    }
+  }
+
   return {
     schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt: raw.exportedAt,
@@ -291,6 +311,8 @@ function parseManifest(raw: unknown): BackupManifest | null {
     fileCount: raw.fileCount,
     totalFileBytes: raw.totalFileBytes,
     files,
+    ...(areaCounts ? { areaCounts } : {}),
+    ...(missingFiles ? { incomplete: true as const, missingFiles } : {}),
   };
 }
 
@@ -435,7 +457,16 @@ export async function validateLocalBackupZip(
     }
 
     const nonImportable = detectNonImportableBackupAppStateFields(appStateRaw);
-    if (nonImportable.includes('secrets') || nonImportable.includes('invalid_root')) {
+    if (nonImportable.includes('secrets')) {
+      // S-11.4 — Fundstelle als Pfad, nie der Wert.
+      return {
+        ok: false,
+        reason: 'non_importable_fields',
+        errorKey: 'backup.validate.error.nonImportable',
+        secretPaths: findBackupCredentialPaths(appStateRaw),
+      };
+    }
+    if (nonImportable.includes('invalid_root')) {
       return fail('non_importable_fields', 'backup.validate.error.nonImportable');
     }
     if (nonImportable.includes('syncOutbox') || nonImportable.includes('documentFileBlobs')) {
@@ -453,6 +484,11 @@ export async function validateLocalBackupZip(
       if (manifest.recordCounts[key] !== expectedCounts[key]) {
         return fail('invalid_manifest', 'backup.validate.error.manifest');
       }
+    }
+    // EINRICHTUNG-01 (AP7; 1.23, D-03.2) — die Bereichszählung des Manifests muss zum enthaltenen Bestand passen.
+    const bereichsZaehlung = buildBackupAreaCounts(normalized, manifest.fileCount);
+    if (manifest.areaCounts && !sameBackupAreaCounts(manifest.areaCounts, bereichsZaehlung)) {
+      return fail('invalid_manifest', 'backup.validate.error.manifest');
     }
 
     const refs = normalized.documentFileRefs ?? [];
@@ -473,20 +509,23 @@ export async function validateLocalBackupZip(
       return fail('ref_mismatch', 'backup.validate.error.refs');
     }
 
+    // EINRICHTUNG-01 (S-13) — nur ausdrücklich vermerkte Lücken einer Teilsicherung sind erlaubt.
+    const missingIds = new Set((manifest.missingFiles ?? []).map((entry) => entry.fileRefId));
+
     for (const binding of bindings) {
-      if (!refsById.has(binding.fileRefId)) {
+      if (!refsById.has(binding.fileRefId) && !missingIds.has(binding.fileRefId)) {
         return fail('ref_mismatch', 'backup.validate.error.refs');
       }
     }
 
-    // Every documentFileRef must have a blob entry in the ZIP / manifest.
+    // Every documentFileRef must have a blob entry in the ZIP / manifest — or be listed as missing.
     const manifestById = new Map(manifest.files.map((f) => [f.fileRefId, f]));
     if (manifestById.size !== manifest.files.length) {
       return fail('invalid_manifest', 'backup.validate.error.manifest');
     }
 
     for (const ref of refs) {
-      if (!manifestById.has(ref.id)) {
+      if (!manifestById.has(ref.id) && !missingIds.has(ref.id)) {
         return fail('blob_mismatch', 'backup.validate.error.blobs');
       }
     }
@@ -558,8 +597,12 @@ export async function validateLocalBackupZip(
       exportedAt: manifest.exportedAt,
       schemaVersion: manifest.schemaVersion,
       recordCounts: cloneJson(manifest.recordCounts),
+      areaCounts: bereichsZaehlung,
       fileCount: manifest.fileCount,
       totalFileBytes: manifest.totalFileBytes,
+      ...(manifest.incomplete
+        ? { incomplete: true, missingFiles: cloneJson(manifest.missingFiles ?? []) }
+        : {}),
     };
 
     return {

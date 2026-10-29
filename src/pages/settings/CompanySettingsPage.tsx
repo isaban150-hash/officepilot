@@ -1,19 +1,28 @@
-import { useMemo, useState } from 'react';
-import { Button } from '../../components/ui/Button';
-import { PageHeader } from '../../components/ui/Card';
-import { ReadOnlyNotice } from '../../components/ui/ReadOnlyNotice';
+import { useState } from 'react';
+import { SettingsAccessNotice, resolveSettingsNoticeVariant } from '../../components/settings/SettingsAccessNotice';
+import { SettingsPageHeader } from '../../components/settings/SettingsPageHeader';
+import { SettingsSaveBar } from '../../components/settings/SettingsSaveBar';
 import { useApp } from '../../context/AppContext';
-import { useAuth } from '../../context/AuthContext';
+import { SettingsForeignFieldErrors, foreignFieldErrors } from '../../components/settings/SettingsForeignFieldErrors';
+import { CHANNEL_OPTIONS, MATERIAL_OPTIONS } from '../../components/setup/setupOptions';
+import { useFocusFieldFromHash } from '../../hooks/useFocusFieldFromHash';
 import { useFormResume } from '../../hooks/useFormResume';
+import { useSettingsAccess } from '../../hooks/useSettingsAccess';
 import { changedProfileFields, useProfileFormBase } from '../../hooks/useProfileFormBase';
 import { getCompanyProfile } from '../../services/companyProfileService';
-import { isSupabaseConfigured } from '../../lib/supabase';
 import { getLastPersistSuccess } from '../../services/persistenceService';
 import { getInvoiceNumberSequenceSnapshot } from '../../services/invoiceNumberService';
 import { ibanErrorKey, validateCompanyProfileForSettings } from '../../services/setupValidationService';
-import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
-import type { CompanyProfile } from '../../types/models';
+import { COMPANY_PROFILE_TEXT_LIMITS, textInputMaxLength } from '../../services/company/companyProfileSettingsContract';
+import {
+  formatIbanGroups,
+  normalizeCompanyProfileFormats,
+  normalizeIbanInput,
+} from '../../services/company/companyProfileFormatRules';
+import { INDUSTRY_OPTIONS } from '../../data/mockData';
+import type { CompanyProfile, CompanySetup } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
+import { SETTINGS_TARGET_PATHS } from './settingsHubConfig';
 
 /**
  * SETTINGS-01B2 — die Firmenprofil-Unterseite `/einstellungen/firma`.
@@ -29,7 +38,7 @@ import type { TranslationKey } from '../../i18n';
  * wird über `useFormResume` (dieselbe Infrastruktur wie die Firmendaten)
  * gegen Reload und Navigation gesichert und nach dem Speichern verworfen.
  */
-export const COMPANY_SETTINGS_ROUTE = '/einstellungen/firma';
+export const COMPANY_SETTINGS_ROUTE = SETTINGS_TARGET_PATHS['company-profile'];
 
 /** Die Felder dieser Seite — und nur diese werden gelesen und geschrieben. */
 export const COMPANY_SETTINGS_FIELDS = [
@@ -166,7 +175,8 @@ const SECTIONS: SectionSpec[] = [
     titleKey: 'settings.company.section.bank',
     fields: [
       { key: 'bankName', labelKey: 'companyProfile.bankName' },
-      { key: 'accountHolder', labelKey: 'companyProfile.accountHolder', maxLength: 120 },
+      // EINRICHTUNG-01 (S-08) — Grenze in Codepunkten; das Feld blockiert keinen gültigen Wert.
+      { key: 'accountHolder', labelKey: 'companyProfile.accountHolder', maxLength: textInputMaxLength(COMPANY_PROFILE_TEXT_LIMITS.accountHolder) },
       { key: 'iban', labelKey: 'companyProfile.iban' },
       { key: 'bic', labelKey: 'companyProfile.bic' },
     ],
@@ -202,25 +212,54 @@ export function missingCapitalCompanyFields(
   return CAPITAL_COMPANY_FIELDS.filter((field) => !(draft[field.key] ?? '').trim());
 }
 
+/** F-03 — die IBAN steht im Entwurf in Vierergruppen; verglichen und gespeichert wird die elektronische Form. */
 function pickFields(profile: CompanyProfile): CompanySettingsDraft {
   const picked = {} as Record<CompanySettingsField, string>;
   for (const key of COMPANY_SETTINGS_FIELDS) picked[key] = profile[key] ?? '';
+  picked.iban = formatIbanGroups(picked.iban);
   return picked;
 }
 
-export function isCompanySettingsDirty(draft: CompanySettingsDraft, saved: CompanyProfile): boolean {
-  return COMPANY_SETTINGS_FIELDS.some((key) => (draft[key] ?? '') !== (saved[key] ?? ''));
+function comparableValue(key: CompanySettingsField, value: string | undefined): string {
+  const text = value ?? '';
+  return key === 'iban' ? normalizeIbanInput(text) : text;
 }
 
-export function CompanySettingsPage() {
-  const { companyProfile, updateCompanyProfile, translate, showToast } = useApp();
-  const { user } = useAuth();
+export function isCompanySettingsDirty(draft: CompanySettingsDraft, saved: CompanyProfile): boolean {
+  return COMPANY_SETTINGS_FIELDS.some((key) => comparableValue(key, draft[key]) !== comparableValue(key, saved[key]));
+}
 
-  const access = useMemo(
-    () => resolveWorkspaceWriteAccess({ userId: user?.id, cloudConfigured: isSupabaseConfigured() }),
-    [user?.id],
-  );
-  const editable = access.canWrite;
+/** F-04 — Gewerk, Materialstandard und Kanal (CompanySetup), dieselben Werte wie im Assistenten. */
+type OperationsDraft = Pick<CompanySetup, 'industry' | 'materialStandard' | 'communicationChannel'>;
+
+function pickOperations(setup: CompanySetup): OperationsDraft {
+  return { industry: setup.industry, materialStandard: setup.materialStandard, communicationChannel: setup.communicationChannel };
+}
+
+function changedOperations(draft: OperationsDraft, saved: OperationsDraft): Partial<OperationsDraft> {
+  const changed: Partial<OperationsDraft> = {};
+  if (draft.industry !== saved.industry) changed.industry = draft.industry;
+  if (draft.materialStandard !== saved.materialStandard) changed.materialStandard = draft.materialStandard;
+  if (draft.communicationChannel !== saved.communicationChannel) changed.communicationChannel = draft.communicationChannel;
+  return changed;
+}
+
+/** Fehlerschlüssel, die diese Seite selbst am Feld zeigt (F-01): ihre Felder, die Sammelangabe Steuer, F-04. */
+const OWN_ERROR_KEYS: ReadonlySet<string> = new Set<string>([
+  ...COMPANY_SETTINGS_FIELDS,
+  'taxIdentifier',
+  'industry',
+  'materialStandard',
+  'communicationChannel',
+]);
+
+export function CompanySettingsPage() {
+  const { companyProfile, setup, updateCompanyProfile, updateSetup, translate, showToast } = useApp();
+  // EINRICHTUNG-01 (AP5; 1.16) — reaktiv: Rolle, Lizenz und Löschantrag wirken ohne Neuladen.
+  const { access, canEdit: editable } = useSettingsAccess();
+  const noticeVariant = resolveSettingsNoticeVariant(access);
+  // EINRICHTUNG-01 (AP6; F-01.2) — Sprung aus der Fehlerliste einer anderen Seite: Fokus am Feld.
+  useFocusFieldFromHash();
 
   /*
    * Derselbe Resume-Namensraum wie die Firmendaten: Es gibt genau einen
@@ -239,24 +278,52 @@ export function CompanySettingsPage() {
     ...pickFields(companyProfile),
     ...resume.restored,
   }));
+  const [operations, setOperations] = useState<OperationsDraft>(() => pickOperations(setup));
   const [errors, setErrors] = useState<Partial<Record<string, TranslationKey>>>({});
+  const [foreign, setForeign] = useState<Array<{ field: string; message: TranslationKey }>>([]);
   const [saving, setSaving] = useState(false);
+  // EINRICHTUNG-01 (AP9; 1.30) — Speicherfehler als bleibender Hinweis an der Speicherleiste, nicht als Toast.
+  const [saveError, setSaveError] = useState<TranslationKey | null>(null);
 
   resume.observe(draft);
   // FINANZ-CORE-01A (EIN-03) — Ausgangsstand des Entwurfs; unberührte Felder folgen dem Profil.
   const baseRef = useProfileFormBase(companyProfile, pickFields, setDraft);
 
-  const dirty = isCompanySettingsDirty(draft, companyProfile);
+  const savedOperations = pickOperations(setup);
+  const operationsDirty = Object.keys(changedOperations(operations, savedOperations)).length > 0;
+  const dirty = isCompanySettingsDirty(draft, companyProfile) || operationsDirty;
+
+  /* EINRICHTUNG-01 (AP5; 1.17) — „Verwerfen“: zurück auf den gespeicherten Stand, der Entwurf entfällt. */
+  const discard = () => {
+    setDraft(pickFields(companyProfile));
+    baseRef.current = pickFields(companyProfile);
+    setOperations(pickOperations(setup));
+    setErrors({});
+    setForeign([]);
+    // EINRICHTUNG-01 (AP9; 1.30) — mit dem Verwerfen gilt auch der Hinweis des letzten Speicherversuchs nicht mehr.
+    setSaveError(null);
+    resume.clearResume();
+  };
+
+  const clearError = (key: string) => {
+    if (!errors[key]) return;
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const setField = (key: CompanySettingsField, value: string) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
-    if (errors[key]) {
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    }
+    clearError(key);
+    if (key === 'taxNumber' || key === 'vatId') clearError('taxIdentifier');
+  };
+
+  const setOperation = <K extends keyof OperationsDraft>(key: K, value: OperationsDraft[K]) => {
+    if (!editable) return;
+    setOperations((prev) => ({ ...prev, [key]: value }));
+    clearError(key);
   };
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -269,43 +336,66 @@ export function CompanySettingsPage() {
     const ibanField = event.currentTarget.elements.namedItem('iban');
     const ibanFromDom = ibanField instanceof HTMLInputElement ? ibanField.value : undefined;
     const effectiveDraft: CompanySettingsDraft =
-      ibanFromDom !== undefined && ibanFromDom !== (draft.iban ?? '') ? { ...draft, iban: ibanFromDom } : draft;
-    if (!editable || saving || !isCompanySettingsDirty(effectiveDraft, companyProfile)) return;
+      ibanFromDom !== undefined && normalizeIbanInput(ibanFromDom) !== normalizeIbanInput(draft.iban ?? '')
+        ? { ...draft, iban: ibanFromDom }
+        : draft;
+    const opsChanged = changedOperations(operations, savedOperations);
+    const profileDirty = isCompanySettingsDirty(effectiveDraft, companyProfile);
+    if (!editable || saving || (!profileDirty && Object.keys(opsChanged).length === 0)) return;
     setSaving(true);
+    setSaveError(null);
     try {
-      /*
-       * Geprüft wird das vollständige Profil mit den Seitenwerten darüber —
-       * derselbe Validator wie bisher, keine eigene Oberflächenregel.
-       */
       /*
        * FINANZ-CORE-01A (EIN-03) — nur die geänderten Felder, über dem aktuellen Stand des Stores:
        * Ein inzwischen auf einem anderen Gerät geänderter Wert geht nicht mehr verloren.
+       * EINRICHTUNG-01 (AP6; F-02, F-03) — gespeichert wird die einheitliche Form (IBAN ohne Leerzeichen, BIC und
+       * USt-IdNr. in Großbuchstaben). Eine gespeicherte IBAN mit Leerzeichen wird beim nächsten Speichern normalisiert.
        */
-      const changed = changedProfileFields(effectiveDraft, baseRef.current);
-      if (Object.keys(changed).length === 0) return;
-      const candidate: CompanyProfile = { ...getCompanyProfile(), ...changed };
-      const validation = validateCompanyProfileForSettings(
-        candidate,
-        getInvoiceNumberSequenceSnapshot().lastIssuedNumber,
+      const changed = normalizeCompanyProfileFormats(
+        changedProfileFields(effectiveDraft, baseRef.current) as Partial<CompanyProfile>,
       );
+      const storedIban = getCompanyProfile().iban ?? '';
+      if (changed.iban === undefined && storedIban && normalizeIbanInput(storedIban) !== storedIban) {
+        changed.iban = normalizeIbanInput(storedIban);
+      }
+      const candidate: CompanyProfile = { ...getCompanyProfile(), ...changed };
+      /*
+       * Geprüft wird das vollständige Profil mit den Seitenwerten darüber — derselbe Validator wie bisher, jetzt mit den
+       * Formatregeln (F-02) für die Felder dieser Seite.
+       */
+      const validation = validateCompanyProfileForSettings(candidate, getInvoiceNumberSequenceSnapshot().lastIssuedNumber, {
+        formatChecks: 'strict',
+      });
       if (!validation.valid) {
-        setErrors(validation.errors);
-        showToast(translate('settings.company.validationSummary'));
+        const own: Partial<Record<string, TranslationKey>> = {};
+        for (const [key, message] of Object.entries(validation.errors)) {
+          if (message && OWN_ERROR_KEYS.has(key)) own[key] = message;
+        }
+        setErrors(own);
+        // F-01 — Fehler anderer Seiten als Liste mit Sprung; keine Behauptung „markierte Felder“ ohne Markierung.
+        setForeign(foreignFieldErrors(validation.errors, 'company-profile'));
+        // EINRICHTUNG-01 (AP9; 1.30) — Sammelhinweis bleibt an der Speicherleiste stehen (kein verschwindender Toast).
+        if (Object.keys(own).length > 0) setSaveError('settings.company.validationSummary');
         return;
       }
       setErrors({});
+      setForeign([]);
 
       // Ein kanonisches Update mit genau den Feldern dieser Seite.
-      const result = updateCompanyProfile(changed);
-      if (!result.success) {
-        showToast(translate(result.errorKey as TranslationKey));
-        return;
+      if (Object.keys(changed).length > 0) {
+        const result = updateCompanyProfile(changed);
+        if (!result.success) {
+          setSaveError(result.errorKey as TranslationKey);
+          return;
+        }
+        setDraft(pickFields(result.profile));
+        baseRef.current = pickFields(result.profile);
       }
-      setDraft(pickFields(result.profile));
-      baseRef.current = pickFields(result.profile);
+      // F-04 — Gewerk, Material und Kanal über den bestehenden Setup-Weg (company_setup).
+      if (Object.keys(opsChanged).length > 0) updateSetup(opsChanged);
       resume.clearResume();
       if (!getLastPersistSuccess()) {
-        showToast(translate('persist.failed.userAction'));
+        setSaveError('persist.failed.userAction');
         return;
       }
       showToast(translate('settings.company.saved'));
@@ -320,7 +410,7 @@ export function CompanySettingsPage() {
    * Speichern ist erst mit gültiger IBAN möglich (Validator oben).
    */
   const ibanCheckKey = (draft.iban ?? '').trim() ? ibanErrorKey(draft.iban ?? '') : null;
-  const ibanIsStored = (draft.iban ?? '') === (companyProfile.iban ?? '');
+  const ibanIsStored = normalizeIbanInput(draft.iban ?? '') === normalizeIbanInput(companyProfile.iban ?? '');
   const missingLegalFields = missingCapitalCompanyFields(draft);
 
   const errorFor = (field: FieldSpec): TranslationKey | null => {
@@ -331,25 +421,27 @@ export function CompanySettingsPage() {
     return null;
   };
 
+  const industryOptions = INDUSTRY_OPTIONS.includes(operations.industry) || !operations.industry
+    ? INDUSTRY_OPTIONS
+    : [operations.industry, ...INDUSTRY_OPTIONS];
+
   return (
     <div className="page settings-page settings-subpage" data-testid="settings-company-page">
-      <PageHeader
-        title={translate('settings.company.title')}
-        backLabel={translate('settings.backToHub')}
-        backHref="/einstellungen"
+      <SettingsPageHeader
+        target="company-profile"
         backTestId="settings-company-back"
         subtitle={translate('settings.company.page.subtitle')}
       />
 
-      {!editable ? (
-        <ReadOnlyNotice message={translate(
-            access.reason === 'member' ? 'settings.company.readOnly' : 'settings.company.roleUnknown',
-          )} testId="settings-company-readonly" />
-      ) : (
+      {!editable && noticeVariant ? (
+        <SettingsAccessNotice variant={noticeVariant} testId="settings-company-readonly" />
+      ) : editable ? (
         <p className="hint-text" data-testid="settings-company-historical-hint">
           {translate('settings.company.historicalHint')}
         </p>
-      )}
+      ) : null}
+
+      <SettingsForeignFieldErrors entries={foreign} testId="settings-company-foreign-errors" />
 
       <form className="company-profile-form settings-form" onSubmit={handleSubmit} noValidate>
         {SECTIONS.map((section) => (
@@ -381,6 +473,11 @@ export function CompanySettingsPage() {
                     aria-describedby={error ? `${inputId}-error` : field.hintKey ? `${inputId}-hint` : undefined}
                     data-testid={inputId}
                     onChange={(event) => setField(field.key, event.target.value)}
+                    onBlur={
+                      field.key === 'iban'
+                        ? (event) => setField('iban', formatIbanGroups(event.target.value))
+                        : undefined
+                    }
                   />
                   {field.hintKey && !error ? (
                     <p className="form-hint" id={`${inputId}-hint`}>
@@ -412,16 +509,75 @@ export function CompanySettingsPage() {
           </fieldset>
         ))}
 
-        {editable ? (
-          <div className="settings-form__actions" data-testid="settings-company-actions">
-            <span className="settings-form__dirty" data-testid="settings-company-dirty">
-              {dirty ? translate('settings.company.unsavedHint') : translate('settings.company.noChanges')}
-            </span>
-            <Button type="submit" disabled={!dirty || saving} loading={saving} data-testid="settings-company-save">
-              {translate('common.save')}
-            </Button>
+        {/* ---------------- EINRICHTUNG-01 (AP6; F-04) — Arbeitsweise ---------------- */}
+        <fieldset
+          className="form-group settings-form__section"
+          id="settings-company-operations"
+          data-testid="settings-company-section-operations"
+          disabled={!editable || saving}
+        >
+          <legend className="settings-form__legend">{translate('settings.company.section.operations')}</legend>
+          <p className="hint-text">{translate('settings.company.operations.hint')}</p>
+          <div className="settings-form__field">
+            <label htmlFor="settings-company-industry">{translate('setup.industry')}</label>
+            <select
+              id="settings-company-industry"
+              className="select input"
+              value={operations.industry}
+              disabled={!editable}
+              onChange={(event) => setOperation('industry', event.target.value)}
+              data-testid="settings-company-industry"
+            >
+              {industryOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </div>
-        ) : null}
+          <div className="settings-form__field" role="group" aria-labelledby="settings-company-channel-label">
+            <span id="settings-company-channel-label" className="settings-form__label">
+              {translate('setup.communicationChannel')}
+            </span>
+            <div className="chip-group" id="settings-company-communicationChannel">
+              {CHANNEL_OPTIONS.map(({ value, labelKey }) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`chip ${operations.communicationChannel === value ? 'chip--active' : ''}`}
+                  aria-pressed={operations.communicationChannel === value}
+                  disabled={!editable}
+                  onClick={() => setOperation('communicationChannel', value)}
+                  data-testid={`settings-company-channel-${value}`}
+                >
+                  {translate(labelKey)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="settings-form__field" role="radiogroup" aria-labelledby="settings-company-material-label">
+            <span id="settings-company-material-label" className="settings-form__label">
+              {translate('setup.materialStandard')}
+            </span>
+            <div className="radio-group" id="settings-company-materialStandard">
+              {MATERIAL_OPTIONS.map(({ value, labelKey }) => (
+                <label key={value} className="radio-label">
+                  <input
+                    type="radio"
+                    name="materialStandard"
+                    checked={operations.materialStandard === value}
+                    disabled={!editable}
+                    onChange={() => setOperation('materialStandard', value)}
+                    data-testid={`settings-company-material-${value}`}
+                  />
+                  {translate(labelKey)}
+                </label>
+              ))}
+            </div>
+          </div>
+        </fieldset>
+
+        {editable ? <SettingsSaveBar dirty={dirty} saving={saving} onDiscard={discard} testIdPrefix="settings-company" draftKept error={saveError ? translate(saveError) : null} /> : null}
       </form>
     </div>
   );

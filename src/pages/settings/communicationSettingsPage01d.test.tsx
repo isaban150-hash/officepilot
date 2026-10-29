@@ -91,12 +91,17 @@ beforeEach(async () => {
 afterEach(() => { vi.restoreAllMocks(); resetTestStores(); });
 
 describe('01D — Hub', () => {
-  it('A: Firma, Rechnungen & Zahlungen, Design, E-Mail & Kommunikation, Betrieb — in dieser Reihenfolge; Kommunikation verlinkt', async () => {
+  it('A: Gruppen nach 1.15 in dieser Reihenfolge (lokaler Betrieb); Kommunikation verlinkt', async () => {
     await mount(<EinstellungenPage />, '/einstellungen');
     const groups = Array.from(host.querySelectorAll('.settings-group')).map((g) => g.getAttribute('data-testid'));
-    expect(groups).toEqual(['settings-group-company', 'settings-group-documents', 'settings-group-design', 'settings-group-communication', 'settings-group-team']);
+    /*
+     * EINRICHTUNG-01 (AP5; Verträge 1.15, 1.16): sieben Gruppen; im lokalen Betrieb ohne Cloud bleibt aus „Mein Konto“
+     * nur die Sprache (A5-2). Der Eintrag heißt wie das Ziel „E-Mail-Absender und Vorlagen“.
+     */
+    expect(groups).toEqual(['settings-group-account', 'settings-group-workspace', 'settings-group-documents', 'settings-group-communication', 'settings-group-accounting', 'settings-group-data', 'settings-group-help']);
     expect(q('settings-entry-communication')?.getAttribute('href')).toBe('/einstellungen/kommunikation');
-    expect(q('settings-entry-communication')?.textContent).toContain('E-Mail & Kommunikation');
+    expect(q('settings-entry-communication')?.textContent).toContain('E-Mail-Absender und Vorlagen');
+    expect(q('settings-entry-mailbox'), 'Postfach braucht die Cloud').toBeNull();
     await unmount();
   });
 });
@@ -105,9 +110,11 @@ describe('01D — E-Mail & Kommunikation', () => {
   it('D/E/L: Fallbacks sichtbar; technischer From nicht editierbar', async () => {
     await mount(<CommunicationSettingsPage />);
     expect(q('settings-communication-senderDisplayName-hint')?.textContent).toContain('Cirmak Haustechnik GmbH');
-    expect(q('settings-communication-replyToEmail-hint')?.textContent).toContain('info@cirmak.example');
+    // EINRICHTUNG-01 (AP6; E18) — leer: Antworten an die bestätigte Anmelde-E-Mail des Inhabers (nie die Firmen-E-Mail).
+    expect(q('settings-communication-replyToEmail-hint')?.textContent).toContain('bestätigte Anmelde-E-Mail des Inhabers');
     expect(q('settings-communication-identity-name')?.textContent).toBe('Cirmak Haustechnik GmbH');
-    expect(q('settings-communication-identity-replyTo')?.textContent).toBe('info@cirmak.example');
+    // Im lokalen Betrieb ohne Cloud wird nichts gesendet; die Antwortadresse bestimmt erst der Server.
+    expect(q('settings-communication-identity-replyTo')?.textContent).toBe('Im lokalen Betrieb ohne Cloud wird keine E-Mail gesendet.');
     expect(q('settings-communication-identity-from')?.textContent).toContain('nicht änderbar');
     expect(host.querySelector('input[name="from"], input[name="fromEmail"], input[name="senderEmail"]')).toBeNull();
     await unmount();
@@ -144,8 +151,17 @@ describe('01D — E-Mail & Kommunikation', () => {
     expect(q('settings-communication-error')?.textContent).toContain('Antwortadresse');
     expect(getCompanyProfile().replyToEmail).toBe('alt@cirmak.example');
     await type('settings-communication-replyToEmail', 'alt@cirmak.example');
+    const nameVorher = getCompanyProfile().senderDisplayName;
     await type('settings-communication-senderDisplayName', 'x'.repeat(121));
-    expect((q('settings-communication-senderDisplayName') as HTMLInputElement).maxLength).toBe(120);
+    /*
+     * EINRICHTUNG-01 (S-08) — die Grenze zählt Codepunkte wie der Server. `maxLength` zählt
+     * UTF-16-Einheiten und liegt deshalb beim Doppelten; den zu langen Namen weist das
+     * Speichern mit sichtbarem Hinweis ab.
+     */
+    expect((q('settings-communication-senderDisplayName') as HTMLInputElement).maxLength).toBe(240);
+    await submit();
+    expect(q('settings-communication-error')?.textContent).toContain('Absendername');
+    expect(getCompanyProfile().senderDisplayName).toBe(nameVorher);
     await unmount();
   });
 

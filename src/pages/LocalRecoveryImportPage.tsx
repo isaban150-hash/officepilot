@@ -10,6 +10,14 @@ import {
   verifyReselectedTargetBackup,
 } from '../services/storage/localScopeEmergencyQuarantineService';
 import { triggerZipDownload } from '../services/storage/localRecoveryDownloadService';
+import { isRecoveryCopyReleased } from '../services/storage/localRecoveryAccessService';
+import { useRecoveryIdentity } from '../hooks/useRecoveryIdentity';
+import { RecoveryIdentityPanel } from '../components/system/RecoveryIdentityPanel';
+import { SkipLink } from '../components/system/SkipLink';
+import { t } from '../i18n';
+import { DocumentLanguage } from '../components/system/DocumentLanguage';
+import { pickRecoveryLanguage } from './localRecoveryLanguage';
+import type { AppLanguage } from '../types/models';
 import {
   clearLocalRecoveryCheckpoint,
   matchLocalRecoveryCheckpoint,
@@ -42,6 +50,12 @@ import {
  * der Kern keine Sperre zwischen Erzeugung und Bereinigung besitzt, könnte
  * eine gleichzeitig laufende Quarantäne beschädigt werden. staging wird
  * deshalb nur angezeigt und blockiert.
+ *
+ * EINRICHTUNG-01 (AP1, E8; T-03.1) — dieselbe Freigaberegel wie auf /local-recovery: Zielbereiche sind
+ * Betriebsbestände und damit gebunden. Sie erscheinen erst, wenn der Server die Anmeldung genau des Kontos
+ * bestätigt, dem sie gehören (beim alten gemeinsamen Betriebsbestand: Inhaber oder Admin dieses Betriebs). Vor
+ * der Vorbereitung und vor der Quarantäne wird erneut bestätigt. Marker und Wiederaufsetzpunkte gebundener
+ * Bereiche bleiben ohne Freigabe unsichtbar und unangetastet.
  */
 type UiState =
   | 'inventory'
@@ -88,15 +102,29 @@ function DetailRow({ field, label, value, technical = true }: DetailRowProps) {
   );
 }
 
-const TARGET_CHANGE_WARNING =
-  'Während des Vorgangs oder danach wurde eine Änderung am Zielbereich oder ein weiterer ' +
-  'Quarantänevorgang für dieses Ziel erkannt. Dieser Stand ist für keinen weiteren Schritt ' +
-  'freigegeben. Beginnen Sie später vollständig neu.';
-
 export function LocalRecoveryImportPage() {
   // Einmalige, rein lesende Momentaufnahme — kein Polling, keine Abos.
   const inventory = useMemo(() => readLocalScopeInventory(), []);
   const [markers, setMarkers] = useState<QuarantineMarker[]>(() => listQuarantineMarkers());
+  // EINRICHTUNG-01 (E8) — Freigabe für alle Bereiche, die die Seite nennen könnte: Bestände und Markerquellen.
+  const storageKeys = useMemo(
+    () => [...new Set([...inventory.copies.map((copy) => copy.storageKey), ...markers.map((marker) => marker.sourceStorageKey)])],
+    [inventory, markers],
+  );
+  const { identity, confirm, login, logout, loginBusy, loginError } = useRecoveryIdentity(storageKeys);
+  const allTargets = inventory.copies.filter((copy) => copy.scopeType === 'workspace' && copy.valid);
+  const targets = allTargets.filter((copy) => isRecoveryCopyReleased(copy.storageKey, identity));
+  const hiddenTargetCount = allTargets.length - targets.length;
+  const visibleMarkers = markers.filter((marker) => isRecoveryCopyReleased(marker.sourceStorageKey, identity));
+  /*
+   * EINRICHTUNG-01 (App-Eigenprüfung; Vertrag 1.31, E-9) — Sprache wie auf /local-recovery: die des jüngsten
+   * freigegebenen Bestands, ohne Freigabe Deutsch. Ereignis-Zuhörer und Wiederaufsetzpunkt lesen sie über die Ref.
+   */
+  const lang = pickRecoveryLanguage(targets);
+  const langRef = useRef<AppLanguage>(lang);
+  useEffect(() => {
+    langRef.current = lang;
+  }, [lang]);
 
   const [state, setState] = useState<UiState>('inventory');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -211,10 +239,7 @@ export function LocalRecoveryImportPage() {
             (marker) => marker.status === 'staging' && marker.sourceStorageKey === current,
           )
         ) {
-          invalidateSession(
-            'staging_blocked',
-            'Für diesen Bereich wurde inzwischen ein unvollständiger Quarantänevorgang angelegt. Der vorbereitete Stand wurde verworfen.',
-          );
+          invalidateSession('staging_blocked', t('localRecoveryImport.msg.stagingCreated', langRef.current));
         }
         return;
       }
@@ -245,9 +270,7 @@ export function LocalRecoveryImportPage() {
       setPrepared(null);
       setVerified(null);
       setDownloadError(null);
-      setMessage(
-        'Der Zielbereich wurde von einer anderen Ansicht verändert. Der Vorgang wurde verworfen. Bitte wählen Sie den Bereich erneut ausdrücklich aus.',
-      );
+      setMessage(t('localRecoveryImport.msg.targetChangedElsewhere', langRef.current));
       setState('session_lost');
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
@@ -309,10 +332,18 @@ export function LocalRecoveryImportPage() {
     setMessage(null);
     setDownloadError(null);
     try {
+      // EINRICHTUNG-01 (E8) — unmittelbar vor der Vorbereitung erneut beim Server bestätigen.
+      const bestaetigt = await confirm();
+      if (generation !== generationRef.current) return;
+      if (!isRecoveryCopyReleased(selectedKey, bestaetigt)) {
+        setMessage(t('localRecoveryImport.msg.confirmBeforeBackupFailed', lang));
+        setState('blocked_error');
+        return;
+      }
       const outcome = await prepareTargetBackupSession(selectedKey);
       if (generation !== generationRef.current) return; // verspätet — verwerfen
       if (!outcome.ok) {
-        setMessage(`Die Zielsicherung konnte nicht erzeugt werden: ${outcome.reason}`);
+        setMessage(t('localRecoveryImport.msg.prepareFailedReason', lang, { reason: outcome.reason }));
         setState('blocked_error');
         return;
       }
@@ -325,7 +356,7 @@ export function LocalRecoveryImportPage() {
       setState('prepared_validated');
     } catch {
       if (generation !== generationRef.current) return;
-      setMessage('Die Zielsicherung konnte nicht erzeugt werden.');
+      setMessage(t('localRecoveryImport.msg.prepareFailed', lang));
       setState('blocked_error');
     } finally {
       prepareInFlight.current = false;
@@ -360,9 +391,7 @@ export function LocalRecoveryImportPage() {
       setMessage(null);
       setState('download_triggered');
     } catch {
-      setDownloadError(
-        'Der Download konnte nicht ausgelöst werden. Es wurde nichts gespeichert — bitte erneut versuchen.',
-      );
+      setDownloadError(t('localRecoveryImport.msg.downloadFailed', lang));
     } finally {
       downloadInFlight.current = false;
     }
@@ -390,10 +419,7 @@ export function LocalRecoveryImportPage() {
       if (generation !== generationRef.current) return;
       if (!outcome.ok) {
         // Ungleich: der Ablauf beginnt wieder vor der Vorbereitung.
-        invalidateSession(
-          'reselect_mismatch',
-          `Die gewählte Datei ist nicht die soeben erzeugte Zielsicherung (${outcome.reason}). Es wurde nichts gespeichert und nichts importiert. Bitte erzeugen Sie die Sicherung erneut.`,
-        );
+        invalidateSession('reselect_mismatch', t('localRecoveryImport.msg.reselectMismatch', lang, { reason: outcome.reason }));
         return;
       }
       setVerified(outcome.session);
@@ -401,10 +427,7 @@ export function LocalRecoveryImportPage() {
       setState('reselect_confirmed');
     } catch {
       if (generation !== generationRef.current) return;
-      invalidateSession(
-        'reselect_mismatch',
-        'Die gewählte Datei konnte nicht gelesen werden. Es wurde nichts gespeichert.',
-      );
+      invalidateSession('reselect_mismatch', t('localRecoveryImport.msg.reselectUnreadable', lang));
     } finally {
       verifyInFlight.current = false;
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -419,9 +442,17 @@ export function LocalRecoveryImportPage() {
     setState('quarantining');
     setMessage(null);
     try {
+      // EINRICHTUNG-01 (E8) — unmittelbar vor der Quarantäne erneut beim Server bestätigen.
+      const ziel = selectedKeyRef.current;
+      const bestaetigt = await confirm();
+      if (!ziel || !isRecoveryCopyReleased(ziel, bestaetigt)) {
+        setMessage(t('localRecoveryImport.msg.confirmBeforeQuarantineFailed', lang));
+        setState('blocked_error');
+        return;
+      }
       const outcome = await createTargetQuarantine(verified);
       if (!outcome.ok) {
-        setMessage(`Die Quarantänekopie wurde nicht angelegt: ${outcome.reason}`);
+        setMessage(t('localRecoveryImport.msg.quarantineFailedReason', lang, { reason: outcome.reason }));
         setState('blocked_error');
         setMarkers(listQuarantineMarkers());
         return;
@@ -438,14 +469,12 @@ export function LocalRecoveryImportPage() {
           : 'quarantine_complete',
       );
     } catch {
-      setMessage('Die Quarantänekopie wurde nicht angelegt.');
+      setMessage(t('localRecoveryImport.msg.quarantineFailed', lang));
       setState('blocked_error');
     } finally {
       quarantineInFlight.current = false;
     }
   };
-
-  const targets = inventory.copies.filter((copy) => copy.scopeType === 'workspace' && copy.valid);
 
   /**
    * MOBILE-SAFE-RESUME-01B — genau einmal beim Montieren. Der Punkt wird nur
@@ -457,11 +486,27 @@ export function LocalRecoveryImportPage() {
    */
   const checkpointStartedRef = useRef(false);
   useEffect(() => {
+    /*
+     * EINRICHTUNG-01 (E8) — erst wenn feststeht, wer angemeldet ist, und nur auf der Ausgangsstufe: Ein laufender
+     * Ablauf wird nie durch einen Wiederaufsetzpunkt ersetzt. Ohne Freigabe bleibt der Punkt unangetastet liegen;
+     * nach einer bestätigten Anmeldung wird er einmal geprüft.
+     */
     if (checkpointStartedRef.current) return;
-    checkpointStartedRef.current = true;
-
+    if (identity.state === 'checking') return;
+    if (state !== 'inventory' || selectedKeyRef.current !== null) {
+      checkpointStartedRef.current = true;
+      return;
+    }
     const stored = readLocalRecoveryCheckpoint();
-    if (!stored) return;
+    if (!stored) {
+      checkpointStartedRef.current = true;
+      return;
+    }
+    if (!isRecoveryCopyReleased(stored.sourceStorageKey, identity)) {
+      if (identity.state === 'confirmed') checkpointStartedRef.current = true;
+      return;
+    }
+    checkpointStartedRef.current = true;
 
     const match = matchLocalRecoveryCheckpoint({
       checkpoint: stored,
@@ -474,9 +519,7 @@ export function LocalRecoveryImportPage() {
       // Zielbestand fehlt oder hat sich verändert: der Punkt ist wertlos.
       clearLocalRecoveryCheckpoint();
       if (match.reason === 'target_changed') {
-        setMessage(
-          'Der lokale Zielbestand hat sich seit der letzten Sicherung verändert. Der Ablauf beginnt neu.',
-        );
+        setMessage(t('localRecoveryImport.msg.targetChangedSinceBackup', langRef.current));
       }
       return;
     }
@@ -487,8 +530,8 @@ export function LocalRecoveryImportPage() {
     setSelectedKey(match.checkpoint.sourceStorageKey);
     setResumedCheckpoint(match.checkpoint);
     setState('resumed_after_download');
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- einmal, sobald die Identität feststeht
+  }, [identity]);
   const selectedCopy = targets.find((copy) => copy.storageKey === selectedKey) ?? null;
   const blockingMarker = selectedKey ? stagingForKey(selectedKey) : undefined;
   const finished = result !== null;
@@ -511,25 +554,49 @@ export function LocalRecoveryImportPage() {
 
   return (
     <div className="auth-page local-recovery-import-page" data-testid="local-recovery-import-page">
+      <DocumentLanguage language={lang} />
+      {/* EINRICHTUNG-01 (AP9-Nacharbeit; 1.32) — erstes fokussierbares Element. App-Eigenprüfung (1.31, E-9): alle Texte
+          der Seite kommen aus den Sprachdateien (`localRecoveryImport.*`), in der Sprache wie auf /local-recovery. */}
+      <SkipLink
+        href="#local-recovery-import-title"
+        label={t('a11y.skipToContent', lang)}
+        findTarget={() => document.getElementById('local-recovery-import-title')}
+      />
       <div className="auth-card">
         <header className="auth-card__header">
           <p className="auth-card__brand">OfficeTakt</p>
-          <h1 className="auth-card__title">Zielsicherung und Quarantäne</h1>
-          <p className="auth-card__subtitle">
-            Diese Seite sichert ausschließlich den vorhandenen lokalen Bestand dieser Adresse und
-            legt eine örtliche Quarantänekopie an. Es wird nichts importiert, nichts ersetzt und
-            kein Cloud-Abgleich gestartet.
-          </p>
+          <h1 className="auth-card__title" id="local-recovery-import-title" tabIndex={-1}>
+            {t('localRecoveryImport.title', lang)}
+          </h1>
+          <p className="auth-card__subtitle">{t('localRecoveryImport.intro', lang)}</p>
         </header>
 
         <dl className="local-recovery-import-details" data-testid="import-origin">
-          <DetailRow field="origin" label="Adresse" value={inventory.origin} />
+          <DetailRow field="origin" label={t('localRecoveryImport.label.origin', lang)} value={inventory.origin} />
         </dl>
 
-        {markers.length > 0 ? (
+        <RecoveryIdentityPanel
+          identity={identity}
+          lang={lang}
+          hiddenBoundCount={hiddenTargetCount}
+          loginBusy={loginBusy}
+          loginError={loginError}
+          onLogin={login}
+          onLogout={async () => {
+            // Ohne Anmeldung gehört keine laufende Sitzung mehr zu einem sichtbaren Ziel.
+            if (!quarantineInFlight.current && resultRef.current === null) {
+              selectedKeyRef.current = null;
+              setSelectedKey(null);
+              invalidateSession('inventory', null);
+            }
+            await logout();
+          }}
+        />
+
+        {visibleMarkers.length > 0 ? (
           <section data-testid="import-marker-list">
-            <h2 className="local-recovery-item__headline">Vorhandene Quarantänevorgänge</h2>
-            {markers.map((marker) => (
+            <h2 className="local-recovery-item__headline">{t('localRecoveryImport.markers.title', lang)}</h2>
+            {visibleMarkers.map((marker) => (
               <dl
                 className="local-recovery-import-details"
                 key={marker.token}
@@ -537,35 +604,29 @@ export function LocalRecoveryImportPage() {
               >
                 <DetailRow
                   field="status"
-                  label="Status"
+                  label={t('localRecoveryImport.label.status', lang)}
                   value={marker.status}
                   technical={false}
                 />
-                <DetailRow field="token" label="Kennung" value={marker.token} />
+                <DetailRow field="token" label={t('localRecoveryImport.label.token', lang)} value={marker.token} />
                 <DetailRow
                   field="sourceStorageKey"
-                  label="Speicherschlüssel"
+                  label={t('localRecoveryImport.label.storageKey', lang)}
                   value={marker.sourceStorageKey}
                 />
               </dl>
             ))}
-            <p className="form-hint">
-              Vorhandene Vorgänge werden hier nur angezeigt. Diese Seite entfernt niemals einen
-              Marker, eine Hülle oder eine Datei.
-            </p>
+            <p className="form-hint">{t('localRecoveryImport.markers.note', lang)}</p>
           </section>
         ) : null}
 
         {!finished ? (
           <section>
-            <h2 className="local-recovery-item__headline">1. Zielbereich auswählen</h2>
-            <p className="form-hint">
-              Es wird nichts vorausgewählt. Wählen Sie den Bereich ausdrücklich aus — auch dann,
-              wenn nur einer angeboten wird.
-            </p>
+            <h2 className="local-recovery-item__headline">{t('localRecoveryImport.step1.title', lang)}</h2>
+            <p className="form-hint">{t('localRecoveryImport.step1.hint', lang)}</p>
             {targets.length === 0 ? (
               <p className="form-hint" data-testid="import-no-targets">
-                Auf dieser Adresse liegt kein gültiger Arbeitsbereich.
+                {t('localRecoveryImport.noTargets', lang)}
               </p>
             ) : null}
             <ul className="local-recovery-list">
@@ -586,40 +647,48 @@ export function LocalRecoveryImportPage() {
                       nicht möglich.
                     */}
                     <span className="local-recovery-import-target__row" data-field="storageKey">
-                      <span className="local-recovery-import-target__label">Speicherschlüssel</span>
+                      <span className="local-recovery-import-target__label">
+                        {t('localRecoveryImport.label.storageKey', lang)}
+                      </span>
                       <span className="local-recovery-import-target__value local-recovery-import-target__value--technical">
                         {copy.storageKey}
                       </span>
                     </span>
                     <span className="local-recovery-import-target__row" data-field="workspaceId">
-                      <span className="local-recovery-import-target__label">Arbeitsbereich</span>
+                      <span className="local-recovery-import-target__label">
+                        {t('localRecoveryImport.label.workspace', lang)}
+                      </span>
                       <span className="local-recovery-import-target__value local-recovery-import-target__value--technical">
-                        {copy.scopeId ?? 'unbekannt'}
+                        {copy.scopeId ?? t('localRecoveryImport.value.unknown', lang)}
                       </span>
                     </span>
                     <span className="local-recovery-import-target__row" data-field="setupCompany">
                       <span className="local-recovery-import-target__label">
-                        Firma (Einrichtung)
+                        {t('localRecoveryImport.label.setupCompany', lang)}
                       </span>
                       <span className="local-recovery-import-target__value">
-                        {copy.setupCompanyName ?? 'ohne Angabe'}
+                        {copy.setupCompanyName ?? t('localRecoveryImport.value.none', lang)}
                       </span>
                     </span>
                     <span className="local-recovery-import-target__row" data-field="profileCompany">
-                      <span className="local-recovery-import-target__label">Firma (Profil)</span>
+                      <span className="local-recovery-import-target__label">
+                        {t('localRecoveryImport.label.profileCompany', lang)}
+                      </span>
                       <span className="local-recovery-import-target__value">
-                        {copy.profileCompanyName ?? 'ohne Angabe'}
+                        {copy.profileCompanyName ?? t('localRecoveryImport.value.none', lang)}
                       </span>
                     </span>
                     <span className="local-recovery-import-target__row" data-field="savedAt">
-                      <span className="local-recovery-import-target__label">Gespeichert am</span>
+                      <span className="local-recovery-import-target__label">
+                        {t('localRecoveryImport.label.savedAt', lang)}
+                      </span>
                       <span className="local-recovery-import-target__value">
-                        {copy.savedAt ?? 'ohne Angabe'}
+                        {copy.savedAt ?? t('localRecoveryImport.value.none', lang)}
                       </span>
                     </span>
                     <span className="local-recovery-import-target__row" data-field="counts">
                       <span className="local-recovery-import-target__label">
-                        Vorgänge / Dokumente
+                        {t('localRecoveryImport.label.counts', lang)}
                       </span>
                       <span className="local-recovery-import-target__value">
                         {copy.vorgangCount} / {copy.documentCount}
@@ -636,7 +705,7 @@ export function LocalRecoveryImportPage() {
           <dl className="local-recovery-import-details" data-testid="import-selected-target">
             <DetailRow
               field="storageKey"
-              label="Gewählter Bereich"
+              label={t('localRecoveryImport.label.selected', lang)}
               value={selectedCopy.storageKey}
             />
           </dl>
@@ -644,44 +713,36 @@ export function LocalRecoveryImportPage() {
 
         {state === 'resumed_after_download' && resumedCheckpoint ? (
           <section className="local-recovery-import-resume" data-testid="import-resumed">
-            <p className="form-hint">
-              Die Seite wurde nach dem Herunterladen der Sicherung verworfen. Zielbereich und
-              erwartete Prüfsumme sind bekannt geblieben. Es wurde nichts quarantänisiert und
-              nichts geschrieben.
-            </p>
+            <p className="form-hint">{t('localRecoveryImport.resumed.text', lang)}</p>
             <dl className="local-recovery-import-details">
               <DetailRow
                 field="storageKey"
-                label="Gewählter Bereich"
+                label={t('localRecoveryImport.label.selected', lang)}
                 value={resumedCheckpoint.sourceStorageKey}
               />
               <DetailRow
                 field="workspaceId"
-                label="Arbeitsbereich"
+                label={t('localRecoveryImport.label.workspace', lang)}
                 value={resumedCheckpoint.workspaceId}
               />
               <DetailRow
                 field="archiveSha256"
-                label="Erwartetes Archiv-SHA-256"
+                label={t('localRecoveryImport.label.expectedArchiveSha', lang)}
                 value={resumedCheckpoint.archiveSha256}
               />
               <DetailRow
                 field="suggestedFilename"
-                label="Dateiname der Sicherung"
+                label={t('localRecoveryImport.label.backupFilename', lang)}
                 value={resumedCheckpoint.suggestedFilename}
               />
               <DetailRow
                 field="savedAt"
-                label="Stand des Zielbereichs"
-                value={resumedCheckpoint.targetSavedAt ?? 'ohne Angabe'}
+                label={t('localRecoveryImport.label.targetSavedAt', lang)}
+                value={resumedCheckpoint.targetSavedAt ?? t('localRecoveryImport.value.none', lang)}
                 technical={false}
               />
             </dl>
-            <p className="form-hint">
-              Die heruntergeladene Datei kann anhand dieser Prüfsumme verglichen werden. Für die
-              Quarantäne muss die Sicherung erneut vorbereitet, die Datei erneut ausgewählt und die
-              Quarantäne erneut bestätigt werden — die vorherige Bestätigung gilt nicht weiter.
-            </p>
+            <p className="form-hint">{t('localRecoveryImport.resumed.hint', lang)}</p>
           </section>
         ) : null}
 
@@ -689,31 +750,28 @@ export function LocalRecoveryImportPage() {
             Vorgang ist nicht blockiert, sondern läuft bereits. */}
         {blockingMarker && !finished && state !== 'quarantining' ? (
           <div className="form-error" role="alert" data-testid="import-staging-blocked">
-            <p className="local-recovery-import-detail-label">
-              Für diesen Bereich läuft bereits ein unvollständiger Quarantänevorgang. Er wird hier
-              nur angezeigt und nicht angetastet.
-            </p>
+            <p className="local-recovery-import-detail-label">{t('localRecoveryImport.staging.blocked', lang)}</p>
             <dl className="local-recovery-import-details">
-              <DetailRow field="token" label="Kennung" value={blockingMarker.token} />
+              <DetailRow field="token" label={t('localRecoveryImport.label.token', lang)} value={blockingMarker.token} />
               <DetailRow
                 field="workspaceId"
-                label="Arbeitsbereich"
+                label={t('localRecoveryImport.label.workspace', lang)}
                 value={blockingMarker.workspaceId}
               />
               <DetailRow
                 field="createdAt"
-                label="Begonnen am"
+                label={t('localRecoveryImport.label.startedAt', lang)}
                 value={blockingMarker.createdAt}
                 technical={false}
               />
               <DetailRow
                 field="archiveSha256"
-                label="Archiv-SHA-256"
+                label={t('localRecoveryImport.label.archiveSha', lang)}
                 value={blockingMarker.archiveSha256}
               />
               <DetailRow
                 field="fileCount"
-                label="Erwartete Dateien"
+                label={t('localRecoveryImport.label.expectedFiles', lang)}
                 value={blockingMarker.files.length}
                 technical={false}
               />
@@ -731,7 +789,7 @@ export function LocalRecoveryImportPage() {
               void handlePrepare();
             }}
           >
-            2. Zielsicherung erzeugen
+            {t('localRecoveryImport.step2.action', lang)}
           </button>
         ) : null}
 
@@ -739,19 +797,19 @@ export function LocalRecoveryImportPage() {
           <dl className="local-recovery-import-details" data-testid="import-prepare-result">
             <DetailRow
               field="storageKey"
-              label="Speicherschlüssel"
+              label={t('localRecoveryImport.label.storageKey', lang)}
               value={prepared.sourceStorageKey}
             />
-            <DetailRow field="workspaceId" label="Arbeitsbereich" value={prepared.workspaceId} />
+            <DetailRow field="workspaceId" label={t('localRecoveryImport.label.workspace', lang)} value={prepared.workspaceId} />
             <DetailRow
               field="fileCount"
-              label="Dateien"
+              label={t('localRecoveryImport.label.files', lang)}
               value={prepared.files.length}
               technical={false}
             />
             <DetailRow
               field="archiveSha256"
-              label="Archiv-SHA-256"
+              label={t('localRecoveryImport.label.archiveSha', lang)}
               value={prepared.archiveSha256}
             />
           </dl>
@@ -764,7 +822,7 @@ export function LocalRecoveryImportPage() {
             data-testid="import-download"
             onClick={handleDownload}
           >
-            3. Sicherung herunterladen
+            {t('localRecoveryImport.step3.action', lang)}
           </button>
         ) : null}
 
@@ -781,6 +839,10 @@ export function LocalRecoveryImportPage() {
           type="file"
           accept=".zip,application/zip"
           className="backup-export-panel__file-input"
+          // EINRICHTUNG-01 (AP9-Nacharbeit; 1.32, 1.33) — die versteckte Datei-Eingabe trägt einen Namen (wie der Knopf)
+          // und ist kein unsichtbarer Tabulatorstopp; bedient wird sie über den sichtbaren Knopf (wie in BackupExportPanel).
+          aria-label={t('localRecoveryImport.fileInput.label', lang)}
+          tabIndex={-1}
           data-testid="import-file-input"
           onChange={(event) => {
             void handleFileChosen(event.target.files?.[0]);
@@ -790,7 +852,7 @@ export function LocalRecoveryImportPage() {
         {showChooseFile ? (
           <>
             <p className="form-hint" data-testid="import-reselect-hint">
-              Nicht die wiederherzustellende Sicherung. In diesem Schritt wird nichts importiert.
+              {t('localRecoveryImport.reselect.hint', lang)}
             </p>
             <button
               type="button"
@@ -799,7 +861,7 @@ export function LocalRecoveryImportPage() {
               disabled={state === 'reselect_checking'}
               onClick={() => fileInputRef.current?.click()}
             >
-              4. Die soeben heruntergeladene Zielsicherung erneut auswählen
+              {t('localRecoveryImport.step4.action', lang)}
             </button>
           </>
         ) : null}
@@ -812,9 +874,7 @@ export function LocalRecoveryImportPage() {
 
         {verified && showStart ? (
           <p className="form-hint" data-testid="import-verify-result">
-            Die gewählte Datei stimmt vollständig mit der erzeugten Sicherung überein:
-            Archivprüfwert, Rohzustandsprüfwert, Bereich, Zeitpunkt und alle {verified.files.length}{' '}
-            Dateiprüfwerte.
+            {t('localRecoveryImport.verify.result', lang, { count: verified.files.length })}
           </p>
         ) : null}
 
@@ -827,13 +887,13 @@ export function LocalRecoveryImportPage() {
               void handleQuarantine();
             }}
           >
-            5. Lokale Quarantänekopie anlegen
+            {t('localRecoveryImport.step5.action', lang)}
           </button>
         ) : null}
 
         {state === 'quarantining' ? (
           <p className="form-hint" role="status" data-testid="import-quarantine-busy">
-            Die Quarantänekopie wird angelegt. Bitte diese Seite nicht schließen.
+            {t('localRecoveryImport.quarantine.busy', lang)}
           </p>
         ) : null}
 
@@ -851,63 +911,63 @@ export function LocalRecoveryImportPage() {
 
         {result ? (
           <section data-testid="import-report">
-            <h2 className="local-recovery-item__headline">Abschlussbericht</h2>
+            <h2 className="local-recovery-item__headline">{t('localRecoveryImport.report.title', lang)}</h2>
             {/* Quelle unverändert: result.marker, result.token und die drei
                 Schlüssel aus QuarantineSuccess — nichts wird aus dem Token
                 nachgerechnet und nichts erneut aus localStorage gelesen. */}
             <dl className="local-recovery-import-details">
               <DetailRow
                 field="sourceStorageKey"
-                label="Ziel-Speicherschlüssel"
+                label={t('localRecoveryImport.label.targetStorageKey', lang)}
                 value={result.marker.sourceStorageKey}
               />
               <DetailRow
                 field="sourceScopeKey"
-                label="Ziel-Bereichsschlüssel"
+                label={t('localRecoveryImport.label.targetScopeKey', lang)}
                 value={result.marker.sourceScopeKey}
               />
               <DetailRow
                 field="workspaceId"
-                label="Arbeitsbereich"
+                label={t('localRecoveryImport.label.workspace', lang)}
                 value={result.marker.workspaceId}
               />
               <DetailRow
                 field="savedAt"
-                label="Gespeichert am"
-                value={verified?.bundle.savedAt ?? 'ohne Angabe'}
+                label={t('localRecoveryImport.label.savedAt', lang)}
+                value={verified?.bundle.savedAt ?? t('localRecoveryImport.value.none', lang)}
               />
               <DetailRow
                 field="archiveSha256"
-                label="Archiv-SHA-256"
+                label={t('localRecoveryImport.label.archiveSha', lang)}
                 value={result.marker.archiveSha256}
               />
               <DetailRow
                 field="sourceRawTextSha256"
-                label="Rohzustands-SHA-256"
+                label={t('localRecoveryImport.label.rawSha', lang)}
                 value={result.marker.sourceRawTextSha256}
               />
               <DetailRow
                 field="fileCount"
-                label="Dateien"
+                label={t('localRecoveryImport.label.files', lang)}
                 value={result.marker.files.length}
                 technical={false}
               />
-              <DetailRow field="token" label="Quarantäne-Kennung" value={result.token} />
-              <DetailRow field="markerKey" label="Marker-Schlüssel" value={result.markerKey} />
-              <DetailRow field="stateKey" label="Hüllen-Schlüssel" value={result.stateKey} />
+              <DetailRow field="token" label={t('localRecoveryImport.label.quarantineToken', lang)} value={result.token} />
+              <DetailRow field="markerKey" label={t('localRecoveryImport.label.markerKey', lang)} value={result.markerKey} />
+              <DetailRow field="stateKey" label={t('localRecoveryImport.label.stateKey', lang)} value={result.stateKey} />
               <DetailRow
                 field="quarantineScopeKey"
-                label="Quarantäne-Dateibereich"
+                label={t('localRecoveryImport.label.quarantineScopeKey', lang)}
                 value={result.quarantineScopeKey}
               />
               <DetailRow
                 field="completedAt"
-                label="Zeitpunkt"
+                label={t('localRecoveryImport.label.completedAt', lang)}
                 value={result.marker.completedAt ?? result.marker.createdAt}
               />
               <DetailRow
                 field="status"
-                label="Status"
+                label={t('localRecoveryImport.label.status', lang)}
                 value={result.marker.status}
                 technical={false}
               />
@@ -921,42 +981,39 @@ export function LocalRecoveryImportPage() {
                   data-file={file.fileRefId}
                 >
                   <dl className="local-recovery-import-details">
-                    <DetailRow field="fileRefId" label="FileRef-ID" value={file.fileRefId} />
+                    <DetailRow field="fileRefId" label={t('localRecoveryImport.label.fileRefId', lang)} value={file.fileRefId} />
                     <DetailRow
                       field="localDataKey"
-                      label="Datenschlüssel"
+                      label={t('localRecoveryImport.label.dataKey', lang)}
                       value={file.localDataKey}
                     />
-                    <DetailRow field="mimeType" label="MIME-Typ" value={file.mimeType} />
+                    <DetailRow field="mimeType" label={t('localRecoveryImport.label.mimeType', lang)} value={file.mimeType} />
                     <DetailRow
                       field="fileSize"
-                      label="Größe"
-                      value={`${file.fileSize} Byte`}
+                      label={t('localRecoveryImport.label.size', lang)}
+                      value={t('localRecoveryImport.value.bytes', lang, { size: file.fileSize })}
                       technical={false}
                     />
-                    <DetailRow field="sha256" label="SHA-256" value={file.sha256} />
+                    <DetailRow field="sha256" label={t('localRecoveryImport.label.sha256', lang)} value={file.sha256} />
                   </dl>
                 </li>
               ))}
             </ul>
 
             <p className="form-hint" data-testid="import-report-note">
-              Die lokale Zielsicherung wurde quarantänisiert. Es wurde nichts importiert, nichts
-              ersetzt und kein Cloud-Abgleich gestartet.
+              {t('localRecoveryImport.report.note', lang)}
             </p>
 
             {state === 'quarantine_complete_with_target_change' ? (
               <p className="form-error" role="alert" data-testid="import-report-target-change">
-                {TARGET_CHANGE_WARNING}
+                {t('localRecoveryImport.targetChangeWarning', lang)}
               </p>
             ) : null}
           </section>
         ) : null}
 
         <p className="form-hint" data-testid="import-readonly-note">
-          Diese Seite führt keinen Import durch, ersetzt keinen Bestand, entfernt keinen
-          Quarantänevorgang, startet keine Synchronisierung und wechselt nicht in die normale
-          Anwendung.
+          {t('localRecoveryImport.readonlyNote', lang)}
         </p>
       </div>
     </div>

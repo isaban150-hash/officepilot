@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import { BusinessStateGate } from './components/system/BusinessStateGate';
 import { LocalRecoveryPage } from './pages/LocalRecoveryPage';
 import { LocalRecoveryImportPage } from './pages/LocalRecoveryImportPage';
+import { REPLY_TO_CONFIRM_ROUTE, ReplyToConfirmPage } from './pages/ReplyToConfirmPage';
 
 export const LOCAL_RECOVERY_PATH = '/local-recovery';
 export const LOCAL_RECOVERY_IMPORT_PATH = '/local-recovery/import';
@@ -42,7 +43,19 @@ export function isLocalRecoveryImportPath(pathname?: string): boolean {
   return currentPath(pathname) === LOCAL_RECOVERY_IMPORT_PATH;
 }
 
+/**
+ * EINRICHTUNG-01 (AP6; E-03, K4) — die Bestätigungsseite der Antwortadresse steht vor Anmeldung und Gate: Wer den Link
+ * öffnet, braucht kein Konto, und kein Zustand der App (Sperre, Einladung, Einrichtung) darf die Bestätigung verdecken.
+ * Exakter Vergleich wie bei den Notfalladressen.
+ */
+export function isReplyToConfirmPath(pathname?: string): boolean {
+  return currentPath(pathname) === REPLY_TO_CONFIRM_ROUTE;
+}
+
 export function RootShell() {
+  if (isReplyToConfirmPath()) {
+    return <ReplyToConfirmPage />;
+  }
   if (isLocalRecoveryPath()) {
     return <LocalRecoveryPage />;
   }

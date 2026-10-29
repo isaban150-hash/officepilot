@@ -50,14 +50,27 @@
   gap: var(--space-3);
 }
 
+/* EINRICHTUNG-01 (AP9; 1.33) — auf schmalen Geräten untereinander statt nebeneinander (kein horizontales Scrollen). */
+@media (max-width: 30rem) {
+  .auth-form__row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .auth-form__field {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  min-width: 0;
   font-size: var(--text-meta-size);
 }
 
 .auth-form__field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  /* EINRICHTUNG-01 (AP9; 1.33) — Bedienflächen mindestens 44 px hoch. */
+  min-height: 44px;
   padding: var(--space-3);
   border: 1px solid var(--op-border-strong);
   border-radius: var(--radius-md);
@@ -76,6 +89,7 @@
 .auth-form__password-input {
   flex: 1;
   min-width: 0;
+  min-height: 44px;
   padding: var(--space-3);
   border: 1px solid var(--op-border-strong);
   border-radius: var(--radius-md);
@@ -87,6 +101,7 @@
   align-items: center;
   justify-content: center;
   width: 2.75rem;
+  min-height: 44px;
   padding: 0;
   border: 1px solid var(--op-border-strong);
   border-radius: var(--radius-md);
@@ -113,6 +128,8 @@
   display: flex;
   gap: var(--space-2);
   align-items: flex-start;
+  /* EINRICHTUNG-01 (AP9; 1.33) — das Label ist die Trefferfläche des Kontrollkästchens. */
+  min-height: 44px;
   font-size: var(--text-meta-size);
   line-height: var(--text-meta-line);
 }
@@ -143,6 +160,11 @@
 }
 
 .auth-form__links a {
+  /* EINRICHTUNG-01 (AP9; 1.33) — eigenständige Links mit Trefferfläche ≥ 44 × 44 px. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
   color: var(--op-primary);
   text-decoration: none;
 }
@@ -209,6 +231,13 @@
 }
 
 .legal-footer-links a {
+  /* EINRICHTUNG-01 (AP9; 1.33) — Trefferfläche ≥ 44 × 44 px. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 0.25rem;
   color: var(--op-text-muted);
   text-decoration: none;
 }
@@ -250,7 +279,10 @@
 }
 
 .legal-page__back {
-  display: inline-block;
+  /* EINRICHTUNG-01 (AP9; 1.33) — Trefferfläche ≥ 44 px hoch. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   margin-bottom: var(--space-3);
   font-size: var(--text-meta-size);
   color: var(--op-primary);

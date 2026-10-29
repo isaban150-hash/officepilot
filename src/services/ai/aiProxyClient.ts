@@ -34,7 +34,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_request: 'Die Anfrage war unvollständig.',
   unauthenticated: 'Bitte melden Sie sich erneut an.',
   forbidden: 'Ihr Zugang ist derzeit nicht freigeschaltet.',
-  license_inactive: 'Für diesen Zugang ist keine aktive Lizenz hinterlegt.',
+  // EINRICHTUNG-01 (AP9; 1.30, Q-01.5) — es zählt die Lizenz des Betriebs (E3), nicht die eigene.
+  license_inactive: 'Die Lizenz dieses Betriebs ist nicht wirksam. Die KI steht wieder zur Verfügung, sobald der Inhaber die Lizenz verlängert.',
   workspace_forbidden: 'Kein Zugriff auf diesen Betrieb.',
   rate_limited: 'Zu viele Anfragen in kurzer Zeit. Bitte später erneut versuchen.',
   payload_too_large: 'Der Inhalt ist zu umfangreich für eine Anfrage.',

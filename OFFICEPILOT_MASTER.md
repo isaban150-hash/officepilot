@@ -230,14 +230,18 @@ Komponentenbasis, daneben aber umfangreiches gewachsenes Seiten-CSS.
 **V1-Kern** — Kunden und Vorgänge · Dokumenterkennung und Ablage · eingehende Post
 verstehen · Angebot bis Schlussrechnung mit Zahlungen · Rechnung als PDF mit eigenem
 Branding **und Versand** · Belege und Ausgaben erfassen · zentrale Firmendaten und
-Einstellungen · mobile Nutzung ohne Datenverlust · getrennte, gesicherte Betriebsdaten.
+Einstellungen · **Team im Betrieb** (Einladung und Annahme, Rollen Inhaber · Admin ·
+Mitglied, Entfernen, Verlassen, Inhaberwechsel, Betriebswahl bei mehreren
+Mitgliedschaften; Entscheidung E1, umgesetzt in EINRICHTUNG-01) · mobile Nutzung ohne
+Datenverlust · getrennte, gesicherte Betriebsdaten.
 
 **Spätere Ausbaustufen** — Materialkatalog, Lieferantenstamm, Nachkalkulation ·
-Abo-Selbstbedienung und Bezahlung · Benutzer und Rollen im Betrieb · weitere
+Abo-Selbstbedienung und Bezahlung · feinere Rechte über die drei Rollen hinaus · weitere
 Dokumenttypen und Vorlagen · weitere Gewerke.
 
 **Nicht für den ersten Release** — WhatsApp-Kommunikation. Es existiert dafür **keine**
-Infrastruktur; die Kanalbezeichnungen in der Oberfläche sind Platzhalter.
+Infrastruktur; seit EINRICHTUNG-01 (AP3) ist WhatsApp in Einrichtung und Firmendaten
+nicht mehr wählbar.
 
 ---
 

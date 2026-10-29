@@ -474,15 +474,26 @@ do $$
 declare
   v_sicht jsonb;
 begin
+  /*
+   * EINRICHTUNG-01 (E3a, Katalog V3 Z-07.1/Z-07.2) -- bewusst geaenderte Erwartung: Massgeblich ist die
+   * Betriebslizenz (Inhaber), nicht die eigene Lizenz. K11a: Der Admin mit eigener abgelaufener Lizenz darf in einem
+   * Betrieb mit wirksamer Betriebslizenz. K11b: Ist die Betriebslizenz abgelaufen, bleibt das Lesen, Finanzaktionen
+   * werden mit dem unveraenderten Code abgewiesen.
+   */
+  perform pg_temp.als(pg_temp.admin_lizenz());
+  perform public.assert_financial_action_allowed(pg_temp.ws());
+  perform pg_temp.zurueck();
+  update public.profiles set license_status = 'expired' where id = pg_temp.inhaber();
   perform pg_temp.als(pg_temp.admin_lizenz());
   v_sicht := pg_temp.sicht(pg_temp.ws());
-  perform pg_temp.erwarte_abweisung('K11 abgelaufene Lizenz: Finanzaktion',
+  perform pg_temp.erwarte_abweisung('K11b abgelaufene Betriebslizenz: Finanzaktion',
     format('select public.assert_financial_action_allowed(%L)', pg_temp.ws()), 'finance_license_expired', null);
   perform pg_temp.zurueck();
+  update public.profiles set license_status = 'active' where id = pg_temp.inhaber();
   if (v_sicht->>'dokumente')::int = 0 then
     raise exception 'K11 abgelaufene Lizenz sperrt das Lesen: %', v_sicht;
   end if;
-  raise notice 'OK  K11 abgelaufene Lizenz ist keine Kontosperre: Lesen bleibt, Finanzaktionen abgewiesen';
+  raise notice 'OK  K11 abgelaufene Lizenz ist keine Kontosperre: eigene Lizenz hindert nicht (E3a), abgelaufene Betriebslizenz: Lesen bleibt, Finanzaktionen abgewiesen';
 end $$;
 
 /* ------------------------------------------------------------------ */

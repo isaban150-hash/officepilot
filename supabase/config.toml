@@ -431,6 +431,54 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/send-email/index.ts"
 
+# EINRICHTUNG-01 (AP4) — Edge Function "send-team-invitation" (Einladungsmail an eine
+# eingeladene Person). Gleiche Absicherung und Secrets wie send-email; dazu
+# APP_ALLOWED_ORIGINS (kommagetrennt) fuer die Linkbasis, ohne Angabe nur lokale Adressen.
+[functions.send-team-invitation]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/send-team-invitation/index.ts"
+
+# EINRICHTUNG-01 (AP6; E-03, E18, K4) — Edge Function "confirm-reply-to" (Bestaetigung der Antwortadresse).
+# Nur POST; "request" mit Token der Person (Inhaber/Admin, Server prueft Rolle und Lizenz), "confirm" ohne Anmeldung
+# (der anon key genuegt dem Gateway). Gleiche Secrets wie send-email; APP_ALLOWED_ORIGINS fuer den Link.
+[functions.confirm-reply-to]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/confirm-reply-to/index.ts"
+
+# EINRICHTUNG-01 (AP6; E-06) — Edge Function "mail-status" (Testmodus-Hinweis). Angemeldet, aktives Mitglied;
+# liefert nur den Modus, keine Adressen und keine Geheimnisse.
+[functions.mail-status]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/mail-status/index.ts"
+
+# EINRICHTUNG-01 (AP7; 1.25a, K1) — Edge Function "confirm-destructive-action" (Bestaetigungsnachweis fuer Konto- und
+# Betriebsloeschung). Angemeldet; prueft das Passwort ueber Supabase Auth und widerruft die Pruefsitzung sofort.
+[functions.confirm-destructive-action]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/confirm-destructive-action/index.ts"
+
+# EINRICHTUNG-01 (AP7; 1.25, K2) — Edge Function "delete-account" (Kontoloeschung, Token der Person + Nachweis).
+[functions.delete-account]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/delete-account/index.ts"
+
+# EINRICHTUNG-01 (AP7; 1.25, 1.26) — Dienstwege ohne Nutzer-JWT (Planer per pg_net mit Vault-Geheimnis oder direkter
+# Aufruf mit dem Dienstrollen-Schluessel), daher verify_jwt = false; die Functions pruefen den Aufrufer selbst.
+[functions.account-deletion-resume]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/account-deletion-resume/index.ts"
+
+[functions.workspace-deletion-run]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/workspace-deletion-run/index.ts"
+
 # E-MAIL-07E — Edge Function "sync-mailbox" (eingehende E-Mails abrufen).
 # verify_jwt = true: nur angemeldete Nutzer; die Function prueft zusaetzlich
 # Schreibrecht und Postfach-Zugehoerigkeit. Zugangsdaten nur aus Supabase Vault.

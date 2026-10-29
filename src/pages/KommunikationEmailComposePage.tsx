@@ -26,6 +26,7 @@
  * Platzhalter („[Termin ergänzen]") sperren den Versand. Kein Auto-Send.
  */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { resolveCloudConfirmedActionAccess } from '../services/workspace/workspaceRoleService';
 import { buildCustomerOptionLabels } from '../services/customer/customerOptionLabels';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
@@ -56,6 +57,9 @@ import { getCustomerStoreSnapshot } from '../services/customerStoreService';
 import { getAllVorgaenge } from '../services/vorgangService';
 import { isEntitySyncActive } from '../services/sync/syncMetaService';
 import { appendSignatureOnce, resolveEmailSignature } from '../services/delivery/deliveryMailComposer';
+import { resolveProfileCommunicationLanguage } from '../services/company/companyProfileSettingsContract';
+import { MailTestModeNotice } from '../components/communication/MailTestModeNotice';
+import { loadReplyToStatus } from '../services/delivery/replyToConfirmationService';
 import { resolveProfileReplyToEmail } from '../services/company/companyProfileSettingsContract';
 import {
   EMAIL_ATTACHMENT_MAX_COUNT,
@@ -147,7 +151,7 @@ export function KommunikationEmailComposePage({
 }
 
 function ReplyCompose({ parentId, loadSource, prepareReplyDraft, sourceRef }: { parentId: string; loadSource: LoadReplySource; prepareReplyDraft: PrepareReplyDraft; sourceRef?: DocumentReplySourceRef }) {
-  const { translate, language, companyProfile } = useApp();
+  const { translate, companyProfile } = useApp();
   const t = (key: string) => translate(key as TranslationKey);
   const [state, setState] = useState<{ phase: 'loading' | 'missing' | 'error' } | { phase: 'ready'; draft: FreeEmailDraft; reply: ReplyContext }>({ phase: 'loading' });
 
@@ -168,7 +172,7 @@ function ReplyCompose({ parentId, loadSource, prepareReplyDraft, sourceRef }: { 
       // Kontext nur per Kennung aus dem Original — und nur, wenn er hier bekannt ist (sonst nichts erfinden).
       const customerId = parent.customerId && getCustomerStoreSnapshot().some((customer) => customer.id === parent.customerId) ? parent.customerId : undefined;
       const vorgangId = parent.vorgangId && getAllVorgaenge().some((vorgang) => vorgang.id === parent.vorgangId) ? parent.vorgangId : undefined;
-      const signature = resolveEmailSignature(companyProfile, language);
+      const signature = /* EINRICHTUNG-01 (AP6; E-05) */ resolveEmailSignature(companyProfile, resolveProfileCommunicationLanguage(companyProfile));
       const quote = buildQuotedReply(
         { bodyText: parent.bodyText, senderLabel: parent.direction === 'inbound' ? inboundSenderLabel(parent) : parent.senderName, dateLabel: formatTimestamp(parent.receivedAt ?? parent.providerAcceptedAt ?? parent.createdAt) },
         { wrote: t('emailThread.wrote') },
@@ -208,14 +212,15 @@ function ReplyCompose({ parentId, loadSource, prepareReplyDraft, sourceRef }: { 
 }
 
 function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmailReplyDraft, sourceRef }: { initialDraft?: FreeEmailDraft; reply?: ReplyContext; prepareReplyDraft?: PrepareReplyDraft; sourceRef?: DocumentReplySourceRef } = {}) {
-  const { translate, language, companyProfile, showToast } = useApp();
+  const { translate, companyProfile, showToast } = useApp();
   const t = (key: string) => translate(key as TranslationKey);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const user = useOptionalAuth()?.user ?? null;
   const cloud = isSupabaseConfigured();
   const access = useMemo(() => resolveWorkspaceWriteAccess({ userId: user?.id, cloudConfigured: cloud }), [user?.id, cloud]);
-  const canSend = cloud && access.canWrite;
+  // EINRICHTUNG-01 (AP2, Vertrag 1.11) — zusätzlich gesperrt, solange die Rechte nur aus dem Zwischenspeicher stammen.
+  const canSend = cloud && resolveCloudConfirmedActionAccess(access);
 
   const customers = useMemo(
     () => getCustomerStoreSnapshot().filter((customer) => isEntitySyncActive(customer)).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'de')),
@@ -240,7 +245,7 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
       if (own) return own;
       const info = resolveDocumentReplySource(sourceRef);
       const prefill = info ? buildReplyEmailPrefill(info) : { to: '', subject: '' };
-      const signature = resolveEmailSignature(companyProfile, language);
+      const signature = /* EINRICHTUNG-01 (AP6; E-05) */ resolveEmailSignature(companyProfile, resolveProfileCommunicationLanguage(companyProfile));
       return createFreeEmailDraft({
         to: prefill.to,
         subject: prefill.subject,
@@ -253,7 +258,7 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
     }
     const existing = loadFreeEmailDraft();
     if (existing) return existing;
-    const signature = resolveEmailSignature(companyProfile, language);
+    const signature = /* EINRICHTUNG-01 (AP6; E-05) */ resolveEmailSignature(companyProfile, resolveProfileCommunicationLanguage(companyProfile));
     const vorgangId = searchParams.get('vorgangId') ?? undefined;
     const vorgang = vorgangId ? vorgaenge.find((entry) => entry.id === vorgangId) : undefined;
     const customerId = vorgang?.customerId ?? searchParams.get('customerId') ?? undefined;
@@ -519,7 +524,22 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
   };
 
   const totalSize = draft.attachments.reduce((sum, entry) => sum + entry.sizeBytes, 0);
-  const replyTo = resolveProfileReplyToEmail(companyProfile);
+  /*
+   * EINRICHTUNG-01 (AP6; E18) — welche Antwortadresse der Versand nutzt, bestimmt der Server: die bestätigte
+   * Antwortadresse des Betriebs, sonst die bestätigte Anmelde-E-Mail des Inhabers (maskiert angezeigt).
+   */
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void loadReplyToStatus().then((status) => {
+      if (!active || !status) return;
+      const confirmed = status.confirmed && status.address ? status.address : null;
+      setReplyTo(confirmed ?? status.effectiveMasked);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="page kommunikation-email-compose" data-testid="kommunikation-email-compose">
@@ -529,6 +549,9 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
         backLabel={t(reply ? 'emailThread.backToMessage' : 'freeEmail.compose.back')}
         backTestId="kommunikation-email-compose-back"
       />
+
+      {/* EINRICHTUNG-01 (AP6; E-06) */}
+      <MailTestModeNotice testId="kommunikation-email-test-mode" />
 
       {reply ? (
         <div className="email-reply-original" data-testid="kommunikation-reply-original">

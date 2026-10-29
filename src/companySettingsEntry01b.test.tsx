@@ -11,14 +11,16 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider } from './context/AuthContext';
 import { BETA_TEST_SETUP } from './config/betaTestMode';
 import { EinstellungenPage } from './pages/EinstellungenPage';
 import { FirmendatenLegacyRoute, resolveFirmendatenLegacyTarget } from './pages/settings/FirmendatenLegacyRoute';
 import { CompanySettingsPage } from './pages/settings/CompanySettingsPage';
-import { OperatingSettingsPage, OPERATING_SETTINGS_BACKUP_HREF } from './pages/settings/OperatingSettingsPage';
+import { BackupSettingsPage } from './pages/settings/BackupSettingsPage';
+import { SETTINGS_TARGET_PATHS } from './pages/settings/settingsHubConfig';
+import { alsInhaber } from './test/workspaceRoleTestUtils';
 import { UserMenu } from './components/layout/UserMenu';
 import { loginAsDefaultAdmin } from './test/authFixtures';
 import {
@@ -45,7 +47,7 @@ function mountAt(entry: string, element: React.ReactNode = <EinstellungenPage />
               <Route path="/einstellungen" element={element} />
               <Route path="/firmendaten" element={<FirmendatenLegacyRoute />} />
               <Route path="/einstellungen/firma" element={<CompanySettingsPage />} />
-              <Route path="/einstellungen/betrieb" element={<OperatingSettingsPage />} />
+              <Route path={SETTINGS_TARGET_PATHS.backup} element={<BackupSettingsPage />} />
               <Route path="/einstellungen/rechnungen" element={<div data-testid="invoice-settings-stub" />} />
               <Route path="/einstellungen/design" element={<div data-testid="design-settings-stub" />} />
               <Route path="/mehr" element={<div data-testid="mehr-page-stub" />} />
@@ -69,9 +71,16 @@ function entryHref(mount: Mount, id: string): string | null {
 
 beforeEach(() => {
   localStorage.clear();
+  /*
+   * EINRICHTUNG-01 (AP5; Vertrag 1.16) — der Hub zeigt je Rolle nur deren Ziele; die Testumgebung meldet die Cloud als
+   * eingerichtet, ohne Mitgliedschaft wäre die Rolle unbekannt (Mitgliederansicht). Dieser Block prüft die Bündelung
+   * für den Inhaber.
+   */
+  alsInhaber();
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   while (mounted.length > 0) {
     const mount = mounted.pop()!;
     act(() => mount.root.unmount());
@@ -90,8 +99,8 @@ describe('01B — Einstellungen als zentraler Einstieg', () => {
   it('M8: alle Kernbereiche sind vorhanden — auch in einer Spalte', () => {
     const mount = mountAt('/einstellungen');
 
-    // SETTINGS-01B2 — Firma, Rechnungen & Zahlungen, Dokumente & Design, Betrieb.
-    for (const group of ['company', 'documents', 'design', 'team']) {
+    // EINRICHTUNG-01 (AP5; 1.15) — sieben Gruppen statt der früheren Bereiche Firma, Rechnungen, Design und Betrieb.
+    for (const group of ['account', 'workspace', 'documents', 'communication', 'accounting', 'data', 'help']) {
       expect(
         mount.container.querySelector(`[data-testid="settings-group-${group}"]`),
         `Bereich fehlt: ${group}`,
@@ -123,7 +132,7 @@ describe('01B — Einstellungen als zentraler Einstieg', () => {
     expect(resolveFirmendatenLegacyTarget(`#${PAYMENT_TERMS_SECTION_ID}`)).toBe('/einstellungen/rechnungen');
     expect(resolveFirmendatenLegacyTarget(`#${INVOICE_TEXTS_SECTION_ID}`)).toBe('/einstellungen/rechnungen');
     expect(resolveFirmendatenLegacyTarget('#logo')).toBe('/einstellungen/design');
-    expect(resolveFirmendatenLegacyTarget('#datensicherung')).toBe(OPERATING_SETTINGS_BACKUP_HREF);
+    expect(resolveFirmendatenLegacyTarget('#datensicherung')).toBe(SETTINGS_TARGET_PATHS.backup); // EINRICHTUNG-01 (AP5)
     expect(resolveFirmendatenLegacyTarget('')).toBe('/einstellungen/firma');
     expect(resolveFirmendatenLegacyTarget('#unbekannt')).toBe('/einstellungen/firma');
     for (const target of ['', '#logo', '#zahlungsbedingungen', '#datensicherung', '#x']) {
@@ -131,10 +140,14 @@ describe('01B — Einstellungen als zentraler Einstieg', () => {
     }
   });
 
-  it('M6: Betrieb führt auf ein bestehendes Ziel', () => {
+  it('M6: die Seite „Betrieb“ ist aufgelöst; ihre Bereiche haben eigene Ziele (EINRICHTUNG-01 AP5, Vertrag 1.15)', () => {
     const mount = mountAt('/einstellungen');
 
-    expect(entryHref(mount, 'operations')).toBe('/einstellungen/betrieb'); // SETTINGS-01B5
+    expect(entryHref(mount, 'operations')).toBeNull();
+    expect(entryHref(mount, 'backup')).toBe('/einstellungen/daten/sicherung');
+    expect(entryHref(mount, 'chart-of-accounts')).toBe('/einstellungen/kontenrahmen');
+    expect(entryHref(mount, 'account-language')).toBe('/einstellungen/konto/sprache');
+    expect(entryHref(mount, 'sync')).toBe('/synchronisation');
   });
 
   it('M10: die Seite führt keine eigene Firmendatenquelle ein', () => {
@@ -171,9 +184,13 @@ describe('01C — Tiefenlinks springen sichtbar zum Abschnitt', () => {
    * Diese Regression hält die Verallgemeinerung fest, damit ein künftiger
    * Abschnitt nicht wieder still ins Leere zeigt.
    */
-  // SETTINGS-01B5 — der einzige verbliebene Abschnitts-Tiefenlink ist die Datensicherung auf der Betriebsseite.
+  /*
+   * EINRICHTUNG-01 (AP5; Vertrag 1.15) — die Datensicherung hat eine eigene Seite; der alte Tiefenlink
+   * `/firmendaten#datensicherung` landet dort direkt, ein Sprung innerhalb einer Seite ist nicht mehr nötig. Geprüft
+   * bleibt, dass das Ziel den Abschnitt mit seiner Kennung trägt.
+   */
   for (const sectionId of ['datensicherung']) {
-    it(`springt zu #${sectionId}`, async () => {
+    it(`landet auf der Sicherungsseite mit #${sectionId}`, async () => {
       const scrolled: string[] = [];
       const original = Element.prototype.scrollIntoView;
       Element.prototype.scrollIntoView = function scrollIntoViewSpy(this: Element) {
@@ -187,12 +204,14 @@ describe('01C — Tiefenlinks springen sichtbar zum Abschnitt', () => {
       }) as typeof window.requestAnimationFrame;
 
       try {
-        mountAt(`/einstellungen/betrieb#${sectionId}`, <div />);
+        const mount = mountAt(`/firmendaten#${sectionId}`, <div />);
         await act(async () => {
           for (const frame of frames.splice(0)) frame(0);
           await Promise.resolve();
         });
-        expect(scrolled).toContain(sectionId);
+        expect(mount.container.querySelector('[data-testid="settings-backup-page"]')).toBeTruthy();
+        expect(mount.container.querySelector(`#${sectionId}`)).toBeTruthy();
+        expect(scrolled).toEqual([]);
       } finally {
         Element.prototype.scrollIntoView = original;
         window.requestAnimationFrame = originalRaf;

@@ -62,41 +62,45 @@ describe('R3: Leserechte der Edge Function (Struktur)', () => {
   });
 });
 
+/*
+ * EINRICHTUNG-01 (AP1, E3) — bewusst geänderte Struktur: Profil- und Mitgliedschaftsabfrage sind ersetzt durch EINEN
+ * Aufruf der zentralen Zugriffsregel (`workspace_user_access_denial`, nur service_role), die zusätzlich die
+ * Betriebslizenz prüft. Der Befund aus R3 bleibt abgesichert: Ein Datenbankfehler wird ausgewertet, steht vor der
+ * fachlichen Bewertung und erscheint nie als Sperre.
+ */
 describe('R3: Datenbankfehler sind keine Sperre', () => {
-  it('wertet den Fehler der profiles-Abfrage aus', () => {
-    expect(code).toContain('error: profileError');
-    expect(code).toMatch(/if \(profileError\)[\s\S]{0,160}return fail\('server_misconfigured'\)/);
+  it('wertet den Fehler der Zugriffsabfrage aus', () => {
+    expect(code).toContain('error: accessError');
+    expect(code).toMatch(/if \(accessError\)[\s\S]{0,160}return fail\('server_misconfigured'\)/);
   });
 
-  it('wertet den Fehler der workspace_members-Abfrage aus', () => {
-    expect(code).toContain('error: membershipError');
-    expect(code).toMatch(/if \(membershipError\)[\s\S]{0,160}return fail\('server_misconfigured'\)/);
+  it('nutzt die zentrale Zugriffsregel mit der Aktion member statt eigener Lizenzpruefung', () => {
+    expect(code).toContain("admin.rpc('workspace_user_access_denial'");
+    expect(code).toContain("p_action: 'member'");
+    expect(code).not.toMatch(/\.from\('profiles'\)/);
+    expect(code).not.toMatch(/license_status/);
   });
 
   it('meldet bei einem Abfragefehler weder forbidden noch workspace_forbidden', () => {
     /*
-     * Die Fehlerbehandlung steht jeweils **vor** der fachlichen Bewertung —
-     * sonst liefe ein technischer Fehler wieder in die Sperre.
+     * Die Fehlerbehandlung steht **vor** der fachlichen Bewertung — sonst liefe
+     * ein technischer Fehler wieder in die Sperre.
      */
-    expect(code.indexOf('if (profileError)')).toBeLessThan(
+    expect(code.indexOf('if (accessError)')).toBeGreaterThan(-1);
+    expect(code.indexOf('if (accessError)')).toBeLessThan(
       // Die Aufrufstelle, nicht der Import am Dateikopf.
-      code.indexOf('evaluateProfileAccess(profile'),
-    );
-    expect(code.indexOf('if (membershipError)')).toBeLessThan(
-      code.indexOf("fail('workspace_forbidden')"),
+      code.indexOf('evaluateWorkspaceAccessDenial(denial'),
     );
   });
 
   it('reicht keine Supabase-Meldung und keine SQL-Details hinaus', () => {
-    // Die Fehlerobjekte werden nur auf Existenz geprüft, nie serialisiert.
-    expect(code).not.toMatch(/profileError\.(message|details|hint|code)/);
-    expect(code).not.toMatch(/membershipError\.(message|details|hint|code)/);
-    expect(code).not.toMatch(/JSON\.stringify\((profileError|membershipError)/);
+    // Das Fehlerobjekt wird nur auf Existenz geprüft, nie serialisiert.
+    expect(code).not.toMatch(/accessError\.(message|details|hint|code)/);
+    expect(code).not.toMatch(/JSON\.stringify\(accessError/);
   });
 
-  it('lässt die fachliche Bewertung unverändert', () => {
-    // Die Semantik selbst liegt weiterhin in evaluateProfileAccess.
-    expect(code).toContain('evaluateProfileAccess(profile, new Date())');
-    expect(code).toContain("return fail('workspace_forbidden')");
+  it('bewertet fachlich an einer Stelle', () => {
+    expect(code).toContain('evaluateWorkspaceAccessDenial(denial)');
+    expect(code).toContain('return fail(access.error)');
   });
 });

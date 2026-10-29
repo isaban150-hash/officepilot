@@ -63,7 +63,7 @@ export const trMailboxOAuth = {
   'mailboxOAuth.confirm.expired': 'Bu onayın süresi doldu veya zaten tamamlandı. Lütfen yeniden bağlanın.',
 
   'mailboxOAuth.disconnect.title': 'Bağlantı kesilsin mi?',
-  'mailboxOAuth.disconnect.text': '{address} erişimi silinir; OfficeTakt artık e-posta almaz. Daha önce alınan e-postalar ve müşteri verileri korunur. İstediğiniz zaman yeniden bağlanabilirsiniz.',
+  'mailboxOAuth.disconnect.text': 'OfficeTakt, {address} için kayıtlı erişimi siler ve e-posta almayı durdurur. Daha önce alınan e-postalar ve müşteri verileri korunur. İstediğiniz zaman yeniden bağlanabilirsiniz.',
   'mailboxOAuth.disconnect.failed': 'Bağlantı şu anda kesilemedi.',
 
   'mailboxOAuth.error.generic': 'Microsoft ile bağlantı kurulamadı. Lütfen tekrar deneyin.',
@@ -84,4 +84,8 @@ export const trMailboxOAuth = {
   'mailboxOAuth.error.provider_not_available': 'Bu posta kutusu sağlayıcısı henüz kullanılamıyor.',
   'mailboxOAuth.error.invalid_import_window': 'Lütfen geçerli bir zaman aralığı seçin.',
   'mailboxOAuth.error.server_unavailable': 'Bağlantı şu anda mümkün değildi. Lütfen daha sonra tekrar deneyin.',
+
+  'mailboxOAuth.disconnect.microsoft': 'Microsoft\'taki izin, siz oradan kaldırana kadar geçerli kalır:',
+  'mailboxOAuth.disconnect.linkPersonal': 'Uygulama izinleri (kişisel Microsoft hesabı)',
+  'mailboxOAuth.disconnect.linkWork': 'Uygulamalarım (iş veya okul hesabı)',
 } as const;

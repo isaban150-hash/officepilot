@@ -18,6 +18,7 @@ import { buildStorageKey } from './services/storage/storageScopeService';
 import { STORAGE_VERSION } from './services/sync/syncMigrationService';
 import { createSyncClient } from './services/sync/syncClientService';
 import { resetTestStores } from './test/resetStores';
+import { LICENSE_VERSION, PRIVACY_VERSION, TERMS_VERSION } from './config/legalVersions';
 
 const USER_ID = 'bootstrap-order-user';
 const WORKSPACE_ID = 'bootstrap-order-ws';
@@ -34,6 +35,11 @@ const proofUser: UserAccount = {
   updatedAt: '2026-07-01T10:00:00.000Z',
   licensePlan: 'beta',
   licenseStatus: 'active',
+  // EINRICHTUNG-01 (AP2, EIN-19) — ohne gültige Zustimmung zur geltenden Fassung bootstrapt das Gate nicht.
+  acceptedTermsVersion: TERMS_VERSION,
+  acceptedPrivacyVersion: PRIVACY_VERSION,
+  acceptedLicenseVersion: LICENSE_VERSION,
+  legalAcceptedAt: '2026-07-01T10:00:00.000Z',
 };
 
 let cloudResolve: (() => void) | null = null;

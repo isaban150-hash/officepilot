@@ -50,6 +50,8 @@ function deps(row: DeliveryRow, senderEmail: string) {
     senderEmail,
     userCanWrite: async () => true,
     loadDelivery: async () => ({ delivery: row, invoice }),
+    // EINRICHTUNG-01 (AP6; E18) — die Antwortadresse bestimmt der Server.
+    resolveReplyTo: async () => ({ ok: true, email: 'inhaber@betrieb.invalid', source: 'owner_login' }),
     downloadAttachment: async () => PDF,
     sha256Hex,
     provider: { provider: 'stub', async sendTransactionalEmail(input) { sent.push(input); return stub.sendTransactionalEmail(input); } },
@@ -109,26 +111,23 @@ describe('BREVO-LIVE-CONFIG-01 — MAIL_SENDER_EMAIL', () => {
   });
 
   /*
-   * E-MAIL-07B — eine eingetragene, aber ungültige Antwortadresse fällt nicht
-   * mehr still auf die Firmen-E-Mail zurück: Der Betrieb hat eine Adresse
-   * gewählt, Antworten an eine andere wären ein stiller Fehler. Leer heißt
-   * weiterhin „nicht eingestellt" (Fallback). Ohne eingestellte Werte bleibt
-   * die Rechnung beim Snapshot.
+   * EINRICHTUNG-01 (AP6; E18) — der Anzeigename folgt den Kommunikations-Einstellungen (leer: Firmenname und
+   * Rechtsform). Die Antwortadresse kommt allein vom Server (`resolveReplyTo`); die gespeicherte Wunschadresse und die
+   * Firmen-E-Mail werden dafür nie verwendet. Ohne Adresse vom Server: kein Versand.
    */
-  it('5: Dokumentversand folgt Anzeigename/Antwortadresse mit Fallback; ungültige Antwortadresse sendet nicht; Rechnung ohne Einstellungen beim Snapshot', async () => {
-    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', legalForm: 'GmbH', email: 'info@betrieb.invalid', senderDisplayName: 'Meister Müller', replyToEmail: 'Antwort@Betrieb.invalid' }))
+  it('5: Dokumentversand folgt dem Anzeigenamen mit Rückfall; Antwortadresse vom Server; Rechnung ohne Einstellungen beim Snapshot-Namen', async () => {
+    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', legalForm: 'GmbH', email: 'info@betrieb.invalid', senderDisplayName: 'Meister Müller', replyToEmail: 'wunsch@betrieb.invalid' }, 'Antwort@Betrieb.invalid'))
       .toEqual({ ok: true, fromName: 'Meister Müller', replyTo: 'antwort@betrieb.invalid' });
-    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', legalForm: 'GmbH', email: 'info@betrieb.invalid', senderDisplayName: '  ', replyToEmail: '  ' }))
-      .toEqual({ ok: true, fromName: 'Betrieb GmbH', replyTo: 'info@betrieb.invalid' });
-    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', legalForm: 'GmbH', email: 'info@betrieb.invalid', replyToEmail: 'kaputt' }))
-      .toEqual({ ok: false, code: 'sender_reply_to_invalid' });
-    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', email: '', replyToEmail: 'ungueltig' })).toEqual({ ok: false, code: 'sender_reply_to_invalid' });
+    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', legalForm: 'GmbH', email: 'info@betrieb.invalid', senderDisplayName: '  ', replyToEmail: '  ' }, 'inhaber@betrieb.invalid'))
+      .toEqual({ ok: true, fromName: 'Betrieb GmbH', replyTo: 'inhaber@betrieb.invalid' });
+    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', legalForm: 'GmbH', email: 'info@betrieb.invalid', replyToEmail: 'kaputt' }, ''))
+      .toEqual({ ok: false, code: 'reply_to_unavailable' });
 
     const row = await invoiceDelivery();
     const { d, sent } = deps(row, SENDER);
     await runSendDocument({ userId: 'u', workspaceId: WS, clientDeliveryId: 'cd-1' }, d);
     const mail = sent[0] as { from: { name: string }; replyTo: { email: string } };
     expect(mail.from.name).toBe('Betrieb GmbH');
-    expect(mail.replyTo.email).toBe('info@betrieb.invalid');
+    expect(mail.replyTo.email).toBe('inhaber@betrieb.invalid');
   });
 });

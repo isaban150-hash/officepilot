@@ -5,7 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runSendEmail, type EmailMessageRow, type SendEmailDeps } from '../../../supabase/functions/_shared/sendEmailCore';
 import { createBrevoEmailProvider, createStubEmailProvider, type EmailProviderAdapter } from '../../../supabase/functions/_shared/emailProvider';
-import { resolveTestRecipientAllowlist } from '../../../supabase/functions/_shared/sendDocumentCore';
+import { resolveTestRecipientAllowlist, type ReplyToResolution } from '../../../supabase/functions/_shared/sendDocumentCore';
 import { sha256Hex } from '../delivery/documentDeliveryContract';
 
 const WS = '00000000-0000-4000-8000-0000000007d0';
@@ -48,7 +48,7 @@ async function message(patch: Partial<EmailMessageRow> = {}): Promise<EmailMessa
   };
 }
 
-function deps(initial: EmailMessageRow, options: { provider?: EmailProviderAdapter; files?: Record<string, Uint8Array>; allowlist?: string; claimLost?: boolean; staleResolved?: boolean } = {}) {
+function deps(initial: EmailMessageRow, options: { provider?: EmailProviderAdapter; files?: Record<string, Uint8Array>; allowlist?: string; claimLost?: boolean; staleResolved?: boolean; replyTo?: ReplyToResolution } = {}) {
   let row = { ...initial };
   const files: Record<string, Uint8Array> = options.files ?? {};
   if (!options.files) {
@@ -65,6 +65,8 @@ function deps(initial: EmailMessageRow, options: { provider?: EmailProviderAdapt
     testRecipientAllowlist: resolveTestRecipientAllowlist(options.allowlist),
     userCanWrite: async () => true,
     loadMessage: async (ws, id) => (ws === row.workspace_id && id === row.client_message_id ? { ...row } : null),
+    // EINRICHTUNG-01 (AP6; E18) — die Antwortadresse bestimmt der Server bei jedem Versand (hier: Inhaber-Anmeldung).
+    resolveReplyTo: async () => options.replyTo ?? { ok: true, email: 'inhaber@beispiel.invalid', source: 'owner_login' },
     downloadAttachment: async (path) => files[path] ?? null,
     sha256Hex,
     provider,
@@ -97,6 +99,18 @@ function deps(initial: EmailMessageRow, options: { provider?: EmailProviderAdapt
 
 const input = { userId: 'u-1', workspaceId: WS, clientMessageId: 'em-1' };
 
+describe('EINRICHTUNG-01 (AP6; E18, E-03.9, E-03.11) — Antwortadresse der freien E-Mail', () => {
+  it('die bestätigte Antwortadresse des Betriebs gilt; ohne Adresse vom Server kein Versand', async () => {
+    const confirmed = deps(await message(), { replyTo: { ok: true, email: 'Antwort@Beispiel.invalid', source: 'confirmed_reply_to' } });
+    expect(await runSendEmail(input, confirmed.d)).toMatchObject({ ok: true, action: 'sent' });
+    expect(confirmed.send.mock.calls[0][0].replyTo).toEqual({ email: 'antwort@beispiel.invalid', name: 'Beispiel GmbH' });
+
+    const unavailable = deps(await message(), { replyTo: { ok: false, code: 'reply_to_unavailable' } });
+    expect(await runSendEmail(input, unavailable.d)).toMatchObject({ ok: true, action: 'failed', message: { status: 'failed', errorCode: 'reply_to_unavailable' } });
+    expect(unavailable.send).not.toHaveBeenCalled();
+  });
+});
+
 describe('E-MAIL-07D — send-email Kern', () => {
   it('sendet An/Cc/Bcc und mehrere Anhänge genau einmal; Logs ohne Adressen/Dateinamen', async () => {
     const row = await message();
@@ -109,7 +123,7 @@ describe('E-MAIL-07D — send-email Kern', () => {
     expect(sent.cc).toEqual([{ email: 'buero@example.invalid' }]);
     expect(sent.bcc).toEqual([{ email: 'archiv@example.invalid' }]);
     expect(sent.from).toEqual({ email: SENDER, name: 'Beispiel GmbH' });
-    expect(sent.replyTo).toEqual({ email: 'info@beispiel.invalid', name: 'Beispiel GmbH' });
+    expect(sent.replyTo).toEqual({ email: 'inhaber@beispiel.invalid', name: 'Beispiel GmbH' });
     expect(sent.attachments?.map((entry) => entry.filename)).toEqual(['Angebot.pdf', 'Foto.png']);
     expect(atob(sent.attachments![0].contentBase64)).toBe('%PDF-1.4 angebot');
     expect(sent.idempotencyKey).toBe(`${WS}:email:em-1`);

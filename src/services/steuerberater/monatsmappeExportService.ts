@@ -15,6 +15,7 @@ import { buildPersistedStateSnapshot } from '../persistenceService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { resolveWorkspaceWriteAccess } from '../workspace/workspaceRoleService';
 import { getDocumentFileBlob } from '../documentFileStoreService';
+import { buildSteuerberaterFileName } from '../exportFileNames';
 import { collectMonatsmappeInput } from './monatsmappeInputService';
 import { generateApprovedInvoicePdf, generateInvoiceCorrectionPdf } from '../invoicePdfService';
 import {
@@ -58,8 +59,9 @@ export type MonatsmappeExportResult =
   | { outcome: 'document_load_failed'; failed: Array<{ id: string; belegnummer: string; fileName: string; detail: string }> }
   | { outcome: 'export_failed'; detail?: string };
 
+/** EINRICHTUNG-01 (AP7; 1.23, F13, D-03.3) — nur der Name; Paket und Sperren bleiben unverändert. */
 export function buildMonatsmappeFilename(monthKey: string): string {
-  return `OfficePilot_Steuerberater_${monthKey}.zip`;
+  return buildSteuerberaterFileName(monthKey);
 }
 
 /**

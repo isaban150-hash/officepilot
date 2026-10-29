@@ -63,7 +63,7 @@ export const deMailboxOAuth = {
   'mailboxOAuth.confirm.expired': 'Diese Bestätigung ist abgelaufen oder bereits erledigt. Bitte erneut verbinden.',
 
   'mailboxOAuth.disconnect.title': 'Verbindung trennen?',
-  'mailboxOAuth.disconnect.text': 'Der Zugang zu {address} wird gelöscht; OfficeTakt ruft keine E-Mails mehr ab. Bereits übernommene E-Mails und Kundendaten bleiben erhalten. Sie können jederzeit neu verbinden.',
+  'mailboxOAuth.disconnect.text': 'OfficeTakt löscht den gespeicherten Zugang zu {address} und beendet den Abruf. Bereits übernommene E-Mails und Kundendaten bleiben erhalten. Sie können jederzeit neu verbinden.',
   'mailboxOAuth.disconnect.failed': 'Die Verbindung konnte gerade nicht getrennt werden.',
 
   'mailboxOAuth.error.generic': 'Die Verbindung mit Microsoft ist nicht zustande gekommen. Bitte erneut versuchen.',
@@ -84,4 +84,9 @@ export const deMailboxOAuth = {
   'mailboxOAuth.error.provider_not_available': 'Dieser Postfach-Anbieter ist noch nicht verfügbar.',
   'mailboxOAuth.error.invalid_import_window': 'Bitte einen gültigen Zeitraum wählen.',
   'mailboxOAuth.error.server_unavailable': 'Die Verbindung war gerade nicht möglich. Bitte später erneut.',
+
+  /* EINRICHTUNG-01 (AP6; E-07) — Trennen: Berechtigung bei Microsoft bleibt bis zum Entfernen dort. */
+  'mailboxOAuth.disconnect.microsoft': 'Die Berechtigung bei Microsoft bleibt bestehen, bis Sie sie dort entfernen:',
+  'mailboxOAuth.disconnect.linkPersonal': 'App-Berechtigungen (persönliches Microsoft-Konto)',
+  'mailboxOAuth.disconnect.linkWork': 'Meine Apps (Geschäfts- oder Schulkonto)',
 } as const;

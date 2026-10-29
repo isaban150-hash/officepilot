@@ -20,7 +20,7 @@ import {
   AI_OPERATIONS,
   AI_UPSTREAM_TIMEOUT_MS,
   buildGeminiEndpoint,
-  evaluateProfileAccess,
+  evaluateWorkspaceAccessDenial,
   extractGeminiText,
   isAiOperation,
   mapUpstreamStatus,
@@ -111,67 +111,34 @@ describe('KI-Endpunkt: Anfragevertrag', () => {
   });
 });
 
+/*
+ * EINRICHTUNG-01 (AP1, E3) — bewusst geänderte Erwartung: Der Endpunkt prüft nicht mehr die eigene Lizenz der
+ * Person, sondern übernimmt die Entscheidung der zentralen Serverregel (`workspace_user_access_denial`, Aktion
+ * `member`): Sperre, Freigabe, aktive Mitgliedschaft und Betriebslizenz. Deren Semantik (u. a. Ablaufgrenze,
+ * unbekannte Werte, Mitglied ohne eigene Lizenz) belegt supabase/tests/einrichtung01_ap1_zugriff.sql (N-Z1 Weg 10).
+ */
 describe('KI-Endpunkt: Zugriffsentscheidung', () => {
-  const now = new Date('2026-09-01T12:00:00.000Z');
-
-  it('lässt nur freigegebene Konten mit aktiver Lizenz zu', () => {
-    expect(
-      evaluateProfileAccess({ status: 'approved', license_status: 'active' }, now),
-    ).toEqual({ allowed: true });
+  it('lässt zu, wenn die zentrale Regel keinen Grund nennt', () => {
+    expect(evaluateWorkspaceAccessDenial(null)).toEqual({ allowed: true });
   });
 
-  it('weist pending und blocked ab', () => {
-    for (const status of ['pending', 'blocked']) {
-      expect(evaluateProfileAccess({ status, license_status: 'active' }, now)).toEqual({
-        allowed: false,
-        error: 'forbidden',
-      });
+  it('weist eine fremde oder entzogene Mitgliedschaft als workspace_forbidden ab', () => {
+    expect(evaluateWorkspaceAccessDenial('not_member')).toEqual({ allowed: false, error: 'workspace_forbidden' });
+  });
+
+  it('weist eine nicht wirksame Betriebslizenz mit dem bisherigen Code license_inactive ab', () => {
+    expect(evaluateWorkspaceAccessDenial('license_not_effective')).toEqual({ allowed: false, error: 'license_inactive' });
+  });
+
+  it('weist gesperrte und nicht freigegebene Konten ab', () => {
+    for (const reason of ['account_blocked', 'account_not_approved']) {
+      expect(evaluateWorkspaceAccessDenial(reason)).toEqual({ allowed: false, error: 'forbidden' });
     }
   });
 
-  it('weist inactive und expired ab', () => {
-    for (const license_status of ['inactive', 'expired']) {
-      expect(evaluateProfileAccess({ status: 'approved', license_status }, now)).toEqual({
-        allowed: false,
-        error: 'license_inactive',
-      });
-    }
-  });
-
-  it('achtet auf das Ablaufdatum', () => {
-    expect(
-      evaluateProfileAccess(
-        {
-          status: 'approved',
-          license_status: 'active',
-          license_expires_at: '2026-09-02T00:00:00.000Z',
-        },
-        now,
-      ),
-    ).toEqual({ allowed: true });
-
-    expect(
-      evaluateProfileAccess(
-        {
-          status: 'approved',
-          license_status: 'active',
-          license_expires_at: '2026-08-31T00:00:00.000Z',
-        },
-        now,
-      ),
-    ).toEqual({ allowed: false, error: 'license_inactive' });
-  });
-
-  it('ist fail closed: unbekannte Werte und fehlendes Profil sperren', () => {
-    for (const profile of [
-      null,
-      undefined,
-      {},
-      { status: 'irgendwas', license_status: 'active' },
-      { status: 'approved', license_status: 'irgendwas' },
-      { status: 'approved', license_status: 'active', license_expires_at: 'kein-datum' },
-    ]) {
-      expect(evaluateProfileAccess(profile, now).allowed).toBe(false);
+  it('ist fail closed: unbekannte oder fehlende Antworten gewähren nie Zugang', () => {
+    for (const reason of [undefined, '', 'irgendwas', 0, {}, true, 'forbidden_role']) {
+      expect(evaluateWorkspaceAccessDenial(reason).allowed, String(reason)).toBe(false);
     }
   });
 });

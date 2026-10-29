@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { resolveCloudConfirmedActionAccess } from '../services/workspace/workspaceRoleService';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ExpenseForm } from '../components/expenses/ExpenseForm';
 import { PageHeader } from '../components/ui/Card';
@@ -21,10 +22,13 @@ export function AusgabeNeuPage() {
    * sieht den Hinweis statt eines Formulars, dessen Ergebnis der Server abweisen würde.
    */
   const authUser = useOptionalAuth()?.user;
-  const darfFinanzen = resolveWorkspaceWriteAccess({
-    userId: authUser?.id,
-    cloudConfigured: isSupabaseConfigured(),
-  }).canWrite;
+  // EINRICHTUNG-01 (AP2, Vertrag 1.11) — zusätzlich gesperrt, solange die Rechte nur aus dem Zwischenspeicher stammen.
+  const darfFinanzen = resolveCloudConfirmedActionAccess(
+    resolveWorkspaceWriteAccess({
+      userId: authUser?.id,
+      cloudConfigured: isSupabaseConfigured(),
+    }),
+  );
   const [searchParams] = useSearchParams();
   const prefill = useMemo(() => {
     const inboxId = searchParams.get('inboxId');

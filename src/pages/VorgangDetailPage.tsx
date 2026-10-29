@@ -13,6 +13,8 @@ import { StatusBadge } from '../components/ui/Badge';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
 import { PageHeader } from '../components/ui/PageHeader';
+import { ReadOnlyArea } from '../components/system/ReadOnlyArea';
+import { useWorkspaceWriteAccess } from '../hooks/useWorkspaceWriteAccess';
 import { vorgangStatusTone } from '../services/ui/statusTone';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
@@ -134,6 +136,12 @@ export function VorgangDetailPage() {
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
   const restoredSession = useUiSessionRestore();
+  /*
+   * EINRICHTUNG-01 (AP1, Z-08.1; Vertrag 1.3) — Betriebslizenz nicht wirksam: alles bleibt lesbar, die
+   * Schreibbereiche (Erfassen, Zuordnen, Status, Auftrag, Nachträge, Kosten, Abrechnung, Notizen, Briefe,
+   * Nachrichten, KI) sind gesperrt. Rechnungen behalten ihre eigene Auskunft (Ansehen und Drucken bleiben).
+   */
+  const nurLesen = useWorkspaceWriteAccess().licenseReadOnly === true;
   const [searchParams, setSearchParams] = useSearchParams();
   const [vorgang, setVorgang] = useState<Vorgang | undefined>(() =>
     id ? getVorgangById(id) : undefined,
@@ -553,7 +561,7 @@ export function VorgangDetailPage() {
   };
 
   const primaryActions = (
-    <>
+    <ReadOnlyArea active={nurLesen} testId="vorgang-read-only-actions">
       <Button variant="outline" fullWidth onClick={() => navigate('/scan')}>
         {translate('detail.action.addPhoto')}
       </Button>
@@ -581,7 +589,7 @@ export function VorgangDetailPage() {
       >
         {translate('businessLetter.customer.create')}
       </Button>
-    </>
+    </ReadOnlyArea>
   );
 
   const hasOpenAmendmentDraft = (vorgang.orderAmendments?.length ?? 0) > 0;
@@ -625,16 +633,18 @@ export function VorgangDetailPage() {
        */}
       <section className="section">
         <h2 className="section__title">{translate('businessLetter.vorgang.section')}</h2>
-        <div className="form-actions">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => navigate(`/schreiben/neu?vorgangId=${vorgang.id}`)}
-            data-testid="vorgang-letter-create"
-          >
-            {translate('businessLetter.vorgang.create')}
-          </Button>
-        </div>
+        <ReadOnlyArea active={nurLesen}>
+          <div className="form-actions">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => navigate(`/schreiben/neu?vorgangId=${vorgang.id}`)}
+              data-testid="vorgang-letter-create"
+            >
+              {translate('businessLetter.vorgang.create')}
+            </Button>
+          </div>
+        </ReadOnlyArea>
         {vorgangLetters.length === 0 ? (
           <p className="empty-state">{translate('businessLetter.vorgang.empty')}</p>
         ) : (
@@ -659,6 +669,7 @@ export function VorgangDetailPage() {
         )}
       </section>
 
+      <ReadOnlyArea active={nurLesen} testId="vorgang-read-only-notes">
       <section className="section">
         <h2 className="section__title">{translate('vorgangNote.title')}</h2>
         <Card>
@@ -690,6 +701,7 @@ export function VorgangDetailPage() {
           ))
         )}
       </section>
+      </ReadOnlyArea>
 
       <section className="section">
         <h2 className="section__title">{translate('vorgang.photos')}</h2>
@@ -705,6 +717,7 @@ export function VorgangDetailPage() {
         )}
       </section>
 
+      <ReadOnlyArea active={nurLesen} testId="vorgang-read-only-communication">
       <CommunicationIntegrationPanel
         contextRef={{ type: 'vorgang', id: vorgang.id }}
         buttonKeys={VORGANG_COMMUNICATION_BUTTON_KEYS}
@@ -720,9 +733,10 @@ export function VorgangDetailPage() {
         testIdPrefix="vorgang-ai"
         onAsk={(question) => askVorgangAi({ vorgangId: vorgang.id, question })}
       />
+      </ReadOnlyArea>
 
       <div className="action-stack">
-        {hasOrderPositions && !schlussExists && (
+        {hasOrderPositions && !schlussExists && !nurLesen && (
           <Link to={buildInvoiceCreatePath(vorgang.id, 'schluss')}>
             <Button variant="outline" fullWidth>
               {translate('vorgang.prepareSchluss')}
@@ -774,6 +788,7 @@ export function VorgangDetailPage() {
           testId="vorgang-detail-experience"
         />
 
+        <ReadOnlyArea active={nurLesen} testId="vorgang-read-only-overview">
         {customerAssignmentVisible && (
           <Card data-testid="vorgang-assign-customer">
             <h2 className="section__title">{translate('vorgang.assignCustomer.title')}</h2>
@@ -941,6 +956,7 @@ export function VorgangDetailPage() {
             </label>
           ) : null}
         </Card>
+        </ReadOnlyArea>
 
         <OrderSummaryPanel vorgang={vorgang} translate={translate} />
 
@@ -959,6 +975,7 @@ export function VorgangDetailPage() {
       </div>
 
       <div {...vorgangSectionPanelProps('order', activeSection)}>
+        <ReadOnlyArea active={nurLesen} testId="vorgang-read-only-order">
         <section className="section">
           <h2 className="section__title">{translate('vorgang.section.order')}</h2>
           <p className="order-amendment-section__intro">{translate('vorgang.orderSectionIntro')}</p>
@@ -1096,9 +1113,11 @@ export function VorgangDetailPage() {
             })
           )}
         </section>
+        </ReadOnlyArea>
       </div>
 
       <div {...vorgangSectionPanelProps('amendments', activeSection)}>
+        <ReadOnlyArea active={nurLesen} testId="vorgang-read-only-amendments">
         <VorgangOrderAmendmentPanel
           vorgang={vorgang}
           translate={translate}
@@ -1106,13 +1125,16 @@ export function VorgangDetailPage() {
           onToast={showToast}
           isSectionActive={activeSection === 'amendments'}
         />
+        </ReadOnlyArea>
       </div>
 
       <div {...vorgangSectionPanelProps('invoices', activeSection)}>
         {/* ORDER-COST-ALLOCATION-01B — Abgerechnet, zugeordnete Kosten, Verbleibt. */}
+        <ReadOnlyArea active={nurLesen} testId="vorgang-read-only-billing">
         <VorgangCostPanel vorgangId={vorgang.id} translate={translate} />
 
         <VorgangBillingPreparationPanel vorgang={vorgang} translate={translate} />
+        </ReadOnlyArea>
 
         <section
           className="section vorgang-invoices-section"
@@ -1132,7 +1154,7 @@ export function VorgangDetailPage() {
               Bewusst ohne Mengenprüfung: solange keine Schlussrechnung
               existiert, bleibt ein pauschaler Abschlag ein legitimer Weg.
             */}
-            {hasOrderPositions && !schlussExists ? (
+            {hasOrderPositions && !schlussExists && !nurLesen ? (
               <div className="vorgang-invoices-section__cta">
                 <Link
                   to={prepareInvoicePath}
@@ -1207,7 +1229,7 @@ export function VorgangDetailPage() {
         {secondaryPanels}
       </ShowMoreSection>
 
-      {formMode && (
+      {formMode && !nurLesen && (
         <OrderPositionForm
           mode={formMode.type}
           vorgang={vorgang}
@@ -1217,7 +1239,7 @@ export function VorgangDetailPage() {
         />
       )}
       <SimpleConfirmDialog
-        open={pendingDelete !== null}
+        open={pendingDelete !== null && !nurLesen}
         title={pendingDelete?.kind === 'note' ? translate('vorgangNote.delete') : translate('position.delete')}
         message={pendingDelete?.kind === 'note' ? translate('vorgangNote.deleteConfirm') : translate('position.deleteConfirm')}
         confirmLabel={pendingDelete?.kind === 'note' ? translate('vorgangNote.delete') : translate('position.delete')}

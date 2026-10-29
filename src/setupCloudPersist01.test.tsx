@@ -114,6 +114,16 @@ function registerHandlers(): void {
   });
   registerMockRpcHandler('pull_workspace_invoices', () => []);
   registerMockRpcHandler('pull_workspace_order_amendments', () => []);
+  /*
+   * EINRICHTUNG-01 (AP3, O-04.3) — die Einrichtung hinterlegt die letzte Rechnungsnummer jetzt vor dem Abschluss beim
+   * Server (FINANZ-CORE-01A, RE-02) und meldet einen Fehler sichtbar. Der echte Server kennt die Funktion; das Mock
+   * kannte sie nicht. Bewusst nicht in `rpcLog`: Die Reihenfolgeprüfungen betreffen die Firmendaten.
+   */
+  registerMockRpcHandler('set_workspace_invoice_number_start', (args) => ({
+    applied: true,
+    year: args.p_year,
+    last_sequence: args.p_last_sequence,
+  }));
   registerMockRpcHandler('upsert_workspace_sync_entity', (args) => {
     const entity = String(args.p_entity_type ?? '');
     const payload = (args.p_payload ?? {}) as { payload?: Record<string, unknown> };

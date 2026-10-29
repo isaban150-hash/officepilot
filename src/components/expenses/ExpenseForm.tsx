@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
+import { useInRouterContext } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import {
   EXPENSE_CATEGORIES,
@@ -15,6 +16,9 @@ import type { TaxStatus } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 import { Button } from '../ui/Button';
 import { getBusinessDay } from '../../services/businessDateService';
+import { useLeaveGuard } from '../../hooks/useLeaveGuard';
+import { useResumeOffer, type ResumeOffer } from '../../hooks/useResumeOffer';
+import { FormResumeOffer } from '../forms/FormResumeOffer';
 
 export interface ExpenseFormDraft {
   title: string;
@@ -132,14 +136,58 @@ function draftFromInput(input: Partial<ExpenseInput>): ExpenseFormDraft {
   };
 }
 
-export function ExpenseForm({ mode, expense, prefill, onSaved, onCancel }: ExpenseFormProps) {
+function initialDraft(expense: Expense | undefined, prefill: Partial<ExpenseInput> | undefined): ExpenseFormDraft {
+  if (expense) return draftFromExpense(expense);
+  if (prefill) return draftFromInput(prefill);
+  return emptyDraft();
+}
+
+const EXPENSE_FORM_FIELDS: readonly (keyof ExpenseFormDraft & string)[] = [
+  'title', 'category', 'supplierName', 'invoiceNumber', 'description', 'issueDate', 'paymentDueDate',
+  'grossAmount', 'netAmount', 'taxAmount', 'taxStatus',
+];
+
+/**
+ * EINRICHTUNG-01 (AP8; Vertrag 1.27) — im Router mit Entwurfsaufnahme (je Konto, Betrieb und Beleg über die
+ * UI-Sitzung; „Fortsetzen“ oder „Verwerfen“); ohne Router (Komponententests) das Formular allein. Die Fachlogik des
+ * Formulars bleibt unverändert.
+ */
+export function ExpenseForm(props: ExpenseFormProps) {
+  return useInRouterContext() ? <ExpenseFormMitEntwurf {...props} /> : <ExpenseFormFelder {...props} />;
+}
+
+function ExpenseFormMitEntwurf(props: ExpenseFormProps) {
+  const [saved] = useState(() => initialDraft(props.expense, props.prefill));
+  const [draft, setDraft] = useState<ExpenseFormDraft>(saved);
+  const offer = useResumeOffer<ExpenseFormDraft>({
+    namespace: `expense-form.${props.expense?.id ?? `neu.${props.prefill?.linkedInboxId ?? 'manuell'}`}`,
+    fields: EXPENSE_FORM_FIELDS,
+    saved,
+    current: draft,
+    workspaceType: 'other',
+  });
+  return <ExpenseFormFelder {...props} gesteuert={{ saved, draft, setDraft, offer }} />;
+}
+
+interface GesteuerterEntwurf {
+  saved: ExpenseFormDraft;
+  draft: ExpenseFormDraft;
+  setDraft: Dispatch<SetStateAction<ExpenseFormDraft>>;
+  offer: ResumeOffer<ExpenseFormDraft>;
+}
+
+function ExpenseFormFelder({ mode, expense, prefill, onSaved, onCancel, gesteuert }: ExpenseFormProps & { gesteuert?: GesteuerterEntwurf }) {
   const { translate, showToast } = useApp();
   const [linkedInboxId] = useState(prefill?.linkedInboxId);
-  const [draft, setDraft] = useState<ExpenseFormDraft>(() => {
-    if (expense) return draftFromExpense(expense);
-    if (prefill) return draftFromInput(prefill);
-    return emptyDraft();
-  });
+  const [eigenerAusgang] = useState(() => initialDraft(expense, prefill));
+  const [eigenerEntwurf, setEigenerEntwurf] = useState<ExpenseFormDraft>(eigenerAusgang);
+  const ausgang = gesteuert?.saved ?? eigenerAusgang;
+  const draft = gesteuert?.draft ?? eigenerEntwurf;
+  const setDraft = gesteuert?.setDraft ?? setEigenerEntwurf;
+  const offer = gesteuert?.offer;
+  // 1.27 — Rückfrage beim Verlassen, solange etwas geändert ist; mit Entwurfsaufnahme bleibt der Entwurf erhalten.
+  const dirty = EXPENSE_FORM_FIELDS.some((field) => draft[field] !== ausgang[field]);
+  const leaveGuard = useLeaveGuard(dirty, Boolean(offer));
 
   /*
    * OFFICEPILOT-V1-A — nach einer gebuchten Zahlung bleiben die Beträge fest
@@ -160,11 +208,27 @@ export function ExpenseForm({ mode, expense, prefill, onSaved, onCancel }: Expen
       return;
     }
 
+    // Nach erfolgreichem Speichern: kein Entwurf, keine Rückfrage.
+    offer?.clear();
+    leaveGuard.release();
     onSaved(result.expense);
   };
 
   return (
     <form className="form-stack expense-form" onSubmit={handleSubmit}>
+      {offer ? (
+        <FormResumeOffer
+          pending={offer.pending}
+          stale={offer.stale}
+          onContinue={() => {
+            const werte = offer.continueDraft();
+            setDraft((prev) => ({ ...prev, ...werte }));
+          }}
+          onDiscard={offer.discardDraft}
+          onDismissStale={offer.dismissStale}
+          testIdPrefix="expense-form"
+        />
+      ) : null}
       <label className="form-group">
         <span>{translate('expense.fieldTitle')}</span>
         <input
@@ -327,7 +391,16 @@ export function ExpenseForm({ mode, expense, prefill, onSaved, onCancel }: Expen
       </label>
 
       <div className="form-actions">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            // „Abbrechen“ verwirft ausdrücklich: kein Entwurf, keine Rückfrage.
+            offer?.clear();
+            leaveGuard.release();
+            onCancel();
+          }}
+        >
           {translate('common.cancel')}
         </Button>
         <Button type="submit">

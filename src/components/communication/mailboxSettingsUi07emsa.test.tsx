@@ -22,6 +22,7 @@ import { hydrateCompanyProfileStore } from '../../services/companyProfileService
 import { hydrateWorkspaceStore } from '../../services/workspace/workspaceStore';
 import { setActiveStorageScope } from '../../services/storage/storageScopeService';
 import { CommunicationSettingsPage } from '../../pages/settings/CommunicationSettingsPage';
+import { MailboxSettingsPage } from '../../pages/settings/MailboxSettingsPage';
 import { CONNECTABLE_PROVIDERS, MailboxSettingsSection, mailboxDisplayState } from './MailboxSettingsSection';
 import type { CompanySetup } from '../../types/models';
 import type { MailboxConnection } from '../../types/emailMessage';
@@ -187,7 +188,10 @@ describe('E-MAIL-07E-MSA — Postfach in den Einstellungen', () => {
     expect(q('settings-mailbox-notice')?.textContent).toBe('Die Zustimmung bei Microsoft wurde abgelehnt. Es wurde nichts verbunden.');
     await act(async () => root.unmount());
     await mount(<MailboxSettingsSection loadConnections={async () => ({ ok: true, connections: [] })} />, '/einstellungen/kommunikation?postfach=fehler&grund=%3Cscript%3E');
-    expect(q('settings-mailbox-notice')?.textContent).toBe('Die Verbindung mit Microsoft ist nicht zustande gekommen. Bitte erneut versuchen.');
+    // EINRICHTUNG-01 (AP9; 1.30, Q-01.2) — ein unbekannter Grund zeigt den allgemeinen Text mit Kurzreferenz, nie den Wert.
+    expect(q('settings-mailbox-notice')?.textContent).toMatch(/^Das hat nicht geklappt\. Bitte versuchen Sie es erneut\. Bleibt der Fehler, nennen Sie bitte diese Referenz: [0-9A-Z]{4}$/);
+    expect(q('settings-mailbox-notice')?.textContent).not.toContain('script');
+    expect(q('settings-mailbox-notice')?.getAttribute('role')).toBe('alert');
   });
 
   it('anderes Konto: erkannte Adresse wird gezeigt; nichts verbunden, bis bestätigt — Bestätigen oder Verwerfen', async () => {
@@ -224,13 +228,23 @@ describe('E-MAIL-07E-MSA — Postfach in den Einstellungen', () => {
     expect(q('settings-mailbox-notice')?.textContent).toContain('abgelaufen');
   });
 
-  it('Einstellungsseite enthält den Postfach-Bereich; ohne Cloud nur Hinweis; kein Passwortfeld auf der Seite', async () => {
+  it('Postfach-Seite enthält den Postfach-Bereich; ohne Cloud nur Hinweis; kein Passwortfeld auf der Seite', async () => {
+    /*
+     * EINRICHTUNG-01 (AP5; Vertrag 1.15, Z-F11) — das Postfach hat die eigene Adresse `/einstellungen/postfach`; die Seite
+     * „E-Mail-Absender und Vorlagen“ enthält den Abschnitt nicht mehr. Der B3-Inhalt ist unverändert.
+     */
     vi.mocked(supabaseLib.isSupabaseConfigured).mockReturnValue(false);
-    await mount(<CommunicationSettingsPage />);
+    await mount(<MailboxSettingsPage />, '/einstellungen/postfach');
+    expect(q('settings-mailbox-page')).not.toBeNull();
     expect(q('settings-mailbox-section')).not.toBeNull();
     expect(q('settings-mailbox-unavailable')?.textContent).toBe('Die Postfach-Anbindung ist mit Cloud-Anbindung verfügbar.');
     expect(host.querySelectorAll('input[type="password"]').length).toBe(0);
+    await act(async () => root.unmount());
+    host.remove();
+
+    await mount(<CommunicationSettingsPage />);
     expect(q('settings-communication-page')).not.toBeNull();
+    expect(q('settings-mailbox-section')).toBeNull();
   });
 
   it('07E-PF: providerneutrale Anzeige — Gmail (vorbereitet) mit Label-Wortlaut; Kontowechsel wird als solcher erklärt; nur Microsoft wählbar', async () => {

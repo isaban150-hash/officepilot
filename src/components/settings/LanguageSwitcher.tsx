@@ -1,7 +1,7 @@
 import { useApp } from '../../context/AppContext';
 import type { ProductLanguage } from '../../i18n/types';
 import type { AppLanguage } from '../../types/models';
-import type { TranslationKey } from '../../i18n';
+import { t, type TranslationKey } from '../../i18n';
 import { Card, CardTitle } from '../ui/Card';
 
 const PRODUCT_LANGUAGE_OPTIONS: { value: ProductLanguage; labelKey: TranslationKey }[] = [
@@ -20,12 +20,14 @@ interface LanguageSwitcherProps {
 }
 
 export function LanguageSwitcher({ testId = 'language-switcher' }: LanguageSwitcherProps) {
-  const { translate, language, updateSetup, showToast } = useApp();
+  const { translate, language, updateLanguage, showToast } = useApp();
 
   const handleChange = (next: AppLanguage) => {
     if (next === language) return;
-    updateSetup({ language: next });
-    showToast(translate('language.saved'));
+    // EINRICHTUNG-01 (E6, S-15.3) — im Cloud-Betrieb je Person, ohne Firmen-Schreibauftrag.
+    updateLanguage(next);
+    // App-Eigenprüfung (N-09) — die Bestätigung in der gewählten Sprache; `translate` gehört noch zur bisherigen.
+    showToast(t('language.saved', next));
   };
 
   return (
@@ -44,6 +46,7 @@ export function LanguageSwitcher({ testId = 'language-switcher' }: LanguageSwitc
             key={value}
             type="button"
             className={`chip ${language === value ? 'chip--active' : ''}`}
+            aria-pressed={language === value}
             onClick={() => handleChange(value)}
             data-testid={`language-option-${value}`}
           >
@@ -53,12 +56,13 @@ export function LanguageSwitcher({ testId = 'language-switcher' }: LanguageSwitc
       </div>
       <details className="language-switcher__preview">
         <summary>{translate('language.previewNotice')}</summary>
-        <div className="chip-group language-switcher__chips">
+        <div className="chip-group language-switcher__chips" role="group" aria-label={translate('language.previewNotice')}>
           {PREVIEW_LANGUAGE_OPTIONS.map(({ value, labelKey }) => (
             <button
               key={value}
               type="button"
               className={`chip ${language === value ? 'chip--active' : ''}`}
+              aria-pressed={language === value}
               onClick={() => handleChange(value)}
               data-testid={`language-option-${value}`}
             >

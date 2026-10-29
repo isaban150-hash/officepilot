@@ -194,5 +194,11 @@ export interface EnsurePersonalWorkspaceResult {
   /** True only when the server created the workspace in this call. */
   created?: boolean;
   error?: string;
-  errorCode?: 'auth' | 'rls' | 'network' | 'unknown';
+  /**
+   * EINRICHTUNG-01 (Z-03.1) — `no_license`: freigegeben, aber weder eine Mitgliedschaft zum Binden noch eine
+   * wirksame eigene Lizenz für einen neuen Betrieb. Der Server hat nichts angelegt.
+   * EINRICHTUNG-01 (AP4; Vertrag 1.5, M-07.4) — `invitation_pending`: ohne Mitgliedschaft, aber mit offener Einladung an
+   * die bestätigte E-Mail; der Server legt keinen eigenen Betrieb an, die Oberfläche zeigt die Einladung.
+   */
+  errorCode?: 'auth' | 'rls' | 'network' | 'unknown' | 'no_license' | 'invitation_pending';
 }

@@ -54,6 +54,11 @@ function isValidatedBundle(value: BackupRestoreInput['validated']): value is Val
   );
 }
 
+/** EINRICHTUNG-01 (S-10.3) — aktiver Bereich gehört zu einem Cloud-Betrieb. */
+export function isCloudWorkspaceScopeActive(): boolean {
+  return getActiveStorageScope().type === 'workspace';
+}
+
 function stagingIdFor(fileRefId: string): string {
   return `${BACKUP_RESTORE_STAGING_PREFIX}${fileRefId}`;
 }
@@ -203,7 +208,12 @@ async function commitRestoredState(
 }
 
 async function createAndValidateSafetyBackup(): Promise<SafetyBackupArtifacts> {
-  const built = await buildLocalBackupBundle();
+  /*
+   * EINRICHTUNG-01 (S-10.2) — das Sicherheitsbackup hält den heutigen Stand fest,
+   * auch wenn ihm schon Dateien fehlen: Die Lücke wird vermerkt, statt jede
+   * Wiederherstellung zu verhindern. Die strukturelle Zugangsdatenprüfung gilt.
+   */
+  const built = await buildLocalBackupBundle(new Date(), { allowMissingFiles: true });
   if (!built.ok) {
     throw new Error('safety_build_failed');
   }
@@ -315,6 +325,14 @@ export async function restoreLocalBackupBundle(
   input: BackupRestoreInput,
   deps: BackupRestoreDeps = {},
 ): Promise<BackupRestoreResult> {
+  /*
+   * EINRICHTUNG-01 (S-10.3, E9) — im Cloud-Betrieb ist die Cloud führend. Eine
+   * lokale Sicherung ersetzt dort nichts; sie bleibt für den lokalen Betrieb und
+   * als Notfallweg. Geprüft vor allem anderen, damit nichts angefasst wird.
+   */
+  if (isCloudWorkspaceScopeActive()) {
+    return fail('cloud_workspace', 'backup.restore.error.cloudWorkspace');
+  }
   if (!input.confirmed) {
     return fail('not_confirmed', 'backup.restore.error.notConfirmed');
   }

@@ -10,16 +10,56 @@ function requireClient() {
   return client;
 }
 
+/** EINRICHTUNG-01 (AP2, A-01.1) — ein hängender Abruf zählt nach dieser Zeit als vorübergehender Fehler. */
+export const PROFILE_FETCH_TIMEOUT_MS = 15_000;
+
+/**
+ * EINRICHTUNG-01 (AP2) — die Einordnung folgt Code und Status, nicht dem Wortlaut der Meldung: abgewiesene Sitzung
+ * (401, PGRST301, `session_not_active`), sonst vorübergehend. Ein unbekannter Fehler meldet nie ab.
+ */
+export function classifyProfileFetchError(error: { message?: string; code?: string; status?: number } | null | undefined): 'session_invalid' | 'temporary' {
+  if (!error) return 'temporary';
+  if (error.status === 401 || error.code === 'PGRST301' || error.code === 'PGRST303') return 'session_invalid';
+  if (typeof error.message === 'string' && error.message.startsWith('session_not_active')) return 'session_invalid';
+  return 'temporary';
+}
+
+function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T | 'timeout'> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve('timeout'), ms);
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export async function fetchProfileById(userId: string): Promise<ProfileLoadResult> {
   const client = requireClient();
-  const { data, error } = await client
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .maybeSingle();
+  let response: { data: unknown; error: { message?: string; code?: string; status?: number } | null } | 'timeout';
+  try {
+    response = await withTimeout(
+      client.from('profiles').select('*').eq('id', userId).maybeSingle() as PromiseLike<{
+        data: unknown;
+        error: { message?: string; code?: string; status?: number } | null;
+      }>,
+      PROFILE_FETCH_TIMEOUT_MS,
+    );
+  } catch {
+    // Netzfehler (fetch wirft) oder ein unerwarteter Fehler: keine Aussage über das Profil.
+    return { success: false, error: 'temporary' };
+  }
+  if (response === 'timeout') return { success: false, error: 'temporary' };
 
+  const { data, error } = response;
   if (error) {
-    return { success: false, error: 'query_failed' };
+    return { success: false, error: classifyProfileFetchError(error) };
   }
 
   if (!data) {

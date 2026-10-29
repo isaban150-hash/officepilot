@@ -360,14 +360,18 @@ describe('Angrenzende Oberflächen', () => {
   });
 
   it('Benutzer & Zugänge statt „Mitarbeiter" für die Benutzerverwaltung — DE, TR, BG', () => {
-    expect(t('settings.team.users.title')).toBe('Benutzer & Zugänge');
-    expect(t('settings.operating.section.admin')).toBe('Benutzer & Zugänge');
-    expect(t('settings.operating.admin.users')).toBe('Benutzer & Zugänge verwalten');
-    expect(t('settings.operating.role.member')).not.toContain('Mitarbeiter');
-    expect(t('settings.team.users.title', 'tr')).toBe('Kullanıcılar ve erişimler');
-    expect(t('settings.operating.role.member', 'tr')).not.toMatch(/Çalışan/i);
-    expect(t('settings.team.users.title', 'bg')).toBe('Потребители и достъп');
-    expect(t('settings.operating.role.member', 'bg')).not.toMatch(/служител/i);
+    /*
+     * EINRICHTUNG-01 (AP5; Vertrag 1.15) — die Seite „Betrieb“ samt ihren Texten ist aufgelöst; die Benutzerverwaltung
+     * heißt im Einstellungs-Hub „Team und Rollen“, das Konto einer Person „Mitglied“. Die Erwartung bleibt: Benutzer und
+     * Zugänge heißen nie „Mitarbeiter“ (das sind die Stammsätze der Mitarbeiterzahlungen).
+     */
+    expect(t('settings.target.team-members.title')).toBe('Team und Rollen');
+    expect(t('settings.target.team-members.title')).not.toContain('Mitarbeiter');
+    expect(t('team.role.member')).not.toContain('Mitarbeiter');
+    expect(t('settings.target.team-members.title', 'tr')).not.toMatch(/Çalışan/i);
+    expect(t('team.role.member', 'tr')).not.toMatch(/Çalışan/i);
+    expect(t('settings.target.team-members.title', 'bg')).not.toMatch(/служител/i);
+    expect(t('team.role.member', 'bg')).not.toMatch(/служител/i);
     expect(t('home.tile.assistant.desc')).toBe('Ihr digitaler Assistent');
     /* Die neue Entität heisst sichtbar „Mitarbeiter". */
     expect(t('finanzen.employeePayments')).toBe('Mitarbeiterzahlungen');

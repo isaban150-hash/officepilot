@@ -24,7 +24,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { useOptionalAuth } from '../../context/AuthContext';
-import type { TranslationKey } from '../../i18n';
+import { errorReference, t as translateIn, type TranslationKey } from '../../i18n';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import {
   rpcDisconnectMailbox,
@@ -86,6 +86,15 @@ export function mailboxDisplayState(connection: MailboxConnection): MailboxDispl
 
 export function mailboxOAuthErrorKey(code: string | null | undefined): string {
   return code && KNOWN_ERRORS.has(code) ? `mailboxOAuth.error.${code}` : 'mailboxOAuth.error.generic';
+}
+
+/**
+ * EINRICHTUNG-01 (AP9; 1.30, Q-01.2) — Hinweis zum Rückkehrgrund: bekannter Code → eigener Text; unbekannter (auch ein
+ * veränderter Adressparameter) → allgemeiner Text mit Kurzreferenz, nie der Wert selbst.
+ */
+export function mailboxOAuthErrorNotice(code: string | null | undefined): { key: string; params?: Record<string, string> } {
+  if (code && KNOWN_ERRORS.has(code)) return { key: `mailboxOAuth.error.${code}` };
+  return { key: 'errors.genericWithReference', params: { ref: errorReference(code ?? 'ohne_grund') } };
 }
 
 type ConnectionsResult = { ok: true; connections: MailboxConnection[] } | { ok: false; error: string };
@@ -151,7 +160,7 @@ export function MailboxSettingsSection({
   disconnect = defaults.disconnect,
   navigate = defaults.navigate,
 }: Props) {
-  const { translate } = useApp();
+  const { translate, language } = useApp();
   const t = (key: string) => translate(key as TranslationKey);
   const user = useOptionalAuth()?.user ?? null;
   const canWrite = resolveWorkspaceWriteAccess({ userId: user?.id, cloudConfigured: isSupabaseConfigured() }).canWrite;
@@ -163,7 +172,7 @@ export function MailboxSettingsSection({
   const [importDays, setImportDays] = useState<number>(0);
   const [starting, setStarting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ tone: 'info' | 'error'; key: string } | null>(null);
+  const [notice, setNotice] = useState<{ tone: 'info' | 'error'; key: string; params?: Record<string, string> } | null>(null);
   const [pending, setPending] = useState<MailboxOAuthPending | null>(null);
   const [pendingBusy, setPendingBusy] = useState(false);
   const [disconnectTarget, setDisconnectTarget] = useState<MailboxConnection | null>(null);
@@ -198,7 +207,7 @@ export function MailboxSettingsSection({
       return;
     }
     if (outcome === 'fehler') {
-      setNotice({ tone: 'error', key: mailboxOAuthErrorKey(reason) });
+      setNotice({ tone: 'error', ...mailboxOAuthErrorNotice(reason) });
       clear();
       return;
     }
@@ -295,8 +304,12 @@ export function MailboxSettingsSection({
       <p className="form-hint">{t('mailboxOAuth.section.hint')}</p>
 
       {notice ? (
-        <p className={notice.tone === 'error' ? 'form-error' : 'form-hint mailbox-settings__success'} role="status" data-testid="settings-mailbox-notice">
-          {t(notice.key)}
+        <p
+          className={notice.tone === 'error' ? 'form-error' : 'form-hint mailbox-settings__success'}
+          role={notice.tone === 'error' ? 'alert' : 'status'}
+          data-testid="settings-mailbox-notice"
+        >
+          {notice.params ? translateIn(notice.key as TranslationKey, language, notice.params) : t(notice.key)}
         </p>
       ) : null}
 
@@ -520,6 +533,19 @@ export function MailboxSettingsSection({
         cancelTestId="settings-mailbox-disconnect-cancel"
         dialogTestId="settings-mailbox-disconnect-dialog"
         returnFocusRef={disconnectButtonRef}
+        details={
+          /* EINRICHTUNG-01 (AP6; E-07) — die Berechtigung bei Microsoft entfernt OfficeTakt nicht; dort widerrufen. */
+          <p className="form-hint" data-testid="settings-mailbox-disconnect-microsoft">
+            {t('mailboxOAuth.disconnect.microsoft')}{' '}
+            <a href="https://account.live.com/consent/Manage" target="_blank" rel="noopener noreferrer" data-testid="settings-mailbox-disconnect-link-personal">
+              {t('mailboxOAuth.disconnect.linkPersonal')}
+            </a>
+            {' · '}
+            <a href="https://myapps.microsoft.com" target="_blank" rel="noopener noreferrer" data-testid="settings-mailbox-disconnect-link-work">
+              {t('mailboxOAuth.disconnect.linkWork')}
+            </a>
+          </p>
+        }
         onConfirm={handleDisconnect}
         onCancel={() => setDisconnectTarget(null)}
       />

@@ -21,19 +21,28 @@ import {
   getCurrentInvoiceYear,
   validateInvoiceNumberFormat,
 } from '../../services/invoiceNumberService';
+import { invoiceNumberRangeErrorKey } from '../../services/invoice/invoiceNumberRangeErrors';
 import type { TranslationKey } from '../../i18n';
 import type { InvoiceNumberFormat } from '../../types/models';
 
 interface Props {
   editable: boolean;
+  /**
+   * EINRICHTUNG-01 (AP8; 1.27) — ein von der Seite übernommener Entwurf („Fortsetzen“); er gilt, sobald der Stand
+   * geladen ist. Die Versionsprüfung beim Speichern schützt weiter vor dem Überschreiben eines neueren Stands.
+   */
+  resumeDraft?: Partial<InvoiceNumberFormat> | null;
+  /** Meldet der Seite den aktuellen Entwurf und ob er vom geladenen Stand abweicht. */
+  onDraftChange?: (draft: InvoiceNumberFormat, dirty: boolean) => void;
 }
 
 const PADDING_OPTIONS = Array.from({ length: INVOICE_NUMBER_PADDING_MAX - INVOICE_NUMBER_PADDING_MIN + 1 }, (_, i) => INVOICE_NUMBER_PADDING_MIN + i);
 
-export function InvoiceNumberFormatSection({ editable }: Props) {
+export function InvoiceNumberFormatSection({ editable, resumeDraft = null, onDraftChange }: Props) {
   const { translate, showToast } = useApp();
   const [state, setState] = useState<InvoiceNumberFormatState | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // EINRICHTUNG-01 (AP6; V-06.2) — Ladefehler als übersetzter Text, nie der Rohcode.
+  const [loadError, setLoadError] = useState<TranslationKey | null>(null);
   const [draft, setDraft] = useState<InvoiceNumberFormat>({ prefix: '', yearInNumber: true, padding: 4 });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<TranslationKey | null>(null);
@@ -46,7 +55,7 @@ export function InvoiceNumberFormatSection({ editable }: Props) {
         setState(result.state);
         setDraft(result.state.format);
       } else {
-        setLoadError('detail' in result && result.detail ? result.detail : result.outcome);
+        setLoadError(invoiceNumberRangeErrorKey(`${result.outcome} ${'detail' in result && result.detail ? result.detail : ''}`));
       }
     });
     return () => { cancelled = true; };
@@ -55,6 +64,15 @@ export function InvoiceNumberFormatSection({ editable }: Props) {
   const year = state?.currentYear ?? getCurrentInvoiceYear();
   const locked = state?.currentYearLocked ?? false;
   const dirty = state ? draft.prefix !== state.format.prefix || draft.yearInNumber !== state.format.yearInNumber || draft.padding !== state.format.padding : false;
+
+  // EINRICHTUNG-01 (AP8; 1.27) — ein übernommener Entwurf gilt, sobald der Stand geladen ist.
+  const geladen = state !== null;
+  useEffect(() => {
+    if (geladen && resumeDraft) setDraft((prev) => ({ ...prev, ...resumeDraft }));
+  }, [geladen, resumeDraft]);
+  useEffect(() => {
+    if (geladen) onDraftChange?.(draft, dirty);
+  }, [geladen, draft, dirty, onDraftChange]);
   /*
    * 01C2 — das Standardformat bleibt aenderbar; ein Jahr mit Nummern traegt
    * seine eingefrorene Kopie. Die Vorschau zeigt das erste Jahr, fuer das die
@@ -81,13 +99,14 @@ export function InvoiceNumberFormatSection({ editable }: Props) {
       } else if (result.outcome === 'locked') {
         setError('settings.invoices.number.locked');
       } else if (result.outcome === 'forbidden') {
-        setError('settings.invoices.readOnly');
+        // EINRICHTUNG-01 (AP6; V-06.2) — Rolle, Lizenz oder Konto unterscheiden.
+        setError(invoiceNumberRangeErrorKey(`forbidden ${result.detail ?? ''}`));
       } else if (result.outcome === 'version_conflict') {
         setError('settings.invoices.number.conflict');
         const reloaded = await loadInvoiceNumberFormat();
         if (reloaded.outcome === 'ok') { setState(reloaded.state); setDraft(reloaded.state.format); }
       } else {
-        setError('settings.invoices.number.failed');
+        setError(invoiceNumberRangeErrorKey(result.detail));
       }
     } finally {
       setSaving(false);
@@ -99,7 +118,7 @@ export function InvoiceNumberFormatSection({ editable }: Props) {
       <legend className="settings-form__legend">{translate('settings.invoices.number.title')}</legend>
       <p className="hint-text">{translate('settings.invoices.number.hint')}</p>
       {loadError ? (
-        <p className="form-error" data-testid="settings-invoices-number-load-error">{translate('settings.invoices.number.failed')} ({loadError})</p>
+        <p className="form-error" role="alert" data-testid="settings-invoices-number-load-error">{translate(loadError)}</p>
       ) : null}
       {locked ? (
         <p className="invoice-hint invoice-hint--warning" data-testid="settings-invoices-number-locked">
@@ -114,7 +133,7 @@ export function InvoiceNumberFormatSection({ editable }: Props) {
           className="input"
           value={draft.prefix}
           maxLength={INVOICE_NUMBER_PREFIX_MAX_LENGTH}
-          placeholder="RE"
+          placeholder={translate('settings.invoices.number.prefixPlaceholder')}
           onChange={(event) => setDraft((prev) => ({ ...prev, prefix: event.target.value.toUpperCase() }))}
           data-testid="settings-invoices-number-prefix"
           readOnly={!canEdit}
@@ -149,6 +168,8 @@ export function InvoiceNumberFormatSection({ editable }: Props) {
           ))}
         </select>
       </div>
+      {/* EINRICHTUNG-01 (AP6; Z-F6) — der Trenner ist fest; der Format-RPC kennt keinen eigenen. */}
+      <p className="form-hint" data-testid="settings-invoices-number-separator">{translate('settings.numberRanges.separator')}</p>
       <p className="hint-text" data-testid="settings-invoices-number-preview">
         {translate('settings.invoices.number.preview')}: <strong>{preview}</strong>
         {locked ? ` (${translate('settings.invoices.number.previewNextYear').replace('{year}', String(effectiveYear))})` : ''}

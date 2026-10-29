@@ -1,0 +1,46 @@
+/** EINRICHTUNG-01 (AP7; Vertrag 1.24) — „Veriler › Dışa aktarma“. */
+export const trDataExport = {
+  'dataExport.subtitle': 'Bu işletmenin tüm verileri okunabilir ZIP dosyası olarak: tablolar (CSV), orijinal dosyalar ve kayıtlı PDF’ler.',
+  'dataExport.intro':
+    'Dışa aktarma, insanlar ve başka programlar içindir. Geri yükleme için bir yedek ve mali müşavir paketi değildir; kapanış veya devir durumu belirlemez.',
+  'dataExport.local': 'Bulutsuz yerel işletme: Dışa aktarma bu cihazdaki verileri içerir.',
+  'dataExport.notAllowed': 'Dışa aktarmayı yalnızca bu işletmenin sahibi ve yöneticileri oluşturabilir.',
+  'dataExport.prepare': 'Eksiksizliği kontrol et',
+  'dataExport.prepare.hint':
+    'Kontrol, güncel durumu sunucudan ve tüm dosyaları yükler. Açık değişiklikleri göndermez; yalnızca listeler.',
+  'dataExport.cancel': 'İptal',
+  'dataExport.progress.binding': 'Hesap, işletme ve rol kontrol ediliyor …',
+  'dataExport.progress.pull': 'Güncel durum sunucudan yükleniyor …',
+  'dataExport.progress.check': 'Eksiksizlik kontrol ediliyor …',
+  'dataExport.progress.files': 'Dosyalar: {done} / {total}',
+  'dataExport.progress.emails': 'Gönderilen e-postalar ve ekler: {done} / {total}',
+  'dataExport.progress.csv': 'Tablolar oluşturuluyor …',
+  'dataExport.progress.zip': 'ZIP dosyası oluşturuluyor: %{done}',
+  'dataExport.progress.download': 'İndirme başlatılıyor …',
+  'dataExport.result.complete': 'Kontrolde eksik bulunmadı: Dışa aktarma eksiksiz.',
+  'dataExport.result.gaps': 'Dışa aktarma eksik olurdu. Kontrol şu eksikleri buldu:',
+  'dataExport.result.gapsHint':
+    'Önce eksikleri giderebilir (örneğin Senkronizasyon sayfasında) veya eksik listesi olan, açıkça eksik bir dışa aktarma oluşturabilirsiniz.',
+  'dataExport.result.syncLink': 'Senkronizasyona git',
+  'dataExport.result.size': 'Tahmini boyut: {size}',
+  'dataExport.sizeWarning':
+    'Dışa aktarma yaklaşık 1 GB’tan büyük. Tarayıcıda oluşturulur; uzun sürebilir veya bu cihazda başarısız olabilir.',
+  'dataExport.create': 'Dışa aktarmayı oluştur',
+  'dataExport.createWithGaps': 'Eksik listesiyle dışa aktarmayı oluştur',
+  'dataExport.success': 'İndirme başlatıldı: {name}. Lütfen dosyanın indirme klasörünüze ulaşıp ulaşmadığını kontrol edin.',
+  'dataExport.successIncomplete':
+    'Eksik dışa aktarmanın indirmesi başlatıldı: {name}. Eksikler luecken.csv dosyasında ve genel bakışta yer alır.',
+  'dataExport.cancelled': 'Dışa aktarma iptal edildi. Dosya oluşturulmadı.',
+  'dataExport.bindingChanged': 'Hesap, işletme veya rol değiştiği için dışa aktarma iptal edildi. Dosya oluşturulmadı.',
+  'dataExport.failed': 'Dışa aktarma oluşturulamadı. Dosya oluşturulmadı. Lütfen tekrar deneyin.',
+  'dataExport.gap.sync_open': 'Açık değişiklikler: {count}',
+  'dataExport.gap.sync_rejected': 'Reddedilen değişiklikler: {count}',
+  'dataExport.gap.sync_held': 'Bekletilen değişiklikler: {count}',
+  'dataExport.gap.pull_skipped': 'Önce açık değişikliklerin eşitlenmesi gerektiği için sunucudan güncel durum alınmadı.',
+  'dataExport.gap.pull_failed': 'Güncel durum sunucudan tamamen yüklenemedi.',
+  'dataExport.gap.persist_failed': 'Bu cihazdaki son kaydetme başarısız oldu.',
+  'dataExport.gap.file_unavailable': 'Dosya kullanılamıyor: {detail}',
+  'dataExport.gap.finance_unconfirmed': 'Mali durum onaylanmadı: {detail}',
+  'dataExport.gap.emails_unavailable': 'Gönderilen e-postalar yüklenemedi.',
+  'dataExport.gap.emails_truncated': 'Yalnızca en yeni 500 gönderilen e-posta dahildir; daha eskiler eksik.',
+} as const;

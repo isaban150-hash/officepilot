@@ -144,45 +144,26 @@ export function validateAiRequest(body: unknown): AiRequestValidation {
   };
 }
 
-/**
- * Profilzustände, die KI nutzen dürfen — abgeleitet aus den tatsächlichen
- * Constraints der `profiles`-Tabelle:
- *   status         in ('pending', 'approved', 'blocked')
- *   license_status in ('inactive', 'active', 'expired')
- *
- * Fail closed: Jeder unbekannte Wert führt zur Ablehnung.
- */
-export interface AiProfileState {
-  status?: string | null;
-  license_status?: string | null;
-  license_expires_at?: string | null;
-}
-
 export type AiAccessDecision = { allowed: true } | { allowed: false; error: AiErrorCode };
 
-export function evaluateProfileAccess(
-  profile: AiProfileState | null | undefined,
-  now: Date,
-): AiAccessDecision {
-  if (!profile) {
-    return { allowed: false, error: 'forbidden' };
-  }
-  if (profile.status !== 'approved') {
-    // deckt 'pending', 'blocked' und jeden unbekannten Wert ab
-    return { allowed: false, error: 'forbidden' };
-  }
-  if (profile.license_status !== 'active') {
-    // deckt 'inactive', 'expired' und jeden unbekannten Wert ab
-    return { allowed: false, error: 'license_inactive' };
-  }
-  if (profile.license_expires_at) {
-    const expires = Date.parse(profile.license_expires_at);
-    // Ein unlesbares Datum gilt als abgelaufen, nicht als unbegrenzt.
-    if (!Number.isFinite(expires) || expires <= now.getTime()) {
-      return { allowed: false, error: 'license_inactive' };
-    }
-  }
-  return { allowed: true };
+/**
+ * EINRICHTUNG-01 (AP1, E3) — die Antwort der zentralen Zugriffsregel (`workspace_user_access_denial`, Aktion
+ * `member`) als KI-Entscheidung. Bisher prüfte der Endpunkt die **eigene** Lizenz der Person; massgeblich ist die
+ * Lizenz des Betriebs (Inhaber). Ein Mitglied ohne eigene Lizenz darf in einem lizenzierten Betrieb Dokumente
+ * verstehen lassen; in einem Betrieb ohne wirksame Lizenz darf es niemand.
+ *
+ *   null                    -> erlaubt
+ *   not_member              -> workspace_forbidden (fremde oder entzogene Mitgliedschaft)
+ *   license_not_effective   -> license_inactive (Betriebslizenz nicht wirksam; Code wie bisher)
+ *   invalid_request         -> invalid_request
+ *   alles andere            -> forbidden (gesperrt, nicht freigegeben, unbekannt: fail-closed)
+ */
+export function evaluateWorkspaceAccessDenial(reason: unknown): AiAccessDecision {
+  if (reason === null) return { allowed: true };
+  if (reason === 'not_member') return { allowed: false, error: 'workspace_forbidden' };
+  if (reason === 'license_not_effective') return { allowed: false, error: 'license_inactive' };
+  if (reason === 'invalid_request') return { allowed: false, error: 'invalid_request' };
+  return { allowed: false, error: 'forbidden' };
 }
 
 export interface AiRateLimitConfig {

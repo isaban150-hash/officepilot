@@ -15,6 +15,14 @@ import { bgDocumentOriginal } from './documentOriginal';
 import { bgBackup } from './backup';
 import { bgPilot } from './pilot';
 import { bgSettings } from './settings';
+import { bgSettingsHub } from './settingsHub';
+import { bgSettingsProfile } from './settingsProfile';
+import { bgDataDeletion } from './dataDeletion';
+import { bgDataExport } from './dataExport';
+import { bgLeaveGuard } from './leaveGuard';
+import { bgDeviceData } from './deviceData';
+import { bgErrors } from './errors';
+import { bgEinrichtungNachtrag } from './einrichtungNachtrag';
 import { bgDelivery } from './delivery';
 import { bgFreeEmail } from './freeEmail';
 import { bgInboundEmail } from './inboundEmail';
@@ -23,6 +31,14 @@ import { bgBusinessLetter } from './businessLetter';
 import { bgOffer } from './offer';
 import { bgOrder } from './order';
 import { bgDocumentMeaning } from './documentMeaning';
+import { bgWorkspaceAccess } from './workspaceAccess';
+import { bgLocalRecoveryAccess } from './localRecoveryAccess';
+import { bgLocalRecoveryImport } from './localRecoveryImport';
+import { bgAuthSession } from './authSession';
+import { bgAccount } from './account';
+import { bgSetupFlow } from './setupFlow';
+import { bgPlatform } from './platform';
+import { bgTeam } from './team';
 
 export const bgModules = {
   ...bgAuth,
@@ -47,6 +63,14 @@ export const bgModules = {
   ...bgBackup,
   ...bgPilot,
   ...bgSettings,
+  ...bgSettingsHub,
+  ...bgSettingsProfile,
+  ...bgDataDeletion,
+  ...bgDataExport,
+  ...bgLeaveGuard,
+  ...bgDeviceData,
+  ...bgErrors,
+  ...bgEinrichtungNachtrag,
   ...bgDelivery,
   ...bgFreeEmail,
   ...bgInboundEmail,
@@ -55,4 +79,12 @@ export const bgModules = {
   ...bgOffer,
   ...bgOrder,
   ...bgDocumentMeaning,
+  ...bgWorkspaceAccess,
+  ...bgLocalRecoveryAccess,
+  ...bgLocalRecoveryImport,
+  ...bgAuthSession,
+  ...bgAccount,
+  ...bgSetupFlow,
+  ...bgPlatform,
+  ...bgTeam,
 } as const;

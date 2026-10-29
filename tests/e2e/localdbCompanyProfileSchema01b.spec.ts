@@ -19,9 +19,12 @@ const SERVICE_ROLE_KEY = process.env.E2E_LOCALDB_SERVICE_ROLE_KEY ?? '';
 
 let owner: LocalDbUser;
 let member: LocalDbUser;
+/** EINRICHTUNG-01 (EIN-38) — ein Konto ohne Mitgliedschaft, das einen eigenen Betrieb anlegen darf. */
+let eigen: LocalDbUser;
 let admin: SupabaseClient;
 let clientOwner: SupabaseClient;
 let clientMember: SupabaseClient;
+let clientEigen: SupabaseClient;
 let ws = '';
 
 async function login(user: LocalDbUser): Promise<SupabaseClient> {
@@ -53,8 +56,10 @@ test.beforeAll(async () => {
   admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   owner = await provisionLocalDbUser({ supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE_KEY, label: 'cp-owner' });
   member = await provisionLocalDbUser({ supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE_KEY, label: 'cp-member' });
+  eigen = await provisionLocalDbUser({ supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE_KEY, label: 'cp-eigen' });
   clientOwner = await login(owner);
   clientMember = await login(member);
+  clientEigen = await login(eigen);
   const { data, error } = await clientOwner.rpc('ensure_personal_workspace', { p_name: 'Profil SQL Test' });
   if (error) throw new Error(error.message);
   ws = (data as { workspace: { id: string } }).workspace.id;
@@ -62,7 +67,7 @@ test.beforeAll(async () => {
   if (ins.error) throw new Error(ins.error.message);
 });
 test.afterAll(async () => {
-  for (const user of [owner, member]) if (user) await removeLocalDbUser({ supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE_KEY, userId: user.id });
+  for (const user of [owner, member, eigen]) if (user) await removeLocalDbUser({ supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE_KEY, userId: user.id });
 });
 
 test.describe('FIRMENPROFIL-01B — Schema-Preserve gegen die lokale Datenbank', () => {
@@ -163,12 +168,24 @@ test.describe('FIRMENPROFIL-01B3 — Servervalidierung', () => {
     const member = await upsert(clientMember, { ...BASE, currency: 'EUR' }, stableVersion, 2);
     expect(member.error?.message).toContain('Keine Schreibberechtigung');
 
-    // Anlegen (Insert-Pfad) wird ebenso validiert: neuer Workspace des Members mit ungueltiger Waehrung
-    const { data: ownWs } = await clientMember.rpc('ensure_personal_workspace', { p_name: 'Member eigener WS' });
+    /*
+     * EINRICHTUNG-01 (EIN-38) — seit 20261124 (Mitarbeiter-Erstzugang) liefert `ensure_personal_workspace` einem
+     * Konto mit aktiver Mitgliedschaft genau diesen Betrieb, statt einen eigenen anzulegen. Der Test erwartete hier
+     * noch einen eigenen Betrieb des Members und widersprach damit der Migration. Den Insert-Pfad prüft jetzt ein
+     * Konto ohne Mitgliedschaft mit eigener Lizenz; die Erwartung an die Validierung bleibt unverändert.
+     */
+    const { data: memberWs, error: memberEnsureError } = await clientMember.rpc('ensure_personal_workspace', { p_name: 'Member eigener WS' });
+    expect(memberEnsureError).toBeNull();
+    expect((memberWs as { workspace: { id: string }; created: boolean }).workspace.id).toBe(ws);
+    expect((memberWs as { created: boolean }).created).toBe(false);
+
+    // Anlegen (Insert-Pfad) wird ebenso validiert: neuer eigener Workspace mit ungueltiger Waehrung
+    const { data: ownWs } = await clientEigen.rpc('ensure_personal_workspace', { p_name: 'Eigener WS' });
     const ownWsId = (ownWs as { workspace: { id: string } }).workspace.id;
-    const insertInvalid = await clientMember.rpc('upsert_workspace_sync_entity', { p_workspace_id: ownWsId, p_entity_type: 'company_profile', p_payload: { payload: { ...BASE, currency: 'USD' }, profile_schema_version: 2 }, p_row_version: 0 });
+    expect(ownWsId).not.toBe(ws);
+    const insertInvalid = await clientEigen.rpc('upsert_workspace_sync_entity', { p_workspace_id: ownWsId, p_entity_type: 'company_profile', p_payload: { payload: { ...BASE, currency: 'USD' }, profile_schema_version: 2 }, p_row_version: 0 });
     expect(insertInvalid.error?.message).toContain('Firmenprofil ungueltig: currency');
-    const insertNull = await clientMember.rpc('upsert_workspace_sync_entity', { p_workspace_id: ownWsId, p_entity_type: 'company_profile', p_payload: { payload: { ...BASE, currency: 'EUR', replyToEmail: null }, profile_schema_version: 2 }, p_row_version: 0 });
+    const insertNull = await clientEigen.rpc('upsert_workspace_sync_entity', { p_workspace_id: ownWsId, p_entity_type: 'company_profile', p_payload: { payload: { ...BASE, currency: 'EUR', replyToEmail: null }, profile_schema_version: 2 }, p_row_version: 0 });
     expect(insertNull.error).toBeNull();
     const created = await admin.from('workspace_company_profiles').select('payload').eq('workspace_id', ownWsId).single();
     expect('replyToEmail' in (created.data!.payload as object)).toBe(false);

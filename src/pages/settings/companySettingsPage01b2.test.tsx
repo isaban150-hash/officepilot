@@ -168,7 +168,12 @@ function pathNow(): string {
   return q('location')?.getAttribute('data-path') ?? '';
 }
 
-describe('SETTINGS-01B2 — Hub, Routing, Firmenprofil', () => {
+/*
+ * EINRICHTUNG-01 (AP6) — Zeitbudget wie in anderen Shell-Tests (30 s): Vollständige Renders mit Hub und Shell brauchen
+ * unter Last mehr als die 5 s der Grundeinstellung; ein überschrittener Fall lief sonst neben dem nächsten weiter und
+ * riss die übrigen Fälle über die gemeinsame Wurzel mit.
+ */
+describe('SETTINGS-01B2 — Hub, Routing, Firmenprofil', { timeout: 30_000 }, () => {
   beforeEach(async () => {
     resetTestStores();
     resetAuthForTests();
@@ -192,10 +197,11 @@ describe('SETTINGS-01B2 — Hub, Routing, Firmenprofil', () => {
 
   /* ---------------- Routing ---------------- */
 
-  it('R1: /einstellungen ist der Hub mit den vier Bereichen und Zeilen statt Karten', async () => {
+  it('R1: /einstellungen ist der Hub mit den Gruppen nach 1.15 und Zeilen statt Karten', async () => {
     await renderAt('/einstellungen');
     expect(q('einstellungen-page')).not.toBeNull();
-    for (const group of ['company', 'documents', 'design', 'team']) {
+    // EINRICHTUNG-01 (AP5; 1.15): sieben Gruppen statt Firma, Rechnungen, Design und Betrieb.
+    for (const group of ['account', 'workspace', 'documents', 'communication', 'accounting', 'data', 'help']) {
       expect(q(`settings-group-${group}`), group).not.toBeNull();
     }
     expect(q('settings-entry-company-profile')?.getAttribute('href')).toBe(ROUTE);
@@ -209,7 +215,9 @@ describe('SETTINGS-01B2 — Hub, Routing, Firmenprofil', () => {
     await renderAt(ROUTE);
     expect(q('settings-company-page')).not.toBeNull();
     expect(input('companyName').value).toBe('Bestand GmbH');
-    expect(input('iban').value).toBe('DE89370400440532013000');
+    // EINRICHTUNG-01 (AP6; F-03) — Anzeige in Vierergruppen; gespeichert bleibt die elektronische Form.
+    expect(input('iban').value).toBe('DE89 3704 0044 0532 0130 00');
+    expect(getCompanyProfile().iban).toBe('DE89370400440532013000');
     expect(input('accountHolder').value).toBe('');
     for (const section of ['company', 'address', 'contact', 'tax', 'register', 'bank']) {
       expect(q(`settings-company-section-${section}`), section).not.toBeNull();
@@ -228,7 +236,7 @@ describe('SETTINGS-01B2 — Hub, Routing, Firmenprofil', () => {
     await unmount();
 
     await renderAt('/firmendaten#datensicherung');
-    expect(pathNow()).toBe('/einstellungen/betrieb');
+    expect(pathNow()).toBe('/einstellungen/daten/sicherung'); // EINRICHTUNG-01 (AP5; 1.15)
     expect(host.querySelector('.company-profile-form')).toBeNull();
     await unmount();
 
@@ -334,14 +342,15 @@ describe('SETTINGS-01B2 — Hub, Routing, Firmenprofil', () => {
     seedWorkspace('admin');
     expect(resolveWorkspaceWriteAccess({ userId: ADMIN_USER_ID, cloudConfigured: true })).toMatchObject({ canWrite: true, role: 'admin' });
     seedWorkspace('none', ADMIN_USER_ID);
-    expect(resolveWorkspaceWriteAccess({ userId: ADMIN_USER_ID, cloudConfigured: true })).toMatchObject({ canWrite: true, role: 'owner' });
+    /* EINRICHTUNG-01 (AP4, M-18.1): ohne geladene Mitgliedschaft kein Schreibrecht, auch nicht für `owner_user_id`. */
+    expect(resolveWorkspaceWriteAccess({ userId: ADMIN_USER_ID, cloudConfigured: true })).toMatchObject({ canWrite: false, reason: 'membership_unknown' });
     seedWorkspace('none');
     expect(resolveWorkspaceWriteAccess({ userId: ADMIN_USER_ID, cloudConfigured: true })).toMatchObject({ canWrite: false, reason: 'membership_unknown' });
     expect(resolveWorkspaceWriteAccess({ userId: ADMIN_USER_ID, cloudConfigured: false })).toMatchObject({ canWrite: true, reason: 'local_only' });
 
     seedWorkspace('member');
     await renderAt(ROUTE);
-    expect(q('settings-company-readonly')?.textContent).toContain('Nur Administratoren');
+    expect(q('settings-company-readonly')?.textContent).toContain('nur Inhaber und Administratoren'); // EINRICHTUNG-01 (AP5; 1.16)
     expect(q('settings-company-save')).toBeNull();
     expect(input('companyName').readOnly).toBe(true);
     expect(input('companyName').value).toBe('Bestand GmbH');

@@ -4,7 +4,7 @@ import {
   getInvoiceNumberSequenceSnapshot,
   hydrateInvoiceNumberSequence,
 } from './invoiceNumberService';
-import { persistAll } from './persistenceService';
+import { getCachedSetup, persistAll, setCachedSetup } from './persistenceService';
 import { validateSetupWizard } from './setupValidationService';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import type { CompanyProfile, CompanySetup } from '../types/models';
@@ -13,13 +13,20 @@ import type { TranslationKey } from '../i18n';
 
 export type SetupCompletionResult =
   | { success: true; setup: CompanySetup; profile: CompanyProfile }
-  | { success: false; errorKey?: TranslationKey; errors?: Partial<Record<string, TranslationKey>> };
+  | {
+      success: false;
+      errorKey?: TranslationKey;
+      errors?: Partial<Record<string, TranslationKey>>;
+      /** EINRICHTUNG-01 (AP3, O-04.3) — der Assistent bietet „Erneut versuchen“ an (etwa beim Nummernkreis). */
+      retryable?: boolean;
+    };
 
 function buildProfileFromDraft(draft: SetupWizardDraft): CompanyProfile {
   return {
     ...DEFAULT_COMPANY_PROFILE,
     companyName: draft.companyName.trim(),
-    legalForm: '',
+    // EINRICHTUNG-01 (AP3, O-02.2) — bisher fest leer; jetzt die optionale Angabe aus dem Assistenten.
+    legalForm: (draft.legalForm ?? '').trim(),
     street: draft.street.trim(),
     zip: draft.zip.trim(),
     city: draft.city.trim(),
@@ -43,14 +50,27 @@ function buildProfileFromDraft(draft: SetupWizardDraft): CompanyProfile {
   };
 }
 
-function buildSetupFromDraft(draft: SetupWizardDraft, currentSetup: CompanySetup): CompanySetup {
+export interface SetupCompletionOptions {
+  /**
+   * EINRICHTUNG-01 (AP3, EIN-14; E6) — im Cloud-Betrieb gehört die Sprachwahl im Assistenten der Person (Profil und
+   * Gerät), nicht dem Betrieb: Das Setup behält seine bisherige Sprache. Im lokalen Betrieb gehört das Setup dem
+   * Gerät, dort gilt die Wahl wie bisher für das Setup.
+   */
+  keepSetupLanguage?: boolean;
+}
+
+function buildSetupFromDraft(
+  draft: SetupWizardDraft,
+  currentSetup: CompanySetup,
+  options: SetupCompletionOptions,
+): CompanySetup {
   return {
     ...currentSetup,
     companyName: draft.companyName.trim(),
     industry: draft.industry.trim(),
     taxStatus: draft.taxStatus,
     materialStandard: draft.materialStandard,
-    language: draft.language,
+    language: options.keepSetupLanguage ? currentSetup.language : draft.language,
     communicationChannel: draft.communicationChannel,
     setupComplete: true,
     setupVersion: SETUP_VERSION,
@@ -60,6 +80,7 @@ function buildSetupFromDraft(draft: SetupWizardDraft, currentSetup: CompanySetup
 export function completeSetupWizard(
   draft: SetupWizardDraft,
   currentSetup: CompanySetup,
+  options: SetupCompletionOptions = {},
 ): SetupCompletionResult {
   const validation = validateSetupWizard(draft);
   if (!validation.valid) {
@@ -67,7 +88,7 @@ export function completeSetupWizard(
   }
 
   const profile = buildProfileFromDraft(draft);
-  const nextSetup = buildSetupFromDraft(draft, currentSetup);
+  const nextSetup = buildSetupFromDraft(draft, currentSetup, options);
 
   /**
    * OFFICEPILOT-SETUP-CLOUD-PERSIST-01C — vor dem Hydrieren den bisherigen Stand
@@ -76,6 +97,12 @@ export function completeSetupWizard(
    */
   const previousProfile = getCompanyProfile();
   const previousSequence = getInvoiceNumberSequenceSnapshot();
+  /*
+   * EINRICHTUNG-01 (AP3, O-01.3) — auch das Setup im Speicher: `persistAll(nextSetup)` übernimmt es vor dem Schreiben.
+   * Scheitert das Schreiben, stand sonst im Speicher „abgeschlossen“, und die nächste Setup-Änderung (etwa die
+   * Sprachwahl im Assistenten) hätte den Abschluss ohne Firmenprofil gespeichert — ein vorgetäuschter Abschluss.
+   */
+  const previousSetup = getCachedSetup();
 
   hydrateCompanyProfileStore(profile);
   hydrateInvoiceNumberSequence({
@@ -92,6 +119,7 @@ export function completeSetupWizard(
     // Stores auf den Stand vor dem Abschluss zurücksetzen.
     hydrateCompanyProfileStore(previousProfile);
     hydrateInvoiceNumberSequence(previousSequence);
+    setCachedSetup(previousSetup);
     return { success: false, errorKey: 'persist.banner.message' };
   }
 

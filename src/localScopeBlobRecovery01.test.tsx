@@ -5,7 +5,7 @@
  * keine RPCs, kein localStorage-Schreibzugriff und keine IndexedDB-Schreib-
  * transaktion. IndexedDB darf erst beim ausdrücklichen Klick geöffnet werden.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import JSZip from 'jszip';
@@ -16,6 +16,7 @@ import {
 } from './services/storage/localScopeBlobInventoryService';
 import { clearMockRpcHandlers, registerMockRpcHandler } from './test/mockProfileStore';
 import { resetTestStores } from './test/resetStores';
+import { alsBestaetigtesKonto } from './test/recoveryIdentityTestUtils';
 
 const DB_NAME = 'officepilot-document-blobs';
 const STORE_NAME = 'document_blobs';
@@ -242,6 +243,10 @@ describe('OFFICEPILOT-LOCAL-SCOPE-BLOB-RECOVERY-01B', () => {
   let originalClear: IDBObjectStore['clear'];
 
   beforeEach(async () => {
+    // EINRICHTUNG-01 (AP1, E8) — gebundene Bestände gibt die Notfallseite erst nach vom Server bestätigter
+    // Anmeldung frei. Diese Abläufe gelten unverändert für das bestätigte Konto, dem die Bestände gehören
+    // (Inhaber des Betriebsbestands; der fremde Kontobestand bleibt verborgen). Die Freigaberegel selbst prüft localRecoveryE8Ap1.test.tsx.
+    alsBestaetigtesKonto('konto-blob-inhaber');
     localStorage.clear();
     sessionStorage.clear();
     rpcCalls.length = 0;
@@ -327,6 +332,7 @@ describe('OFFICEPILOT-LOCAL-SCOPE-BLOB-RECOVERY-01B', () => {
     resetTestStores();
     localStorage.clear();
     window.history.pushState({}, '', '/');
+    vi.restoreAllMocks();
   });
 
   /** Seedet Testdaten und stellt danach die Lese-Wächter wieder her. */

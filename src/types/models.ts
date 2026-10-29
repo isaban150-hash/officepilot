@@ -828,6 +828,9 @@ export interface CompanySetup {
   communicationChannel: CommunicationChannel;
 }
 
+/** EINRICHTUNG-01 (AP6; E-05) — Sprachen der Kommunikationsvorgaben eines Betriebs. */
+export type CommunicationLanguage = 'de' | 'tr' | 'bg';
+
 export interface CompanyProfile {
   companyName: string;
   legalForm: string;
@@ -944,6 +947,24 @@ export interface CompanyProfile {
   managingDirector?: string;
   taxFreeNotice?: string;
   invoiceFooterNotes: string;
+  /**
+   * EINRICHTUNG-01 (AP6; Vertrag 1.21) — Vorgaben für **neue** Angebote, Aufträge und Briefe (Profil-Schema 3,
+   * Server-Katalog `introduced_in = 3`). Bestehende Entwürfe und freigegebene Dokumente bleiben unverändert.
+   * Fehlend = keine Vorgabe; die Angebotsgültigkeit liest sich dann als 30 Tage.
+   */
+  offerValidityDays?: number;
+  offerIntroText?: string;
+  offerClosingText?: string;
+  orderIntroText?: string;
+  orderClosingText?: string;
+  letterSalutation?: string;
+  letterClosing?: string;
+  /**
+   * EINRICHTUNG-01 (AP6; E-05, E6) — Sprache der Vorgabetexte für Betreff und Text der Rechnungs-, Angebots- und
+   * Briefmails des Betriebs. Fehlend = Deutsch. Die Oberflächensprache der sendenden Person wirkt nicht; PDFs bleiben
+   * deutsch (E21).
+   */
+  communicationLanguage?: CommunicationLanguage;
   /**
    * BRANDING-01E-1 — der strukturierte Branding-Block. Bewusst ein geschlossener
    * Unterblock und keine flachen Einzelfelder: Der Serverschutz aus BRANDING-01E-0

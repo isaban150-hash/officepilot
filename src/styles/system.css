@@ -35,6 +35,14 @@
   line-height: 1.5;
 }
 
+/* EINRICHTUNG-01 (AP9-Nacharbeit; 1.33) — ein allein stehender Link in einem Systemtext (z. B. „Zu OfficeTakt“ auf
+   der Bestätigungsseite der Antwortadresse) ist kein Fließtext: Klickfläche mindestens 44 px hoch, Optik unverändert. */
+.system-page__text > a:only-child {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .bootstrap-loading {
   min-height: 100vh;
   display: flex;
@@ -88,6 +96,22 @@
   font-weight: 600;
   text-decoration: underline;
   white-space: nowrap;
+}
+
+/* EINRICHTUNG-01 (AP1, Vertrag 1.3) — Nur-Lesen ist ein Hinweis, kein Fehler. */
+.workspace-read-only-banner {
+  background: #fef3c7;
+  color: #92400e;
+  border-bottom-color: #fcd34d;
+}
+
+/* Schreibbereich im Nur-Lesen-Betrieb: sperrt die Bedienelemente, ohne das Layout zu verändern. */
+.read-only-area {
+  display: contents;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }
 
 .pilot-hints-panel {

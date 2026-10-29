@@ -7,7 +7,7 @@ import {
 import { COMPANY_SETTINGS_ROUTE } from './CompanySettingsPage';
 import { DESIGN_SETTINGS_ROUTE } from './DesignSettingsPage';
 import { INVOICE_SETTINGS_ROUTE } from './InvoiceSettingsPage';
-import { OPERATING_SETTINGS_BACKUP_HREF } from './OperatingSettingsPage';
+import { SETTINGS_TARGET_PATHS } from './settingsHubConfig';
 
 /**
  * SETTINGS-01B2…01B5 — `/firmendaten` ist nur noch ein Redirect.
@@ -15,7 +15,7 @@ import { OPERATING_SETTINGS_BACKUP_HREF } from './OperatingSettingsPage';
  *   * ohne Hash                       → `/einstellungen/firma`
  *   * `#logo`                         → `/einstellungen/design`
  *   * `#zahlungsbedingungen`, `#rechnungstexte` → `/einstellungen/rechnungen`
- *   * `#datensicherung`               → `/einstellungen/betrieb#datensicherung`
+ *   * `#datensicherung`               → `/einstellungen/daten/sicherung` (EINRICHTUNG-01 AP5, Vertrag 1.15)
  *   * unbekannter Hash                → `/einstellungen/firma`
  *
  * Immer `replace`, und kein Ziel verweist zurück auf `/firmendaten` — eine
@@ -26,7 +26,7 @@ export function resolveFirmendatenLegacyTarget(hash: string): string {
   const section = hash.replace(/^#/, '');
   if (section === LOGO_SECTION_ID) return DESIGN_SETTINGS_ROUTE;
   if (FIRMENDATEN_INVOICE_SECTION_IDS.includes(section)) return INVOICE_SETTINGS_ROUTE;
-  if (section === BACKUP_SECTION_ID) return OPERATING_SETTINGS_BACKUP_HREF;
+  if (section === BACKUP_SECTION_ID) return SETTINGS_TARGET_PATHS.backup;
   return COMPANY_SETTINGS_ROUTE;
 }
 

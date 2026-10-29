@@ -15,6 +15,12 @@ begin;
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
 values ('00000000-0000-0000-0000-00000000ac02', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
         'manual-order-test@example.invalid', 'x', now(), now(), now(), '{}'::jsonb, '{}'::jsonb);
+
+-- EINRICHTUNG-01 (AP1, Vertrag 1.1 Stufen 3 und 6): Der Server verlangt jetzt fuer jeden
+-- Weg ein freigegebenes Konto und fuer Schreibwege die wirksame Betriebslizenz. handle_new_user legt Profile mit
+-- pending/inactive an; die synthetischen Testnutzer erhalten den Zustand eines produktiv arbeitenden Betriebs.
+update public.profiles set status = 'approved', license_status = 'active', license_expires_at = null
+where id in ('00000000-0000-0000-0000-00000000ac02'::uuid);
 insert into public.workspaces (id, name, owner_user_id)
 values ('00000000-0000-0000-0000-000000000c01', 'Auftrag-02C', '00000000-0000-0000-0000-00000000ac02'),
        ('00000000-0000-0000-0000-000000000c02', 'Fremd', '00000000-0000-0000-0000-00000000ac02');

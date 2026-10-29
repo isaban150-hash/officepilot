@@ -24,12 +24,51 @@ export const ROLE_DENIAL_MESSAGE = 'Keine Schreibberechtigung';
  * Lizenz). Sie tragen nicht den Text oben, sind aber ebenso endgültig für diesen
  * Stand: Ausgaben, Kontierung, Monatsabschluss oder Mitarbeiterzahlungen eines
  * Geräts mit veralteter Rolle hielten sonst bei jedem Lauf den ganzen Abgleich an.
- * Der Auftrag bleibt stehen (nach einer Lizenzverlängerung gelingt er), der
- * Abgleich läuft weiter.
+ * Der Auftrag bleibt abgewiesen, der Abgleich läuft weiter.
+ *
+ * EINRICHTUNG-01 (AP1, Vertrag 1.8) — eine beendete Sitzung ist nie eine
+ * Rollenabweisung, auch wenn eine Meldung beides nennt.
  */
 export function isRoleDenialMessage(message: string | null | undefined): boolean {
   const text = message ?? '';
+  if (isSessionNotActiveMessage(text)) return false;
   return text.includes(ROLE_DENIAL_MESSAGE) || isFinancialActionDenial(text) || isFinalPermissionDenialMessage(text);
+}
+
+/**
+ * EINRICHTUNG-01 (AP1, Vertrag 1.8) — die Sitzung des Tokens besteht nicht mehr
+ * (abgemeldet, „auf allen Geräten abmelden“, abgelaufen). Der Server weist dann
+ * jeden Zugriff mit diesem Code ab, bevor er Konto, Mitgliedschaft oder Rolle
+ * prüft. Das sagt nichts über die Rechte: Der Client verlangt die Anmeldung, die
+ * Aufträge bleiben beim Ursprung und laufen nach der Anmeldung desselben Kontos
+ * weiter. Deshalb nie endgültig.
+ */
+export const SESSION_NOT_ACTIVE_CODE = 'session_not_active';
+
+export function isSessionNotActiveMessage(message: string | null | undefined): boolean {
+  return (message ?? '').includes(SESSION_NOT_ACTIVE_CODE);
+}
+
+/**
+ * EINRICHTUNG-01 (AP1, Vertrag 1.9) — Rolle oder Mitgliedschaft änderten sich
+ * während der Prüfung (SQLSTATE 40001). Nichts wurde geschrieben; der nächste Lauf
+ * prüft mit dem neuen Stand und erhält die endgültige Antwort.
+ */
+export const WORKSPACE_ACCESS_CHANGED_CODE = 'workspace_access_changed';
+
+export function isWorkspaceAccessChangedMessage(message: string | null | undefined): boolean {
+  return (message ?? '').includes(WORKSPACE_ACCESS_CHANGED_CODE);
+}
+
+/**
+ * EINRICHTUNG-01 (AP4; Vertrag 1.7, M-10.3) — der Server kennt das Konto in genau diesem Betrieb nicht (mehr) als
+ * aktives Mitglied (entfernt, verlassen; seit 20261109 auch bei Kontosperre). Für die Bindung an diesen Betrieb ist das
+ * ein bestätigter Entzug, kein technischer Fehler.
+ */
+export const WORKSPACE_NO_ACCESS_MESSAGE = 'Kein Zugriff auf Workspace';
+
+export function isWorkspaceNoAccessMessage(message: string | null | undefined): boolean {
+  return (message ?? '').includes(WORKSPACE_NO_ACCESS_MESSAGE);
 }
 
 /**
@@ -44,9 +83,17 @@ export function isRoleDenialMessage(message: string | null | undefined): boolean
  * abgewiesene Archivlöschung an. Dieselbe Endgültigkeit gilt für eine fehlende
  * Rolle oder Mitgliedschaft und ein nicht freigegebenes Konto.
  *
- * Bewusst NICHT dabei: abgelaufene oder inaktive Lizenz (`finance_license_*`).
- * Diese Aufträge bleiben stehen und gelingen nach einer Lizenzverlängerung —
- * so wie oben beschrieben.
+ * EINRICHTUNG-01 (AP1, Vertrag 1.7, N-Z4.4/N-Z4.5) — dazu die nicht wirksame
+ * Betriebslizenz: `license_not_effective` der Schreibwege, `finance_license_*` der
+ * Finanzwege, und die fehlende Freigabe `account_not_approved`. Bis dahin blieben
+ * Lizenzabweisungen bewusst offen und wurden nach einer Verlängerung nachgeholt. Der mit
+ * WEISS abgestimmte Katalog V3 legt fest: Eine Rechtewiederkehr oder
+ * Lizenzverlängerung führt endgültig abgewiesene Aufträge nicht aus. Im
+ * Nur-Lesen-Zustand (Vertrag 1.3) entstehen keine neuen; eine neue, bewusste
+ * Änderung nach der Verlängerung erzeugt einen neuen Auftrag.
+ *
+ * Bewusst NICHT dabei: die beendete Sitzung (`session_not_active`, siehe oben)
+ * und die gleichzeitige Rechteänderung (`workspace_access_changed`).
  */
 const FINAL_PERMISSION_DENIALS = [
   ROLE_DENIAL_MESSAGE,
@@ -54,11 +101,27 @@ const FINAL_PERMISSION_DENIALS = [
   'account_blocked',
   'finance_forbidden_role',
   'finance_account_not_approved',
+  'account_not_approved',
+  'license_not_effective',
+  'finance_license_expired',
+  'finance_license_inactive',
 ] as const;
 
 export function isFinalPermissionDenialMessage(message: string | null | undefined): boolean {
   const text = message ?? '';
+  if (isSessionNotActiveMessage(text) || isWorkspaceAccessChangedMessage(text)) return false;
   return FINAL_PERMISSION_DENIALS.some((marker) => text.includes(marker));
+}
+
+/**
+ * EINRICHTUNG-01 (AP1, Vertrag 1.7) — eine Abweisung, mit der der Server bestätigt, dass die Betriebslizenz des
+ * Betriebs nicht wirksam ist. Die Oberfläche fragt danach sofort den Lizenzstand ab (Nur-Lesen, Vertrag 1.3).
+ */
+const WORKSPACE_LICENSE_REJECTIONS = ['license_not_effective', 'finance_license_expired', 'finance_license_inactive'] as const;
+
+export function isWorkspaceLicenseRejectionMessage(message: string | null | undefined): boolean {
+  const text = message ?? '';
+  return WORKSPACE_LICENSE_REJECTIONS.some((marker) => text.includes(marker));
 }
 
 /**

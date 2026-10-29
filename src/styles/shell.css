@@ -1,21 +1,10 @@
 /**
  * OfficePilot Design System v1.0 – App Shell (responsive layout)
- * Overrides legacy 480px mobile-shell constraints from index.css
+ *
+ * EINRICHTUNG-01 (AP5, EIN-37) — die frühere Aufhebung der 480-px-Begrenzung aus index.css (`.app-shell`,
+ * `.bottom-nav`) entfällt: Beide Regeln stehen in index.css in genau einer Fassung mit voller Breite. Die Grenze für
+ * die Seitenleiste ist überall 1024 px.
  */
-
-.app-shell {
-  width: 100%;
-  max-width: none;
-  margin: 0;
-}
-
-.bottom-nav {
-  left: 0;
-  right: 0;
-  transform: none;
-  width: 100%;
-  max-width: none;
-}
 
 .bottom-nav__label {
   font-size: 0.6875rem;
@@ -81,7 +70,7 @@
 
 @media (max-width: 767px) {
   .user-menu .dropdown-menu__trigger {
-    min-height: 40px;
+    min-height: 44px;
     padding: var(--space-1) var(--space-2);
     font-size: 0.8125rem;
   }
@@ -422,6 +411,18 @@
   margin-top: var(--space-6);
 }
 
+/* EINRICHTUNG-01 (Eigenpruefung; AP5, Vertrag 1.17, N-05) — auf Einstellungsseiten unter 1024 px darf #app-main kein
+   eigener Scrollcontainer sein: Er scrollt dort nie selbst (das Fenster scrollt), sein overflow-y: auto brach aber
+   position: sticky der Speicherleiste; sie blieb am Formularende statt ueber der Bottom-Navigation zu kleben.
+   overflow-x: clip schneidet weiter horizontal ab, ohne Scrollcontainer zu werden. Nur Einstellungsseiten (:has),
+   damit sich klebende Elemente der Fachbereiche nicht ungeprueft aendern. */
+@media (max-width: 1023px) {
+  .app-shell__main:has(.settings-page) {
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+}
+
 /* UIUX-FOUNDATION-01G — fokussierte Felder/Aktionen landen beim Scrollen nicht hinter der Bottom-Nav. */
 @media (max-width: 1023px) {
   html,
@@ -489,11 +490,20 @@
   z-index: 30;
 }
 
-/* Mobil: nur das Suchsymbol im Kopf; das Feld klappt unter der Kopfzeile aus. */
+/* EINRICHTUNG-01 (App-Eigenprüfung; Vertrag 1.33) — die Vorschau der Kopfzeilensuche richtete sich am ganzen Kopf
+   aus (`.global-search` war nicht positioniert): volle Breite, in der Stapelfolge unter der Seitenleiste (Kopf
+   z-index 10 < Seitenleiste 20), Treffer links verdeckt und nicht anklickbar. Auf dem Desktop bezieht sie sich jetzt
+   auf das Suchfeld; mobil bleibt das ausklappende Feld bewusst am Kopf ausgerichtet. */
+.app-shell__top .global-search:not(.global-search--mobile-collapsible) {
+  position: relative;
+}
+
+/* Mobil: nur das Suchsymbol im Kopf; das Feld klappt unter der Kopfzeile aus.
+   EINRICHTUNG-01 (AP9-Nacharbeit; Vertrag 1.33): Klickfläche mindestens 44 × 44 CSS-Pixel. */
 .global-search__mobile-trigger--icon {
-  width: 40px;
-  min-width: 40px;
-  min-height: 40px;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   justify-content: center;
   color: #fff;
@@ -548,8 +558,8 @@
   }
 
   .app-shell__top .app-shell__tool {
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .app-shell__top .user-menu__name {
@@ -694,9 +704,10 @@
   background: rgba(255, 255, 255, 0.18);
 }
 
+/* EINRICHTUNG-01 (AP9-Nacharbeit; Vertrag 1.33): Klickfläche 44 × 44 statt 40 × 40, Symbol unverändert. */
 .app-shell__tool {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
   color: rgba(255, 255, 255, 0.72);
 }
 
@@ -711,10 +722,11 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* Suche auf dunklem Grund: eingelassenes Feld statt weißer Box */
+/* Suche auf dunklem Grund: eingelassenes Feld statt weißer Box.
+   EINRICHTUNG-01 (AP9-Nacharbeit; Vertrag 1.33): Feldhöhe mindestens 44 px (vorher 36 px). */
 .app-shell__top .global-search__input,
 .app-shell__top .global-search--compact .input {
-  min-height: 36px;
+  min-height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background:
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>")
@@ -744,7 +756,8 @@
 /* Benutzermenü: Initialen-Kreis + Name (Desktop), nur Initialen (Handy) */
 .app-shell__top .user-menu .dropdown-menu__trigger {
   gap: var(--space-2);
-  min-height: 36px;
+  /* EINRICHTUNG-01 (AP9-Nacharbeit; Vertrag 1.33): Klickfläche mindestens 44 px hoch. */
+  min-height: 44px;
   padding: 2px var(--space-2) 2px 2px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.06);
@@ -793,15 +806,17 @@
     margin-left: auto;
   }
 
+  /* EINRICHTUNG-01 (AP9-Nacharbeit; Vertrag 1.33): auch am Handy Klickflächen 44 × 44 (vorher 36 × 36);
+     Symbole und Initialenkreis behalten ihre Größe. */
   .app-shell__top .app-shell__tool {
-    width: 2.25rem;
-    height: 2.25rem;
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .global-search__mobile-trigger--icon {
-    width: 36px;
-    min-width: 36px;
-    min-height: 36px;
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
     color: rgba(255, 255, 255, 0.72);
   }
 
@@ -810,8 +825,8 @@
     padding: 0;
     border: 0;
     background: transparent;
-    min-height: 36px;
-    width: 36px;
+    min-height: 44px;
+    width: 44px;
     justify-content: center;
   }
 
@@ -879,6 +894,13 @@
 }
 
 @media (max-width: 640px) {
+  /* EINRICHTUNG-01 (AP9-Nacharbeit; Vertrag 1.33): ohne sichtbaren Text bleibt die Klickfläche 44 × 44 (vorher 28 px
+     breit); der Punkt steht mittig. */
+  .app-shell__sync-indicator {
+    min-width: 2.75rem;
+    justify-content: center;
+  }
+
   /* Mobil nur der Punkt; der Text bleibt als Name der Schaltfläche erhalten. */
   .app-shell__sync-indicator-text {
     position: absolute;

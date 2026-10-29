@@ -60,6 +60,10 @@ export interface NavSecondaryItemConfig extends NavItemConfig {
  *
  * Bewusst NICHT enthalten: Einstellungen (nur Zahnrad + Benutzermenü) und
  * der Assistent (nur das globale Header-Werkzeug) — keine Doppel-Einstiege.
+ *
+ * EINRICHTUNG-01 (AP5; Vertrag 1.15) — die Gruppe „System“ entfällt: Die
+ * Synchronisation steht unter „Einstellungen › Hilfe und Rechtliches“, die
+ * Plattform-Verwaltung hat ihren einen Einstieg im Benutzermenü (P-01.1).
  */
 export const SECONDARY_NAV_GROUPS: readonly NavGroupConfig[] = [
   {
@@ -86,14 +90,6 @@ export const SECONDARY_NAV_GROUPS: readonly NavGroupConfig[] = [
     titleKey: 'mehr.group.officepilot',
     items: [
       { to: '/wissen', key: 'mehr.knowledge', descriptionKey: 'mehr.knowledgeDesc', icon: 'knowledge', sidebar: true },
-    ],
-  },
-  {
-    id: 'system',
-    titleKey: 'mehr.group.system',
-    items: [
-      { to: '/synchronisation', key: 'mehr.sync', descriptionKey: 'mehr.syncDesc', icon: 'more' },
-      { to: '/admin/users', key: 'mehr.adminUsers', descriptionKey: 'mehr.adminUsersDesc', icon: 'customers', adminOnly: true },
     ],
   },
 ];

@@ -2,7 +2,7 @@ import type { AppLanguage } from '../types/models';
 import { deModules } from './locales/de';
 import { trModules } from './locales/tr';
 import { bgModules } from './locales/bg';
-import { translateKey, type TranslateCatalog } from './translate';
+import { errorReference, translateKey, type TranslateCatalog } from './translate';
 
 export type TranslationKey = keyof typeof de;
 
@@ -37,6 +37,9 @@ const deLegacy = {
   'companyConflict.confirmUseLocal': 'Ja, lokale Firmendaten in die Cloud übernehmen',
   'companyConflict.busy': 'Firmendaten werden übertragen …',
   'companyConflict.changed': 'Der Cloud-Stand hat sich seit der Anzeige geändert. Es wurde nichts gesendet. Bitte erneut bestätigen.',
+  // EINRICHTUNG-01 (AP9; 1.30, EIN-27) — statt Rohcodes ein Text mit nächstem Schritt.
+  'companyConflict.error.pullFailed': 'Der Stand in der Cloud konnte nicht geladen werden. Es wurde nichts geändert. Bitte prüfen Sie die Verbindung und versuchen Sie es erneut.',
+  'companyConflict.error.localMissing': 'Die lokalen Firmendaten sind auf diesem Gerät nicht mehr vorhanden. Es wurde nichts geändert. Bitte melden Sie sich neu an.',
   'localRecovery.downloadZip': 'Diese Kopie als ZIP sichern',
   'localRecovery.downloadWithFiles': 'Kopie inklusive Dateien sichern',
   'localRecovery.files.saved': 'Dateien gesichert',
@@ -154,6 +157,10 @@ const deLegacy = {
   'companyProfile.defaultClosingTextTooLong': 'Der Schlusstext darf höchstens 2000 Zeichen lang sein.',
   'companyProfile.defaultInvoiceEmailSubjectInvalid': 'Der Standard-Betreff darf höchstens 255 Zeichen lang sein und keine Zeilenumbrüche enthalten.',
   'companyProfile.defaultInvoiceEmailBodyTooLong': 'Die Standard-Nachricht darf höchstens 20000 Zeichen lang sein.',
+  // EINRICHTUNG-01 (EIN-06, S-08) — dieselben Grenzen wie der Server, in Zeichen (Codepunkten).
+  'companyProfile.emailSignatureTooLong': 'Die Signatur darf höchstens 2000 Zeichen lang sein.',
+  'companyProfile.emailSubjectInvalid': 'Ein Betreff darf höchstens 255 Zeichen lang sein und keine Zeilenumbrüche enthalten.',
+  'companyProfile.emailBodyTooLong': 'Ein Nachrichtentext darf höchstens 20000 Zeichen lang sein.',
   'companyProfile.documentTemplateInvalid': 'Diese Dokumentvorlage ist nicht verfügbar.',
   /* SKONTO-DUE-DATE-CONSISTENCY-01B — beide Werte sind einzeln gültig, ihr Verhältnis nicht. */
   'companyProfile.skontoDaysExceedPaymentDays':
@@ -236,7 +243,6 @@ const deLegacy = {
   'mehr.group.work': 'Arbeit',
   'mehr.group.finance': 'Finanzen & Dokumente',
   'mehr.group.officepilot': 'OfficeTakt',
-  'mehr.group.system': 'Konto & System',
   'mehr.financeDesc': 'Ausgaben, offene Posten und Steuerberater',
   'mehr.assistant': 'Assistent',
   'mehr.assistantDesc': 'Fragen stellen und Aufgaben erledigen lassen',
@@ -878,7 +884,7 @@ const deLegacy = {
   'scanResult.action.openOrder': 'Auftrag öffnen',
 
   'mehr.title': 'Mehr',
-  'mehr.subtitle': 'Weitere Bereiche und Einstellungen',
+  'mehr.subtitle': 'Weitere Bereiche',
   'mehr.tasks': 'Zu erledigen',
   'mehr.tasksDesc': 'Offene Aufgaben und Fristen',
   'mehr.customers': 'Kunden',
@@ -897,8 +903,6 @@ const deLegacy = {
   'mehr.knowledgeDesc': 'Betriebswissen und Vorlagen',
   'mehr.company': 'Einstellungen',
   'mehr.companyDesc': 'Firmenprofil, Rechnungen, Design, Sprache und Datensicherung',
-  'mehr.sync': 'Synchronisation',
-  'mehr.syncDesc': 'Status, Outbox und Cloud-Synchronisation',
   'mehr.adminUsers': 'Benutzerverwaltung',
   'mehr.adminUsersDesc': 'Freischaltung, Sperren und Lizenzen',
 
@@ -1016,9 +1020,9 @@ const deLegacy = {
   'financeGuard.account_not_approved':
     'Ihr Konto ist noch nicht freigegeben. Bis zur Freigabe sind keine Rechnungs- und Zahlungsvorgänge möglich.',
   'financeGuard.license_expired':
-    'Ihre Lizenz ist abgelaufen. Bitte verlängern Sie sie, um wieder Rechnungen und Zahlungen bearbeiten zu können.',
+    'Die Lizenz dieses Betriebs ist abgelaufen. Rechnungen und Zahlungen lassen sich wieder bearbeiten, sobald der Inhaber sie verlängert.',
   'financeGuard.license_inactive':
-    'Für Ihr Konto ist keine aktive Lizenz hinterlegt. Bitte wenden Sie sich an den Betreiber.',
+    'Für diesen Betrieb ist keine wirksame Lizenz hinterlegt. Bitte wenden Sie sich an den Inhaber des Betriebs.',
   'sync.failure.reason.financeGuard':
     'Für diese Änderung fehlt die Berechtigung oder die Freigabe des Kontos. Sie wurde nicht übertragen.',
   'sync.entity.accounting_assignment': 'Kontierung',
@@ -5274,6 +5278,9 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'companyProfile.currencyUnsupported': 'Bu para birimi şu anda desteklenmiyor (yalnızca EUR).',
   'companyProfile.replyToEmailInvalid': 'Yanıt adresi geçerli bir e-posta adresi değil.',
   'companyProfile.senderDisplayNameTooLong': 'Gönderen adı çok uzun (en fazla 120 karakter).',
+  'companyProfile.emailSignatureTooLong': 'İmza en fazla 2000 karakter olabilir.',
+  'companyProfile.emailSubjectInvalid': 'Konu en fazla 255 karakter olabilir ve satır sonu içeremez.',
+  'companyProfile.emailBodyTooLong': 'Mesaj metni en fazla 20000 karakter olabilir.',
   'companyProfile.taxStatusInvalid': 'Vergi durumu geçersiz.',
   'position.unitUnresolved':
     'Birim kesin olarak tanınamadı ({units}). Hiçbir kalem aktarılmadı — lütfen sözleşmedeki birimi kontrol edin.',
@@ -5305,6 +5312,8 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'companyConflict.confirmUseLocal': 'Evet, yerel firma bilgilerini buluta aktar',
   'companyConflict.busy': 'Firma bilgileri aktarılıyor …',
   'companyConflict.changed': 'Bulut verisi görüntülendikten sonra değişti. Hiçbir şey gönderilmedi. Lütfen tekrar onaylayın.',
+  'companyConflict.error.pullFailed': 'Buluttaki veriler yüklenemedi. Hiçbir şey değiştirilmedi. Lütfen bağlantıyı kontrol edip tekrar deneyin.',
+  'companyConflict.error.localMissing': 'Yerel firma bilgileri bu cihazda artık mevcut değil. Hiçbir şey değiştirilmedi. Lütfen yeniden oturum açın.',
   'localRecovery.downloadZip': 'Bu kopyayı ZIP olarak kaydet',
   'localRecovery.downloadWithFiles': 'Kopyayı dosyalarla birlikte kaydet',
   'localRecovery.files.saved': 'kaydedilen dosya',
@@ -5371,7 +5380,6 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'mehr.group.work': 'Çalışma',
   'mehr.group.finance': 'Finans ve belgeler',
   'mehr.group.officepilot': 'OfficeTakt',
-  'mehr.group.system': 'Hesap ve sistem',
   'mehr.financeDesc': 'Giderler, açık kalemler ve mali müşavir',
   'mehr.assistant': 'Asistan',
   'mehr.assistantDesc': 'Soru sorun ve işleri yaptırın',
@@ -7065,6 +7073,9 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'companyProfile.currencyUnsupported': 'Тази валута понастоящем не се поддържа (само EUR).',
   'companyProfile.replyToEmailInvalid': 'Адресът за отговор не е валиден имейл адрес.',
   'companyProfile.senderDisplayNameTooLong': 'Името на подателя е твърде дълго (макс. 120 знака).',
+  'companyProfile.emailSignatureTooLong': 'Подписът може да бъде най-много 2000 знака.',
+  'companyProfile.emailSubjectInvalid': 'Темата може да бъде най-много 255 знака и не може да съдържа нови редове.',
+  'companyProfile.emailBodyTooLong': 'Текстът на съобщението може да бъде най-много 20000 знака.',
   'companyProfile.taxStatusInvalid': 'Данъчният статус е невалиден.',
   'app.name': 'OfficeTakt',
   'setup.title': 'Добре дошли в OfficeTakt',
@@ -7094,6 +7105,8 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'companyConflict.confirmUseLocal': 'Да, прехвърли локалните данни в облака',
   'companyConflict.busy': 'Данните на фирмата се прехвърлят …',
   'companyConflict.changed': 'Състоянието в облака се промени след показването. Нищо не беше изпратено. Моля, потвърдете отново.',
+  'companyConflict.error.pullFailed': 'Състоянието в облака не можа да бъде заредено. Нищо не беше променено. Моля, проверете връзката и опитайте отново.',
+  'companyConflict.error.localMissing': 'Локалните данни за фирмата вече не са налични на това устройство. Нищо не беше променено. Моля, влезте отново.',
   'localRecovery.downloadZip': 'Запази това копие като ZIP',
   'localRecovery.downloadWithFiles': 'Запази копието заедно с файловете',
   'localRecovery.files.saved': 'запазени файла',
@@ -7758,7 +7771,6 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'mehr.group.work': 'Работа',
   'mehr.group.finance': 'Финанси и документи',
   'mehr.group.officepilot': 'OfficeTakt',
-  'mehr.group.system': 'Акаунт и система',
   'mehr.financeDesc': 'Разходи, открити позиции и счетоводител',
   'mehr.assistant': 'Асистент',
   'mehr.assistantDesc': 'Задавайте въпроси и възлагайте задачи',
@@ -8433,5 +8445,37 @@ export function t(
 
 export { de, deLegacy, tr, trLegacy, bg, bgLegacy };
 export { assertCoreTranslations, resetMissingTranslationLog } from './translate';
+export { errorReference, GENERIC_TEXT_KEY } from './translate';
+
+/** EINRICHTUNG-01 (AP9; Vertrag 1.30, Q-01.2) — allgemeiner Fehlertext mit Kurzreferenz; nie der Rohtext. */
+export function genericErrorText(lang: AppLanguage, raw: unknown): string {
+  return t('errors.genericWithReference', lang, { ref: errorReference(raw) });
+}
+
+/**
+ * EINRICHTUNG-01 (AP9; Vertrag 1.30, Q-01.1, Q-01.2) — ein Fehler zur Anzeige. Ein bekannter Code hat seinen eigenen
+ * Text (`errorKey`); bei einem unbekannten Code oder einer Ausnahme trägt der Fehler zusätzlich die Kurzreferenz
+ * (`ref`), und angezeigt wird der allgemeine Text mit dieser Referenz. Wer `ref` nicht auswertet, zeigt weiter den
+ * allgemeinen Text des Bereichs (ohne Referenz) — nie einen Platzhalter und nie den Rohtext.
+ */
+export interface ShownFailure {
+  errorKey: TranslationKey;
+  ref?: string;
+}
+
+/** Schlüssel und Werte für `t()` oder einen gespeicherten Hinweis. */
+export function failureMessage(failure: ShownFailure): { key: TranslationKey; params?: Record<string, string> } {
+  return failure.ref ? { key: 'errors.genericWithReference', params: { ref: failure.ref } } : { key: failure.errorKey };
+}
+
+export function failureText(lang: AppLanguage, failure: ShownFailure): string {
+  const message = failureMessage(failure);
+  return t(message.key, lang, message.params);
+}
+
+/** Unbekannter Code oder Ausnahme: der allgemeine Schlüssel des Bereichs plus Kurzreferenz aus dem Rohwert. */
+export function unknownFailure(errorKey: TranslationKey, raw: unknown): ShownFailure {
+  return { errorKey, ref: errorReference(raw) };
+}
 export { formatMessage, interpolateParams } from './formatMessage';
 export type { ExplanationTextBlock } from './types';

@@ -3,10 +3,14 @@
  * taxFreeNotice auf der Rechnungsseite und die Ablösung der alten
  * Firmendaten-Seite (keine doppelte Logo-/Defaults-/Backup-UI mehr).
  * Synthetische Daten, kein Netz.
+ *
+ * EINRICHTUNG-01 (AP5; Vertrag 1.15) — die Betriebsseite ist aufgelöst: Sprache → „Mein Konto › Sprache“, Sicherung →
+ * „Daten › Sicherung“, Synchronisation → „Hilfe und Rechtliches“, Kontenrahmen → „Buchhaltung“. Die Fälle T1–T16 und
+ * T21–T24 prüfen dieselben Zusagen an den neuen Zielen; T17–T20 sind unverändert.
  */
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppProvider } from '../../context/AppContext';
 import { AuthProvider } from '../../context/AuthContext';
@@ -17,7 +21,10 @@ import { EinstellungenPage } from '../EinstellungenPage';
 import { CompanySettingsPage } from './CompanySettingsPage';
 import { DesignSettingsPage } from './DesignSettingsPage';
 import { InvoiceSettingsPage } from './InvoiceSettingsPage';
-import { OperatingSettingsPage, OPERATING_SETTINGS_ROUTE, OPERATING_SETTINGS_BACKUP_HREF } from './OperatingSettingsPage';
+import { AccountLanguagePage } from './AccountLanguagePage';
+import { BackupSettingsPage } from './BackupSettingsPage';
+import { ChartOfAccountsSettingsPage } from './ChartOfAccountsSettingsPage';
+import { LEGACY_OPERATING_SETTINGS_ROUTE, SETTINGS_HUB_ROUTE, SETTINGS_TARGET_PATHS } from './settingsHubConfig';
 import { FirmendatenLegacyRoute, resolveFirmendatenLegacyTarget } from './FirmendatenLegacyRoute';
 import { loginAsDefaultAdmin, resetAuthForTests } from '../../test/authFixtures';
 import { resetTestStores } from '../../test/resetStores';
@@ -81,7 +88,11 @@ function routes(): ReactNode {
         <Route path="/einstellungen/firma" element={<CompanySettingsPage />} />
         <Route path="/einstellungen/rechnungen" element={<InvoiceSettingsPage />} />
         <Route path="/einstellungen/design" element={<DesignSettingsPage />} />
-        <Route path={OPERATING_SETTINGS_ROUTE} element={<OperatingSettingsPage />} />
+        {/* wie in App.tsx: die aufgelöste Seite „Betrieb“ führt in den Hub */}
+        <Route path={LEGACY_OPERATING_SETTINGS_ROUTE} element={<Navigate to={SETTINGS_HUB_ROUTE} replace />} />
+        <Route path={SETTINGS_TARGET_PATHS['account-language']} element={<AccountLanguagePage />} />
+        <Route path={SETTINGS_TARGET_PATHS.backup} element={<BackupSettingsPage />} />
+        <Route path={SETTINGS_TARGET_PATHS['chart-of-accounts']} element={<ChartOfAccountsSettingsPage />} />
         <Route path="/firmendaten" element={<FirmendatenLegacyRoute />} />
         <Route path="/synchronisation" element={<div data-testid="sync-stub" />} />
         <Route path="/admin/users" element={<div data-testid="admin-users-stub" />} />
@@ -154,7 +165,12 @@ async function submitForm(): Promise<void> {
   await settle();
 }
 
-describe('SETTINGS-01B5 — Betrieb, Legacy-Ablösung', () => {
+/*
+ * EINRICHTUNG-01 (AP6) — Zeitbudget wie in anderen Shell-Tests (30 s): Vollständige Renders mit Hub und Shell brauchen
+ * unter Last mehr als die 5 s der Grundeinstellung; ein überschrittener Fall lief sonst neben dem nächsten weiter und
+ * riss die übrigen Fälle über die gemeinsame Wurzel mit.
+ */
+describe('SETTINGS-01B5 — Betrieb, Legacy-Ablösung', { timeout: 30_000 }, () => {
   beforeEach(async () => {
     resetTestStores();
     resetAuthForTests();
@@ -178,25 +194,26 @@ describe('SETTINGS-01B5 — Betrieb, Legacy-Ablösung', () => {
 
   /* ---------------- Routing (1–9) ---------------- */
 
-  it('T1/T2: /einstellungen/betrieb rendert die Betriebsseite; der Hub-Eintrag „Betrieb" führt dorthin', async () => {
-    await renderAt('/einstellungen');
-    expect(q('settings-entry-operations')?.getAttribute('href')).toBe(OPERATING_SETTINGS_ROUTE);
-    expect(q('settings-entry-operations')?.textContent).toContain('Betrieb');
-    // Endzustand des Hubs (01D): fuenf Gruppen — Firma, Rechnungen & Zahlungen, Design, E-Mail & Kommunikation, Betrieb; keine Links auf /firmendaten oder /mehr.
-    expect(host.querySelectorAll('.settings-group').length).toBe(5);
+  it('T1/T2: /einstellungen/betrieb führt in den Hub; die Bereiche der Betriebsseite haben eigene Ziele (EINRICHTUNG-01 AP5)', async () => {
+    await renderAt(LEGACY_OPERATING_SETTINGS_ROUTE);
+    expect(pathNow()).toBe('/einstellungen');
+    expect(q('einstellungen-page')).not.toBeNull();
+    expect(q('settings-entry-operations')).toBeNull();
+    // Lokaler Betrieb ohne Cloud (dieser Block): Sprache, Sicherung und Kontenrahmen sind eigene Einträge; keine Synchronisation.
+    expect(q('settings-entry-account-language')?.getAttribute('href')).toBe('/einstellungen/konto/sprache');
+    expect(q('settings-entry-backup')?.getAttribute('href')).toBe('/einstellungen/daten/sicherung');
+    expect(q('settings-entry-chart-of-accounts')?.getAttribute('href')).toBe('/einstellungen/kontenrahmen');
+    expect(q('settings-entry-sync')).toBeNull();
     expect(q('settings-entry-communication')?.getAttribute('href')).toBe('/einstellungen/kommunikation');
     for (const a of Array.from(host.querySelectorAll('.settings-row'))) {
       expect(a.getAttribute('href')?.startsWith('/firmendaten')).toBe(false);
       expect(a.getAttribute('href')).not.toBe('/mehr');
+      expect(a.getAttribute('href')).not.toBe('/einstellungen/betrieb');
     }
-    expect(host.textContent).not.toContain('Firmendaten');
-    await click('settings-entry-operations');
-    expect(pathNow()).toBe(OPERATING_SETTINGS_ROUTE);
-    expect(q('settings-operating-page')).not.toBeNull();
-    for (const section of ['language', 'backup', 'sync', 'admin']) {
-      expect(q(`settings-operating-${section}`), section).not.toBeNull();
-    }
-    expect(q('settings-operating-back')?.getAttribute('href')).toBe('/einstellungen');
+    await click('settings-entry-backup');
+    expect(pathNow()).toBe('/einstellungen/daten/sicherung');
+    expect(q('settings-backup-page')).not.toBeNull();
+    expect(q('settings-backup-back')?.getAttribute('href')).toBe('/einstellungen');
   });
 
   it('T3–T9: alle Legacy-Hashes landen am kanonischen Ziel, unbekannt → Firma, kein Loop', async () => {
@@ -205,8 +222,9 @@ describe('SETTINGS-01B5 — Betrieb, Legacy-Ablösung', () => {
       ['/firmendaten#logo', '/einstellungen/design'],
       ['/firmendaten#zahlungsbedingungen', '/einstellungen/rechnungen'],
       ['/firmendaten#rechnungstexte', '/einstellungen/rechnungen'],
-      ['/firmendaten#datensicherung', OPERATING_SETTINGS_ROUTE],
+      ['/firmendaten#datensicherung', SETTINGS_TARGET_PATHS.backup],
       ['/firmendaten#unbekannt', '/einstellungen/firma'],
+      [LEGACY_OPERATING_SETTINGS_ROUTE, '/einstellungen'],
     ];
     for (const [entry, expected] of cases) {
       await renderAt(entry);
@@ -216,15 +234,15 @@ describe('SETTINGS-01B5 — Betrieb, Legacy-Ablösung', () => {
       expect(host.querySelector('#profile-companyName'), entry).toBeNull();
       await unmount();
     }
-    expect(resolveFirmendatenLegacyTarget('#datensicherung')).toBe(OPERATING_SETTINGS_BACKUP_HREF);
-    expect(SETTINGS_BACKUP_HREF).toBe(OPERATING_SETTINGS_BACKUP_HREF);
+    expect(resolveFirmendatenLegacyTarget('#datensicherung')).toBe(SETTINGS_TARGET_PATHS.backup);
+    expect(SETTINGS_BACKUP_HREF).toBe(SETTINGS_TARGET_PATHS.backup);
   });
 
-  /* ---------------- Betrieb (10–16) ---------------- */
+  /* ---------------- Sprache, Sicherung, Rollen (10–16) — seit AP5 an den eigenen Zielen ---------------- */
 
-  it('T10–T12: Sprache sichtbar mit bestehendem Wert; Wechsel wirkt sofort über CompanySetup.language (keine zweite Speicherung)', async () => {
-    await renderAt(OPERATING_SETTINGS_ROUTE);
-    const switcher = q('settings-operating-language-switcher')!;
+  it('T10–T12: Sprache sichtbar mit bestehendem Wert; Wechsel wirkt lokal sofort über CompanySetup.language (keine zweite Speicherung)', async () => {
+    await renderAt(SETTINGS_TARGET_PATHS['account-language']);
+    const switcher = q('account-language-switcher')!;
     expect(switcher).not.toBeNull();
     expect(switcher.querySelector('[data-testid="language-option-de"]')?.className).toContain('chip--active');
     for (const code of ['de', 'tr', 'bg']) {
@@ -237,43 +255,40 @@ describe('SETTINGS-01B5 — Betrieb, Legacy-Ablösung', () => {
     expect(getCachedSetup().language).toBe('tr');
     expect(host.textContent).toMatch(/Sprache gespeichert|Dil kaydedildi/);
     expect(host.textContent).toContain('Geçerli dil');
-    // Kein eigener Speichern-Knopf auf der Betriebsseite.
-    expect(q('settings-operating-save')).toBeNull();
+    // Kein eigener Speichern-Knopf für die Sprache.
     expect(host.querySelector('form.settings-form')).toBeNull();
   });
 
-  it('T13/T14: Datensicherung ist erreichbar (Export + Wiederherstellung); Sync-Status und Link auf /synchronisation', async () => {
-    await renderAt(OPERATING_SETTINGS_BACKUP_HREF);
+  it('T13/T14: Datensicherung ist erreichbar (Export + Wiederherstellung) auf „Daten › Sicherung“', async () => {
+    await renderAt(SETTINGS_BACKUP_HREF);
+    expect(q('settings-backup-page')).not.toBeNull();
     expect(q('backup-section')).not.toBeNull();
     expect(host.querySelector('#datensicherung')).not.toBeNull();
     expect(q('backup-export-panel')?.querySelector('button')).not.toBeNull();
     expect(q('backup-export-panel')?.querySelector('input[type="file"]')).not.toBeNull();
-    expect(q('settings-operating-sync-status')?.textContent).toBeTruthy();
-    expect(q('settings-operating-sync-last')).not.toBeNull();
-    expect(q('settings-operating-sync-link')?.getAttribute('href')).toBe('/synchronisation');
-    expect(q('settings-operating-sync-link')?.textContent).toContain('Synchronisation verwalten');
-    await click('settings-operating-sync-link');
-    expect(pathNow()).toBe('/synchronisation');
   });
 
-  it('T15/T16: Benutzerverwaltung nur für Admin; member sieht Hinweis und keine Schreibmöglichkeit', async () => {
-    await renderAt(OPERATING_SETTINGS_ROUTE);
-    expect(q('settings-operating-users-link')?.getAttribute('href')).toBe('/admin/users');
-    expect(q('settings-operating-more-link')?.getAttribute('href')).toBe('/mehr');
-    await unmount();
-
+  it('T15/T16: Mitglied sieht nur seine Ziele; Sicherung nur mit Hinweis; Admin sieht Sicherung und Kontenrahmen', async () => {
     vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(true);
     seedWorkspace('member');
-    await renderAt(OPERATING_SETTINGS_ROUTE);
-    expect(q('settings-operating-role')?.textContent).toContain('Benutzerkonto');
-    expect(q('settings-operating-role')?.textContent).toContain('Administratoren');
+    await renderAt('/einstellungen');
+    expect(q('settings-entry-backup')).toBeNull();
+    expect(q('settings-entry-chart-of-accounts')).toBeNull();
+    expect(q('settings-entry-account-language')).not.toBeNull();
+    expect(q('settings-entry-sync')?.getAttribute('href')).toBe('/synchronisation');
+    await unmount();
+
+    await renderAt(SETTINGS_BACKUP_HREF);
+    expect(q('backup-export-not-allowed')?.getAttribute('data-variant')).toBe('role');
+    expect(q('backup-export-panel')).toBeNull();
     expect(host.querySelector('form.settings-form')).toBeNull();
-    expect(q('settings-operating-language-switcher')).not.toBeNull();
     await unmount();
 
     seedWorkspace('admin');
-    await renderAt(OPERATING_SETTINGS_ROUTE);
-    expect(q('settings-operating-role')?.textContent).toContain('Sie können'); // BROWSER-ACCEPTANCE-FIX 01 / C4 — Sie-Form
+    await renderAt('/einstellungen');
+    expect(q('settings-entry-backup')?.getAttribute('href')).toBe('/einstellungen/daten/sicherung');
+    expect(q('settings-entry-chart-of-accounts')?.getAttribute('href')).toBe('/einstellungen/kontenrahmen');
+    expect(q('settings-entry-workspace-delete')).toBeNull();
   });
 
   /* ---------------- taxFreeNotice (17–20) ---------------- */
@@ -282,7 +297,8 @@ describe('SETTINGS-01B5 — Betrieb, Legacy-Ablösung', () => {
     hydrateVorgangStore([{ ...createTestVorgang({ id: 'v-tf', status: 'beauftragt', orderPositions: [createOrderPosition({ id: 'op-1', unit: 'm²', plannedQuantity: 10, unitPrice: 10 })] }), invoices: [] } as Vorgang]);
     hydrateCompanyProfileStore({ ...SAVED, defaultTaxStatus: 'tax_free' });
     const before = buildManualInvoiceDraft({ billing: CUSTOMER }, setup);
-    expect(before.legalNotices).toEqual(['Die Leistung ist steuerfrei bzw. ohne Umsatzsteuer.']);
+    // EINRICHTUNG-01 (AP6; V-02) — genau ein Standardhinweis aus einer Quelle (taxNoticeTexts).
+    expect(before.legalNotices).toEqual(['Die Leistung ist ohne Umsatzsteuer.']);
     const base = buildInvoiceDraftForType('v-tf', setup, 'rechnung')!;
     const finalized = finalizeInvoiceDraft('v-tf', updateInvoiceDraftMetadata(updateDraftPositionQuantity(base, base.positions[0]!.id, 10), { servicePeriodFrom: '2026-09-01', servicePeriodTo: '2026-09-05', servicePeriodConfirmed: true }), setup);
     expect(finalized.ok).toBe(true);
@@ -309,7 +325,7 @@ describe('SETTINGS-01B5 — Betrieb, Legacy-Ablösung', () => {
     expect(buildLegalNotices('tax_free', getCompanyProfile())).toEqual(['Steuerfrei nach § 4 Nr. 1 UStG.']);
     expect(buildLegalNotices('standard_19', getCompanyProfile())).toEqual([]);
     // Alter Draft und finalisierte Rechnung bleiben.
-    expect(before.legalNotices).toEqual(['Die Leistung ist steuerfrei bzw. ohne Umsatzsteuer.']);
+    expect(before.legalNotices).toEqual(['Die Leistung ist ohne Umsatzsteuer.']);
     const invoiceAfter = getVorgangInvoice('v-tf', finalized.invoice.id)!;
     expect(immutableInvoiceFingerprint(invoiceAfter, 'v-tf')).toBe(fingerprint);
     expect(invoiceAfter.legalNotices).toEqual(invoiceBefore.legalNotices);
@@ -319,13 +335,14 @@ describe('SETTINGS-01B5 — Betrieb, Legacy-Ablösung', () => {
   /* ---------------- Legacy (21–26) ---------------- */
 
   it('T21–T24: nirgends mehr die alte Firmendaten-UI — keine doppelte Logo-, Defaults- oder Backup-Sektion', async () => {
-    for (const route of ['/einstellungen', '/einstellungen/firma', '/einstellungen/rechnungen', '/einstellungen/design', OPERATING_SETTINGS_ROUTE]) {
+    const BACKUP = SETTINGS_TARGET_PATHS.backup;
+    for (const route of ['/einstellungen', '/einstellungen/firma', '/einstellungen/rechnungen', '/einstellungen/design', BACKUP]) {
       await renderAt(route);
       expect(host.querySelector('#profile-companyName'), route).toBeNull();
       expect(host.querySelector('#profile-logo-file'), route).toBeNull();
       expect(host.querySelector('#profile-payment-days'), route).toBeNull();
-      expect(host.querySelectorAll('[data-testid="backup-section"]').length, route).toBe(route === OPERATING_SETTINGS_ROUTE ? 1 : 0);
-      expect(host.querySelectorAll('input[type="file"]').length, route).toBe(route === '/einstellungen/design' ? 1 : route === OPERATING_SETTINGS_ROUTE ? 1 : 0);
+      expect(host.querySelectorAll('[data-testid="backup-section"]').length, route).toBe(route === BACKUP ? 1 : 0);
+      expect(host.querySelectorAll('input[type="file"]').length, route).toBe(route === '/einstellungen/design' ? 1 : route === BACKUP ? 1 : 0);
       expect(host.querySelectorAll('[data-testid="settings-invoices-skontoEnabled"]').length, route).toBe(route === '/einstellungen/rechnungen' ? 1 : 0);
       expect(host.querySelectorAll('[data-testid="pilot-hints-panel"]').length, route).toBe(0);
       await unmount();

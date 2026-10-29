@@ -166,4 +166,10 @@ export const trDelivery = {
   'delivery.state.hint.complained': 'Alıcı e-postayı istenmeyen olarak bildirdi. OfficeTakt otomatik olarak tekrar göndermez.',
   'delivery.state.history.title': 'Teslimat geçmişi',
   'delivery.state.history.hint': 'E-posta servisinin geri bildirimleri. Açılma veya okunma kaydedilmez.',
+
+  'delivery.error.code.reply_to_unavailable': 'Bu işletme için onaylanmış bir yanıt adresi yok. Lütfen Ayarlar › İletişim › E-posta göndereni ve şablonlar altında yanıt adresini onaylayın veya işletme sahibinin giriş e-postasını onaylayın. Hiçbir şey gönderilmedi.',
+
+  'delivery.testMode.stub': 'Test modu: E-postalar teslim edilmez.',
+  'delivery.testMode.recipients': 'Test modu: E-postalar yalnızca izin verilen test alıcılarına gider.',
+  'delivery.testMode.misconfigured': 'Test modu hatalı yapılandırılmış: Hiçbir şey gönderilmez.',
 } as const;

@@ -16,6 +16,7 @@ import { createMailProvider, resolveMailProviderName } from '../_shared/emailPro
 import { EMAIL_ATTACHMENT_BUCKET } from '../_shared/emailMessageRules.ts';
 import { resolveConfiguredSenderEmail, resolveTestRecipientAllowlist } from '../_shared/sendDocumentCore.ts';
 import { runSendEmail, type EmailMessageRow, type SendEmailErrorCode } from '../_shared/sendEmailCore.ts';
+import { readWorkspaceAccessDenial, workspaceAccessErrorCode } from '../_shared/workspaceAccess.ts';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -84,6 +85,21 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const userId = userData?.user?.id ?? null;
   if (userError || !userId) return fail('unauthenticated');
 
+  /*
+   * EINRICHTUNG-01 (AP1, Vertrag 1.1, Z-05.5) — die zentrale Zugriffsregel vor allem anderen. Eine nicht wirksame
+   * Betriebslizenz heisst license_not_effective; Sperre, Freigabe, Mitgliedschaft und Rolle bleiben forbidden.
+   */
+  const access = await readWorkspaceAccessDenial(admin, workspaceId, userId, 'write');
+  if (!access.ok) {
+    log({ outcome: 'access_check_failed' });
+    return fail('server_error');
+  }
+  if (access.denial) {
+    const code = workspaceAccessErrorCode(access.denial);
+    log({ outcome: code });
+    return json({ ok: false, error: code }, code === 'invalid_request' ? 400 : 403);
+  }
+
   const provider = createMailProvider({ provider: providerName, brevoApiKey: Deno.env.get('BREVO_API_KEY') });
   const testRecipientAllowlist = resolveTestRecipientAllowlist(Deno.env.get('MAIL_TEST_RECIPIENT_ALLOWLIST'));
 
@@ -97,6 +113,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
           const { data, error } = await admin.rpc('workspace_user_can_write', { p_workspace_id: ws, p_user_id: user });
           if (error) throw new Error(`can_write: ${error.message}`);
           return data === true;
+        },
+        async resolveReplyTo(ws) {
+          // EINRICHTUNG-01 (AP6; E18) — bei jedem Versand neu, nur der Server entscheidet.
+          const { data, error } = await admin.rpc('resolve_workspace_reply_to', { p_workspace_id: ws });
+          if (error) throw new Error(`reply_to: ${error.message}`);
+          const row = (data ?? {}) as Record<string, unknown>;
+          if (row.ok === true && typeof row.email === 'string') {
+            return { ok: true as const, email: row.email, source: row.source === 'confirmed_reply_to' ? ('confirmed_reply_to' as const) : ('owner_login' as const) };
+          }
+          return { ok: false as const, code: 'reply_to_unavailable' as const };
         },
         async loadMessage(ws, id) {
           const { data, error } = await admin.rpc('get_workspace_email_message_for_send', { p_workspace_id: ws, p_client_message_id: id });

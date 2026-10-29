@@ -19,6 +19,7 @@ import {
   type CompanyContext,
   type DeliveryRow,
   type InvoiceContext,
+  type ReplyToResolution,
   type SendDocumentDeps,
   type TestRecipientAllowlist,
 } from '../../../supabase/functions/_shared/sendDocumentCore';
@@ -73,6 +74,8 @@ const INVOICE: InvoiceContext = {
 
 interface FakeOptions {
   company?: CompanyContext | null;
+  /** EINRICHTUNG-01 (AP6; E18) — Antwort des Servers auf die Frage nach der Antwortadresse. */
+  replyTo?: ReplyToResolution;
   allowlist?: TestRecipientAllowlist;
   /** Provider-Aufruf künstlich verzögern (Parallelität sichtbar machen). */
   providerDelayMs?: number;
@@ -95,6 +98,8 @@ function fakeDb(initial: DeliveryRow, options: FakeOptions = {}) {
     userCanWrite: vi.fn(async () => true),
     // Jeder Aufruf bekommt seine eigene Momentaufnahme — wie ein SELECT.
     loadDelivery: vi.fn(async () => ({ delivery: { ...row }, invoice: INVOICE, company: options.company ?? null })),
+    // EINRICHTUNG-01 (AP6; E18) — die Antwortadresse bestimmt der Server bei jedem Versand.
+    resolveReplyTo: vi.fn(async () => options.replyTo ?? ({ ok: true, email: 'inhaber@betrieb.invalid', source: 'owner_login' } as const)),
     downloadAttachment: vi.fn(async () => PDF),
     sha256Hex,
     provider: {
@@ -293,37 +298,43 @@ describe('07B — Testempfänger-Schutz (MAIL_TEST_RECIPIENT_ALLOWLIST)', () => 
   });
 });
 
+/*
+ * EINRICHTUNG-01 (AP6; E18, K4) — die Antwortadresse bestimmt der Server (`resolve_workspace_reply_to`): die bestätigte
+ * Antwortadresse des Betriebs, sonst die bestätigte Anmelde-E-Mail des Inhabers. Die gespeicherte Wunschadresse und die
+ * Firmen-E-Mail werden nie verwendet; ohne bestätigte Adresse: kein Versand (`reply_to_unavailable`).
+ */
 describe('07B — Absendername und Antwortadresse (serverseitig aus dem Workspace)', () => {
-  it('eigener Anzeigename und eigene Antwortadresse erreichen den Provider — auch beim Rechnungsversand', async () => {
+  it('eigener Anzeigename erreicht den Provider; Antwortadresse ist die bestätigte des Betriebs — auch beim Rechnungsversand', async () => {
     const db = fakeDb(await invoiceRow(), {
       company: { companyName: 'Betrieb', legalForm: 'GmbH', email: 'info@betrieb.invalid', senderDisplayName: 'Meister Müller', replyToEmail: 'Buero@Betrieb.invalid' },
+      replyTo: { ok: true, email: 'buero@betrieb.invalid', source: 'confirmed_reply_to' },
     });
     await send(db.deps);
     expect(db.calls.sent[0].from).toEqual({ email: SENDER, name: 'Meister Müller' });
     expect(db.calls.sent[0].replyTo.email).toBe('buero@betrieb.invalid');
   });
 
-  it('keine Antwortadresse eingestellt: Firmen-E-Mail aus dem Rechnungs-Snapshot', async () => {
-    const db = fakeDb(await invoiceRow(), { company: { companyName: 'Betrieb', email: 'aktuell@betrieb.invalid', senderDisplayName: '', replyToEmail: '' } });
+  it('unbestätigte Wunschadresse: Antworten an die bestätigte Anmelde-E-Mail des Inhabers, nie an die Firmen-E-Mail', async () => {
+    const db = fakeDb(await invoiceRow(), { company: { companyName: 'Betrieb', email: 'aktuell@betrieb.invalid', senderDisplayName: '', replyToEmail: 'wunsch@betrieb.invalid' } });
     await send(db.deps);
     expect(db.calls.sent[0].from.name).toBe('Betrieb GmbH');
-    expect(db.calls.sent[0].replyTo.email).toBe('info@betrieb.invalid');
+    expect(db.calls.sent[0].replyTo.email).toBe('inhaber@betrieb.invalid');
   });
 
-  it('ungültige Antwortadresse: kein Versand, sichere Meldung', async () => {
-    const db = fakeDb(await invoiceRow(), { company: { companyName: 'Betrieb', email: 'info@betrieb.invalid', replyToEmail: 'kaputt@' } });
+  it('keine bestätigte Adresse (E-03.11): kein Versand, kein Claim, sichere Meldung mit Weg', async () => {
+    const db = fakeDb(await invoiceRow(), { company: { companyName: 'Betrieb', email: 'info@betrieb.invalid', replyToEmail: 'kaputt@' }, replyTo: { ok: false, code: 'reply_to_unavailable' } });
     const outcome = await send(db.deps);
-    expect(outcome).toMatchObject({ ok: true, action: 'failed', delivery: { errorCode: 'sender_reply_to_invalid' } });
+    expect(outcome).toMatchObject({ ok: true, action: 'failed', delivery: { errorCode: 'reply_to_unavailable' } });
     expect(db.calls.sent).toHaveLength(0);
     expect(db.calls.claims).toBe(0);
   });
 
   it('Resolver: exakte Werte für Rechnung und Dokument', () => {
-    expect(resolveSenderIdentity(INVOICE, { senderDisplayName: 'Anzeige', replyToEmail: 'Antwort@Betrieb.invalid' })).toEqual({ ok: true, fromName: 'Anzeige', replyTo: 'antwort@betrieb.invalid' });
-    expect(resolveSenderIdentity(INVOICE, null)).toEqual({ ok: true, fromName: 'Betrieb GmbH', replyTo: 'info@betrieb.invalid' });
-    expect(resolveSenderIdentity(INVOICE, { replyToEmail: 'x' })).toEqual({ ok: false, code: 'sender_reply_to_invalid' });
-    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', email: 'info@betrieb.invalid', senderDisplayName: 'Anzeige' })).toEqual({ ok: true, fromName: 'Anzeige', replyTo: 'info@betrieb.invalid' });
-    // Antwortadresse allein genügt auch ohne Firmen-E-Mail.
-    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', email: '', replyToEmail: 'antwort@betrieb.invalid' })).toEqual({ ok: true, fromName: 'Betrieb', replyTo: 'antwort@betrieb.invalid' });
+    expect(resolveSenderIdentity(INVOICE, { senderDisplayName: 'Anzeige', replyToEmail: 'wunsch@betrieb.invalid' }, 'Antwort@Betrieb.invalid')).toEqual({ ok: true, fromName: 'Anzeige', replyTo: 'antwort@betrieb.invalid' });
+    expect(resolveSenderIdentity(INVOICE, null, 'inhaber@betrieb.invalid')).toEqual({ ok: true, fromName: 'Betrieb GmbH', replyTo: 'inhaber@betrieb.invalid' });
+    expect(resolveSenderIdentity(INVOICE, null, 'x')).toEqual({ ok: false, code: 'reply_to_unavailable' });
+    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', email: 'info@betrieb.invalid', senderDisplayName: 'Anzeige' }, 'inhaber@betrieb.invalid')).toEqual({ ok: true, fromName: 'Anzeige', replyTo: 'inhaber@betrieb.invalid' });
+    // Ein ungültiger gespeicherter Anzeigename fällt auf die Ableitung zurück (E-04).
+    expect(resolveCompanySenderIdentity({ companyName: 'Betrieb', legalForm: 'GmbH', senderDisplayName: 'info@betrieb.invalid' }, 'inhaber@betrieb.invalid')).toEqual({ ok: true, fromName: 'Betrieb GmbH', replyTo: 'inhaber@betrieb.invalid' });
   });
 });

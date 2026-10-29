@@ -46,9 +46,14 @@ export interface BackupValidationPreview {
   exportedAt: string;
   schemaVersion: number;
   recordCounts: BackupRecordCounts;
+  /** EINRICHTUNG-01 (AP7; 1.23) — Zählung je Bereich des enthaltenen Bestands, auch für ältere Sicherungen. */
+  areaCounts: import('./backupExport').BackupAreaCounts;
   fileCount: number;
   totalFileBytes: number;
   /** Human-oriented total size label is left to UI; raw bytes provided. */
+  /** EINRICHTUNG-01 (S-13.3) — Teilsicherung: fehlende Dateien vor dem Ersetzen zeigen. */
+  incomplete?: boolean;
+  missingFiles?: import('./backupExport').BackupMissingFileEntry[];
 }
 
 export type BackupValidationResult =
@@ -69,6 +74,8 @@ export type BackupValidationResult =
       ok: false;
       reason: BackupValidateFailureReason;
       errorKey: BackupValidateErrorKey;
+      /** EINRICHTUNG-01 (S-11.4) — Fundstellen von Zugangsdaten als Pfad, nie der Wert. */
+      secretPaths?: string[];
     };
 
 export type ValidatedBackupBundle = Extract<BackupValidationResult, { ok: true }>;

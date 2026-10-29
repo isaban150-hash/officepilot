@@ -13,11 +13,13 @@ export interface ReadOnlyNoticeProps {
   title?: ReactNode;
   className?: string;
   testId?: string;
+  /** EINRICHTUNG-01 (AP5; 1.16) — Variante des einheitlichen Einstellungshinweises, als `data-variant` lesbar. */
+  variant?: string;
 }
 
-export function ReadOnlyNotice({ message, title, className = '', testId = 'read-only-notice' }: ReadOnlyNoticeProps) {
+export function ReadOnlyNotice({ message, title, className = '', testId = 'read-only-notice', variant }: ReadOnlyNoticeProps) {
   return (
-    <div className={['read-only-notice', className].filter(Boolean).join(' ')} role="status" data-testid={testId}>
+    <div className={['read-only-notice', className].filter(Boolean).join(' ')} role="status" data-testid={testId} data-variant={variant}>
       <Icon id="lock" size="sm" className="read-only-notice__icon" />
       <div className="read-only-notice__text">
         {title ? <p className="read-only-notice__title">{title}</p> : null}

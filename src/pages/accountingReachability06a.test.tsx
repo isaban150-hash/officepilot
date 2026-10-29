@@ -20,7 +20,7 @@ import { AuthProvider } from '../context/AuthContext';
 import { DEFAULT_SETUP } from '../data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { AusgabeDetailPage } from './AusgabeDetailPage';
-import { OperatingSettingsPage } from './settings/OperatingSettingsPage';
+import { ChartOfAccountsSettingsPage } from './settings/ChartOfAccountsSettingsPage';
 import { setExpenseStoreForTests } from '../services/expenseStore';
 import { setAccountingStoreForTests } from '../services/accounting/accountingStore';
 import { hydrateWorkspaceStore } from '../services/workspace/workspaceStore';
@@ -106,11 +106,11 @@ async function zeige(path: string, element: React.ReactElement, pattern: string)
 /* ================================================================== */
 
 describe('06A — die Kontierung ist in der Anwendung erreichbar', () => {
-  /* 1 — Einstellungen: der Kontenrahmen ist bedienbar. */
-  it('S1: die Betriebseinstellungen zeigen die Kontenrahmen-Auswahl', async () => {
-    await zeige('/einstellungen/betrieb', <OperatingSettingsPage />, '/einstellungen/betrieb');
+  /* 1 — Einstellungen: der Kontenrahmen ist bedienbar (seit EINRICHTUNG-01 AP5 eigene Seite „Buchhaltung › Kontenrahmen“). */
+  it('S1: die Einstellungsseite Kontenrahmen zeigt die Kontenrahmen-Auswahl', async () => {
+    await zeige('/einstellungen/kontenrahmen', <ChartOfAccountsSettingsPage />, '/einstellungen/kontenrahmen');
 
-    expect(q('settings-operating-accounting'), 'der Buchhaltungsabschnitt fehlt').not.toBeNull();
+    expect(q('settings-accounting-section'), 'der Buchhaltungsabschnitt fehlt').not.toBeNull();
     const select = q('settings-chart-of-accounts-select') as HTMLSelectElement;
     expect(select, 'die Auswahl fehlt').not.toBeNull();
     expect([...select.options].map((o) => o.value)).toEqual(['SKR03', 'SKR04']);
@@ -121,7 +121,7 @@ describe('06A — die Kontierung ist in der Anwendung erreichbar', () => {
   });
 
   it('S2: die Auswahl lässt sich speichern und bleibt nach erneutem Betreten stehen', async () => {
-    await zeige('/einstellungen/betrieb', <OperatingSettingsPage />, '/einstellungen/betrieb');
+    await zeige('/einstellungen/kontenrahmen', <ChartOfAccountsSettingsPage />, '/einstellungen/kontenrahmen');
 
     const select = q('settings-chart-of-accounts-select') as HTMLSelectElement;
     const setter = Object.getOwnPropertyDescriptor(
@@ -136,7 +136,7 @@ describe('06A — die Kontierung ist in der Anwendung erreichbar', () => {
     expect(q('settings-chart-of-accounts-unset'), 'jetzt ist es eine Entscheidung').toBeNull();
 
     // Seite neu betreten — wie nach einem Reload aus dem persistierten Zustand.
-    await zeige('/einstellungen/betrieb', <OperatingSettingsPage />, '/einstellungen/betrieb');
+    await zeige('/einstellungen/kontenrahmen', <ChartOfAccountsSettingsPage />, '/einstellungen/kontenrahmen');
     expect((q('settings-chart-of-accounts-select') as HTMLSelectElement).value).toBe('SKR04');
   });
 

@@ -2,7 +2,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AppPersistedState, StoredInvoiceEntry, Vorgang, VorgangInvoice } from '../../types/models';
 import type { SyncOutboxEntry, SyncSimulationReport } from '../../types/sync';
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
-import { isClosureBusinessRejection, isFinalBusinessRejectionMessage, isFinalPermissionDenialMessage } from './syncRoleDenial';
+import {
+  isClosureBusinessRejection,
+  isFinalBusinessRejectionMessage,
+  isFinalPermissionDenialMessage,
+  isSessionNotActiveMessage,
+  isWorkspaceAccessChangedMessage,
+} from './syncRoleDenial';
+import { reportSessionInvalid } from '../auth/sessionInvalidationService';
 import type {
   SyncAcknowledgeInput,
   SyncAdapter,
@@ -291,6 +298,10 @@ export function appendMissingInvoicePositionRefsToReport(
  *    als `error` und ging mit jedem automatischen Lauf (Start, Änderung, Fokus, alle
  *    90 s) erneut hinaus — nach dem Entsperren nahm der Server ihn an.
  *  * Alles andere (Netz, Zeitüberlauf, Serverfehler) → `error`, weiter wiederholbar.
+ *  * EINRICHTUNG-01 (AP1) — beendete Sitzung (`session_not_active`, Vertrag 1.8) → `error`,
+ *    nicht wiederholbar und nie endgültig: Die Anmeldung wird verlangt, der Auftrag bleibt
+ *    beim Ursprung. Gleichzeitige Rechteänderung (`workspace_access_changed`, 40001,
+ *    Vertrag 1.9) → `error`, wiederholbar: Der nächste Lauf erhält die endgültige Antwort.
  *
  * Die Einstufung folgt der Servermeldung, nicht nur dem Fehlercode: Finanzwege melden
  * `finance_account_blocked` ohne SQLSTATE 42501.
@@ -301,6 +312,14 @@ function pushFailureOutcome(
 ): { status: SyncOutboxEntry['status']; retryable: boolean } {
   if (error instanceof WorkspaceCloudError && error.code === 'version_conflict') {
     return { status: 'blocked', retryable: error.retryable };
+  }
+  if (isSessionNotActiveMessage(message)) {
+    // EINRICHTUNG-01 (AP2, B3) — der Server bestätigt: Diese Sitzung besteht nicht mehr. Anmeldung verlangt.
+    reportSessionInvalid('session_not_active');
+    return { status: 'error', retryable: false };
+  }
+  if (isWorkspaceAccessChangedMessage(message)) {
+    return { status: 'error', retryable: true };
   }
   if (isFinalPermissionDenialMessage(message)) {
     return { status: 'failed', retryable: false };

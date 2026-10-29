@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { resolveCloudConfirmedActionAccess } from '../services/workspace/workspaceRoleService';
 import { Link, useLocation } from 'react-router-dom';
 import { PageHeader, StatusBadge } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -35,10 +36,13 @@ export function AusgabenPage() {
   const location = useLocation();
   /* GO-LIVE-SECURITY-01 / ABSCHLUSS — Ausgaben erfassen nur Inhaber, Verwaltung und der lokale Betrieb. */
   const authUser = useOptionalAuth()?.user;
-  const darfFinanzen = resolveWorkspaceWriteAccess({
-    userId: authUser?.id,
-    cloudConfigured: isSupabaseConfigured(),
-  }).canWrite;
+  // EINRICHTUNG-01 (AP2, Vertrag 1.11) — zusätzlich gesperrt, solange die Rechte nur aus dem Zwischenspeicher stammen.
+  const darfFinanzen = resolveCloudConfirmedActionAccess(
+    resolveWorkspaceWriteAccess({
+      userId: authUser?.id,
+      cloudConfigured: isSupabaseConfigured(),
+    }),
+  );
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<ExpenseCategory | 'all'>('all');
   const [expenses, setExpenses] = useState(getAllExpenses);

@@ -8,8 +8,9 @@ import { useAuth } from '../context/AuthContext';
 
 /**
  * UIUX-FOUNDATION-01C — „Mehr“ ist eine ruhige, gruppierte Sekundär-
- * navigation (Arbeit / Finanzen & Dokumente / OfficePilot / Konto & System)
- * statt einer Wand gleichgewichtiger Karten. Quelle: `navConfig`.
+ * navigation (Arbeit / Finanzen & Dokumente / OfficePilot) statt einer Wand
+ * gleichgewichtiger Karten. Quelle: `navConfig`. Seit EINRICHTUNG-01 (AP5,
+ * Vertrag 1.15) ohne Einstellungsziele und ohne Gruppe „System“.
  * Admin-Ziele nur nach bestehender `isAdmin`-Logik.
  */
 export function MehrPage() {

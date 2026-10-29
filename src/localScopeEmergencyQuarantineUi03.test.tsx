@@ -27,6 +27,7 @@ import { DEFAULT_SETUP } from './data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from './data/companyProfileDefaults';
 import { clearMockRpcHandlers, registerMockRpcHandler } from './test/mockProfileStore';
 import { resetTestStores } from './test/resetStores';
+import { alsBestaetigtesKonto } from './test/recoveryIdentityTestUtils';
 import {
   QUARANTINE_MARKER_PREFIX,
   buildQuarantineMarkerKey,
@@ -322,6 +323,10 @@ beforeEach(async () => {
   spiedPrepare().mockReset().mockImplementation(actualService.prepareTargetBackupSession);
   spiedVerify().mockReset().mockImplementation(actualService.verifyReselectedTargetBackup);
   spiedQuarantine().mockReset().mockImplementation(actualService.createTargetQuarantine);
+  // EINRICHTUNG-01 (AP1, E8) — gebundene Bestände gibt die Notfallseite erst nach vom Server bestätigter
+  // Anmeldung frei. Diese Abläufe gelten unverändert für das bestätigte Konto, dem die Bestände gehören
+  // (Inhaber der Betriebsbestände). Die Freigaberegel selbst prüft localRecoveryE8Ap1.test.tsx.
+  alsBestaetigtesKonto('konto-ui-inhaber');
 
   localStorage.clear();
   sessionStorage.clear();
