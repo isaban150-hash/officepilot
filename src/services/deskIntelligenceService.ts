@@ -44,6 +44,7 @@ const MAX_SUCCESSES = 4;
 
 const PENDING_DESK_KEYS: Record<string, TranslationKey> = {
   'pending.highlight.newInbox': 'desk.priority.newDocuments',
+  'pending.highlight.newInboxOne': 'desk.priority.newDocumentOne',
   'pending.highlight.deferredInbox': 'desk.priority.deferredDocuments',
   'pending.highlight.overdueInvoiceOne': 'desk.priority.overdueInvoiceOne',
   'pending.highlight.overdueInvoicesMany': 'desk.priority.overdueInvoicesMany',

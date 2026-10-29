@@ -56,6 +56,7 @@ export type BankReconciliationRefusal =
    * Abschlags eingefroren; Geld danach gehört auf die Schlussrechnung.
    */
   | 'final_invoice_exists'
+  /* P1 A-04 Produktregel A — `expense_tax_split_open` entfällt: Eine offene Steueraufteilung hindert die Zuordnung nicht mehr. */
   | 'offline';
 
 export type BankReconciliationOutcome =

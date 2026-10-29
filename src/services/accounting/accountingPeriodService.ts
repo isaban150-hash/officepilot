@@ -33,6 +33,7 @@ import {
 } from './accountingPeriodStore';
 import { buildClosureRevisionStatusMap, isActiveClosure, isClosureCloudMode } from './accountingPeriodRevisionStatus';
 import { auditExpenseMoneyIntegrity } from '../expense/expenseMoneyIntegrity';
+import { isExpenseTaxSplitOpen } from '../expense/expenseTaxSplit';
 import { getAllExpensesFromStore } from '../expenseStore';
 import { generateUuid } from '../sync/syncMetaService';
 import { getLastPersistSuccess, persistAll } from '../persistenceService';
@@ -158,9 +159,25 @@ export function collectPeriodBlockers(
   const monthExpenseIds = new Set(
     manifest.entries.filter((entry) => entry.sourceType === 'expense').map((entry) => entry.sourceId),
   );
-  const audit = auditExpenseMoneyIntegrity(
-    getAllExpensesFromStore().filter((expense) => monthExpenseIds.has(expense.id)),
-  );
+  const allExpenses = getAllExpensesFromStore();
+  const monthExpenses = allExpenses.filter((expense) => monthExpenseIds.has(expense.id));
+  const audit = auditExpenseMoneyIntegrity(monthExpenses);
+  /*
+   * P1 A-04 Produktregel A (Server: workspace_fc_abschluss_projektion6, Grund `zahlung_steuer_offen`) — eine Zahlung
+   * dieses Monats auf einen Beleg mit offener Steueraufteilung aus einem **anderen** Monat (liegt der Beleg im Monat,
+   * greift schon `tax_split_open`). Bis zur Klärung kein endgültiger Abschluss; der Abschlusstext bleibt unverändert.
+   */
+  const expenseById = new Map(allExpenses.map((expense) => [expense.id, expense]));
+  const paymentsOnOpenTaxSplit = [
+    ...new Set(
+      (manifest.payments ?? [])
+        .filter((payment) => payment.sourceType === 'expense' && !monthExpenseIds.has(payment.sourceId))
+        .map((payment) => payment.sourceId),
+    ),
+  ].filter((id) => {
+    const expense = expenseById.get(id);
+    return Boolean(expense) && expense!.status !== 'storniert' && isExpenseTaxSplitOpen(expense!);
+  });
 
   return [
     blocker('unassigned_documents', unassigned),
@@ -169,6 +186,18 @@ export function collectPeriodBlockers(
     blocker('confirmed_without_account', confirmedWithoutAccount),
     blocker('money_integrity', audit.invalid.map((entry) => entry.id)),
     blocker('unconfirmed_financial_changes', unconfirmedSourceIds),
+    /*
+     * P1-KORREKTURBLOCK A-04 — eine offene Steueraufteilung ist keine Buchung: Netto und Steuer sind Platzhalter.
+     * Lösbar: Netto und Vorsteuer vom Beleg übernehmen — auch nach einer Zahlung (Produktregel A, Brutto bleibt fest).
+     * Altbestand mit Prüfbefund blockiert bewusst nicht — er wird nur lesend gekennzeichnet (Monatsmappe, Detail).
+     */
+    blocker(
+      'tax_split_open',
+      monthExpenses
+        .filter((expense) => expense.status !== 'storniert' && isExpenseTaxSplitOpen(expense))
+        .map((expense) => expense.id),
+    ),
+    blocker('tax_split_open_payment', paymentsOnOpenTaxSplit),
   ].filter((item): item is AccountingPeriodBlocker => item !== null);
 }
 
@@ -183,7 +212,15 @@ function resolveReadiness(
      * Ein Abschluss, zu dem die Daten nicht mehr passen, bleibt nicht einfach
      * „abgeschlossen". Genau das ist der Punkt des Blocks.
      */
-    return activeClosure.fingerprint === fingerprint ? 'closed' : 'changed_after_close';
+    if (activeClosure.fingerprint !== fingerprint) return 'changed_after_close';
+    /*
+     * P1 A-04 (Nacharbeit WEISS, Abschlussgültigkeit) — derselbe Stand, aber inzwischen ein Sperrgrund: etwa eine
+     * Zahlung dieses Monats auf einen Beleg eines anderen Monats, dessen Steueraufteilung wieder offen ist (der
+     * Fingerprint bindet die Aufteilung fremder Belege nicht), eine noch unbestätigte Finanzänderung oder eine offene
+     * Aufteilung, die eine ältere Fassung nicht bindet. Für jeden Sperrgrund gleich, nicht nur für einen Code. Die
+     * Revision bleibt unverändert und aktiv, gilt aber bis zur Behebung nicht; danach gilt sie wieder — ohne neue Revision.
+     */
+    return blockers.length > 0 ? 'recheck_required' : 'closed';
   }
   if (blockers.length > 0) return 'not_ready';
   /*
@@ -225,15 +262,18 @@ export function buildAccountingPeriodState(
    * jeder neue Abschluss entsteht mit Version 3 (P1 MITARBEITERZAHLUNGEN: samt
    * Mitarbeiterzahlungen); Abschlüsse der Version 2 bleiben nach Version 2 gültig.
    */
-  const manifest = buildPeriodManifest(
-    model,
-    assignments,
-    chartOfAccounts,
-    // FINANZ-CORE-01A (Gesamtnacharbeit INV-04) — neue Abschlüsse mit Version 4 (Skonto und Zahlungsart gebunden).
-    // Systemische Gesamtnacharbeit — neue Revisionen mit Fassung 5 (servervalidiert, inkl. kumulierter offener Posten).
-    activeClosure ? closureFingerprintVersion(activeClosure) : 5,
-  );
+  // FINANZ-CORE-01A (Gesamtnacharbeit INV-04) — neue Abschlüsse mit Version 4 (Skonto und Zahlungsart gebunden).
+  // Systemische Gesamtnacharbeit — neue Revisionen mit Fassung 5 (servervalidiert, inkl. kumulierter offener Posten).
+  // P1-KORREKTUR A04-WEISS-R2 — neue Revisionen mit Fassung 6 (zusätzlich Steueraufteilung und Vorsteuerabzug).
+  const fassung = activeClosure ? closureFingerprintVersion(activeClosure) : 6;
+  const manifest = buildPeriodManifest(model, assignments, chartOfAccounts, fassung);
   const fingerprint = buildPeriodFingerprint(manifest);
+  /*
+   * P1 A-04 (Nacharbeit WEISS, Abschlussgültigkeit) — die Sperrgründe gelten nach den heutigen Regeln, nicht nach der
+   * Fassung der Revision: Fassung 1 kennt etwa keine Zahlungen und sähe eine Zahlung auf einen Beleg mit offener
+   * Steuerprüfung nie. Der Fingerprint bleibt nach der Fassung der Revision geprüft (keine stille Umdeutung).
+   */
+  const regelManifest = fassung === 6 ? manifest : buildPeriodManifest(model, assignments, chartOfAccounts, 6);
   const unconfirmedSources = collectUnconfirmedFinancialSources(model.monthKey, {
     outbox,
     assignments,
@@ -245,7 +285,7 @@ export function buildAccountingPeriodState(
     cloudMode,
   });
   const blockers = [
-    ...collectPeriodBlockers(manifest, sourceTaxOf(model), unconfirmedSources.map((source) => source.sourceId)),
+    ...collectPeriodBlockers(regelManifest, sourceTaxOf(model), unconfirmedSources.map((source) => source.sourceId)),
     /*
      * Systemische Gesamtnacharbeit (SYS-02 / D5) — das letzte Speichern ist gescheitert: Der Bestand im Speicher ist
      * dann weder gesichert noch eingereiht (die Persistenz nimmt den Sendeauftrag zurück). Darauf wird weder
@@ -254,16 +294,18 @@ export function buildAccountingPeriodState(
     ...(getLastPersistSuccess() ? [] : [{ code: 'persist_failed' as const, count: 1, sourceIds: [] as string[] }]),
   ];
   const revisionStatus = buildClosureRevisionStatusMap(closures, { cloudMode, outbox });
+  const readiness = resolveReadiness(manifest, blockers, activeClosure, fingerprint);
 
   return {
     monthKey: model.monthKey,
     unconfirmedSources,
-    readiness: resolveReadiness(manifest, blockers, activeClosure, fingerprint),
+    readiness,
     blockers,
     currentFingerprint: fingerprint,
     currentManifest: manifest,
     activeClosure,
-    isCurrentClosureValid: activeClosure !== null && activeClosure.fingerprint === fingerprint,
+    // P1 A-04 (Nacharbeit WEISS) — gültig ist nur, was auch „abgeschlossen“ heißt: gleicher Stand und kein Sperrgrund.
+    isCurrentClosureValid: readiness === 'closed',
     revisionHistory: [...closures].sort((a, b) => b.revision - a.revision),
     activeClosureStatus: activeClosure ? revisionStatus[activeClosure.id] ?? null : null,
     revisionStatus,

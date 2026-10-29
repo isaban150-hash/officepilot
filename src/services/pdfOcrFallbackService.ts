@@ -8,7 +8,7 @@ import {
   type PdfDocumentError,
 } from './pdfDocumentService';
 import { buildPageMarker } from './documentSegmentationService';
-import { withSharedOcrWorker } from './tesseractOcrService';
+import { isOcrEngineUnavailableError, withSharedOcrWorker } from './tesseractOcrService';
 
 export interface PdfOcrResult {
   text: string;
@@ -16,7 +16,8 @@ export interface PdfOcrResult {
   pagesProcessed: number;
   pageCount?: number;
   pageTexts?: Array<{ pageNumber: number; text: string; items?: Array<{ str?: string }> }>;
-  errorCode?: PdfDocumentError['code'];
+  /** `ocr_unavailable` (Abschluss-Rundgang R-09): die Datei ist lesbar, nur die Texterkennung startete nicht. */
+  errorCode?: PdfDocumentError['code'] | 'ocr_unavailable';
   message?: string;
 }
 
@@ -90,6 +91,17 @@ async function ocrPdfPages(bytes: Uint8Array, options: PdfOcrOptions): Promise<P
       await pdf.destroy();
     }
   } catch (error) {
+    // R-09 — die PDF ist geladen, aber die Engine startete nicht: kein „PDF beschädigt“.
+    if (isOcrEngineUnavailableError(error)) {
+      return {
+        text: '',
+        confidence: 0,
+        pagesProcessed: 0,
+        pageCount: options.pageCount,
+        errorCode: 'ocr_unavailable',
+        message: error.message,
+      };
+    }
     const mapped = error as PdfDocumentError;
     if (mapped?.code && mapped?.message) {
       return {

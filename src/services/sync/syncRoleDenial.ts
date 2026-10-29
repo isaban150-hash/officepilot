@@ -147,6 +147,14 @@ const FINAL_BUSINESS_REJECTIONS = [
   'paid_on ungueltig',
   // INV-10 — ein freigegebenes Angebot ist ein Beleg; eine Änderung daran wird nie angenommen.
   'Angebot ist freigegeben und kann nicht mehr geaendert werden',
+  /*
+   * P1-KORREKTUR A04-WEISS-R1/R2 — der Serververtrag der Steueraufteilung: widersprüchliche oder unzulässige
+   * Aufteilung bzw. Abzugsangabe, Zahlung auf eine offene Aufteilung, Änderung in einem mit älterer Fassung
+   * abgeschlossenen Monat. Derselbe Auftrag scheitert beim nächsten Mal genauso.
+   */
+  'expense_tax_split_',
+  'expense_input_tax_deduction_',
+  'expense_payment_tax_split_open',
 ] as const;
 
 /**

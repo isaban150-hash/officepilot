@@ -764,7 +764,7 @@ export function buildPendingSummary(
   pushHighlight(highlights, {
     id: 'new-inbox',
     kind: 'inbox_new',
-    labelKey: 'pending.highlight.newInbox',
+    labelKey: newInboxItems === 1 ? 'pending.highlight.newInboxOne' : 'pending.highlight.newInbox',
     count: newInboxItems,
     route: '/ablage',
   });
@@ -838,7 +838,7 @@ export function buildPendingSummary(
   pushHighlight(highlights, {
     id: 'due-soon-invoices',
     kind: 'invoice_due_soon',
-    labelKey: 'pending.highlight.dueSoonInvoices',
+    labelKey: dueSoonInvoices === 1 ? 'pending.highlight.dueSoonInvoiceOne' : 'pending.highlight.dueSoonInvoices',
     count: dueSoonInvoices,
     route: '/rechnungen/offen',
   });
@@ -846,7 +846,7 @@ export function buildPendingSummary(
   pushHighlight(highlights, {
     id: 'partial-invoices',
     kind: 'invoice_partial',
-    labelKey: 'pending.highlight.partialInvoices',
+    labelKey: partialInvoices === 1 ? 'pending.highlight.partialInvoiceOne' : 'pending.highlight.partialInvoices',
     count: partialInvoices,
     route: '/rechnungen/offen',
   });

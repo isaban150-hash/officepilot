@@ -7,7 +7,7 @@ import {
 import { extractTextFromPdfBytes } from './uploadTextExtractionService';
 import { extractPdfTextViaOcr, shouldRunPdfOcr } from './pdfOcrFallbackService';
 import { getPdfPageCount } from './pdfDocumentService';
-import { recognizeImageOrCanvas } from './tesseractOcrService';
+import { isOcrEngineUnavailableError, recognizeImageOrCanvas } from './tesseractOcrService';
 import type { DocumentLayoutPage } from '../types/documentLayout';
 import {
   extractVisibleFactsFromLayout,
@@ -45,7 +45,9 @@ export type DocumentTextErrorCode =
   | 'heic_unsupported'
   | 'heic_conversion_failed'
   | 'password_required'
-  | 'pdf_corrupt';
+  | 'pdf_corrupt'
+  /** Abschluss-Rundgang R-09 — die Texterkennung startete nicht (Engine/Sprachdaten nicht ladbar); kein Dateifehler. */
+  | 'ocr_unavailable';
 
 export interface DocumentTextExtractionResult {
   recognizedText: string;
@@ -237,6 +239,8 @@ async function extractFromPdfBytes(
       pdfErrorCode = 'password_required';
     } else if (ocr.errorCode === 'pdf_corrupt' || ocr.errorCode === 'render_failed') {
       pdfErrorCode = 'pdf_corrupt';
+    } else if (ocr.errorCode === 'ocr_unavailable') {
+      pdfErrorCode = 'ocr_unavailable';
     }
 
     const picked = pickBestPdfVariant(directRaw, ocr.text, ocr.confidence);
@@ -328,7 +332,17 @@ async function extractFromImage(file: File): Promise<DocumentTextExtractionResul
       messageKey: recognizedText ? undefined : OCR_TEXT_HINT_KEYS.noText,
       qualityHintKey: partialRecognition ? OCR_TEXT_HINT_KEYS.partial : undefined,
     });
-  } catch {
+  } catch (error) {
+    // R-09 — startet die Engine nicht, ist das Foto nicht „unscharf“: eigener Fehler, die Datei bleibt verwendbar.
+    if (isOcrEngineUnavailableError(error)) {
+      return finalizeResult({
+        recognizedText: '',
+        displayText: '',
+        confidence: 'none',
+        sourceType: 'image',
+        errorCode: 'ocr_unavailable',
+      });
+    }
     return finalizeResult({
       recognizedText: '',
       displayText: '',

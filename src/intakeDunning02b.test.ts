@@ -78,6 +78,9 @@ function seed(seeds: Seed[]) {
       grossAmount: s.brutto,
       netAmount: s.brutto,
       taxAmount: 0,
+      // P1 A-04 Produktregel B (27.10.2026): 0 € Steuer nur mit einem Steuerstatus ohne Umsatzsteuer — ohne Angabe gilt
+      // „unklar“, und „unklar“ mit 0 € wird abgewiesen. Die Steuer spielt in diesen Mahnfällen keine Rolle.
+      taxStatus: 'tax_free',
       isCreditNote: Boolean(s.gutschrift),
       status: 'gebucht',
     } as Parameters<typeof addExpense>[0]);

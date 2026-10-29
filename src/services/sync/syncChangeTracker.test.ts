@@ -110,6 +110,13 @@ describe('syncChangeTrackerService', () => {
       category: 'material',
       supplierName: 'Lieferant GmbH',
       issueDate: '2026-03-01',
+      /*
+       * P1-KORREKTURBLOCK A-04 — mit belegter Steueraufteilung: Ohne Netto/Steuer wäre sie offen, und auf eine
+       * offene Aufteilung wird (bewusst) keine Zahlung gebucht. Gegenstand hier ist nur die Sync-Verfolgung.
+       */
+      taxStatus: 'standard_19',
+      netAmount: 100.84,
+      taxAmount: 19.16,
       grossAmount: 120,
     });
     expect(created.success).toBe(true);

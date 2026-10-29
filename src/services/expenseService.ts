@@ -20,12 +20,25 @@ import {
   normalizeExpense,
 } from './expenseNormalize';
 import { normalizeExpensePaymentFields } from './expensePaymentCalculations';
-import { fromCents, isValidMoneyNumber, toCents } from './invoiceMoney';
+import { fromCents, toCents } from './invoiceMoney';
 import {
   checkExpenseMoneyIntegrity,
+  isZeroRateTaxStatus,
   type ExpenseMoneyAmounts,
 } from './expense/expenseMoneyIntegrity';
 import { getVorgangById } from './vorgangService';
+import { getActiveClosureForMonth } from './accounting/accountingPeriodStore';
+import { closureFingerprintVersion } from './accounting/accountingPeriodFingerprint';
+import {
+  buildExpenseTaxSplitRequestForUpdate,
+  expenseTaxSplitClosureAttributesChanged,
+  isExpenseTaxSplitOpen,
+  planExpenseTaxSplit,
+  resolveExpenseInputTaxDeduction,
+  resolveExpenseTaxSplitState,
+  touchesExpenseTaxSplit,
+  type ExpenseTaxSplitPlan,
+} from './expense/expenseTaxSplit';
 import {
   recordExpensePayment,
   removeExpensePayment,
@@ -36,7 +49,9 @@ import type {
   ExpenseAllocation,
   ExpenseCategory,
   ExpenseInput,
+  ExpenseInputTaxDeduction,
   ExpenseSummary,
+  ExpenseTaxSplit,
 } from '../types/expense';
 import type { DigitalFolder, PaperFilingRule, TaxStatus } from '../types/models';
 
@@ -134,19 +149,49 @@ function resolveExpenseTaxStatus(input: ExpenseInput): TaxStatus {
  * Steuerbetrag 0, und damit ergab `netto + steuer` −100 statt −119. Für alle
  * Fälle mit brutto ≥ netto ändert sich nichts; der einzige Unterschied liegt
  * dort, wo die Klammer bisher einen ungültigen Beleg erzeugt hat.
+ *
+ * P1-KORREKTURBLOCK A-04 — fehlen Netto **und** Steuer, wird daraus keine Nullsteuer mehr: Die Aufteilung ist
+ * dann `offen` (Platzhalter Netto = Brutto, Steuer 0, ausdrücklich gekennzeichnet; siehe `planExpenseTaxSplit`).
+ * Ein angegebener Betrag ergänzt den fehlenden wie bisher als Differenz zum Brutto — nie über einen Steuersatz.
  */
-function resolveExpenseAmounts(input: ExpenseInput): ExpenseMoneyAmounts {
-  const grossAmount = input.grossAmount;
-  const netAmount = input.netAmount ?? grossAmount;
-  const taxAmount =
-    input.taxAmount ??
-    (isValidMoneyNumber(grossAmount) && isValidMoneyNumber(netAmount)
-      ? fromCents(toCents(grossAmount) - toCents(netAmount))
-      : Number.NaN);
-  return { netAmount, taxAmount, grossAmount, taxStatus: resolveExpenseTaxStatus(input) };
+type ResolvedExpenseMoney = ExpenseMoneyAmounts & {
+  readonly taxSplit?: ExpenseTaxSplit;
+  readonly inputTaxDeduction?: ExpenseInputTaxDeduction;
+  readonly deductibleTaxAmount?: number;
+};
+
+function moneyFromPlan(
+  input: Pick<ExpenseInput, 'grossAmount'>,
+  taxStatus: TaxStatus,
+  plan: Extract<ExpenseTaxSplitPlan, { ok: true }>,
+): ResolvedExpenseMoney {
+  return {
+    netAmount: plan.netAmount,
+    taxAmount: plan.taxAmount,
+    grossAmount: input.grossAmount,
+    taxStatus,
+    taxSplit: plan.taxSplit,
+    ...(plan.inputTaxDeduction ? { inputTaxDeduction: plan.inputTaxDeduction } : {}),
+    ...(plan.deductibleTaxAmount !== undefined ? { deductibleTaxAmount: plan.deductibleTaxAmount } : {}),
+  };
 }
 
-function validateInput(input: ExpenseInput): string | null {
+function resolveExpenseAmounts(input: ExpenseInput): { ok: true; money: ResolvedExpenseMoney } | { ok: false; errorKey: string } {
+  const taxStatus = resolveExpenseTaxStatus(input);
+  const plan = planExpenseTaxSplit({
+    grossAmount: input.grossAmount,
+    taxStatus,
+    netAmount: input.netAmount,
+    taxAmount: input.taxAmount,
+    taxSplit: input.taxSplit,
+    inputTaxDeduction: input.inputTaxDeduction,
+    deductibleTaxAmount: input.deductibleTaxAmount,
+  });
+  if (!plan.ok) return plan;
+  return { ok: true, money: moneyFromPlan(input, taxStatus, plan) };
+}
+
+function validateBaseInput(input: ExpenseInput): string | null {
   if (!input.supplierName?.trim()) return 'expense.supplierRequired';
   if (!input.title?.trim()) return 'expense.titleRequired';
   if (!input.issueDate?.trim()) return 'expense.issueDateRequired';
@@ -154,17 +199,20 @@ function validateInput(input: ExpenseInput): string | null {
     return 'expense.amountRequired';
   }
   if (!EXPENSE_CATEGORIES.includes(input.category)) return 'expense.categoryRequired';
+  return null;
+}
 
-  /*
-   * FINANZCORE-05B — die Geldinvariante, an genau einer Stelle für beide
-   * Schreibwege. `addExpense` prüft die Eingabe, `updateExpense` prüft den
-   * zusammengeführten Stand — beide laufen durch diese Funktion, also kann
-   * keiner von beiden die Prüfung umgehen.
-   *
-   * Fail-closed: Ein widersprüchlicher Beleg wird nicht gerundet, nicht
-   * korrigiert und nicht gespeichert. Er wird abgelehnt.
-   */
-  const money = checkExpenseMoneyIntegrity(resolveExpenseAmounts(input));
+/**
+ * FINANZCORE-05B — die Geldinvariante, an genau einer Stelle für beide
+ * Schreibwege. `addExpense` prüft die Eingabe, `updateExpense` prüft den
+ * zusammengeführten Stand — beide laufen durch diese Funktion, also kann
+ * keiner von beiden die Prüfung umgehen.
+ *
+ * Fail-closed: Ein widersprüchlicher Beleg wird nicht gerundet, nicht
+ * korrigiert und nicht gespeichert. Er wird abgelehnt.
+ */
+function validateMoney(amounts: ExpenseMoneyAmounts): string | null {
+  const money = checkExpenseMoneyIntegrity(amounts);
   if (!money.ok) {
     /*
      * FINANZCORE-05B-FIX1 — die Reihenfolge der Meldungen.
@@ -190,6 +238,7 @@ function validateInput(input: ExpenseInput): string | null {
 
 function buildExpenseFromInput(
   input: ExpenseInput,
+  money: ResolvedExpenseMoney,
   id: string,
   createdAt: string,
   updatedAt: string,
@@ -197,7 +246,7 @@ function buildExpenseFromInput(
   const supplierName = input.supplierName.trim();
   const invoiceNumber = input.invoiceNumber?.trim() ?? '';
   // FINANZCORE-05B — dieselbe Aufloesung, die auch geprueft wurde.
-  const { netAmount, taxAmount, grossAmount, taxStatus } = resolveExpenseAmounts(input);
+  const { netAmount, taxAmount, grossAmount, taxStatus } = money;
 
   return normalizeExpense({
     id,
@@ -214,6 +263,10 @@ function buildExpenseFromInput(
     netAmount,
     taxAmount,
     grossAmount,
+    // A-04 — wie die Aufteilung belegt ist (offen = Platzhalter, keine Steueraussage).
+    ...(money.taxSplit ? { taxSplit: money.taxSplit } : {}),
+    ...(money.inputTaxDeduction ? { inputTaxDeduction: money.inputTaxDeduction } : {}),
+    ...(money.deductibleTaxAmount !== undefined ? { deductibleTaxAmount: money.deductibleTaxAmount } : {}),
     currency: input.currency ?? 'EUR',
     paymentStatus: 'offen',
     payments: [],
@@ -296,15 +349,19 @@ export function isDuplicateExpense(
 }
 
 export function addExpense(input: ExpenseInput): ExpenseMutationResult {
-  const validationError = validateInput(input);
-  if (validationError) return { success: false, errorKey: validationError };
+  const baseError = validateBaseInput(input);
+  if (baseError) return { success: false, errorKey: baseError };
+  const resolved = resolveExpenseAmounts(input);
+  if (!resolved.ok) return { success: false, errorKey: resolved.errorKey };
+  const moneyError = validateMoney(resolved.money);
+  if (moneyError) return { success: false, errorKey: moneyError };
 
   const duplicate = isDuplicateExpense(input.supplierName, input.invoiceNumber ?? '');
   if (duplicate) return { success: false, errorKey: 'expense.duplicate' };
 
   const now = new Date().toISOString();
   const expense = withNewEntitySync(
-    buildExpenseFromInput(input, generateEntityId('exp'), now, now),
+    buildExpenseFromInput(input, resolved.money, generateEntityId('exp'), now, now),
     'expense',
   );
   appendExpenseToStore(expense);
@@ -348,6 +405,66 @@ function isAccountingRelevantExpenseChange(before: Expense, after: ExpenseInput)
   );
 }
 
+/**
+ * P1-KORREKTURBLOCK A-04 — ändert sich die fachliche Steueraufteilung (Zustand, Vorsteuerabzug), gilt eine
+ * Bestätigung der Kontierung nicht mehr. Verglichen werden die wirksamen Zustände: Ein Altbeleg, der beim
+ * Speichern nur das Kennzeichen „belegt“ erhält, ändert nichts.
+ */
+function isTaxSplitRelevantChange(before: Expense, after: Expense): boolean {
+  return (
+    resolveExpenseTaxSplitState(before) !== resolveExpenseTaxSplitState(after) ||
+    resolveExpenseInputTaxDeduction(before) !== resolveExpenseInputTaxDeduction(after) ||
+    amountChanged(after.deductibleTaxAmount ?? 0, before.deductibleTaxAmount ?? 0)
+  );
+}
+
+/** A04-WEISS-R2 — liegt der alte oder neue Belegmonat in einem Abschluss der Fassung 1–5? */
+function isClosedWithOlderFingerprintVersion(before: Expense, after: Expense): boolean {
+  return [...new Set([before.issueDate.slice(0, 7), after.issueDate.slice(0, 7)])].some((monthKey) => {
+    const closure = getActiveClosureForMonth(monthKey);
+    return closure !== undefined && closureFingerprintVersion(closure) < 6;
+  });
+}
+
+/** A-04 — der Geldstand einer Änderung: unberührt exakt der gespeicherte, sonst die eine Auflösung. */
+function resolveExpenseMoneyForUpdate(
+  current: Expense,
+  changes: Partial<ExpenseInput>,
+): { ok: true; touched: boolean; money: ResolvedExpenseMoney } | { ok: false; errorKey: string } {
+  if (!touchesExpenseTaxSplit(current, changes)) {
+    return {
+      ok: true,
+      touched: false,
+      money: {
+        netAmount: current.netAmount,
+        taxAmount: current.taxAmount,
+        grossAmount: current.grossAmount,
+        taxStatus: current.taxStatus,
+        ...(current.taxSplit ? { taxSplit: current.taxSplit } : {}),
+        ...(current.inputTaxDeduction ? { inputTaxDeduction: current.inputTaxDeduction } : {}),
+        ...(current.deductibleTaxAmount !== undefined ? { deductibleTaxAmount: current.deductibleTaxAmount } : {}),
+      },
+    };
+  }
+  const request = buildExpenseTaxSplitRequestForUpdate(current, changes);
+  const plan = planExpenseTaxSplit(request);
+  if (!plan.ok) return plan;
+  /*
+   * WEISS-A04-01 — derselbe Übergang wie der Server (`upsert_workspace_expense`, Regel (e)): Eine offene Aufteilung wird
+   * nur mit belegter Steuer (≠ 0) oder einem Steuerstatus ohne Umsatzsteuer geklärt. „Belegt“ mit 0 € Steuer beim
+   * Steuerstatus „unklar“ (für 19 %/7 % weist das schon `planExpenseTaxSplit` ab) würde der Server endgültig abweisen.
+   */
+  if (
+    isExpenseTaxSplitOpen(current) &&
+    !isZeroRateTaxStatus(request.taxStatus) &&
+    plan.taxSplit !== 'offen' &&
+    toCents(plan.taxAmount) === 0
+  ) {
+    return { ok: false, errorKey: 'expense.taxSplit.openNeedsTax' };
+  }
+  return { ok: true, touched: true, money: moneyFromPlan({ grossAmount: request.grossAmount }, request.taxStatus, plan) };
+}
+
 export function updateExpense(id: string, changes: Partial<ExpenseInput>): ExpenseMutationResult {
   const current = getExpenseFromStoreById(id);
   if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
@@ -367,24 +484,57 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
     if (nextStatus === 'entwurf' && current.status !== 'entwurf') {
       return { success: false, errorKey: 'expense.edit.statusLockedAfterPayment' };
     }
+    /*
+     * P1 A-04 Produktregel A — die Zahlung bindet Brutto und Gutschriftkennzeichen. Netto, Steuer und Steuerstatus
+     * bleiben bei offener Steueraufteilung für deren Klärung änderbar (Prüfung des Ergebnisses unten).
+     */
+    const offenNachZahlung = isExpenseTaxSplitOpen(current);
     if (
       amountChanged(changes.grossAmount, current.grossAmount) ||
-      amountChanged(changes.netAmount, current.netAmount) ||
-      amountChanged(changes.taxAmount, current.taxAmount) ||
-      (changes.taxStatus !== undefined && changes.taxStatus !== current.taxStatus) ||
+      (!offenNachZahlung &&
+        (amountChanged(changes.netAmount, current.netAmount) ||
+          amountChanged(changes.taxAmount, current.taxAmount) ||
+          (changes.taxStatus !== undefined && changes.taxStatus !== current.taxStatus))) ||
       (changes.isCreditNote !== undefined && Boolean(changes.isCreditNote) !== Boolean(current.isCreditNote))
     ) {
       return { success: false, errorKey: 'expense.edit.amountLockedAfterPayment' };
     }
   }
   /*
+   * P1-KORREKTURBLOCK A-04 — Beträge und Steueraufteilung. Berührt die Änderung sie nicht (Titel, Ablage,
+   * Beschreibung …), bleibt der gespeicherte Stand **exakt** — auch ein Altbestand wird dabei weder umgerechnet
+   * noch neu bewertet (dieselbe Regel wie serverseitig „Geld unverändert“). Sonst gilt die eine Auflösung.
+   */
+  const money = resolveExpenseMoneyForUpdate(current, changes);
+  if (!money.ok) return { success: false, errorKey: money.errorKey };
+  if (hasBookedExpensePayments(current)) {
+    const splitGeaendert =
+      amountChanged(money.money.netAmount, current.netAmount) ||
+      amountChanged(money.money.taxAmount, current.taxAmount) ||
+      money.money.taxStatus !== current.taxStatus;
+    /*
+     * P1 A-04 Produktregel A (Server: upsert_workspace_expense) — nach einer Zahlung ist eine Netto/Steuer/Status-
+     * Änderung nur die Klärung einer offenen Aufteilung: vorher „offen“, danach belegt, gemischt oder steuerfrei. Ein
+     * Wechsel innerhalb von „offen“ oder eine Neuaufteilung eines schon geklärten Belegs bleibt gesperrt.
+     */
+    const klaerungNachZahlung =
+      isExpenseTaxSplitOpen(current) && resolveExpenseTaxSplitState({ ...current, ...money.money }) !== 'offen';
+    if (amountChanged(money.money.grossAmount, current.grossAmount) || (splitGeaendert && !klaerungNachZahlung)) {
+      // Auch eine aus der Steueraufteilung abgeleitete Betragsänderung ist nach einer Zahlung gesperrt (Server ebenso).
+      return { success: false, errorKey: 'expense.edit.amountLockedAfterPayment' };
+    }
+  }
+
+  /*
    * ORDER-COST-ALLOCATION-01B — ein kleinerer Nettobetrag darf vorhandene
    * Zuordnungen nicht ungültig machen. Statt sie still zu kürzen, lehnt der
    * Dienst die Änderung ab; der Nutzer entscheidet, welche Zuordnung weicht.
    */
   const allocatedCents = allocationCents(current.allocations ?? []);
-  if (allocatedCents > 0 && changes.netAmount !== undefined) {
-    const nextNetCents = toCents(changes.netAmount);
+  if (allocatedCents > 0 && money.touched) {
+    // A-04 — eine offene Aufteilung hat kein belegtes Netto, auf das sich Zuordnungen stützen könnten.
+    if (money.money.taxSplit === 'offen') return { success: false, errorKey: 'expense.taxSplit.openWithAllocations' };
+    const nextNetCents = toCents(money.money.netAmount);
     if (!Number.isFinite(nextNetCents) || nextNetCents < allocatedCents) {
       return { success: false, errorKey: 'expense.allocation.editBelowAllocated' };
     }
@@ -415,8 +565,10 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
     archiveDocumentId: changes.archiveDocumentId ?? current.archiveDocumentId,
   };
 
-  const validationError = validateInput(merged);
-  if (validationError) return { success: false, errorKey: validationError };
+  const baseError = validateBaseInput(merged);
+  if (baseError) return { success: false, errorKey: baseError };
+  const moneyError = validateMoney(money.money);
+  if (moneyError) return { success: false, errorKey: moneyError };
 
   const duplicate = isDuplicateExpense(merged.supplierName, merged.invoiceNumber ?? '', {
     excludeExpenseId: id,
@@ -425,9 +577,18 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
 
   const now = new Date().toISOString();
   const updated = withConfirmedExpenseSync(
-    buildExpenseFromInput(merged, current.id, current.createdAt, now),
+    buildExpenseFromInput(merged, money.money, current.id, current.createdAt, now),
     current,
   );
+  /*
+   * P1-KORREKTUR A04-WEISS-R2 — Aufteilungsart, Vorsteuerabzug und abziehbarer Betrag bindet erst Abschlussfassung 6.
+   * Ist der Belegmonat mit einer älteren Fassung (1–5) abgeschlossen, könnte eine Änderung daran den Export ändern,
+   * ohne dass die Revision es bemerkt. Deshalb ist sie dort gesperrt; der Korrekturweg ist das Wiederöffnen des Monats
+   * (neue Revision). Der Server prüft dasselbe (`upsert_workspace_expense`, expense_tax_split_closed_period).
+   */
+  if (expenseTaxSplitClosureAttributesChanged(current, updated) && isClosedWithOlderFingerprintVersion(current, updated)) {
+    return { success: false, errorKey: 'expense.taxSplit.closedPeriod' };
+  }
   /*
    * FINANZ-CORE-DURABILITY-01D2 — kanonisches Stornodatum. Der Uebergang nach
    * `storniert` setzt `cancelledAt` genau einmal (Zeitpunkt der Entscheidung);
@@ -459,7 +620,9 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
    */
   requireAccountingReviewAfterSourceChange('expense', id, {
     taxTreatment: updated.taxStatus,
-    changed: isAccountingRelevantExpenseChange(current, merged),
+    changed: isAccountingRelevantExpenseChange(current, merged) || isTaxSplitRelevantChange(current, updated),
+    // A-04 — eine offene Steueraufteilung geht in die Klärung; eine nachgetragene zurück in die Prüfung.
+    taxSplitOpen: isExpenseTaxSplitOpen(updated),
   });
   persistAll();
   return { success: true, expense: getExpenseById(id)! };
@@ -554,6 +717,8 @@ export function assignExpenseToVorgang(
   const current = getExpenseFromStoreById(expenseId);
   if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
   if (current.status === 'storniert') return { success: false, errorKey: 'expense.allocation.cancelled' };
+  // A-04 — Zuordnungen verteilen das Netto; bei offener Steueraufteilung ist es nicht belegt (nur ein Platzhalter).
+  if (isExpenseTaxSplitOpen(current)) return { success: false, errorKey: 'expense.allocation.taxSplitOpen' };
 
   const vorgangId = input.vorgangId?.trim() ?? '';
   const vorgang = vorgangId ? getVorgangById(vorgangId) : undefined;

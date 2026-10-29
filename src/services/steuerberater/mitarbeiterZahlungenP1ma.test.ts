@@ -234,10 +234,11 @@ describe('Steuerberater-Paket', () => {
 });
 
 describe('Fingerprint Version 3 — und keine stille Umdeutung alter Abschlüsse', () => {
-  it('Version 3 enthält die Mitarbeiterzahlungen (neue Stände: Version 5, ebenso)', () => {
+  it('Version 3 enthält die Mitarbeiterzahlungen (neue Stände: Version 6, ebenso)', () => {
     // Systemische Gesamtnacharbeit — neue Stände entstehen mit Version 5; sie enthält dieselben Mitarbeiterzahlungen.
     const neu = buildPeriodManifest(buildMonatsmappeModel(eingabe(OKT, [zahlung()])), [], 'SKR03');
-    expect(neu.fingerprintVersion).toBe(5);
+    // P1-KORREKTUR A04-WEISS-R2 — neue Stände seitdem in Version 6 (mit denselben Mitarbeiterzahlungen).
+    expect(neu.fingerprintVersion).toBe(6);
     const manifest = buildPeriodManifest(buildMonatsmappeModel(eingabe(OKT, [zahlung()])), [], 'SKR03', 3);
     expect(neu.employeePayments).toEqual(manifest.employeePayments);
     expect(manifest.fingerprintVersion).toBe(3);

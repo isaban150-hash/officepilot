@@ -45,6 +45,7 @@ import { deAccount } from './account';
 import { deSetupFlow } from './setupFlow';
 import { dePlatform } from './platform';
 import { deTeam } from './team';
+import { deExpenseTaxSplit } from './expenseTaxSplit';
 
 export const deModules = {
   ...deAuth,
@@ -96,4 +97,5 @@ export const deModules = {
   ...deSetupFlow,
   ...dePlatform,
   ...deTeam,
+  ...deExpenseTaxSplit,
 } as const;

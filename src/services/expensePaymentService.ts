@@ -25,6 +25,7 @@ import {
   requiresOverpaymentConfirmation,
 } from './payment/paymentSemantics';
 import { fromCents, toCents } from './invoiceMoney';
+import { isExpenseTaxSplitOpen } from './expense/expenseTaxSplit';
 import type { Expense, ExpensePayment, ExpensePaymentInput } from '../types/expense';
 
 /** FINANZ-CORE-01A (Gesamtnacharbeit INV-08) — ein echter Kalendertag im ISO-Format. */
@@ -68,6 +69,11 @@ export {
 export interface RecordExpensePaymentOptions {
   /** Erforderlich, sobald der Betrag den offenen Rest uebersteigt. */
   confirmOverpayment?: boolean;
+  /**
+   * P1 A-04 Produktregel A — erforderlich bei offener Steueraufteilung: Der Nutzer bestätigt, dass die Zahlung
+   * tatsächlich erfolgt ist. Die Steuerprüfung bleibt dadurch offen (keine Freigabe).
+   */
+  confirmTaxReviewOpen?: boolean;
 }
 
 /** FINANZCORE-05C — verlangt dieser Betrag eine ausdrueckliche Bestaetigung? */
@@ -91,6 +97,7 @@ export function canRecordExpensePayment(
   today: Date | string = new Date(),
 ): boolean {
   if (!isExpensePayable(expense)) return false;
+  // P1 A-04 Produktregel A — auch bei offener Steueraufteilung (der Dialog verlangt dann eine Bestätigung).
   return !isSettledPaymentStatus(calculateExpensePaymentSummary(expense, today).status);
 }
 
@@ -110,6 +117,16 @@ export function recordExpensePayment(
 
   if (isExpenseCancelled(expense)) {
     return { success: false, errorKey: 'expense.payment.cancelled' };
+  }
+
+  /*
+   * P1 A-04 Produktregel A (vorher: erst belegen, dann zahlen) — eine tatsächlich erfolgte Zahlung darf bei offener
+   * Steueraufteilung erfasst werden, aber nur bewusst: Der Nutzer bestätigt, dass sie erfolgt ist. Die Zahlung ändert
+   * den Beleg nicht — die Steuerprüfung bleibt offen, Kontierung und Monatsabschluss bleiben gesperrt; Netto und
+   * Vorsteuer lassen sich danach weiter nachtragen (Brutto bleibt durch die Zahlung gebunden; Server ebenso).
+   */
+  if (isExpenseTaxSplitOpen(expense) && options.confirmTaxReviewOpen !== true) {
+    return { success: false, errorKey: 'expense.payment.taxReviewAckRequired' };
   }
 
   /*

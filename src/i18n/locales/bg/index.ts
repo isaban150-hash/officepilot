@@ -39,6 +39,7 @@ import { bgAccount } from './account';
 import { bgSetupFlow } from './setupFlow';
 import { bgPlatform } from './platform';
 import { bgTeam } from './team';
+import { bgExpenseTaxSplit } from './expenseTaxSplit';
 
 export const bgModules = {
   ...bgAuth,
@@ -87,4 +88,5 @@ export const bgModules = {
   ...bgSetupFlow,
   ...bgPlatform,
   ...bgTeam,
+  ...bgExpenseTaxSplit,
 } as const;

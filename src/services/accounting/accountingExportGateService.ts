@@ -29,6 +29,11 @@ import type { AccountingPeriodRevisionStatus, AccountingPeriodState } from '../.
 export type ExportBlockerCode =
   | 'not_closed'
   | 'changed_after_close'
+  /**
+   * P1 A-04 (Nacharbeit WEISS, Abschlussgültigkeit) — abgeschlossen mit unverändertem Stand, aber inzwischen besteht
+   * ein Sperrgrund (`readiness` = `recheck_required`): erneute Prüfung erforderlich. Die Gründe nennt `period_blockers`.
+   */
+  | 'closure_recheck_required'
   | 'period_blockers'
   /*
    * Systemische Gesamtnacharbeit (Produktentscheidung) — ein reguläres Cloud-Paket braucht eine vom Server geprüfte
@@ -121,8 +126,10 @@ export function evaluateAccountingExportReadiness(
      * Der Abschluss existiert, passt aber nicht mehr zum heutigen Stand. Der
      * gespeicherte Fingerprint wird dabei **nicht** stillschweigend
      * nachgezogen — der Nutzer soll den Monat bewusst erneut prüfen.
+     * P1 A-04 (Nacharbeit WEISS) — bei gleichem Stand mit neuem Sperrgrund heißt das „erneute Prüfung erforderlich“,
+     * nicht „seit Abschluss geändert“: Geändert hat sich am gebundenen Stand nichts.
      */
-    packageBlockers.push({ code: 'changed_after_close' });
+    packageBlockers.push({ code: state.readiness === 'recheck_required' ? 'closure_recheck_required' : 'changed_after_close' });
   }
 
   /*

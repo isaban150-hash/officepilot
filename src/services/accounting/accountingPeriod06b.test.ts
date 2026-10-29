@@ -651,7 +651,8 @@ describe('U — die API für den DATEV-Block', () => {
     });
     // FINANZ-CORE-01A (Gesamtnacharbeit INV-04) — neue Stände entstehen mit Fingerprint-Version 4 (vorher 3).
     // Systemische Gesamtnacharbeit — neue Stände in Fassung 5: SHA-256 über den kanonischen Text, wie der Server.
-    expect(state.currentFingerprint).toMatch(/^p5:[0-9a-f]{64}$/);
+    // P1-KORREKTUR A04-WEISS-R2 — seitdem Fassung 6 (zusätzlich Steueraufteilung und Vorsteuerabzug).
+    expect(state.currentFingerprint).toMatch(/^p6:[0-9a-f]{64}$/);
     expect(state.currentManifest.entries).toHaveLength(1);
     expect(Array.isArray(state.revisionHistory)).toBe(true);
   });

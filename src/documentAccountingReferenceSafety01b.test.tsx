@@ -85,6 +85,12 @@ function seedExpense(
     issueDate: '2026-08-01',
     paymentDueDate: '2026-08-31',
     grossAmount,
+    /*
+     * P1-KORREKTURBLOCK A-04 — die Rechnung mit belegter Steueraufteilung (19 %): Ohne Netto/Steuer wäre sie offen,
+     * und auf eine offene Aufteilung wird bewusst keine Zahlung gebucht. Gegenstand hier ist der Mahnungsbezug.
+     */
+    taxStatus: 'standard_19',
+    taxAmount: Math.round((grossAmount * 19 * 100) / 119) / 100,
     status: 'gebucht',
   });
   expect(result.success, JSON.stringify(result)).toBe(true);

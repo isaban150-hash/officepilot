@@ -10,6 +10,12 @@
 import { amount, buildCsv, date, datetime, integer, text, yesNo, type CsvColumn } from './dataExportFormat';
 import type { AppPersistedState, Customer, StoredInvoiceEntry, VorgangInvoice } from '../../types/models';
 import type { Expense, ExpensePayment } from '../../types/expense';
+import {
+  expenseBookingAmounts,
+  resolveExpenseInputTaxDeduction,
+  resolveExpenseTaxSplitState,
+  type ExpenseTaxSplitState,
+} from '../expense/expenseTaxSplit';
 import type { EmailMessage } from '../../types/emailMessage';
 import type { EmployeePayment } from '../../types/employee';
 import type { SyncEntityType } from '../../types/sync';
@@ -17,6 +23,24 @@ import type { SyncEntityType } from '../../types/sync';
 export type DataExportRole = 'owner' | 'admin' | 'local';
 
 export type CloudStatus = 'confirmed' | 'unconfirmed' | 'local';
+
+/** P1-KORREKTURBLOCK A-04 — die Steueraufteilung einer Ausgabe, wie `ausgaben.csv` sie benennt. */
+const STEUERAUFTEILUNG_TEXT: Record<ExpenseTaxSplitState, string> = {
+  belegt: 'belegt',
+  gemischt: 'belegt, gemischte Steuersätze',
+  steuerfrei: 'ohne Umsatzsteuer (laut Steuerstatus)',
+  offen: 'offen – Netto und Vorsteuer nicht belegt',
+  altbestand_pruefen: 'Altbestand – bitte prüfen (0,00 Steuer bei Regelsteuersatz)',
+};
+
+/** A-04 — abziehbare Vorsteuer: voll = Steuer, teilweise = angegebener Betrag, keiner = 0; sonst leer. */
+function abziehbareVorsteuer(expense: Expense): number | null {
+  const abzug = resolveExpenseInputTaxDeduction(expense);
+  if (abzug === 'voll') return expense.taxAmount;
+  if (abzug === 'teilweise') return typeof expense.deductibleTaxAmount === 'number' ? expense.deductibleTaxAmount : null;
+  if (abzug === 'keiner') return 0;
+  return null;
+}
 
 export const CLOUD_STATUS_TEXT: Record<CloudStatus, string> = {
   confirmed: 'bestätigt',
@@ -287,13 +311,21 @@ export function buildDataExportCsvFiles(input: DataExportAreaInput): DataExportC
     { header: 'Kategorie', cell: (x) => text(x.category) },
     { header: 'Belegdatum', cell: (x) => date(x.issueDate) },
     { header: 'Fällig am', cell: (x) => date(x.paymentDueDate) },
-    { header: 'Netto', cell: (x) => amount(x.netAmount) },
-    { header: 'Umsatzsteuer', cell: (x) => amount(x.taxAmount) },
+    /*
+     * P1-KORREKTURBLOCK A-04 — bei offener Steueraufteilung bleiben Netto und Umsatzsteuer leer: gespeichert sind nur
+     * Platzhalter, keine belegten Werte. Die Spalten zur Steueraufteilung sagen, warum.
+     */
+    { header: 'Netto', cell: (x) => amount(expenseBookingAmounts(x).netto) },
+    { header: 'Umsatzsteuer', cell: (x) => amount(expenseBookingAmounts(x).steuer) },
     { header: 'Brutto', cell: (x) => amount(x.grossAmount) },
     { header: 'Währung', cell: (x) => text(x.currency || CURRENCY_FALLBACK) },
     { header: 'Zahlungsstatus', cell: (x) => text(x.paymentStatus) },
     { header: 'Gutschrift', cell: (x) => yesNo(x.isCreditNote) },
     { header: 'Storniert am', cell: (x) => datetime(x.cancelledAt) },
+    { header: 'Steuerstatus', cell: (x) => text(x.taxStatus) },
+    { header: 'Steueraufteilung', cell: (x) => text(STEUERAUFTEILUNG_TEXT[resolveExpenseTaxSplitState(x)]) },
+    { header: 'Vorsteuerabzug', cell: (x) => text(resolveExpenseInputTaxDeduction(x) ?? '') },
+    { header: 'Abziehbare Vorsteuer', cell: (x) => amount(abziehbareVorsteuer(x)) },
     { header: 'Cloud-Status', cell: (x) => status(lookup, 'expense', x.id) },
   ], expenses));
 

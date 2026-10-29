@@ -20,6 +20,13 @@ import { Badge, DataRow, PageHeader, StatusBadge } from '../components/ui/Card';
 import { DateDisplay, MoneyDisplay } from '../components/ui/Display';
 import { Page } from '../components/ui/Page';
 import { DetailSection, SummaryList } from '../components/ui/Section';
+import { InlineNotice } from '../components/ui/States';
+import {
+  hasPaymentWithOpenTaxReview,
+  resolveExpenseInputTaxDeduction,
+  resolveExpenseTaxSplitState,
+} from '../services/expense/expenseTaxSplit';
+import { expensePaymentStatusLabel } from '../components/expenses/ExpensePaymentBadge';
 import { expenseStatusTone, paymentStatusTone } from '../services/ui/statusTone';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
@@ -195,6 +202,17 @@ export function AusgabeDetailPage() {
   const canCancel = expense.status === 'gebucht' && !cancelled;
   const paymentsBooked = hasBookedExpensePayments(expense);
   /*
+   * P1-KORREKTURBLOCK A-04 — wie Netto und Steuer belegt sind. Offen: keine Beträge, keine Auftragszuordnung, keine
+   * Bestätigung der Kontierung, kein Monatsabschluss; eine tatsächlich erfolgte Zahlung ist möglich (Produktregel A)
+   * und heißt dann „… – Steuerprüfung offen“. Altbestand mit Prüfbefund: nur gekennzeichnet, die gespeicherten Werte
+   * bleiben, bis der Nutzer sie korrigiert.
+   */
+  const taxSplitState = resolveExpenseTaxSplitState(expense);
+  const taxSplitOpen = taxSplitState === 'offen';
+  const taxReviewOpenAfterPayment = hasPaymentWithOpenTaxReview(expense, paymentSummary.paidAmount);
+  const taxSplitLegacy = taxSplitState === 'altbestand_pruefen';
+  const inputTaxDeduction = resolveExpenseInputTaxDeduction(expense);
+  /*
    * ORDER-COST-ALLOCATION-01B — der Auftragsbezug der Ausgabe. Eine stornierte
    * Ausgabe behält ihre Zuordnung als Historie, wird aber nicht mehr geändert.
    */
@@ -225,6 +243,11 @@ export function AusgabeDetailPage() {
    */
   const nextActionKey: TranslationKey | null = cancelled
     ? 'expense.nextAction.cancelled'
+    /* A-04 — ohne belegte Steueraufteilung ist der nächste Schritt Netto und Vorsteuer (auch nach einer Zahlung). */
+    : taxSplitOpen
+      ? taxReviewOpenAfterPayment
+        ? 'expense.taxSplit.nextActionPaid'
+        : 'expense.taxSplit.nextAction'
     : paymentSummary.status === 'gutschrift'
       ? null
       /* FINANZCORE-05C — „nichts weiter zu tun" gilt hier nicht; es liegt Geld zu viel. */
@@ -256,8 +279,8 @@ export function AusgabeDetailPage() {
         }
         status={
           <StatusBadge
-            tone={cancelled ? expenseStatusTone('storniert') : paymentStatusTone(paymentSummary.status)}
-            label={translate(`payment.status.${paymentSummary.status}` as TranslationKey)}
+            tone={cancelled ? expenseStatusTone('storniert') : taxReviewOpenAfterPayment ? 'warning' : paymentStatusTone(paymentSummary.status)}
+            label={expensePaymentStatusLabel(paymentSummary.status, translate, taxReviewOpenAfterPayment)}
             data-testid="ausgabe-payment-status"
           />
         }
@@ -295,7 +318,37 @@ export function AusgabeDetailPage() {
         </p>
       ) : null}
 
-      <DetailSection title={translate('payment.summaryTitle')} surface testId="ausgabe-section-payment">
+      {/*
+        * P1-KORREKTURBLOCK A-04 — fehlende Steueraufteilung sichtbar, mit dem einen Korrekturweg. Eine stornierte
+        * Ausgabe wird nicht mehr bearbeitet; dort sagen es die Detailzeilen.
+        */}
+      {taxSplitOpen && !cancelled ? (
+        <InlineNotice
+          tone="warning"
+          testId="ausgabe-tax-split-open"
+          action={
+            darfFinanzen && !cancelled ? (
+              <Button type="button" variant="outline" onClick={() => setIsEditing(true)} data-testid="ausgabe-tax-split-enter">
+                {translate('expense.taxSplit.enterAction')}
+              </Button>
+            ) : undefined
+          }
+        >
+          {translate('expense.taxSplit.detailOpenNotice')}
+        </InlineNotice>
+      ) : null}
+      {taxSplitLegacy && !cancelled ? (
+        <InlineNotice tone="warning" testId="ausgabe-tax-split-legacy">
+          {translate('expense.taxSplit.detailLegacyNotice').replace(
+            '{status}',
+            translate(`expense.taxStatus.${expense.taxStatus}` as TranslationKey),
+          )}
+          {paymentsBooked ? ` ${translate('expense.taxSplit.detailLegacyLocked')}` : null}
+        </InlineNotice>
+      ) : null}
+
+      {/* P1-Abschluss-Rundgang (R-20) — wie die Rechnung „Betrag & Zahlung“; die Zusammenfassung darin heißt selbst „Zahlungsstand“. */}
+      <DetailSection title={translate('invoiceDetail.section.payment')} surface testId="ausgabe-section-payment">
         <ExpensePaymentSummary expense={expense} translate={translate} />
         <ExpensePaymentHistory
           expense={expense}
@@ -332,6 +385,12 @@ export function AusgabeDetailPage() {
           testIdPrefix="ausgabe"
           // FINANZ-CORE-01A (WEISS-Nacharbeit N06) — die Steuer der Kontierung folgt diesem Beleg.
           sourceTaxTreatment={expense.taxStatus}
+          /*
+           * A-04 — ohne belegte Steueraufteilung keine Bestätigung; der Korrekturweg führt zum Beleg. Eine stornierte
+           * Ausgabe lässt sich nicht mehr nachtragen: Beleg und Storno bucht buchungen.csv ohnehin nicht (leer, als
+           * unklarer Fall genannt) — ihre Kontierung bleibt bestätigbar, damit der Monat abschliessbar bleibt.
+           */
+          sourceTaxSplitOpen={taxSplitOpen && !cancelled}
           onClarifyTax={darfFinanzen && !cancelled ? () => setIsEditing(true) : undefined}
         />
       </DetailSection>
@@ -393,7 +452,7 @@ export function AusgabeDetailPage() {
           />
           <DataRow
             label={translate('expense.fieldPaymentStatus')}
-            value={translate(`payment.status.${paymentSummary.status}` as TranslationKey)}
+            value={expensePaymentStatusLabel(paymentSummary.status, translate, taxReviewOpenAfterPayment)}
           />
           <DataRow
             label={translate('expense.fieldInvoiceNumber')}
@@ -405,8 +464,46 @@ export function AusgabeDetailPage() {
             value={<DateDisplay value={expense.paymentDueDate} />}
           />
           <DataRow label={translate('expense.fieldGrossAmount')} value={<MoneyDisplay value={expense.grossAmount} emphasis />} />
-          <DataRow label={translate('expense.fieldNetAmount')} value={<MoneyDisplay value={expense.netAmount} />} />
-          <DataRow label={translate('expense.fieldTaxAmount')} value={<MoneyDisplay value={expense.taxAmount} />} />
+          {/* A-04 — Platzhalter einer offenen Aufteilung werden nicht als Netto/Steuer angezeigt. */}
+          <DataRow
+            label={translate('expense.fieldNetAmount')}
+            value={
+              <span data-testid="ausgabe-net-amount">
+                {taxSplitOpen ? translate('expense.taxSplit.notProvided') : <MoneyDisplay value={expense.netAmount} />}
+              </span>
+            }
+          />
+          <DataRow
+            label={translate('expense.fieldTaxAmount')}
+            value={
+              <span data-testid="ausgabe-tax-amount">
+                {taxSplitOpen ? translate('expense.taxSplit.notProvided') : <MoneyDisplay value={expense.taxAmount} />}
+              </span>
+            }
+          />
+          <DataRow
+            label={translate('expense.fieldTaxSplit')}
+            value={
+              <span data-testid="ausgabe-tax-split-state">
+                {translate(`expense.taxSplit.state.${taxSplitState}` as TranslationKey)}
+              </span>
+            }
+          />
+          {inputTaxDeduction ? (
+            <DataRow
+              label={translate('expense.fieldInputTaxDeduction')}
+              value={
+                <span data-testid="ausgabe-input-tax-deduction">
+                  {inputTaxDeduction === 'teilweise' && typeof expense.deductibleTaxAmount === 'number'
+                    ? translate('expense.inputTaxDeduction.partialValue').replace(
+                        '{amount}',
+                        formatPaymentCurrency(expense.deductibleTaxAmount),
+                      )
+                    : translate(`expense.inputTaxDeduction.option.${inputTaxDeduction}` as TranslationKey)}
+                </span>
+              }
+            />
+          ) : null}
           {expense.description && (
             <DataRow label={translate('expense.fieldDescription')} value={expense.description} />
           )}
@@ -447,7 +544,8 @@ export function AusgabeDetailPage() {
           </Button>
         ) : null}
         {/* V1-A — Storno sekundär (outline), bestätigt im Dialog; nie die Hauptaktion. */}
-        {!cancelled ? (
+        {/* A-04 — ohne belegtes Netto keine Auftragszuordnung (der Hinweis oben nennt den Grund). */}
+        {!cancelled && !taxSplitOpen ? (
           <Button
             variant="outline"
             onClick={() => setShowAllocationDialog(true)}

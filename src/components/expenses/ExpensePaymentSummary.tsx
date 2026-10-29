@@ -5,6 +5,7 @@ import {
   isExpenseCancelled,
 } from '../../services/expensePaymentService';
 import { ExpensePaymentBadge } from './ExpensePaymentBadge';
+import { hasPaymentWithOpenTaxReview } from '../../services/expense/expenseTaxSplit';
 import type { Expense } from '../../types/expense';
 import type { TranslationKey } from '../../i18n';
 import { InlineNotice } from '../ui/States';
@@ -36,7 +37,11 @@ export function ExpensePaymentSummary({ expense, translate }: Props) {
     <section className="invoice-payment-summary">
       <div className="invoice-payment-summary__header">
         <h3 className="invoice-payment-summary__title">{translate('payment.summaryTitle')}</h3>
-        <ExpensePaymentBadge status={summary.status} translate={translate} />
+        <ExpensePaymentBadge
+          status={summary.status}
+          translate={translate}
+          taxReviewOpen={hasPaymentWithOpenTaxReview(expense, summary.paidAmount)}
+        />
       </div>
 
       {isExpenseCancelled(expense) && (

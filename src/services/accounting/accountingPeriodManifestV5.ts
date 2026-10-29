@@ -66,8 +66,12 @@ export function buildPeriodManifestV5(
       belegnummer: beleg.belegnummer,
       datum: beleg.datum,
       brutto: round(beleg.brutto),
-      netto: roundOrNull(beleg.netto),
-      steuer: roundOrNull(beleg.steuer),
+      /*
+       * P1-KORREKTURBLOCK A-04 — bei offener Steueraufteilung stehen Netto/Steuer in der Monatsmappe leer; der Server
+       * kennt nur die gespeicherten Platzhalter. Gebunden wird, was gespeichert ist — so bleibt der Text beidseitig gleich.
+       */
+      netto: roundOrNull(beleg.fingerprintBetraege ? beleg.fingerprintBetraege.netto : beleg.netto),
+      steuer: roundOrNull(beleg.fingerprintBetraege ? beleg.fingerprintBetraege.steuer : beleg.steuer),
       belegStatus: beleg.status,
       accountNumber: assignment?.accountNumber.trim() ?? '',
       taxTreatment: assignment?.taxTreatment ?? '',

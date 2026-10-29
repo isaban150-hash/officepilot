@@ -474,9 +474,13 @@ describe('E — kein Schreibweg umgeht die Prüfung', () => {
     );
     expect(nurBrutto.success, nurBrutto.success ? '' : JSON.stringify(nurBrutto)).toBe(true);
     if (!nurBrutto.success) return;
-    // Ohne Aufteilung: Netto = Brutto, Steuer = 0 — in sich schlüssig.
+    /*
+     * Ohne Aufteilung: gespeichert werden Platzhalter (Netto = Brutto, Steuer 0 — für den Serververtrag in sich
+     * schlüssig). P1-KORREKTURBLOCK A-04: ausdrücklich als „offen“ gekennzeichnet, keine bestätigte Nullsteuer.
+     */
     expect(nurBrutto.expense.netAmount).toBe(119);
     expect(nurBrutto.expense.taxAmount).toBe(0);
+    expect(nurBrutto.expense.taxSplit).toBe('offen');
     expect(checkExpenseMoneyIntegrity(nurBrutto.expense)).toEqual({ ok: true });
   });
 });

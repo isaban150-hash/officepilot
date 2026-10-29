@@ -280,8 +280,9 @@ describe('N06 S — Steuerbehandlung', () => {
     const danach = getAccountingAssignmentForSource('expense', 'exp-1')!;
     expect(danach).toMatchObject({ taxTreatment: 'standard_19', status: 'needs_review', suggestionReason: 'accounting.reason.sourceTaxChanged' });
     expect(confirmAccountingAssignment('k1', { sourceTaxTreatment: 'standard_19' }).success).toBe(true);
-    // Und zurück auf „unklar": wieder in die Klärung, die Bestätigung fällt.
-    expect(updateExpense('exp-1', { taxStatus: 'unclear', netAmount: 119, taxAmount: 0, grossAmount: 119 }).success).toBe(true);
+    // Und zurück auf „unklar": wieder in die Klärung, die Bestätigung fällt. (P1 A-04 Produktregel B, 27.10.2026: mit
+    // ausgewiesener Steuer — 0 € bei „unklar“ ist keine zulässige Aufteilung mehr; bisher 119/0.)
+    expect(updateExpense('exp-1', { taxStatus: 'unclear', netAmount: 100, taxAmount: 19, grossAmount: 119 }).success).toBe(true);
     expect(getAccountingAssignmentForSource('expense', 'exp-1')).toMatchObject({
       taxTreatment: 'unclear',
       status: 'needs_clarification',

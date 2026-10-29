@@ -21,6 +21,9 @@ export function SteuerberaterHandoverPanel({ status, translate }: Props) {
   const tone = status.state === 'ready' ? 'success' : status.packageAllowed ? 'info' : 'warning';
   const closure = status.issues.includes('changed_after_close')
     ? translate('handover.closure.changed')
+    : status.closedRevision !== null && status.issues.includes('recheck_required')
+      ? // P1 A-04 (Nacharbeit WEISS) — abgeschlossen, Stand unverändert, aber ein Sperrgrund besteht.
+        translate('handover.closure.recheck').replace('{revision}', String(status.closedRevision))
     : status.closedRevision !== null && status.packageAllowed
       ? translate('handover.closure.closed').replace('{revision}', String(status.closedRevision))
       : status.closedRevision !== null && status.issues.includes('not_server_confirmed')

@@ -33,6 +33,20 @@ export interface DocumentFilingDecisionPanelProps {
 }
 
 /**
+ * Abschluss-Rundgang R-17 — die Aktion mitten im Satz: Der erste Buchstabe wird klein („Als Ausgabe speichern“ →
+ * „als Ausgabe speichern“, „Speichern“ → „speichern“). Folgt auf ein großgeschriebenes erstes Wort ein kleingeschriebenes
+ * (Muster „Ausgabe erfassen“, „Aufgabe anlegen“), ist das erste Wort ein Substantiv und bleibt groß.
+ */
+export function inlineActionLabel(label: string): string {
+  const words = label.trim().split(/\s+/);
+  const [first = '', second] = words;
+  const firstCapital = first.charAt(0) !== first.charAt(0).toLocaleLowerCase('de-DE');
+  const secondLower = second !== undefined && second.charAt(0) === second.charAt(0).toLocaleLowerCase('de-DE') && /\p{L}/u.test(second.charAt(0));
+  if (firstCapital && secondLower) return label;
+  return label.charAt(0).toLocaleLowerCase('de-DE') + label.slice(1);
+}
+
+/**
  * Confirm-first Ablageentscheidung: Kundendokument vs. Unternehmensdokument,
  * digitale Ablage, Papierhinweis. Archivierung bleibt beim Host.
  */
@@ -64,9 +78,8 @@ export function DocumentFilingDecisionPanel({
   const documentKindLabel = translate(draft.documentKindLabelKey as TranslationKey);
   const companyAreaLabel = translate(draft.companyAreaLabelKey as TranslationKey);
   // „Ablage bestätigen und als Ausgabe speichern" — die Aktion klein im Satz, groß im Titel.
-  const continueActionInline = continueActionLabel
-    ? continueActionLabel.charAt(0).toLocaleLowerCase('de-DE') + continueActionLabel.slice(1)
-    : '';
+  // Abschluss-Rundgang R-17 — ein Substantiv am Anfang bleibt groß („…und Ausgabe erfassen“, vorher „ausgabe“).
+  const continueActionInline = continueActionLabel ? inlineActionLabel(continueActionLabel) : '';
 
   const handleConfirm = () => {
     const updated = confirmDocumentFilingDecision(item.id, draft);

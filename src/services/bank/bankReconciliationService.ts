@@ -26,6 +26,7 @@ import { persistAll } from '../persistenceService';
  */
 import { getAllInvoiceOverview } from '../invoiceOverviewService';
 import { getAllExpenseOverview } from '../expenseOverviewService';
+import { isExpenseTaxSplitOpen } from '../expense/expenseTaxSplit';
 import { toCents } from '../invoiceMoney';
 import { getSkontoFristStatus, getSkontoSettlementRemainderCents } from '../invoice/skontoSettlement';
 import { hasFrozenFinalInvoiceDeduction } from '../invoice/invoiceCancelEligibility';
@@ -59,6 +60,11 @@ export interface BankConfirmPlan {
    * über diesen Betrag. Dann ist „neu buchen" vermutlich eine Doppelbuchung.
    */
   recordedMatch: BankRecordedPaymentMatch | null;
+  /**
+   * P1 A-04 Produktregel A — die Ausgabe hat noch keine belegte Steueraufteilung. Die Bankzahlung wird trotzdem
+   * zugeordnet; die Anzeige sagt, dass die Steuerprüfung offen bleibt (Kontierung und Monatsabschluss gesperrt).
+   */
+  taxReviewOpen: boolean;
   /** `null` heisst: Die Bestätigung darf angeboten werden. */
   refusal: BankReconciliationRefusal | null;
 }
@@ -95,6 +101,12 @@ function aktuellerOffenerBetrag(kandidat: BankSuggestionCandidate): number {
   /* Der Typ verspricht `number`, zur Laufzeit kommt bei fehlendem Betrag `null`. */
   if (typeof offen !== 'number' || !Number.isFinite(offen)) return kandidat.openCents;
   return Math.max(0, toCents(offen));
+}
+
+/** P1-KORREKTURBLOCK A-04 — hat die Ausgabe noch keine belegte Steueraufteilung? */
+function ausgabeMitOffenerSteueraufteilung(expenseId: string): boolean {
+  const expense = getAllExpenseOverview().find((item) => item.expense.id === expenseId)?.expense;
+  return expense ? isExpenseTaxSplitOpen(expense) : false;
 }
 
 /** FINANZ-CORE-01A (Feiertage) — hängt das Skonto der Rechnung an einem ungeklärten Feiertag? */
@@ -135,6 +147,7 @@ export function planBankConfirmation(
       findRecordedPaymentMatches(transaction).find(
         (treffer) => treffer.targetType === kandidat.targetType && treffer.targetId === kandidat.targetId,
       ) ?? null,
+    taxReviewOpen: kandidat.targetType === 'expense' && ausgabeMitOffenerSteueraufteilung(kandidat.targetId),
   };
 
   if (findReconciliationForTransaction(transaction.id)) {
@@ -154,6 +167,12 @@ export function planBankConfirmation(
   if (kandidat.targetType === 'invoice' && schlussrechnungHaeltAbschlag(kandidat.targetId)) {
     return { ...basis, refusal: 'final_invoice_exists' };
   }
+
+  /*
+   * P1 A-04 Produktregel A (vorher: Ablehnung `expense_tax_split_open`) — eine offene Steueraufteilung hindert die
+   * Zuordnung nicht mehr: Die Bankbewegung belegt, dass gezahlt wurde. `taxReviewOpen` (oben) lässt die Anzeige sagen,
+   * dass die Steuerprüfung offen bleibt. Netto und Vorsteuer bleiben nach der Zahlung nachtragbar (Server ebenso).
+   */
 
   if (openCents <= 0) {
     return { ...basis, refusal: 'nothing_open' };

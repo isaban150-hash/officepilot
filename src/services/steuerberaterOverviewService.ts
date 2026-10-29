@@ -325,7 +325,13 @@ export function getSteuerberaterHandoverStatus(
 ): SteuerberaterHandoverStatus {
   return deriveSteuerberaterHandoverStatus({
     readiness,
-    unclearCases: findings.unclearDocuments.length + findings.model.stornosOhneDatum.length,
+    // P1-KORREKTURBLOCK A-04 — Eingangsbelege mit offener Steueraufteilung sind unklare Fälle der Übergabe.
+    // A04-WEISS-R1 — ebenso ungeprüfter Altbestand (dieselbe Zählung wie das Steuerberaterpaket).
+    unclearCases:
+      findings.unclearDocuments.length +
+      findings.model.stornosOhneDatum.length +
+      (findings.model.offeneSteueraufteilung?.length ?? 0) +
+      (findings.model.altbestandPruefen?.length ?? 0),
     missingProofs: findings.missingItems.length,
   });
 }

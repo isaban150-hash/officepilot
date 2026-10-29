@@ -252,10 +252,10 @@ describe('D9 — Übergabepaket aus einem geprüften Datenstand', () => {
     expect(root).not.toContain('lokal');
     expect(manifest.version).toBe(3);
     expect(manifest.abschlussCloud).toEqual({
-      status: 'angenommen', cloudBestaetigt: true, uebergabeArt: 'regulaer', fingerprintVersion: 5,
+      status: 'angenommen', cloudBestaetigt: true, uebergabeArt: 'regulaer', fingerprintVersion: 6,
       serverRevision: 1, datenstand: 1, validiertAm: getActiveClosureForMonth(SEP)!.closedAt,
     });
-    expect(pruefbericht).toContain('vom Server geprüft und angenommen (Serverrevision 1, Datenstand 1, Fassung 5)');
+    expect(pruefbericht).toContain('vom Server geprüft und angenommen (Serverrevision 1, Datenstand 1, Fassung 6)');
   });
 
   it('D9-3 ohne Serverannahme: kein reguläres Paket; ausdrücklich lokale Übergabe gekennzeichnet, ohne Serverangaben', async () => {
@@ -267,7 +267,7 @@ describe('D9 — Übergabepaket aus einem geprüften Datenstand', () => {
     if (lokal.result.outcome === 'exported') expect(lokal.result.fileName).toContain('_lokal-nicht-cloudbestaetigt');
     const { manifest, pruefbericht } = await manifestAus(lokal.blob);
     expect(manifest.abschlussCloud).toEqual({
-      status: 'ausstehend', cloudBestaetigt: false, uebergabeArt: 'lokal', fingerprintVersion: 5,
+      status: 'ausstehend', cloudBestaetigt: false, uebergabeArt: 'lokal', fingerprintVersion: 6,
       serverRevision: null, datenstand: null, validiertAm: null,
     });
     expect(pruefbericht).toContain('NICHT CLOUDBESTÄTIGT');
@@ -308,7 +308,7 @@ describe('D7 — Sendeweg des Abschlusses: bestätigt, abgewiesen, ausstehend', 
     const id = vorbereitet();
     const fp = getActiveClosureForMonth(SEP)!.fingerprint;
     await senden(() => ({
-      data: { revision: 3, row_version: 1, noop: false, fingerprint: fp, validated_version: 5, finance_revision: 77, validated_at: '2026-10-01T10:00:00.000Z' },
+      data: { revision: 3, row_version: 1, noop: false, fingerprint: fp, validated_version: 6, finance_revision: 77, validated_at: '2026-10-01T10:00:00.000Z' },
       error: null,
     }));
     expect(getActiveClosureForMonth(SEP)?.server).toEqual({ revision: 3, fingerprint: fp, validiert: true, datenstand: 77, bestaetigtAm: '2026-10-01T10:00:00.000Z' });

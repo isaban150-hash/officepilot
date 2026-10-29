@@ -33,6 +33,13 @@ import { isFinalizedInvoice } from '../invoiceArchiveService';
 import { calculatePaymentSummary, getInvoicePayments } from '../invoicePaymentService';
 import { calculateExpensePaymentSummary, getExpensePayments } from '../expensePaymentCalculations';
 import { checkExpenseMoneyIntegrity } from '../expense/expenseMoneyIntegrity';
+import {
+  describeExpenseBookingTaxNote,
+  describeExpenseTaxSplitHint,
+  expenseBookingAmounts,
+  expenseTaxSplitClosureAttributes,
+  type ExpenseTaxSplitClosureAttributes,
+} from '../expense/expenseTaxSplit';
 import { isEntitySyncActive } from '../sync/syncMetaService';
 import { isCloudSyncBlockedMockExpenseId } from '../expense/expenseCloudSyncService';
 import { isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
@@ -104,6 +111,25 @@ export interface MonatsmappeBeleg {
    * Bestätigung mit anderer Steuer als „zu prüfen". Nicht Teil des Fingerprints.
    */
   steuerstatus?: TaxStatus;
+  /**
+   * P1-KORREKTURBLOCK A-04 — Zusatz zur Steuerbehandlung in `buchungen.csv` (gemischte Sätze, nicht voller
+   * Vorsteuerabzug). Bewusst **nicht** Teil des Fingerprints: Fassung 5 baut der Server aus seinen Tabellen gleich
+   * nach (`close_workspace_accounting_period`); ein nur im Client gebundener Wert brächte jeden Abschluss mit
+   * solchen Belegen um seine Serverbestätigung. Das Binden gehört in eine spätere Fassung mit Servermigration.
+   */
+  steuerbehandlungZusatz?: string;
+  /**
+   * A-04 — nur bei offener Steueraufteilung: die **gespeicherten** Platzhalter (Netto = Brutto, Steuer 0; beim
+   * Storno negiert). Allein der Abschluss-Fingerprint liest sie: Der Server baut Fassung 5 aus seinen Tabellen nach,
+   * und ältere Fassungen müssen unverändert prüfbar bleiben. Nie anzeigen, buchen oder exportieren — dafür stehen
+   * `netto`/`steuer` leer.
+   */
+  fingerprintBetraege?: { netto: number; steuer: number };
+  /**
+   * A04-WEISS-R2 — nur Eingangsbelege und Ausgabenstornos: Aufteilungsart, wirksamer Vorsteuerabzug und abziehbarer
+   * Betrag, wie Abschlussfassung 6 sie bindet (`expenseTaxSplitClosureAttributes`, serverseitig gleich gebildet).
+   */
+  steuerAbschluss?: ExpenseTaxSplitClosureAttributes;
 }
 
 /**
@@ -217,6 +243,18 @@ export interface MonatsmappeModel {
   fehlendeDokumente: Array<{ belegart: MonatsmappeBelegart; id: string; belegnummer: string }>;
   /** 01D2 — stornierte Ausgaben ohne kanonisches Stornodatum (Datenmodell-Luecke, sichtbar). */
   stornosOhneDatum: Array<{ belegart: MonatsmappeBelegart; id: string; belegnummer: string }>;
+  /**
+   * P1-KORREKTURBLOCK A-04 — Belege des Monats mit offener Steueraufteilung (Netto und Steuer nicht belegt; in der
+   * Mappe leer), auch stornierte und Stornobelege. Ein unklarer Fall der Übergabe. Den Abschluss sperren nur die nicht
+   * stornierten (`tax_split_open`) — eine stornierte Ausgabe lässt sich nicht mehr nachtragen.
+   */
+  offeneSteueraufteilung?: Array<{ id: string; belegnummer: string }>;
+  /**
+   * A04-WEISS-R1 — Belege dieser Mappe mit Altbestands-Prüfbefund (0,00 Steuer bei Regel- oder unklarem Steuerstatus,
+   * Netto = Brutto, ohne Kennzeichen). Werte bleiben unverändert; sie gelten als ungeprüft und als unklarer Fall der
+   * Übergabe, sperren den Abschluss aber nicht.
+   */
+  altbestandPruefen?: Array<{ id: string; belegnummer: string }>;
   /** 02B — offene Posten zum Monatsende, über alle Belegmonate bis dahin. */
   offenePostenMonatsende?: MonatsmappeOffenerPosten[];
   /**
@@ -652,6 +690,13 @@ function resolveExpenseBelegHinweis(expense: Expense, hasDocument: boolean, canc
     );
   }
 
+  /*
+   * P1-KORREKTURBLOCK A-04 — offene Aufteilung (leer, nicht geschätzt), Altbestand mit Prüfbefund (Werte
+   * unverändert), gemischte Sätze und ein nicht voller Vorsteuerabzug stehen hier lesbar.
+   */
+  const aufteilung = describeExpenseTaxSplitHint(expense);
+  if (aufteilung) hinweise.push(aufteilung);
+
   if (cancelledAsOf) {
     const stornoDatum = resolveExpenseStornoDatum(expense);
     hinweise.push(stornoDatum ? `Storniert am ${stornoDatum}` : 'Storniert (Stornodatum nicht erfasst)');
@@ -684,14 +729,17 @@ function buildExpenseBeleg(expense: Expense, input: MonatsmappeInput): Monatsmap
   const stornoDatum = resolveExpenseStornoDatum(expense);
   const ref = resolveExpenseFileRef(expense, input);
   const base = `${expense.issueDate.slice(0, 10)}_${safeFileNamePart(expense.supplierName, 24)}_${safeFileNamePart(expense.invoiceNumber || 'ohne-nummer', 24)}_${shortId(expense.id)}`;
+  // P1-KORREKTURBLOCK A-04 — bei offener Steueraufteilung leer statt Platzhalter (wie ungeklärte Altrechnungen).
+  const betraege = expenseBookingAmounts(expense);
+  const zusatz = describeExpenseBookingTaxNote(expense);
   return {
     belegart: 'eingangsbeleg',
     id: expense.id,
     belegnummer: expense.invoiceNumber ?? '',
     datum: expense.issueDate.slice(0, 10),
     gegenpartei: expense.supplierName,
-    netto: expense.netAmount,
-    steuer: expense.taxAmount,
+    netto: betraege.netto,
+    steuer: betraege.steuer,
     brutto: expense.grossAmount,
     status: cancelled ? 'storniert' : 'aktiv',
     zahlungsstatus: cancelled ? 'storniert' : summary.status,
@@ -702,27 +750,41 @@ function buildExpenseBeleg(expense: Expense, input: MonatsmappeInput): Monatsmap
     offenerBetrag: cancelled ? 0 : summary.openAmount,
     ...(!cancelled && expense.status === 'storniert' && stornoDatum ? { spaeterStorniertAm: stornoDatum } : {}),
     ...(expense.taxStatus ? { steuerstatus: expense.taxStatus } : {}),
+    ...(zusatz ? { steuerbehandlungZusatz: zusatz } : {}),
+    ...(betraege.netto === null ? { fingerprintBetraege: { netto: expense.netAmount, steuer: expense.taxAmount } } : {}),
+    steuerAbschluss: expenseTaxSplitClosureAttributes(expense),
   };
 }
 
 /** 01D2 — Ausgabenstorno im Monat des kanonischen `cancelledAt`; Betraege negiert. */
 function buildExpenseStornoBeleg(expense: Expense, stornoDatum: string): MonatsmappeBeleg {
+  // P1-KORREKTURBLOCK A-04 — offen bleibt offen, auch in der Gegenbuchung (wie ungeklärte Altrechnungen).
+  const betraege = expenseBookingAmounts(expense);
+  const zusatz = describeExpenseBookingTaxNote(expense);
+  const stornoHinweis = `Storno zu Eingangsbeleg vom ${expense.issueDate.slice(0, 10)}${expense.cancelReason ? ` — ${expense.cancelReason}` : ''}`;
+  const aufteilung = describeExpenseTaxSplitHint(expense);
   return {
     belegart: 'ausgabenstorno',
     id: expense.id,
     belegnummer: expense.invoiceNumber ?? '',
     datum: stornoDatum,
     gegenpartei: expense.supplierName,
-    netto: negateMoney(expense.netAmount),
-    steuer: negateMoney(expense.taxAmount),
+    netto: betraege.netto === null ? null : negateMoney(betraege.netto),
+    steuer: betraege.steuer === null ? null : negateMoney(betraege.steuer),
     brutto: negateMoney(expense.grossAmount),
     status: 'storno',
     zahlungsstatus: 'storniert',
     zahlungssumme: 0,
     documentStatus: 'none',
     documents: [],
-    hinweis: `Storno zu Eingangsbeleg vom ${expense.issueDate.slice(0, 10)}${expense.cancelReason ? ` — ${expense.cancelReason}` : ''}`,
+    hinweis: aufteilung ? `${stornoHinweis} · ${aufteilung}` : stornoHinweis,
     ...(expense.taxStatus ? { steuerstatus: expense.taxStatus } : {}),
+    ...(zusatz ? { steuerbehandlungZusatz: zusatz } : {}),
+    ...(betraege.netto === null
+      ? { fingerprintBetraege: { netto: negateMoney(expense.netAmount), steuer: negateMoney(expense.taxAmount) } }
+      : {}),
+    // Der Storno bindet dieselben steuerlichen Merkmale wie sein Beleg (nicht negiert; der Server ebenso).
+    steuerAbschluss: expenseTaxSplitClosureAttributes(expense),
   };
 }
 
@@ -978,6 +1040,25 @@ export function buildMonatsmappeModel(input: MonatsmappeInput): MonatsmappeModel
     .filter((beleg) => beleg.documentStatus === 'missing')
     .map((beleg) => ({ belegart: beleg.belegart, id: beleg.id, belegnummer: beleg.belegnummer }));
 
+  /*
+   * P1-KORREKTURBLOCK A-04 — die Belege dieser Mappe mit offener Steueraufteilung (Eingangsbelege und Ausgabenstornos,
+   * je Ausgabe einmal): genau die, deren Netto/Steuer hier leer stehen und die buchungen.csv nicht bucht.
+   */
+  const offeneSteueraufteilung = [
+    ...new Map(
+      [...eingangsbelege, ...stornos]
+        .filter((beleg) => beleg.fingerprintBetraege !== undefined)
+        .map((beleg) => [beleg.id, { id: beleg.id, belegnummer: beleg.belegnummer }] as const),
+    ).values(),
+  ].sort((a, b) => a.id.localeCompare(b.id));
+  const altbestandPruefen = [
+    ...new Map(
+      [...eingangsbelege, ...stornos]
+        .filter((beleg) => beleg.steuerAbschluss?.steueraufteilung === 'altbestand_pruefen')
+        .map((beleg) => [beleg.id, { id: beleg.id, belegnummer: beleg.belegnummer }] as const),
+    ).values(),
+  ].sort((a, b) => a.id.localeCompare(b.id));
+
   return {
     monthKey,
     ausgangsrechnungen,
@@ -987,6 +1068,8 @@ export function buildMonatsmappeModel(input: MonatsmappeInput): MonatsmappeModel
     stornos,
     fehlendeDokumente,
     stornosOhneDatum,
+    offeneSteueraufteilung,
+    altbestandPruefen,
     offenePostenMonatsende,
     zahlungsnachweise: [...nachweisQuellen.values()].sort((a, b) => a.fileName.localeCompare(b.fileName)),
     mitarbeiterZahlungen,

@@ -675,7 +675,7 @@ describe('Q — Mitarbeiterzahlungen, Kontierungen und Rechnungszahlungen folgen
     expect(getUnconfirmedInvoicePaymentKeys().size).toBe(0);
   });
 
-  it('Q9 abgeschlossener Monat bleibt gültig, das Übergabepaket sperrt aber, sobald eine gebundene Zahlung als unbestätigt erkannt ist', () => {
+  it('Q9 abgeschlossener Monat: Revision unverändert, aber erneut zu prüfen — das Übergabepaket sperrt, sobald eine gebundene Zahlung als unbestätigt erkannt ist', () => {
     // Die Zahlung ist vom Server bestätigt (positive Evidenz an der Zahlung), der Abschluss angenommen.
     hydrateInvoiceStore([{ invoice: rechnung('inv-q9', [{ ...zahlung('pay-q9', '2026-06-20'), cloudBestaetigt: true }]), vorgangId: null }]);
     setAccountingStoreForTests([kontierung('inv-q9', 'invoice')]);
@@ -686,11 +686,17 @@ describe('Q — Mitarbeiterzahlungen, Kontierungen und Rechnungszahlungen folgen
     // Die Nachsicherung stellt später fest: Der Server kennt diese Zahlung nicht (z. B. Altclient).
     markInvoicePaymentUnconfirmed('inv-q9', 'pay-q9');
     const state = getAccountingPeriodState(JUNI);
-    expect(state.readiness).toBe('closed');
-    expect(state.isCurrentClosureValid).toBe(true);
+    /*
+     * P1 A-04 (Nacharbeit WEISS, Abschlussgültigkeit) — bisher hieß das „abgeschlossen“ und gültig, obwohl die Übergabe
+     * sperrte. Jetzt: Die Revision bleibt unverändert (gleicher Fingerprint), gilt aber bis zur Klärung nicht.
+     */
+    expect(state.currentFingerprint).toBe(state.activeClosure?.fingerprint);
+    expect(state.readiness).toBe('recheck_required');
+    expect(state.isCurrentClosureValid).toBe(false);
     const gate = evaluateAccountingExportReadiness(JUNI);
     expect(gate.packageAllowed).toBe(false);
     expect(gate.packageBlockers.map((b) => b.code)).toContain('period_blockers');
+    expect(gate.packageBlockers.map((b) => b.code)).toContain('closure_recheck_required');
     expect(state.blockers.map((b) => b.code)).toEqual([SPERRE]);
   });
 

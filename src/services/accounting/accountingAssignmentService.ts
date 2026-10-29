@@ -238,6 +238,11 @@ export interface ConfirmAccountingOptions {
    * bestätigt.
    */
   sourceTaxTreatment?: AccountingTaxTreatment;
+  /**
+   * P1-KORREKTURBLOCK A-04 — die Steueraufteilung des Belegs ist offen (Netto/Steuer sind Platzhalter).
+   * Dann wird nicht bestätigt: Eine bestätigte Kontierung würde die Platzhalter als Buchung ausgeben.
+   */
+  sourceTaxSplitOpen?: boolean;
 }
 
 // FINANZ-CORE-01A (WEISS-Nacharbeit N06) — eine geklärte Steuerbehandlung; die Regel steht in `accountingCanonical`.
@@ -271,6 +276,9 @@ export function confirmAccountingAssignment(
   }
   if (!isAccountingTaxInLineWithSource(existing.taxTreatment, options.sourceTaxTreatment)) {
     return { success: false, errorKey: 'accounting.confirmTaxMismatch' };
+  }
+  if (options.sourceTaxSplitOpen === true) {
+    return { success: false, errorKey: 'accounting.confirmNeedsTaxSplit' };
   }
 
   const timestamp = nowIso();
@@ -319,6 +327,8 @@ export interface AccountingSourceState {
   taxTreatment?: AccountingTaxTreatment;
   /** Hat sich der Beleg fachlich geändert? Ohne Angabe: ja. */
   changed?: boolean;
+  /** P1-KORREKTURBLOCK A-04 — die Steueraufteilung des Belegs ist offen. Ohne Angabe: nein. */
+  taxSplitOpen?: boolean;
 }
 
 /**
@@ -331,8 +341,13 @@ function followSourceStatus(
   existing: AccountingAssignment,
   taxTreatment: AccountingTaxTreatment,
   sourceChanged: boolean,
+  taxSplitOpen = false,
 ): Pick<AccountingAssignment, 'status' | 'suggestionReason' | 'confirmedAt' | 'confirmedBy'> {
   const revoked = { confirmedAt: undefined, confirmedBy: undefined };
+  // P1-KORREKTURBLOCK A-04 — offene Steueraufteilung: in die Klärung, eine Bestätigung fällt.
+  if (taxSplitOpen) {
+    return { status: 'needs_clarification', suggestionReason: 'accounting.reason.taxSplitOpen', ...revoked };
+  }
   if (!isResolvedAccountingTaxTreatment(taxTreatment)) {
     return { status: 'needs_clarification', suggestionReason: 'accounting.reason.taxUnclear', ...revoked };
   }
@@ -342,6 +357,11 @@ function followSourceStatus(
       suggestionReason: sourceChanged ? 'accounting.reason.sourceChanged' : 'accounting.reason.sourceTaxChanged',
       ...revoked,
     };
+  }
+  // A-04 — die Aufteilung ist inzwischen belegt: die Klärung ist erledigt, die Kontierung ist zu prüfen. Eigene
+  // Begründung (Abschluss-Rundgang R-05): „nach der Bestätigung geändert“ stimmte nicht — bestätigt war hier nie etwas.
+  if (existing.suggestionReason === 'accounting.reason.taxSplitOpen') {
+    return { status: 'needs_review', suggestionReason: 'accounting.reason.taxSplitEntered', ...revoked };
   }
   if (existing.status === 'needs_clarification' && existing.suggestionReason !== 'accounting.reason.taxUnclear') {
     return {
@@ -362,11 +382,16 @@ function followSource(
   const taxTreatment = source.taxTreatment ?? existing.taxTreatment;
   const taxFollows = taxTreatment !== existing.taxTreatment;
   const revokes = sourceChanged && existing.status === 'confirmed';
-  if (!taxFollows && !revokes) return null;
+  // P1-KORREKTURBLOCK A-04 — die Klärung folgt der Steueraufteilung in beide Richtungen.
+  const splitOpen = source.taxSplitOpen === true;
+  const inSplitClarification =
+    existing.status === 'needs_clarification' && existing.suggestionReason === 'accounting.reason.taxSplitOpen';
+  const splitFollows = splitOpen ? !inSplitClarification : existing.suggestionReason === 'accounting.reason.taxSplitOpen';
+  if (!taxFollows && !revokes && !splitFollows) return null;
   const next: AccountingAssignment = {
     ...existing,
     taxTreatment,
-    ...followSourceStatus(existing, taxTreatment, sourceChanged),
+    ...followSourceStatus(existing, taxTreatment, sourceChanged, splitOpen),
     updatedAt: nowIso(),
   };
   const stored = replaceAccountingAssignment(existing.id, next);

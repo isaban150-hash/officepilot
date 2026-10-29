@@ -37,6 +37,7 @@ import { trAccount } from './account';
 import { trSetupFlow } from './setupFlow';
 import { trPlatform } from './platform';
 import { trTeam } from './team';
+import { trExpenseTaxSplit } from './expenseTaxSplit';
 
 export const trModules = {
   ...trAuth,
@@ -82,4 +83,5 @@ export const trModules = {
   ...trSetupFlow,
   ...trPlatform,
   ...trTeam,
+  ...trExpenseTaxSplit,
 } as const;

@@ -795,6 +795,12 @@ function Bestaetigung({
     <span className="bank-statement__confirm" data-testid={tid('bank-confirm-dialog')}>
       <b>{translate('bankConfirm.title')}</b>
       <span className="bank-statement__notice">{translate('bankConfirm.intro')}</span>
+      {/* P1 A-04 Produktregel A — Zuordnung trotz offener Steueraufteilung; die Steuerprüfung bleibt offen. */}
+      {plan.taxReviewOpen ? (
+        <span className="bank-statement__notice" data-testid={tid('bank-confirm-tax-review-open')}>
+          {translate('bankConfirm.taxReviewOpenNotice')}
+        </span>
+      ) : null}
       <span>
         {translate('bankConfirm.movement')}: {transaction.counterparty ?? '—'} ·{' '}
         <MoneyDisplay value={fromCents(transaction.amountCents)} />

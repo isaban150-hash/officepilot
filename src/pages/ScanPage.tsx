@@ -232,11 +232,14 @@ export function ScanPage() {
   };
 
   const openFilePicker = (camera = false) => {
-    setUploadError(null);
-    setConfirmError(null);
     // The current draft survives until a new preview has been stored: a cancelled
     // picker must leave analysis, draft and URL untouched. Safari needs the click
     // inside the user gesture, so nothing is awaited here.
+    // P1 A-02 — no state change before the user has actually picked a file: clearing
+    // the error here re-rendered the page into another branch while the picker was
+    // open, and the selection arrived at a detached input (lost silently). Errors are
+    // cleared by `processFile` once a new file is there; a cancelled picker keeps the
+    // error view with its ways out.
     if (camera) {
       cameraInputRef.current?.click();
     } else {
@@ -438,6 +441,11 @@ export function ScanPage() {
   /**
    * The same real inputs in every page state — only one branch renders at a time,
    * so openFilePicker works in the preview and error views too.
+   *
+   * P1 A-02 — and at the same place in every branch: always the first child of the
+   * page root. React keeps elements only at the same position; before, the start view
+   * rendered them inside the capture card, so a branch change (error → start) remounted
+   * them and a selection made from the error view went to the detached old input.
    */
   const captureInputs = (
     <>
@@ -464,23 +472,14 @@ export function ScanPage() {
   if (uploadError) {
     return (
       <div className="page scan-page" data-testid="scan-page">
-        <PageHeader title={translate('scan.title')} subtitle={translate('scan.subtitle')} />
         {captureInputs}
+        <PageHeader title={translate('scan.title')} subtitle={translate('scan.subtitle')} />
         <DocumentUploadErrorPanel
           errorCode={uploadError}
           translate={translate}
-          onRetry={() => {
-            setUploadError(null);
-            openFilePicker(false);
-          }}
-          onNewPhoto={() => {
-            setUploadError(null);
-            openFilePicker(true);
-          }}
-          onSelectFile={() => {
-            setUploadError(null);
-            openFilePicker(false);
-          }}
+          onRetry={() => openFilePicker(false)}
+          onNewPhoto={() => openFilePicker(true)}
+          onSelectFile={() => openFilePicker(false)}
         />
       </div>
     );
@@ -493,8 +492,8 @@ export function ScanPage() {
 
     return (
       <div className="page scan-page" data-testid="scan-page">
-        <PageHeader title={translate('scan.title')} subtitle={translate('scan.ocr.previewSubtitle')} />
         {captureInputs}
+        <PageHeader title={translate('scan.title')} subtitle={translate('scan.ocr.previewSubtitle')} />
         {showKindPicker ? (
           <Card className="upload-kind-picker-card">
             <CardTitle>{translate('docAssistant.changeType')}</CardTitle>
@@ -563,6 +562,7 @@ export function ScanPage() {
 
   return (
     <div className="page scan-page" data-testid="scan-page">
+      {captureInputs}
       <PageHeader
         title={translate('scan.title')}
         subtitle={translate('scan.subtitle')}
@@ -571,8 +571,6 @@ export function ScanPage() {
       <Card className="upload-card upload-card--capture">
         <CardTitle>{translate('scan.captureTitle')}</CardTitle>
         <CardMeta>{translate('docAssistant.autoDetect')}</CardMeta>
-
-        {captureInputs}
 
         <div className="upload-actions">
           <Button

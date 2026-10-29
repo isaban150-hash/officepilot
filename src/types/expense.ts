@@ -18,6 +18,30 @@ export type ExpenseCategory =
 export type ExpenseStatus = 'entwurf' | 'gebucht' | 'storniert';
 
 /**
+ * P1-KORREKTURBLOCK A-04 — wie die Aufteilung in Netto und Steuer **belegt** ist.
+ *
+ *  - `belegt`   — Netto und Steuer stehen so auf dem Beleg (ein Steuersatz).
+ *  - `gemischt` — Netto und Steuer stehen auf dem Beleg, als Summen über mehrere Steuersätze.
+ *  - `offen`    — die Aufteilung ist nicht belegt. Netto und Steuer tragen dann Platzhalter (Netto = Brutto,
+ *                 Steuer 0), weil der Serververtrag (`upsert_workspace_expense`) drei stimmige Beträge verlangt —
+ *                 sie sind **keine Aussage über die Steuer**: Anzeige, Export, Buchung und Abschluss werten sie
+ *                 als unbekannt.
+ *
+ * Bei einem Steuerstatus ohne Umsatzsteuer (steuerfrei, Kleinunternehmer, §13b) ist die Aufteilung durch den
+ * Status selbst belegt (echte Nullsteuer). Fehlt das Feld (Altbestand vor A-04), gilt der gespeicherte Stand;
+ * ein Altbeleg mit Regel- oder unklarem Steuerstatus, 0 € Steuer und Netto = Brutto wird nur lesend als
+ * Prüfbedarf erkannt (`resolveExpenseTaxSplitState`), nie umgerechnet.
+ */
+export type ExpenseTaxSplit = 'belegt' | 'gemischt' | 'offen';
+
+/**
+ * P1-KORREKTURBLOCK A-04 — Vorsteuerabzug zur belegten Steuer. Fehlt das Feld, gilt wie bisher „voll“.
+ * Nur bei belegter Steuer ungleich 0 von Bedeutung; bei `teilweise` steht der abziehbare Betrag in
+ * `deductibleTaxAmount`.
+ */
+export type ExpenseInputTaxDeduction = 'voll' | 'teilweise' | 'keiner';
+
+/**
  * Der Zahlstatus einer Ausgabe.
  *
  * FINANZCORE-05B-FIX2 — `gutschrift` ist neu und beschreibt einen Beleg mit
@@ -199,6 +223,12 @@ export interface Expense {
   netAmount: number;
   taxAmount: number;
   grossAmount: number;
+  /** A-04 — siehe `ExpenseTaxSplit`; fehlt bei Altbestand. */
+  taxSplit?: ExpenseTaxSplit;
+  /** A-04 — siehe `ExpenseInputTaxDeduction`; fehlt = voll abziehbar. */
+  inputTaxDeduction?: ExpenseInputTaxDeduction;
+  /** A-04 — abziehbare Vorsteuer bei `inputTaxDeduction = 'teilweise'` (Vorzeichen wie die Steuer). */
+  deductibleTaxAmount?: number;
   currency: string;
   paymentStatus: ExpensePaymentStatus;
   payments?: ExpensePayment[];
@@ -235,9 +265,17 @@ export interface ExpenseInput {
   issueDate: string;
   paymentDueDate?: string | null;
   taxStatus?: TaxStatus;
+  /** Angegeben heisst: vom Beleg. Fehlt ein Betrag, wird er nie aus einem Steuersatz geschätzt (A-04). */
   netAmount?: number;
   taxAmount?: number;
   grossAmount: number;
+  /**
+   * A-04 — die ausdrückliche Angabe zur Steueraufteilung. Fehlt sie und fehlen Netto und Steuer, ist die
+   * Aufteilung bei einem Steuerstatus mit Umsatzsteuer oder `unclear` **offen** (nie „0 € Steuer“).
+   */
+  taxSplit?: ExpenseTaxSplit;
+  inputTaxDeduction?: ExpenseInputTaxDeduction;
+  deductibleTaxAmount?: number;
   currency?: string;
   status?: ExpenseStatus;
   classifiedKind?: ClassifiedDocumentKind;

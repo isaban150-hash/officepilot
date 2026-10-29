@@ -5,12 +5,13 @@ import { DateDisplay, MoneyDisplay } from '../ui/Display';
 import { BusinessListItem } from '../ui/Lists';
 import { ExpensePaymentForm } from './ExpensePaymentForm';
 import { getExpensePaymentSavedToastKey } from './ExpensePaymentSummary';
-import { ExpensePaymentBadge } from './ExpensePaymentBadge';
+import { ExpensePaymentBadge, expensePaymentStatusLabel } from './ExpensePaymentBadge';
 import {
   calculateExpensePaymentSummary,
   canRecordExpensePayment,
   isExpenseCancelled,
 } from '../../services/expensePaymentService';
+import { hasPaymentWithOpenTaxReview, resolveExpenseTaxSplitState } from '../../services/expense/expenseTaxSplit';
 import type { ExpenseOverviewItem } from '../../types/expense';
 import type { Expense } from '../../types/expense';
 import type { TranslationKey } from '../../i18n';
@@ -52,6 +53,18 @@ export function ExpenseOverviewCard({
   };
 
   const categoryKey = `expense.category.${expense.category}` as TranslationKey;
+  /*
+   * P1-KORREKTURBLOCK A-04 — offene Steueraufteilung und Altbestand mit Prüfbefund stehen sichtbar an der Zeile.
+   * Produktregel A: Eine Zahlung ist bei offener Aufteilung möglich; danach heißt der Status „… – Steuerprüfung offen“.
+   */
+  const taxSplitState = resolveExpenseTaxSplitState(expense);
+  const taxReviewOpen = hasPaymentWithOpenTaxReview(expense, paymentSummary.paidAmount);
+  const taxSplitNoteKey: TranslationKey | null =
+    taxSplitState === 'offen'
+      ? 'expense.taxSplit.overviewOpen'
+      : taxSplitState === 'altbestand_pruefen'
+        ? 'expense.taxSplit.overviewLegacy'
+        : null;
 
   /* UIUX-FOUNDATION-01F — Business-Zeile wie die Rechnungsübersicht; Aktionen unverändert. */
   return (
@@ -62,7 +75,7 @@ export function ExpenseOverviewCard({
         title={expense.title}
         subtitle={`${expense.supplierName}${expense.invoiceNumber ? ` · ${expense.invoiceNumber}` : ''}`}
         meta={translate(categoryKey)}
-        status={<ExpensePaymentBadge status={paymentSummary.status} translate={translate} />}
+        status={<ExpensePaymentBadge status={paymentSummary.status} translate={translate} taxReviewOpen={taxReviewOpen} />}
         date={
           <>
             {translate('expense.fieldDueDate')}: <DateDisplay value={expense.paymentDueDate} />
@@ -102,8 +115,14 @@ export function ExpenseOverviewCard({
               </div>
               <div>
                 <dt>{translate('payment.paymentStatus')}</dt>
-                <dd>{translate(`payment.status.${paymentSummary.status}` as TranslationKey)}</dd>
+                <dd>{expensePaymentStatusLabel(paymentSummary.status, translate, taxReviewOpen)}</dd>
               </div>
+              {taxSplitNoteKey ? (
+                <div data-testid="expense-overview-tax-split">
+                  <dt>{translate('expense.fieldTaxSplit')}</dt>
+                  <dd>{translate(taxSplitNoteKey)}</dd>
+                </div>
+              ) : null}
             </dl>
             <div className="invoice-overview-card__actions">
               <Button type="button" size="sm" onClick={openExpense}>

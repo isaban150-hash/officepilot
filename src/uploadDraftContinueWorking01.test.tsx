@@ -1,5 +1,5 @@
 /**
- * UPLOAD-DRAFT-RESUME-01C2 — die Karte „Du hast zuletzt hier gearbeitet“ darf nur
+ * UPLOAD-DRAFT-RESUME-01C2 — die Karte „Zuletzt haben Sie hier gearbeitet“ darf nur
  * erscheinen, wenn ein echter, vollständig ladbarer Uploadentwurf existiert.
  *
  * Confirm-first: Weiterarbeiten legt nichts an, Verwerfen entfernt ausschließlich
@@ -328,7 +328,7 @@ describe('UPLOAD-DRAFT-RESUME-01C2', () => {
 
     await waitFor(() => card(mounted!.container) !== null, 'continue working card');
     const node = card(mounted.container)!;
-    expect(node.textContent).toContain('Du hast zuletzt hier gearbeitet');
+    expect(node.textContent).toContain('Zuletzt haben Sie hier gearbeitet');
     expect(node.textContent).toContain('CW-C.jpg');
     const headline = node.querySelector('[data-testid="continue-working-headline"]');
     expect(headline?.textContent?.trim()).toBeTruthy();

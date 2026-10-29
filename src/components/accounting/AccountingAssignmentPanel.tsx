@@ -56,6 +56,11 @@ interface Props {
   sourceTaxTreatment?: AccountingTaxTreatment;
   /** Der Korrekturweg für eine ungeklärte Steuer: den Beleg bearbeiten (nur wo das geht). */
   onClarifyTax?: () => void;
+  /**
+   * P1-KORREKTURBLOCK A-04 — die Steueraufteilung des Belegs ist offen (Netto und Vorsteuer nicht belegt). Dann
+   * lässt sich nichts bestätigen; der Korrekturweg ist derselbe wie bei ungeklärter Steuer: den Beleg bearbeiten.
+   */
+  sourceTaxSplitOpen?: boolean;
 }
 
 /** Zu jedem Stand ein Ton — dieselbe Sprache wie die übrigen Abzeichen. */
@@ -74,6 +79,7 @@ export function AccountingAssignmentPanel({
   readOnly = false,
   sourceTaxTreatment,
   onClarifyTax,
+  sourceTaxSplitOpen = false,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [accountNumber, setAccountNumber] = useState('');
@@ -119,6 +125,8 @@ export function AccountingAssignmentPanel({
   const visibleReason = resolveVisibleSuggestionReason(assignment);
   // Sagt der Vorschlagsgrund es schon („Steuerstatus des Belegs ist unklar"), kein zweiter Hinweis.
   const showTaxUnclearHint = taxUnclear && visibleReason !== 'accounting.reason.taxUnclear';
+  // A-04 — dasselbe für die offene Steueraufteilung.
+  const showTaxSplitOpenHint = sourceTaxSplitOpen && visibleReason !== 'accounting.reason.taxSplitOpen';
 
   const handleSave = () => {
     const result = updateAccountingAssignment(assignment.id, {
@@ -136,7 +144,7 @@ export function AccountingAssignmentPanel({
   };
 
   const handleConfirm = () => {
-    const result = confirmAccountingAssignment(assignment.id, { sourceTaxTreatment });
+    const result = confirmAccountingAssignment(assignment.id, { sourceTaxTreatment, sourceTaxSplitOpen });
     if (!result.success) {
       setErrorKey(result.errorKey);
       return;
@@ -269,7 +277,12 @@ export function AccountingAssignmentPanel({
           {translate('accounting.taxUnclearHint')}
         </InlineNotice>
       ) : null}
-      {taxUnclear && !readOnly && onClarifyTax ? (
+      {showTaxSplitOpenHint ? (
+        <InlineNotice tone="warning" testId={`${testIdPrefix}-accounting-tax-split-open`}>
+          {translate('accounting.reason.taxSplitOpen')}
+        </InlineNotice>
+      ) : null}
+      {(taxUnclear || sourceTaxSplitOpen) && !readOnly && onClarifyTax ? (
         <div className="vorgang-dialog__actions">
           <Button
             type="button"
@@ -277,7 +290,7 @@ export function AccountingAssignmentPanel({
             onClick={onClarifyTax}
             data-testid={`${testIdPrefix}-accounting-clarify-tax`}
           >
-            {translate('accounting.action.clarifyTaxOnSource')}
+            {translate(sourceTaxSplitOpen ? 'accounting.action.enterTaxSplit' : 'accounting.action.clarifyTaxOnSource')}
           </Button>
         </div>
       ) : null}

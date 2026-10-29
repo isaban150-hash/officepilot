@@ -60,6 +60,7 @@ function readinessTone(readiness: AccountingPeriodReadiness): 'neutral' | 'warni
       return 'success';
     case 'changed_after_close':
       return 'critical';
+    case 'recheck_required':
     case 'not_ready':
       return 'warning';
     default:
@@ -196,6 +197,25 @@ export function AccountingPeriodPanel({ state, monthLabel, onChanged, translate,
       {readiness === 'changed_after_close' ? (
         <InlineNotice tone="critical" testId="accounting-period-changed">
           {translate('accountingPeriod.changedHint')}
+        </InlineNotice>
+      ) : null}
+
+      {/*
+        P1 A-04 (Nacharbeit WEISS, Abschlussgültigkeit) — gleicher Stand, aber ein Sperrgrund: kein uneingeschränkt
+        gültiger Abschluss, sondern „erneute Prüfung erforderlich“ mit den konkreten Gründen.
+      */}
+      {readiness === 'recheck_required' && activeClosure ? (
+        <InlineNotice tone="warning" testId="accounting-period-recheck">
+          {translate('accountingPeriod.recheckHint')
+            .replace('{revision}', String(activeClosure.revision))
+            .replace(
+              '{reasons}',
+              blockers
+                .map((item) =>
+                  translate(`accountingPeriod.blocker.${item.code}` as TranslationKey).replace('{count}', String(item.count)),
+                )
+                .join('; '),
+            )}
         </InlineNotice>
       ) : null}
 

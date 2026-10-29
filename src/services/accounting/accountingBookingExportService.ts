@@ -122,8 +122,9 @@ export interface BookingExport {
   /**
    * FC01A-P1-Restkorrektur (lokaler Altbestand) — Ausgangsrechnungen mit ungeklärtem Netto: keine
    * Buchungszeile (Netto und Steuer sind unbekannt, nicht geschätzt), aber gemeldet.
+   * P1-KORREKTURBLOCK A-04 — ebenso Eingangsbelege mit offener Steueraufteilung (`grund`).
    */
-  readonly netUnresolved: readonly { sourceId: string; belegnummer: string }[];
+  readonly netUnresolved: readonly { sourceId: string; belegnummer: string; grund?: 'steueraufteilung_offen' }[];
 }
 
 function sourceTypeOf(beleg: MonatsmappeBeleg): 'expense' | 'invoice' {
@@ -187,7 +188,7 @@ export function buildBookingExport(
 
   const rows: BookingExportRow[] = [];
   const withoutDocument: { sourceId: string; belegnummer: string }[] = [];
-  const netUnresolved: { sourceId: string; belegnummer: string }[] = [];
+  const netUnresolved: { sourceId: string; belegnummer: string; grund?: 'steueraufteilung_offen' }[] = [];
   const gesehen = new Set<string>();
 
   for (const beleg of [...model.ausgangsrechnungen, ...model.eingangsbelege, ...model.stornos]) {
@@ -206,7 +207,12 @@ export function buildBookingExport(
     const netto = beleg.netto;
     const steuer = beleg.steuer;
     if (netto === null || steuer === null) {
-      netUnresolved.push({ sourceId: beleg.id, belegnummer: beleg.belegnummer });
+      netUnresolved.push({
+        sourceId: beleg.id,
+        belegnummer: beleg.belegnummer,
+        // P1-KORREKTURBLOCK A-04 — bei Eingangsbelegen heisst „leer“: Steueraufteilung nicht belegt.
+        ...(sourceType === 'expense' ? { grund: 'steueraufteilung_offen' as const } : {}),
+      });
       continue;
     }
 
@@ -235,7 +241,13 @@ export function buildBookingExport(
       netto,
       steuer,
       brutto: beleg.brutto,
-      steuerstatus: TAX_LABEL[assignment.taxTreatment] ?? assignment.taxTreatment,
+      /*
+       * P1-KORREKTURBLOCK A-04 — gemischte Sätze und ein nicht voller Vorsteuerabzug stehen als Zusatz dabei, damit
+       * die Zeile nicht wie gewöhnliche, voll abziehbare Vorsteuer aussieht. Ohne Abweichung unverändert.
+       */
+      steuerstatus: [TAX_LABEL[assignment.taxTreatment] ?? assignment.taxTreatment, beleg.steuerbehandlungZusatz]
+        .filter(Boolean)
+        .join(' – '),
       kontenrahmen: assignment.chartOfAccounts,
       sachkonto: assignment.accountNumber.trim(),
       kontobezeichnung: assignment.accountLabel.trim(),

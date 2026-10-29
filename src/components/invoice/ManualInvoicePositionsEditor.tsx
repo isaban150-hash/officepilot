@@ -188,6 +188,7 @@ export function ManualInvoicePositionsEditor({ positions, onChange, disabled, tr
             <span className="invoice-edit__label">{translate('manualInvoice.position.quantity')}</span>
             <NumericInput
               id="manual-position-quantity"
+              className="input"
               mode="decimal"
               strict
               min={0}
@@ -223,6 +224,7 @@ export function ManualInvoicePositionsEditor({ positions, onChange, disabled, tr
             <span className="invoice-edit__label">{translate('manualInvoice.position.unitPrice')}</span>
             <NumericInput
               id="manual-position-unit-price"
+              className="input"
               mode="decimal"
               strict
               min={0}

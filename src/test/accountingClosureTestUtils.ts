@@ -6,7 +6,8 @@
  * eine Revision, die der Server gegen seinen Finanzbestand geprüft und angenommen hat. In der App setzt das die
  * Antwort auf `close_workspace_accounting_period` (`applyAccountingPeriodPushResultToState`). Tests, die das Paket
  * oder die Übergabe prüfen und nicht den Sync, rufen nach dem Abschließen diese Hilfe — sie setzt genau die
- * Bestätigung, die eine erfolgreiche Serverantwort setzen würde, und nur für Revisionen der Fassung 5.
+ * Bestätigung, die eine erfolgreiche Serverantwort setzen würde, und nur für servervalidierte Fassungen (5; ab
+ * P1-KORREKTUR A04-WEISS-R2 auch 6 — neue Revisionen entstehen in Fassung 6, der Server nimmt nur noch sie an).
  */
 import {
   getAllAccountingPeriodClosures,
@@ -16,7 +17,8 @@ import { closureFingerprintVersion } from '../services/accounting/accountingPeri
 import type { AccountingPeriodClosure } from '../types/accountingPeriod';
 
 export function alsServerBestaetigt(closure: AccountingPeriodClosure, datenstand = 1): AccountingPeriodClosure {
-  if (closureFingerprintVersion(closure) !== 5) return closure;
+  const fassung = closureFingerprintVersion(closure);
+  if (fassung !== 5 && fassung !== 6) return closure;
   return {
     ...closure,
     server: { revision: closure.revision, fingerprint: closure.fingerprint, validiert: true, datenstand, bestaetigtAm: closure.closedAt },

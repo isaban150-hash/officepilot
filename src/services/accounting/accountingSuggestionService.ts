@@ -27,6 +27,7 @@
  * `AccountingSuggestion` schliesst den Wert aus.
  */
 import { isCreditNoteExpense } from '../expensePaymentCalculations';
+import { isExpenseTaxSplitOpen } from '../expense/expenseTaxSplit';
 import { isInvoiceCancelled } from '../invoicePaymentService';
 import type { Expense } from '../../types/expense';
 import type { VorgangInvoice } from '../../types/models';
@@ -106,6 +107,22 @@ export function suggestExpenseAccounting(context: ExpenseSuggestionContext): Acc
       taxTreatment,
       bookingText: joinBookingText('Gutschrift', bookingText),
       reason: 'accounting.reason.expenseCreditNote',
+      status: 'needs_clarification',
+    };
+  }
+
+  /*
+   * P1-KORREKTURBLOCK A-04 — ohne belegte Steueraufteilung gibt es keine Grundlage für eine Buchung: Netto und
+   * Steuer sind dann Platzhalter. Der Beleg geht in die Klärung, bis Netto und Vorsteuer vom Beleg übernommen sind.
+   * Eine stornierte Ausgabe lässt sich nicht mehr nachtragen (und wird ohnehin nicht gebucht) — dort kein Klärungsauftrag.
+   */
+  if (expense.status !== 'storniert' && isExpenseTaxSplitOpen(expense)) {
+    return {
+      accountNumber: '',
+      accountLabel: '',
+      taxTreatment,
+      bookingText,
+      reason: 'accounting.reason.taxSplitOpen',
       status: 'needs_clarification',
     };
   }

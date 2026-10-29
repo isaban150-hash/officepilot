@@ -29,6 +29,38 @@ export function setOcrRecognizerForTests(recognizer: OcrRecognizer | null): void
   ocrRecognizerOverride = recognizer;
 }
 
+/**
+ * P1 A-04/A-02 Abschluss-Rundgang (R-09) — die Texterkennung selbst ließ sich nicht starten: Engine, Kern oder
+ * Sprachdaten nicht ladbar (z. B. ohne Internetverbindung oder bei gesperrtem CDN). Das ist kein Fehler der Datei —
+ * vorher meldete die App in diesem Fall „PDF beschädigt“ bzw. bei Fotos „Foto unscharf“.
+ */
+export class OcrEngineUnavailableError extends Error {
+  readonly code = 'ocr_unavailable' as const;
+  readonly ursache: unknown;
+
+  constructor(ursache?: unknown) {
+    super('Die Texterkennung konnte nicht gestartet werden.');
+    this.name = 'OcrEngineUnavailableError';
+    this.ursache = ursache;
+  }
+}
+
+export function isOcrEngineUnavailableError(error: unknown): error is OcrEngineUnavailableError {
+  return error instanceof OcrEngineUnavailableError;
+}
+
+/** Ein deutscher Tesseract-Worker; scheitert der Start, als `OcrEngineUnavailableError` (R-09). */
+async function createGermanOcrWorker() {
+  try {
+    const { createWorker } = await import('tesseract.js');
+    return await createWorker('deu', 1, {
+      logger: () => {},
+    });
+  } catch (error) {
+    throw new OcrEngineUnavailableError(error);
+  }
+}
+
 /** Test seam for the layout-aware image path. */
 export function setOcrImageRecognizerForTests(recognizer: OcrImageRecognizer | null): void {
   ocrImageRecognizerOverride = recognizer;
@@ -166,10 +198,7 @@ export async function withSharedOcrWorker<T>(
     return run(ocrRecognizerOverride);
   }
 
-  const { createWorker } = await import('tesseract.js');
-  const worker = await createWorker('deu', 1, {
-    logger: () => {},
-  });
+  const worker = await createGermanOcrWorker();
 
   try {
     const recognize: OcrRecognizer = async (input) => {
@@ -200,10 +229,7 @@ export async function recognizeImageOrCanvas(
     return ocrRecognizerOverride(input);
   }
 
-  const { createWorker } = await import('tesseract.js');
-  const worker = await createWorker('deu', 1, {
-    logger: () => {},
-  });
+  const worker = await createGermanOcrWorker();
 
   try {
     const pageSize = await resolvePageSize(input);
@@ -243,10 +269,7 @@ export async function recognizeMultipleCanvases(
     };
   }
 
-  const { createWorker } = await import('tesseract.js');
-  const worker = await createWorker('deu', 1, {
-    logger: () => {},
-  });
+  const worker = await createGermanOcrWorker();
 
   try {
     const parts: string[] = [];

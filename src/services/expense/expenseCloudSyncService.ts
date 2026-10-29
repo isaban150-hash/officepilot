@@ -14,6 +14,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AppPersistedState } from '../../types/models';
 import { checkExpenseMoneyIntegrity } from './expenseMoneyIntegrity';
+import { EXPENSE_TAX_SPLIT_SCHEMA } from './expenseTaxSplit';
 import type { Expense, ExpensePayment, ReconciledExpenseRejection, RejectedExpenseChange, RejectedExpensePayment } from '../../types/expense';
 import type { SyncEntityType, SyncMeta, SyncOutboxEntry } from '../../types/sync';
 import { getSupabaseClient } from '../../lib/supabase';
@@ -92,7 +93,12 @@ export function buildExpensePushPayload(expense: Expense, deleted: boolean): Rec
     dedupe_key: expense.dedupeKey ?? '',
     linked_inbox_id: expense.linkedInboxId ?? null,
     archive_document_id: expense.archiveDocumentId ?? null,
-    payload: { ...stripPaymentFields(expense), updatedAt: expense.updatedAt },
+    /*
+     * P1-KORREKTUR A04-WEISS-R1 — `taxSplitSchema` sagt dem Server: Dieser Stand kennt die Steueraufteilung, die
+     * Nutzlast ist maßgeblich (fehlende Felder heißen „nicht gesetzt“). Ohne das Kennzeichen (Altclient) übernimmt der
+     * Server die gespeicherte Aufteilung und weist widersprüchliche Stände ab.
+     */
+    payload: { ...stripPaymentFields(expense), taxSplitSchema: EXPENSE_TAX_SPLIT_SCHEMA, updatedAt: expense.updatedAt },
     deleted,
   };
 }

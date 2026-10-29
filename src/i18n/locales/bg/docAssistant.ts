@@ -164,6 +164,8 @@ export const bgDocAssistant = {
   'docAssistant.error.title.noReadableText': 'Няма четлив текст',
   'docAssistant.error.title.passwordRequired': 'PDF е защитен с парола',
   'docAssistant.error.title.pdfCorrupt': 'PDF файлът е повреден',
+  'docAssistant.error.title.ocrUnavailable': 'Разпознаването на текст не е налично',
+  'docAssistant.error.ocrUnavailable': 'Файлът е наред, но автоматичното разпознаване на текст не можа да стартира (например без интернет връзка). Моля, опитайте по-късно или изберете PDF с текстов слой.',
   'docAssistant.error.title.fileTooLarge': 'Файлът е твърде голям',
   'docAssistant.error.title.fileReadFailed': 'Файлът не можа да се прочете',
   'docAssistant.error.title.storageFailed': 'Запазването не успя',

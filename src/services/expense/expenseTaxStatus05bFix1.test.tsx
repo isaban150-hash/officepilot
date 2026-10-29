@@ -178,10 +178,12 @@ describe('C — die übrigen Steuerfälle', () => {
     );
     expect(mitSteuer.success).toBe(true);
 
+    // P1 A-04 Produktregel B (27.10.2026): 0 € Steuer bei „unklar“ ist keine Klärung und wird abgewiesen — bisher wurde
+    // sie gespeichert. „Nicht als Nullsteuer gelesen“ gilt damit strenger: Es entsteht gar kein belegter Beleg.
     const ohneSteuer = addExpense(
       input({ taxStatus: 'unclear', invoiceNumber: 'UNCL-2', netAmount: 100, taxAmount: 0, grossAmount: 100 }),
     );
-    expect(ohneSteuer.success).toBe(true);
+    expect(ohneSteuer).toEqual({ success: false, errorKey: 'expense.taxSplit.zeroTaxUnclear' });
   });
 
   // T14 — die Gutschrift aus 05B bleibt unangetastet.

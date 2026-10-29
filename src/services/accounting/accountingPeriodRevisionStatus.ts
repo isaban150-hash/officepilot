@@ -29,12 +29,12 @@ export function isActiveClosure(closure: Pick<AccountingPeriodClosure, 'reopened
   return !closure.reopenedAt && !closure.cloudAbweisung;
 }
 
-/** Der Server hat genau diese Revision geprüft und angenommen (Fassung 5, derselbe Fingerabdruck). */
+/** Der Server hat genau diese Revision geprüft und angenommen (Fassung 5 oder 6, derselbe Fingerabdruck). */
 export function isClosureServerConfirmed(closure: AccountingPeriodClosure): boolean {
   return (
     closure.server?.validiert === true &&
     closure.server.fingerprint === closure.fingerprint &&
-    closureFingerprintVersion(closure) === 5
+    (closureFingerprintVersion(closure) === 5 || closureFingerprintVersion(closure) === 6)
   );
 }
 
@@ -52,7 +52,8 @@ export function resolveClosureRevisionStatus(
   // Rollen- oder Rechteabweisung: endgültig für diesen Auftrag (erneut senden erst nach bewusster Entscheidung).
   if (auftraege.some((entry) => isFinallyDeniedOutboxEntry(entry))) return 'abgewiesen';
   // Ältere Fassung oder eine Serverzeile ohne Prüfung: lesbar, nie serverzertifiziert.
-  if (closureFingerprintVersion(closure) !== 5 || (closure.sync?.version ?? 0) > 0) return 'historisch';
+  // P1-KORREKTUR A04-WEISS-R2 — ausstehend kann nur noch eine Revision der Fassung 6 sein; nur sie nimmt der Server an.
+  if (closureFingerprintVersion(closure) !== 6 || (closure.sync?.version ?? 0) > 0) return 'historisch';
   return 'ausstehend';
 }
 

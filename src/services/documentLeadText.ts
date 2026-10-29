@@ -168,7 +168,12 @@ export function buildDocumentLeadText(
     sentences.push(translate('documentLead.unclear'));
     const sender = factValue(summary, 'sender');
     const subject = factValue(summary, 'subject');
-    if (sender) sentences.push(fill(translate('documentLead.knownSender'), { sender }));
+    // Abschluss-Rundgang R-18 — der Platzhalter „Absender nicht eindeutig erkannt.“ ist kein erkannter Absender
+    // (vorher: „Erkannter Absender: Absender nicht eindeutig erkannt..“); ein Name mit Schlusspunkt endet mit einem Punkt.
+    const unknownSender = translate('common.unknownSender' as TranslationKey).trim();
+    if (sender && sender !== unknownSender) {
+      sentences.push(fill(translate('documentLead.knownSender'), { sender }).replace(/\.\.$/, '.'));
+    }
     if (subject) sentences.push(fill(translate('documentLead.knownSubject'), { subject }));
     return sentences.join(' ').replace(/\s+/g, ' ').trim();
   }

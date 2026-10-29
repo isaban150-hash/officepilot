@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Badge, PageHeader, StatusBadge } from '../components/ui/Card';
+// Abschluss-Rundgang R-13 — Fälligkeit im üblichen Datumsformat (vorher roh als 2026-10-30).
+import { DateDisplay } from '../components/ui/Display';
 import { BusinessList, BusinessListItem } from '../components/ui/Lists';
 import { Page, PageToolbar } from '../components/ui/Page';
 import { Button } from '../components/ui/Button';
@@ -132,7 +134,7 @@ export function AufgabenPage() {
                 subtitle={task.description}
                 meta={`${translate(categoryKey)} · ${translate(sourceKey)}`}
                 status={done ? <StatusBadge tone="success" label={translate('aufgaben.filter.erledigt')} icon={false} /> : <StatusBadge tone={priorityTone(task.priority)} label={translate(priorityKey)} icon={false} />}
-                date={task.dueDate ? <Badge tone={done ? 'neutral' : 'warning'}>{task.dueDate}</Badge> : undefined}
+                date={task.dueDate ? <Badge tone={done ? 'neutral' : 'warning'}><DateDisplay value={task.dueDate} /></Badge> : undefined}
                 action={
                   <Button
                     type="button"

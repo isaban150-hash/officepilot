@@ -25,6 +25,7 @@ import type {
 import type { AccountingAssignment } from '../../types/accounting';
 import { canonicalAccountingAssignmentsBySource } from './accountingCanonical';
 import { buildPeriodCanonicalTextV5, buildPeriodFingerprintV5, buildPeriodManifestV5 } from './accountingPeriodManifestV5';
+import { buildPeriodCanonicalTextV6, buildPeriodFingerprintV6, buildPeriodManifestV6 } from './accountingPeriodManifestV6';
 import { belegExportKey } from '../steuerberater/monatsmappeModelService';
 import type { MonatsmappeBeleg, MonatsmappeModel } from '../steuerberater/monatsmappeModelService';
 
@@ -69,13 +70,18 @@ export function buildPeriodManifest(
    * Skonto, Zahlungsart, Zahlungsstatus und offenen Betrag, wie der Export sie ausweist. Version 3
    * bleibt unverändert (keine stille Umdeutung alter Abschlüsse).
    */
-  version: AccountingPeriodFingerprintVersion = 5,
+  version: AccountingPeriodFingerprintVersion = 6,
 ): AccountingPeriodManifest {
   /*
    * FINANZ-CORE-01A (systemische Gesamtnacharbeit, SYS-01/SYS-03) — neue Revisionen entstehen mit Fassung 5: dazu die
    * kumulierten offenen Posten, und der Server prüft sie gegen seinen eigenen Bestand (accountingPeriodManifestV5.ts).
    * Fassungen 1–4 bleiben unverändert prüfbar, gelten aber nie als serverzertifiziert.
    */
+  /*
+   * P1-KORREKTUR A04-WEISS-R2 — neue Revisionen entstehen mit Fassung 6: dazu Aufteilungsart, Vorsteuerabzug und
+   * abziehbarer Betrag je Eingangsbeleg (accountingPeriodManifestV6.ts). Fassung 5 bleibt unverändert prüfbar.
+   */
+  if (version === 6) return buildPeriodManifestV6(model, assignments, chartOfAccounts);
   if (version === 5) return buildPeriodManifestV5(model, assignments, chartOfAccounts);
   /*
    * FINANZ-CORE-01A (WEISS-Nacharbeit N09) — ab Version 3 dieselbe Kontierung je Beleg wie
@@ -115,8 +121,9 @@ export function buildPeriodManifest(
       belegnummer: beleg.belegnummer,
       datum: beleg.datum,
       brutto: round(beleg.brutto),
-      netto: roundOrNull(beleg.netto),
-      steuer: roundOrNull(beleg.steuer),
+      // P1-KORREKTURBLOCK A-04 — gebunden bleibt das Gespeicherte (offene Aufteilung: Platzhalter), wie bisher.
+      netto: roundOrNull(beleg.fingerprintBetraege ? beleg.fingerprintBetraege.netto : beleg.netto),
+      steuer: roundOrNull(beleg.fingerprintBetraege ? beleg.fingerprintBetraege.steuer : beleg.steuer),
       belegStatus,
       accountNumber: assignment?.accountNumber.trim() ?? '',
       taxTreatment: assignment?.taxTreatment ?? '',
@@ -229,6 +236,7 @@ export function buildPeriodManifest(
 
 /** Die Algorithmusversion eines Manifests; ohne Angabe Version 1. */
 export function manifestFingerprintVersion(manifest: AccountingPeriodManifest): AccountingPeriodFingerprintVersion {
+  if (manifest.fingerprintVersion === 6) return 6;
   if (manifest.fingerprintVersion === 5) return 5;
   if (manifest.fingerprintVersion === 4) return 4;
   if (manifest.fingerprintVersion === 3) return 3;
@@ -237,6 +245,7 @@ export function manifestFingerprintVersion(manifest: AccountingPeriodManifest): 
 
 /** Die Algorithmusversion, mit der ein gespeicherter Abschluss entstand. */
 export function closureFingerprintVersion(closure: AccountingPeriodClosure): AccountingPeriodFingerprintVersion {
+  if (manifestFingerprintVersion(closure.manifest) === 6 || closure.fingerprint.startsWith('p6:')) return 6;
   if (manifestFingerprintVersion(closure.manifest) === 5 || closure.fingerprint.startsWith('p5:')) return 5;
   if (manifestFingerprintVersion(closure.manifest) === 4 || closure.fingerprint.startsWith('p4:')) return 4;
   if (manifestFingerprintVersion(closure.manifest) === 3 || closure.fingerprint.startsWith('p3:')) return 3;
@@ -251,6 +260,7 @@ export function closureFingerprintVersion(closure: AccountingPeriodClosure): Acc
  * Texte, nicht zwei Hexzahlen.
  */
 export function buildPeriodCanonicalText(manifest: AccountingPeriodManifest): string {
+  if (manifestFingerprintVersion(manifest) === 6) return buildPeriodCanonicalTextV6(manifest);
   if (manifestFingerprintVersion(manifest) === 5) return buildPeriodCanonicalTextV5(manifest);
   const head = [
     `month=${manifest.monthKey}`,
@@ -334,6 +344,8 @@ export function buildPeriodCanonicalText(manifest: AccountingPeriodManifest): st
  */
 export function buildPeriodFingerprint(manifest: AccountingPeriodManifest): string {
   // Fassung 5: SHA-256 über den kanonischen Text, identisch mit dem Server (p5:<hex>).
+  // Fassung 6 (A04-WEISS-R2): dieselbe Bildung, Text um die steuerlichen Merkmale ergänzt (p6:<hex>).
+  if (manifestFingerprintVersion(manifest) === 6) return buildPeriodFingerprintV6(manifest);
   if (manifestFingerprintVersion(manifest) === 5) return buildPeriodFingerprintV5(manifest);
   const text = buildPeriodCanonicalText(manifest);
   let hash = 2166136261;

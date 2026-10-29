@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
+import { useId, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
 import { useInRouterContext } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import {
@@ -11,7 +11,15 @@ import {
   EXPENSE_TAX_STATUS_OPTIONS,
   MANUAL_EXPENSE_DEFAULT_TAX_STATUS,
 } from '../../services/expense/expenseTaxStatusOptions';
-import type { Expense, ExpenseCategory, ExpenseInput } from '../../types/expense';
+import { isZeroRateTaxStatus } from '../../services/expense/expenseMoneyIntegrity';
+import { resolveExpenseTaxSplitState } from '../../services/expense/expenseTaxSplit';
+import type {
+  Expense,
+  ExpenseCategory,
+  ExpenseInput,
+  ExpenseInputTaxDeduction,
+  ExpenseTaxSplit,
+} from '../../types/expense';
 import type { TaxStatus } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 import { Button } from '../ui/Button';
@@ -33,7 +41,19 @@ export interface ExpenseFormDraft {
   taxAmount: string;
   /** FINANZCORE-05B-FIX1 — der Steuerstatus dieses Belegs, sichtbar und waehlbar. */
   taxStatus: TaxStatus;
+  /**
+   * P1-KORREKTURBLOCK A-04 — wie Netto und Steuer belegt sind. `''` = keine Angabe: nur beim Bearbeiten eines
+   * Altbestands mit Prüfbefund; ohne Betragseingabe bleibt dessen gespeicherter Stand dann unverändert.
+   */
+  taxSplit: ExpenseTaxSplit | '';
+  /** A-04 — der Vorsteuerabzug zur belegten Steuer. */
+  inputTaxDeduction: ExpenseInputTaxDeduction;
+  /** A-04 — der abziehbare Teil der Vorsteuer (nur bei „teilweise“). */
+  deductibleTaxAmount: string;
 }
+
+const TAX_SPLIT_OPTIONS: readonly ExpenseTaxSplit[] = ['belegt', 'gemischt', 'offen'];
+const INPUT_TAX_DEDUCTION_OPTIONS: readonly ExpenseInputTaxDeduction[] = ['voll', 'teilweise', 'keiner'];
 
 /*
  * EINGANG-01D-1 Nacharbeit 2 (P1) — die eine Schreibweise, in der ein
@@ -47,6 +67,13 @@ function formatAmountForInput(value: number | null | undefined): string {
 }
 
 function draftFromExpense(expense: Expense): ExpenseFormDraft {
+  /*
+   * P1-KORREKTURBLOCK A-04 — die Platzhalter einer offenen Aufteilung und der Prüfbefund eines Altbestands
+   * (Netto = Brutto, 0 € Steuer) kommen nicht als Netto/Steuer ins Formular: Sie sind keine Belegwerte, und
+   * Öffnen + Speichern darf sie nicht nachträglich bestätigen.
+   */
+  const state = resolveExpenseTaxSplitState(expense);
+  const ohneBelegwerte = state === 'offen' || state === 'altbestand_pruefen';
   return {
     title: expense.title,
     category: expense.category,
@@ -56,10 +83,13 @@ function draftFromExpense(expense: Expense): ExpenseFormDraft {
     issueDate: expense.issueDate,
     paymentDueDate: expense.paymentDueDate ?? '',
     grossAmount: formatAmountForInput(expense.grossAmount),
-    netAmount: formatAmountForInput(expense.netAmount),
-    taxAmount: formatAmountForInput(expense.taxAmount),
+    netAmount: ohneBelegwerte ? '' : formatAmountForInput(expense.netAmount),
+    taxAmount: ohneBelegwerte ? '' : formatAmountForInput(expense.taxAmount),
     // Bearbeiten zeigt den gespeicherten Status — nie einen neu geratenen.
     taxStatus: expense.taxStatus,
+    taxSplit: state === 'offen' || state === 'gemischt' ? state : state === 'altbestand_pruefen' ? '' : 'belegt',
+    inputTaxDeduction: expense.inputTaxDeduction ?? 'voll',
+    deductibleTaxAmount: formatAmountForInput(expense.deductibleTaxAmount),
   };
 }
 
@@ -82,6 +112,13 @@ function emptyDraft(): ExpenseFormDraft {
      * abrechnet, bekommt trotzdem Rechnungen mit ausgewiesenen 19 %.
      */
     taxStatus: MANUAL_EXPENSE_DEFAULT_TAX_STATUS,
+    /*
+     * A-04 — vorgewählt ist „vom Beleg“; ohne Netto oder Steuer verlangt das Speichern dann eine bewusste
+     * Entscheidung (Beträge eintragen oder „Noch offen“), statt still 0 € Steuer anzunehmen.
+     */
+    taxSplit: 'belegt',
+    inputTaxDeduction: 'voll',
+    deductibleTaxAmount: '',
   };
 }
 
@@ -91,10 +128,54 @@ function parseAmount(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function toInput(draft: ExpenseFormDraft, linkedInboxId?: string): ExpenseInput {
+/**
+ * A-04 — ein leeres Feld ist „nicht angegeben“; eine eingetragene 0 ist eine Angabe, die die Prüfung bewertet
+ * (bisher wurde aus 0 still „nicht angegeben“ und daraus Netto = Brutto). Unlesbares bleibt unlesbar (NaN).
+ */
+function parseOptionalAmount(value: string): number | undefined {
+  if (value.trim() === '') return undefined;
+  const parsed = parseFloat(value.trim().replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+/** A-04 — die Felder, die Beträge und Steueraufteilung tragen. Bleiben sie unverändert, sendet das Formular sie nicht. */
+const MONEY_FIELDS = [
+  'grossAmount', 'netAmount', 'taxAmount', 'taxStatus', 'taxSplit', 'inputTaxDeduction', 'deductibleTaxAmount',
+] as const satisfies readonly (keyof ExpenseFormDraft)[];
+
+type ExpenseMoneyInput = Pick<
+  ExpenseInput,
+  'grossAmount' | 'netAmount' | 'taxAmount' | 'taxStatus' | 'taxSplit' | 'inputTaxDeduction' | 'deductibleTaxAmount'
+>;
+
+function toMoneyInput(draft: ExpenseFormDraft): ExpenseMoneyInput {
   const grossAmount = parseAmount(draft.grossAmount);
-  const netAmount = parseAmount(draft.netAmount);
-  const taxAmount = parseAmount(draft.taxAmount);
+  // Ohne Umsatzsteuer laut Steuerstatus gibt es keine Aufteilungsfrage (Netto = Brutto, Steuer 0 ist belegt).
+  if (isZeroRateTaxStatus(draft.taxStatus)) {
+    return {
+      grossAmount,
+      taxStatus: draft.taxStatus,
+      netAmount: parseOptionalAmount(draft.netAmount),
+      taxAmount: parseOptionalAmount(draft.taxAmount),
+    };
+  }
+  const taxSplit: ExpenseTaxSplit = draft.taxSplit === '' ? 'belegt' : draft.taxSplit;
+  // Offen: keine Beträge — auch eingetippte nicht, sie wären keine Belegwerte.
+  if (taxSplit === 'offen') return { grossAmount, taxStatus: draft.taxStatus, taxSplit };
+  return {
+    grossAmount,
+    taxStatus: draft.taxStatus,
+    netAmount: parseOptionalAmount(draft.netAmount),
+    taxAmount: parseOptionalAmount(draft.taxAmount),
+    taxSplit,
+    inputTaxDeduction: draft.inputTaxDeduction,
+    ...(draft.inputTaxDeduction === 'teilweise'
+      ? { deductibleTaxAmount: parseOptionalAmount(draft.deductibleTaxAmount) }
+      : {}),
+  };
+}
+
+function toBaseInput(draft: ExpenseFormDraft, linkedInboxId?: string): Omit<ExpenseInput, keyof ExpenseMoneyInput> {
   return {
     title: draft.title,
     category: draft.category,
@@ -103,10 +184,6 @@ function toInput(draft: ExpenseFormDraft, linkedInboxId?: string): ExpenseInput 
     description: draft.description,
     issueDate: draft.issueDate,
     paymentDueDate: draft.paymentDueDate || null,
-    grossAmount,
-    netAmount: netAmount || undefined,
-    taxAmount: taxAmount || undefined,
-    taxStatus: draft.taxStatus,
     linkedInboxId,
   };
 }
@@ -133,6 +210,14 @@ function draftFromInput(input: Partial<ExpenseInput>): ExpenseFormDraft {
     netAmount: input.netAmount ? formatAmountForInput(input.netAmount) : base.netAmount,
     taxAmount: input.taxAmount ? formatAmountForInput(input.taxAmount) : base.taxAmount,
     taxStatus: input.taxStatus ?? base.taxStatus,
+    /*
+     * A-04 — eine Vorbelegung aus dem Eingang trägt meist nur den sicher erkannten Bruttobetrag. Dann ist die
+     * Aufteilung ausdrücklich „noch offen“ vorgewählt (der Hinweis steht im Formular) — nie still 0 € Steuer.
+     */
+    taxSplit: input.taxSplit ?? (input.netAmount || input.taxAmount ? 'belegt' : 'offen'),
+    inputTaxDeduction: input.inputTaxDeduction ?? base.inputTaxDeduction,
+    deductibleTaxAmount:
+      input.deductibleTaxAmount !== undefined ? formatAmountForInput(input.deductibleTaxAmount) : base.deductibleTaxAmount,
   };
 }
 
@@ -144,7 +229,7 @@ function initialDraft(expense: Expense | undefined, prefill: Partial<ExpenseInpu
 
 const EXPENSE_FORM_FIELDS: readonly (keyof ExpenseFormDraft & string)[] = [
   'title', 'category', 'supplierName', 'invoiceNumber', 'description', 'issueDate', 'paymentDueDate',
-  'grossAmount', 'netAmount', 'taxAmount', 'taxStatus',
+  'grossAmount', 'netAmount', 'taxAmount', 'taxStatus', 'taxSplit', 'inputTaxDeduction', 'deductibleTaxAmount',
 ];
 
 /**
@@ -178,9 +263,11 @@ interface GesteuerterEntwurf {
 
 function ExpenseFormFelder({ mode, expense, prefill, onSaved, onCancel, gesteuert }: ExpenseFormProps & { gesteuert?: GesteuerterEntwurf }) {
   const { translate, showToast } = useApp();
+  const taxSplitLabelId = useId();
   const [linkedInboxId] = useState(prefill?.linkedInboxId);
   const [eigenerAusgang] = useState(() => initialDraft(expense, prefill));
   const [eigenerEntwurf, setEigenerEntwurf] = useState<ExpenseFormDraft>(eigenerAusgang);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const ausgang = gesteuert?.saved ?? eigenerAusgang;
   const draft = gesteuert?.draft ?? eigenerEntwurf;
   const setDraft = gesteuert?.setDraft ?? setEigenerEntwurf;
@@ -194,20 +281,39 @@ function ExpenseFormFelder({ mode, expense, prefill, onSaved, onCancel, gesteuer
    * (Regel des Dienstes); die Felder zeigen das, statt beim Speichern zu scheitern.
    */
   const amountsLocked = mode === 'edit' && !!expense && hasBookedExpensePayments(expense);
+  /*
+   * P1 A-04 Produktregel A — nach einer Zahlung bleibt das Brutto fest. Ist die Steueraufteilung noch offen, bleiben
+   * Steuerstatus, Aufteilung, Netto und Steuer für ihre Klärung frei (Dienst und Server prüfen dasselbe).
+   */
+  const splitLocked = amountsLocked && resolveExpenseTaxSplitState(expense!) !== 'offen';
+  /*
+   * P1-KORREKTURBLOCK A-04 — die Aufteilungsfrage stellt sich nur, wenn der Steuerstatus Umsatzsteuer kennen kann
+   * (19 %, 7 %, unklar). Ein Altbestand mit Prüfbefund sagt das beim Bearbeiten ausdrücklich.
+   */
+  const taxable = !isZeroRateTaxStatus(draft.taxStatus);
+  const legacyEntry = mode === 'edit' && !!expense && resolveExpenseTaxSplitState(expense) === 'altbestand_pruefen';
+  const splitOpen = taxable && draft.taxSplit === 'offen';
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    const input = toInput(draft, linkedInboxId);
+    const base = toBaseInput(draft, linkedInboxId);
+    /*
+     * A-04 — beim Bearbeiten werden Beträge und Steueraufteilung nur gesendet, wenn sie geändert wurden. So bleibt
+     * ein gespeicherter Stand (auch ein Altbestand, auch nach einer Zahlung) beim Ändern von Titel oder Ablage exakt.
+     */
+    const moneyChanged = MONEY_FIELDS.some((field) => draft[field] !== ausgang[field]);
     const result =
       mode === 'add'
-        ? addExpense(input)
-        : updateExpense(expense!.id, input);
+        ? addExpense({ ...base, ...toMoneyInput(draft) })
+        : updateExpense(expense!.id, moneyChanged ? { ...base, ...toMoneyInput(draft) } : base);
 
     if (!result.success) {
+      setSubmitError(result.errorKey);
       showToast(translate(result.errorKey as TranslationKey));
       return;
     }
 
+    setSubmitError(null);
     // Nach erfolgreichem Speichern: kein Entwurf, keine Rückfrage.
     offer?.clear();
     leaveGuard.release();
@@ -285,7 +391,7 @@ function ExpenseFormFelder({ mode, expense, prefill, onSaved, onCancel, gesteuer
           className="input"
           value={draft.taxStatus}
           data-testid="expense-tax-status-select"
-          disabled={amountsLocked}
+          disabled={splitLocked}
           onChange={(e) =>
             setDraft((prev) => ({ ...prev, taxStatus: e.target.value as TaxStatus }))
           }
@@ -339,9 +445,13 @@ function ExpenseFormFelder({ mode, expense, prefill, onSaved, onCancel, gesteuer
         />
       </label>
 
-      {amountsLocked ? (
+      {splitLocked ? (
         <p className="form-hint" data-testid="expense-amounts-locked">
           {translate('expense.edit.amountLockedHint')}
+        </p>
+      ) : amountsLocked ? (
+        <p className="form-hint" data-testid="expense-gross-locked-tax-review">
+          {translate('expense.edit.grossLockedTaxReviewHint')}
         </p>
       ) : null}
 
@@ -358,27 +468,113 @@ function ExpenseFormFelder({ mode, expense, prefill, onSaved, onCancel, gesteuer
         />
       </label>
 
-      <label className="form-group">
-        <span>{translate('expense.fieldNetAmount')}</span>
-        <input
-          className="input"
-          inputMode="decimal"
-          value={draft.netAmount}
-          disabled={amountsLocked}
-          onChange={(e) => setDraft((prev) => ({ ...prev, netAmount: e.target.value }))}
-        />
-      </label>
+      {/*
+        * P1-KORREKTURBLOCK A-04 — wie Netto und Steuer belegt sind. Ohne Angabe wird nichts mehr still zu
+        * „0 € Steuer“: Entweder stehen die Werte auf dem Beleg, oder die Aufteilung ist ausdrücklich „noch offen“.
+        */}
+      {taxable ? (
+        <div className="form-group" role="radiogroup" aria-labelledby={taxSplitLabelId} data-testid="expense-tax-split">
+          <span id={taxSplitLabelId}>{translate('expense.taxSplit.label')}</span>
+          <div className="radio-group">
+            {TAX_SPLIT_OPTIONS.map((value) => (
+              <label key={value} className="radio-label">
+                <input
+                  type="radio"
+                  name="expense-tax-split"
+                  value={value}
+                  checked={draft.taxSplit === value}
+                  disabled={splitLocked}
+                  onChange={() => setDraft((prev) => ({ ...prev, taxSplit: value }))}
+                  data-testid={`expense-tax-split-${value}`}
+                />
+                {translate(`expense.taxSplit.option.${value}` as TranslationKey)}
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
-      <label className="form-group">
-        <span>{translate('expense.fieldTaxAmount')}</span>
-        <input
-          className="input"
-          inputMode="decimal"
-          value={draft.taxAmount}
-          disabled={amountsLocked}
-          onChange={(e) => setDraft((prev) => ({ ...prev, taxAmount: e.target.value }))}
-        />
-      </label>
+      {taxable && legacyEntry && draft.taxSplit === '' ? (
+        <p className="form-hint" role="note" data-testid="expense-tax-split-legacy-hint">
+          {translate('expense.taxSplit.legacyHint')}
+        </p>
+      ) : null}
+
+      {splitOpen ? (
+        <p className="form-hint" role="note" data-testid="expense-tax-split-open-hint">
+          {translate('expense.taxSplit.openHint')}
+        </p>
+      ) : (
+        <>
+          <label className="form-group">
+            <span>{translate('expense.fieldNetAmount')}</span>
+            <input
+              className="input"
+              inputMode="decimal"
+              value={draft.netAmount}
+              disabled={splitLocked}
+              data-testid="expense-net-input"
+              onChange={(e) => setDraft((prev) => ({ ...prev, netAmount: e.target.value }))}
+            />
+          </label>
+
+          <label className="form-group">
+            <span>{translate('expense.fieldTaxAmount')}</span>
+            <input
+              className="input"
+              inputMode="decimal"
+              value={draft.taxAmount}
+              disabled={splitLocked}
+              data-testid="expense-tax-input"
+              onChange={(e) => setDraft((prev) => ({ ...prev, taxAmount: e.target.value }))}
+            />
+            {taxable ? (
+              <span className="hint-text">
+                {translate(draft.taxSplit === 'gemischt' ? 'expense.taxSplit.mixedHint' : 'expense.taxSplit.amountsHint')}
+              </span>
+            ) : null}
+          </label>
+
+          {taxable ? (
+            <label className="form-group">
+              <span>{translate('expense.inputTaxDeduction.label')}</span>
+              {/*
+                * P1-Abschluss-Rundgang (R-08) — der Vorsteuerabzug ist kein Betrag des Belegs: Server
+                * (`upsert_workspace_expense`, „Geld unverändert“) und Dienst (`updateExpense`) erlauben die Änderung auch
+                * nach einer gebuchten Zahlung. Das Formular sperrte ihn trotzdem mit den Beträgen.
+                */}
+              <select
+                className="input"
+                value={draft.inputTaxDeduction}
+                data-testid="expense-input-tax-deduction-select"
+                onChange={(e) =>
+                  setDraft((prev) => ({ ...prev, inputTaxDeduction: e.target.value as ExpenseInputTaxDeduction }))
+                }
+              >
+                {INPUT_TAX_DEDUCTION_OPTIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {translate(`expense.inputTaxDeduction.option.${value}` as TranslationKey)}
+                  </option>
+                ))}
+              </select>
+              <span className="hint-text">{translate('expense.inputTaxDeduction.hint')}</span>
+            </label>
+          ) : null}
+
+          {taxable && draft.inputTaxDeduction === 'teilweise' ? (
+            <label className="form-group">
+              <span>{translate('expense.inputTaxDeduction.amountLabel')}</span>
+              <input
+                className="input"
+                inputMode="decimal"
+                value={draft.deductibleTaxAmount}
+                data-testid="expense-deductible-tax-input"
+                onChange={(e) => setDraft((prev) => ({ ...prev, deductibleTaxAmount: e.target.value }))}
+              />
+            </label>
+          ) : null}
+        </>
+      )}
 
       <label className="form-group">
         <span>{translate('expense.fieldDescription')}</span>
@@ -389,6 +585,13 @@ function ExpenseFormFelder({ mode, expense, prefill, onSaved, onCancel, gesteuer
           onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
         />
       </label>
+
+      {/* A-04 — die Ablehnung bleibt am Formular sichtbar, nicht nur im kurzen Hinweis. */}
+      {submitError ? (
+        <p className="form-error" role="alert" data-testid="expense-form-error">
+          {translate(submitError as TranslationKey)}
+        </p>
+      ) : null}
 
       <div className="form-actions">
         <Button

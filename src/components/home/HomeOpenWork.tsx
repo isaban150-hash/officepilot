@@ -26,7 +26,7 @@ export function HomeOpenWork() {
         icon={<NavIcon id="inbox" />}
         title={translate('heute.openInbox')}
         description={
-          inbox.neu > 0 ? translate('heute.openInboxDesc').replace('{count}', String(inbox.neu)) : translate('heute.openInboxEmpty')
+          inbox.neu > 0 ? (inbox.neu === 1 ? translate('heute.openInboxDescOne') : translate('heute.openInboxDesc').replace('{count}', String(inbox.neu))) : translate('heute.openInboxEmpty')
         }
         trailing={inbox.urgent > 0 ? <StatusBadge tone="warning" label={`${inbox.urgent} ${translate('ablage.urgentCount')}`} icon={false} /> : undefined}
         testId="home-card-inbox"

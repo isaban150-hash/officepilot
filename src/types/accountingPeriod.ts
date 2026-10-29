@@ -24,16 +24,24 @@ import type { SyncMeta } from './sync';
  *   `not_ready`            — es gibt Belege, aber offene Punkte.
  *   `ready`                — alles bestätigt, nichts blockiert. **Abgeleitet**,
  *                            nie von Hand gesetzt.
- *   `closed`               — abgeschlossen, und die Daten passen noch dazu.
+ *   `closed`               — abgeschlossen, die Daten passen noch dazu, und
+ *                            kein Sperrgrund besteht.
  *   `changed_after_close`  — abgeschlossen, aber seitdem hat sich etwas
  *                            steuerlich Relevantes geändert.
+ *   `recheck_required`     — P1 A-04 (Nacharbeit WEISS, Abschlussgültigkeit):
+ *                            abgeschlossen, der gespeicherte Stand passt noch,
+ *                            aber inzwischen besteht ein Sperrgrund (etwa eine
+ *                            Zahlung des Monats auf einen Beleg mit offener
+ *                            Steuerprüfung). Die Revision bleibt unverändert,
+ *                            gilt aber nicht, bis der Grund behoben ist.
  */
 export type AccountingPeriodReadiness =
   | 'open'
   | 'not_ready'
   | 'ready'
   | 'closed'
-  | 'changed_after_close';
+  | 'changed_after_close'
+  | 'recheck_required';
 
 /** Warum ein Monat nicht abgeschlossen werden kann. */
 export type AccountingPeriodBlockerCode =
@@ -45,7 +53,11 @@ export type AccountingPeriodBlockerCode =
   /** FINANZ-CORE-01A (END18-R3) — Finanzänderungen, die der Server noch nicht bestätigt hat. */
   | 'unconfirmed_financial_changes'
   /** Systemische Gesamtnacharbeit (SYS-02 / D5) — das letzte Speichern ist gescheitert. */
-  | 'persist_failed';
+  | 'persist_failed'
+  /** P1-KORREKTURBLOCK A-04 — Eingangsbelege des Monats mit offener (nicht belegter) Steueraufteilung. */
+  | 'tax_split_open'
+  /** P1 A-04 Produktregel A — Zahlungen des Monats auf Belege (anderer Monate) mit offener Steueraufteilung. */
+  | 'tax_split_open_payment';
 
 /**
  * FINANZ-CORE-01A (Bericht 20) — eine Quelle mit noch nicht bestätigter Finanzwirkung im Monat (siehe
@@ -106,6 +118,13 @@ export interface AccountingPeriodManifestEntry {
   readonly offenerBetrag?: number;
   /** Ab Version 5: der Kontenrahmen der Kontierung (`SKR03`/`SKR04`, sonst leer). */
   readonly kontenrahmen?: string;
+  /**
+   * P1-KORREKTUR A04-WEISS-R2 (ab Version 6, nur Eingangsbelege und Ausgabenstornos) — Aufteilungsart, wirksamer
+   * Vorsteuerabzug und abziehbarer Betrag (nur bei „teilweise“). Bei Rechnungen leer.
+   */
+  readonly steueraufteilung?: string;
+  readonly vorsteuerabzug?: string;
+  readonly abziehbareVorsteuer?: number | null;
 }
 
 /**
@@ -150,7 +169,7 @@ export interface AccountingPeriodManifestEmployeePayment {
  * Version 4 (FINANZ-CORE-01A, Gesamtnacharbeit INV-04) bindet zusätzlich die exportrelevanten Zahlungs-
  * und Skontowerte; Abschlüsse der Versionen 1 bis 3 bleiben nach ihrer Logik gültig und zeigen ihre Grenze.
  */
-export type AccountingPeriodFingerprintVersion = 1 | 2 | 3 | 4 | 5;
+export type AccountingPeriodFingerprintVersion = 1 | 2 | 3 | 4 | 5 | 6;
 
 /**
  * FINANZ-CORE-01A (systemische Gesamtnacharbeit, SYS-03) — ab Version 5: die kumulierten offenen Posten zum
@@ -195,7 +214,7 @@ export interface AccountingPeriodServerConfirmation {
   readonly revision: number;
   /** Fingerabdruck, den der Server für seinen eigenen Bestand gebildet hat. */
   readonly fingerprint: string;
-  /** Der Server hat das Manifest gegen seinen Finanzbestand geprüft (Fassung 5). */
+  /** Der Server hat das Manifest gegen seinen Finanzbestand geprüft (Fassung 5 oder 6). */
   readonly validiert: boolean;
   /** Finanzdatenstand des Betriebs, gegen den geprüft wurde. */
   readonly datenstand?: number;
@@ -267,7 +286,8 @@ export interface AccountingPeriodState {
   /** Die noch nicht wieder geöffnete Revision, falls es eine gibt. */
   readonly activeClosure: AccountingPeriodClosure | null;
   /**
-   * Passt der aktive Abschluss noch zum heutigen Datenstand?
+   * Passt der aktive Abschluss noch zum heutigen Datenstand — und besteht
+   * kein Sperrgrund (P1 A-04, Nacharbeit WEISS: auch bei gleichem Fingerprint)?
    *
    * `false` heisst: erneute Prüfung nötig. Der Abschluss selbst bleibt
    * erhalten — er war zu seiner Zeit richtig.

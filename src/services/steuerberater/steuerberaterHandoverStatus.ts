@@ -23,6 +23,8 @@ import type { AccountingExportReadiness } from '../accounting/accountingExportGa
 export type SteuerberaterHandoverState =
   | 'not_closed'
   | 'changed_after_close'
+  /** P1 A-04 (Nacharbeit WEISS) — abgeschlossen, Stand unverändert, aber ein Sperrgrund besteht: erneut prüfen. */
+  | 'recheck_required'
   /** Systemische Gesamtnacharbeit (D1) — abgeschlossen, aber nicht (oder nicht mehr) vom Server angenommen. */
   | 'not_server_confirmed'
   | 'unclear_cases'
@@ -32,6 +34,7 @@ export type SteuerberaterHandoverState =
 export type SteuerberaterHandoverIssue =
   | 'not_closed'
   | 'changed_after_close'
+  | 'recheck_required'
   | 'not_server_confirmed'
   | 'period_blockers'
   | 'unclear_cases'
@@ -72,6 +75,7 @@ export function deriveSteuerberaterHandoverStatus(input: SteuerberaterHandoverIn
 
   const issues: SteuerberaterHandoverIssue[] = [];
   if (codes.has('changed_after_close')) issues.push('changed_after_close');
+  if (codes.has('closure_recheck_required')) issues.push('recheck_required');
   if (codes.has('not_closed')) issues.push('not_closed');
   if (codes.has('closure_not_server_confirmed')) issues.push('not_server_confirmed');
   if (periodBlockers > 0) issues.push('period_blockers');
@@ -80,6 +84,8 @@ export function deriveSteuerberaterHandoverStatus(input: SteuerberaterHandoverIn
 
   const state: SteuerberaterHandoverState = codes.has('changed_after_close')
     ? 'changed_after_close'
+    : codes.has('closure_recheck_required')
+      ? 'recheck_required'
     : codes.has('closure_not_server_confirmed') && periodBlockers === 0
       ? 'not_server_confirmed'
       : !readiness.packageAllowed

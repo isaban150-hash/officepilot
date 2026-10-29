@@ -580,7 +580,11 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
         <p className="hint-text" data-testid="kommunikation-email-compose-read-only">{t('freeEmail.compose.readOnly')}</p>
       ) : null}
 
-      {locked ? (
+      {/*
+        * Abschluss-Rundgang R-15 — „Versand unterbrochen … fortsetzen“ nur, wenn gerade nichts gesendet wird. Während
+        * des laufenden Versands ist der Entwurf schon gesperrt (Phase ≠ editing); der Hinweis stand dann fälschlich da.
+        */}
+      {locked && !busy ? (
         <div className="hint-text" data-testid="kommunikation-email-compose-resume-hint">
           <p>{t('freeEmail.compose.resumeHint')}</p>
         </div>
@@ -791,7 +795,8 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
 
         <div className="settings-form__actions">
           <Button type="submit" loading={busy} disabled={!canSend || uploading || busy || aiBusy} data-testid="free-email-send">
-            {locked ? t('freeEmail.compose.resume') : busy ? t('freeEmail.compose.sending') : t(reply ? 'emailThread.sendReply' : 'freeEmail.compose.send')}
+            {/* R-15 — während des Versands „Wird gesendet …“, nicht „Versand fortsetzen“ (der Entwurf ist dann schon gesperrt). */}
+            {busy ? t('freeEmail.compose.sending') : locked ? t('freeEmail.compose.resume') : t(reply ? 'emailThread.sendReply' : 'freeEmail.compose.send')}
           </Button>
           <Button type="button" variant="ghost" onClick={handleDiscard} disabled={busy || locked} data-testid="free-email-discard">
             {t('freeEmail.compose.discard')}

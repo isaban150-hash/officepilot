@@ -16,6 +16,7 @@ import { getDocumentById } from '../../services/documentService';
 import type { TranslationKey } from '../../i18n';
 import { getBusinessDay } from '../../services/businessDateService';
 import { formatDisplayDatePadded } from '../../utils/displayFormat';
+import { isExpenseTaxSplitOpen } from '../../services/expense/expenseTaxSplit';
 
 interface Props {
   expense: Expense;
@@ -45,6 +46,12 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
   const payable = isExpensePayable(expense);
   const openAmount = getExpenseOpenAmount(expense);
   const today = getBusinessDay();
+  /*
+   * P1 A-04 Produktregel A — bei offener Steueraufteilung wird nur eine tatsächlich erfolgte Zahlung erfasst, und der
+   * Nutzer bestätigt das ausdrücklich. Die Steuerprüfung bleibt danach offen (kein steuerliches Buchen, keine Freigabe).
+   */
+  const taxReviewOpen = isExpenseTaxSplitOpen(expense);
+  const [taxReviewAck, setTaxReviewAck] = useState(false);
 
   /*
    * FINANZCORE-05B-FIX3 — der Vorschlag als **Maschinenwert**, nicht als Text.
@@ -85,6 +92,7 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
     setMethod('');
     setProofDocumentId('');
     setErrorKey(null);
+    setTaxReviewAck(false);
   }, [open, openAmount, today]);
 
   const parsedAmount = parseFloat(amount.replace(',', '.')) || 0;
@@ -99,6 +107,11 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
 
   const submitPayment = (confirmed: boolean) => {
     if (cancelled || !payable) return;
+    if (taxReviewOpen && !taxReviewAck) {
+      setPhase('form');
+      setErrorKey('expense.payment.taxReviewAckRequired');
+      return;
+    }
 
     const needsOverpay = willExpensePaymentNeedOverpayConfirm(openAmount, parsedAmount);
     if (!confirmed && needsOverpay) {
@@ -118,6 +131,7 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
 
     const result = recordExpensePayment(expense.id, input, {
       confirmOverpayment: needsOverpay ? confirmed : undefined,
+      ...(taxReviewOpen ? { confirmTaxReviewOpen: taxReviewAck } : {}),
     });
     if (!result.success) {
       setErrorKey(result.errorKey);
@@ -171,6 +185,21 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
 
         {phase === 'form' ? (
           <>
+            {taxReviewOpen && payable && !cancelled ? (
+              <div className="invoice-payment-form__notice" data-testid="expense-payment-tax-review-open">
+                <p>{translate('expense.payment.taxReviewOpenNotice')}</p>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={taxReviewAck}
+                    onChange={(event) => setTaxReviewAck(event.target.checked)}
+                    data-testid="expense-payment-tax-review-ack"
+                  />
+                  <span>{translate('expense.payment.taxReviewAck')}</span>
+                </label>
+              </div>
+            ) : null}
+
             <label className="invoice-payment-form__field">
               <span>{translate('payment.date')}</span>
               <input

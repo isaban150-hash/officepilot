@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { PageHeader, StatusBadge } from '../components/ui/Card';
 import { RowList, RowListItem } from '../components/ui/Lists';
@@ -23,6 +23,7 @@ import { ReadOnlyNotice } from '../components/ui/ReadOnlyNotice';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { subscribeAutomaticSyncStatus } from '../services/sync/syncSchedulerRuntime';
 import { resolveWorkspaceWriteAccess } from '../services/workspace/workspaceRoleService';
 import type { TranslationKey } from '../i18n';
 import {
@@ -62,12 +63,26 @@ export function SteuerberaterPage() {
   /* 02B-FINAL — das letzte Exportergebnis überlebt den Neuaufbau des Panels. */
   const [exportFeedback, setExportFeedback] = useState<AccountingExportFeedback | null>(null);
   const [step, setStep] = useState<FlowStep>('overview');
+  /*
+   * P1 A-04/A-02 Abschluss-Rundgang (R-07) — die Serverbestätigung eines Abschlusses kommt mit der Antwort des Sync-Laufs
+   * (`close_workspace_accounting_period`). Nach jedem beendeten Lauf wird der Stand neu abgeleitet — ohne die Panels neu
+   * aufzubauen (ihr Schlüssel bleibt; offene Dialoge und Eingaben bleiben erhalten). Vorher blieb „wartet auf die Prüfung
+   * durch den Server“ stehen, bis die Seite neu geladen wurde, obwohl die Bestätigung längst gespeichert war.
+   */
+  const [syncRunToken, setSyncRunToken] = useState(0);
+  useEffect(
+    () =>
+      subscribeAutomaticSyncStatus((status) => {
+        if (status && !status.running) setSyncRunToken((value) => value + 1);
+      }),
+    [],
+  );
 
   const overview = useMemo(
     () => getSteuerberaterMonthOverview(new Date(), locale, selectedMonthKey),
     // 02B — der Übergabestatus folgt Abschluss und Export (`periodToken`).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedMonthKey, locale, periodToken],
+    [selectedMonthKey, locale, periodToken, syncRunToken],
   );
 
   const formatOptionLabel = (monthKey: string) =>

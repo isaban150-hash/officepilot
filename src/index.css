@@ -1285,6 +1285,54 @@ body {
   background: var(--color-bg);
 }
 
+/*
+ * P1 A-04/A-02 Abschluss-Rundgang (R-01) — „Falsches Konto verwendet?“ (und der Sperrhinweis) stehen über dem
+ * Assistenten in derselben Spalte wie `.setup-page` und als ruhiger Hinweis. Vorher gab es für diese Klassen keine
+ * Regel: Der Block stand ungestaltet am linken Seitenrand über dem Assistenten.
+ */
+.setup-existing-customer {
+  box-sizing: border-box;
+  max-width: calc(480px - 2rem);
+  margin: 0.85rem auto 0;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 10px);
+}
+
+.setup-existing-customer__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.3;
+}
+
+.setup-existing-customer__hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+@media (max-width: 512px) {
+  .setup-existing-customer {
+    margin-left: 1rem;
+    margin-right: 1rem;
+  }
+}
+
+/* Ab 768px ist `.setup-page` 520px breit mit 1.5rem Innenabstand — der Block bleibt bündig mit dem Assistenten. */
+@media (min-width: 768px) {
+  .setup-existing-customer {
+    max-width: calc(520px - 3rem);
+    margin-top: 1.25rem;
+  }
+}
+
 .setup-brand {
   display: flex;
   align-items: center;
@@ -5354,6 +5402,29 @@ body {
   border: 1px solid #e5e7eb;
   border-radius: var(--radius-sm);
   padding: 0.75rem;
+}
+
+/*
+ * P1 A-04/A-02 Abschluss-Rundgang (R-16) — schmale Bildschirme: Die Zahlungszeile trägt zwei Textknöpfe
+ * („Nachweis hinzufügen“, „Entfernen“). Im allgemeinen Listenraster liegen sie in der schmalen Pfeilspalte und
+ * überdeckten bei 390 px den Text der Zeile. Unter 768 px stehen sie deshalb in einer eigenen Zeile unter Text und Betrag.
+ */
+@media (max-width: 767.98px) {
+  .invoice-payment-history__item.business-list__item {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'identity'
+      'facts'
+      'action';
+  }
+
+  .invoice-payment-history__item.business-list__item > .business-list__action {
+    grid-area: action;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2, 0.5rem);
+    justify-content: flex-start;
+  }
 }
 
 .invoice-payment-history__reference,

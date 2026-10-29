@@ -47,6 +47,8 @@ const EXTRACTION_ERROR_KEYS: Partial<Record<DocumentTextErrorCode, TranslationKe
   no_text: 'docAssistant.error.noReadableText',
   password_required: 'document.upload.error.passwordRequired',
   pdf_corrupt: 'document.upload.error.pdfCorrupt',
+  // Abschluss-Rundgang R-09 — Engine nicht ladbar: kein Datei-, kein Fotofehler.
+  ocr_unavailable: 'docAssistant.error.ocrUnavailable',
 };
 
 const EXTRACTION_TITLE_KEYS: Partial<Record<DocumentTextErrorCode, TranslationKey>> = {
@@ -57,6 +59,7 @@ const EXTRACTION_TITLE_KEYS: Partial<Record<DocumentTextErrorCode, TranslationKe
   no_text: 'docAssistant.error.title.noReadableText',
   password_required: 'docAssistant.error.title.passwordRequired',
   pdf_corrupt: 'docAssistant.error.title.pdfCorrupt',
+  ocr_unavailable: 'docAssistant.error.title.ocrUnavailable',
 };
 
 const INTAKE_TITLE_KEYS: Partial<Record<DocumentIntakeErrorCode, TranslationKey>> = {
@@ -100,7 +103,8 @@ export function isBlockingExtractionError(errorCode?: DocumentTextErrorCode): bo
     errorCode === 'ocr_failed' ||
     errorCode === 'no_text' ||
     errorCode === 'password_required' ||
-    errorCode === 'pdf_corrupt'
+    errorCode === 'pdf_corrupt' ||
+    errorCode === 'ocr_unavailable'
   );
 }
 

@@ -98,6 +98,20 @@ export function resolveReachableManualStep(input: {
 }
 
 /**
+ * P1 A-04/A-02 Abschluss-Rundgang (R-03) — trägt der Entwurf die Pflichtangabe des Schritts „details“? Ohne gültigen,
+ * bestätigten Leistungszeitraum weist die Freigabe ab (`validateInvoiceDraftForApproval`). Erreichbar bleibt die
+ * Vorschau trotzdem (siehe oben); nur die Wiederaufnahme ohne Wunsch soll nicht dort landen.
+ */
+export function hasCompleteManualDetails(
+  draft: Pick<InvoiceDraft, 'servicePeriodFrom' | 'servicePeriodTo' | 'servicePeriodConfirmed'>,
+): boolean {
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  const from = draft.servicePeriodFrom?.trim() ?? '';
+  const to = draft.servicePeriodTo?.trim() ?? '';
+  return iso.test(from) && iso.test(to) && from <= to && draft.servicePeriodConfirmed === true;
+}
+
+/**
  * Ein `?step=` aus der Adresse wird **geprüft**, nicht geglaubt — dieselbe
  * Haltung wie `resolveResumableInvoiceWizardStep`. Ein gesperrter Entwurf
  * (Finalisierung läuft oder ist erledigt) landet in der Vorschau, wo der
@@ -111,8 +125,10 @@ export function resolveResumableManualStep(input: {
 }): ManualInvoiceStep {
   const reachable = resolveReachableManualStep(input);
   if (input.finalizationLocked && input.draft) return 'review';
-  // Ohne Wunsch aus der Adresse: der erste Schritt, der noch etwas braucht.
-  if (!input.requested) return reachable;
+  // Ohne Wunsch aus der Adresse: der erste Schritt, der noch etwas braucht — auch der Leistungszeitraum (R-03).
+  if (!input.requested) {
+    return reachable === 'review' && input.draft && !hasCompleteManualDetails(input.draft) ? 'details' : reachable;
+  }
   return MANUAL_INVOICE_STEPS.indexOf(input.requested) <= MANUAL_INVOICE_STEPS.indexOf(reachable)
     ? input.requested
     : reachable;

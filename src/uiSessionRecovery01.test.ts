@@ -170,7 +170,7 @@ describe('APP-STATE-RECOVERY-IMPLEMENTATION-01', () => {
         onDiscard: () => undefined,
       }),
     );
-    expect(html).toContain('Du hast zuletzt hier gearbeitet');
+    expect(html).toContain('Zuletzt haben Sie hier gearbeitet');
     expect(html).toContain('Weiterarbeiten');
     expect(html).toContain('Verwerfen');
     expect(html).toContain('Kundenauftrag');

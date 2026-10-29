@@ -183,10 +183,12 @@ export function DocumentUploadPage() {
   }, []);
 
   const openFilePicker = () => {
-    setUploadError(null);
-    setConfirmError(null);
     // Safari: click must stay inside the user gesture — no await, and the current
     // draft survives until a new preview has been stored successfully.
+    // P1 A-02 — no state change before a file has actually been picked: clearing the
+    // error here re-rendered the page into the start view while the picker was open,
+    // and the selection arrived at a detached input (lost silently). `processFile`
+    // clears errors once a new file is there; a cancelled picker keeps the error view.
     inputRef.current?.click();
   };
 
@@ -392,6 +394,12 @@ export function DocumentUploadPage() {
    * UPLOAD-DRAFT-RESUME-01B1B — the same real file input in every page state.
    * Only one branch renders at a time, so exactly one input carries inputRef and
    * openFilePicker works in preview and error views too.
+   *
+   * P1 A-02 — and at the same place in every branch: always the first child of the
+   * page root (it is hidden, `display: none`). React keeps an element only at the same
+   * position; before, the start view rendered it inside the drop zone, so a branch
+   * change (error → start) remounted it and a selection made from the error view went
+   * to the detached old input.
    */
   const fileInput = (
     <input
@@ -408,6 +416,7 @@ export function DocumentUploadPage() {
   if (uploadError) {
     return (
       <div className="page document-upload-page" data-testid="document-upload-page">
+        {fileInput}
         <PageHeader
           title={translate('document.upload.title')}
           subtitle={translate('document.upload.subtitle')}
@@ -415,22 +424,12 @@ export function DocumentUploadPage() {
           backHref="/dokumente"
           backTestId="document-upload-back"
         />
-        {fileInput}
         <DocumentUploadErrorPanel
           errorCode={uploadError}
           translate={translate}
-          onRetry={() => {
-            setUploadError(null);
-            openFilePicker();
-          }}
-          onNewPhoto={() => {
-            setUploadError(null);
-            navigate('/scan?input=camera');
-          }}
-          onSelectFile={() => {
-            setUploadError(null);
-            openFilePicker();
-          }}
+          onRetry={openFilePicker}
+          onNewPhoto={() => navigate('/scan?input=camera')}
+          onSelectFile={openFilePicker}
         />
       </div>
     );
@@ -445,6 +444,7 @@ export function DocumentUploadPage() {
 
     return (
       <div className="page document-upload-page" data-testid="document-upload-page">
+        {fileInput}
         <PageHeader
           title={translate('document.upload.title')}
           subtitle={translate('scan.ocr.previewSubtitle')}
@@ -452,7 +452,6 @@ export function DocumentUploadPage() {
           backHref="/dokumente"
           backTestId="document-upload-back"
         />
-        {fileInput}
         <OcrPreviewPanel
           fileName={pendingUpload.cachedFile.fileName}
           extraction={pendingUpload.extraction}
@@ -489,6 +488,7 @@ export function DocumentUploadPage() {
 
   return (
     <div className="page document-upload-page" data-testid="document-upload-page">
+      {fileInput}
       <PageHeader
         title={translate('document.upload.title')}
         subtitle={translate('document.upload.subtitle')}
@@ -517,7 +517,6 @@ export function DocumentUploadPage() {
         >
           <p className="document-upload-dropzone__title">{translate('document.upload.dropTitle')}</p>
           <p className="document-upload-dropzone__hint">{translate('document.upload.dropHint')}</p>
-          {fileInput}
           <Button
             type="button"
             variant="outline"

@@ -341,7 +341,8 @@ export function buildExpenseInputFromInbox(
     : resolveSafeGrossAmount(item, printedAmount);
 
   return {
-    title: item.title,
+    // Abschluss-Rundgang R-12 — „Gerade erfasst:“ ist der Erfassungszustand der Prüfseite, kein Belegtitel.
+    title: item.title.replace(/^Gerade erfasst:\s*/i, '').trim() || item.title,
     supplierName: item.sender.trim() || 'Unbekannt',
     // Nacharbeit 3 — eine Gutschrift trägt ihre eigene Nummer, nie die der zitierten Rechnung.
     invoiceNumber: isSupplierCreditNote

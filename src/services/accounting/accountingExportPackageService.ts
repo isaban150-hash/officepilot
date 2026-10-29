@@ -259,7 +259,19 @@ export async function buildAccountingExportPackage(
     // FC01A-P1-Restkorrektur (lokaler Altbestand) — Netto/USt ungeklärt: nicht gebucht, aber genannt.
     ...(bookings.netUnresolved ?? []).map((entry) => ({
       id: entry.sourceId,
-      titel: `Netto/USt ungeklärt (Altbestand), nicht gebucht: ${entry.belegnummer || entry.sourceId}`,
+      titel:
+        entry.grund === 'steueraufteilung_offen'
+          ? // P1-KORREKTURBLOCK A-04 — Eingangsbeleg ohne belegte Steueraufteilung: leer, nicht geschätzt.
+            `Steueraufteilung offen (Netto/Vorsteuer nicht belegt), nicht gebucht: ${entry.belegnummer || entry.sourceId}`
+          : `Netto/USt ungeklärt (Altbestand), nicht gebucht: ${entry.belegnummer || entry.sourceId}`,
+    })),
+    /*
+     * P1-KORREKTUR A04-WEISS-R1 — Altbestand mit Prüfbefund: Die Buchungszeile bleibt (Werte unverändert) und trägt
+     * den Vorbehalt „UNGEPRÜFT“; hier steht der Fall zusätzlich als unklar — das Paket heißt dann nicht „vollständig“.
+     */
+    ...(model.altbestandPruefen ?? []).map((entry) => ({
+      id: entry.id,
+      titel: `Altbestand ungeprüft (0,00 Steuer bei diesem Steuerstatus, Aufteilung möglicherweise nicht belegt), Werte unverändert: ${entry.belegnummer || entry.id}`,
     })),
   ];
   const manifest: Record<string, unknown> = {

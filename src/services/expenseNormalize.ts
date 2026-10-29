@@ -81,6 +81,17 @@ export function normalizeExpense(raw: Partial<Expense> & Pick<Expense, 'id'>): E
     netAmount,
     taxAmount,
     grossAmount,
+    // P1-KORREKTURBLOCK A-04 — Kennzeichen der Steueraufteilung überstehen Laden und Abgleich (sonst ginge „offen" verloren).
+    ...(raw.taxSplit === 'belegt' || raw.taxSplit === 'gemischt' || raw.taxSplit === 'offen' ? { taxSplit: raw.taxSplit } : {}),
+    ...(raw.inputTaxDeduction === 'voll' || raw.inputTaxDeduction === 'teilweise' || raw.inputTaxDeduction === 'keiner'
+      ? { inputTaxDeduction: raw.inputTaxDeduction }
+      : {}),
+    // Der abziehbare Betrag gehört nur zu „teilweise“ — ein veralteter Wert aus einem früheren Stand fällt weg.
+    ...(raw.inputTaxDeduction === 'teilweise' &&
+    typeof raw.deductibleTaxAmount === 'number' &&
+    Number.isFinite(raw.deductibleTaxAmount)
+      ? { deductibleTaxAmount: raw.deductibleTaxAmount }
+      : {}),
     currency: raw.currency?.trim() || 'EUR',
     paymentStatus,
     payments: (raw.payments ?? []).map(cloneExpensePayment),

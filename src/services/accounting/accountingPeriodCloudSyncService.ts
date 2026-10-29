@@ -100,7 +100,7 @@ export interface ClosureRpcResult {
   noop: boolean;
   /**
    * Systemische Gesamtnacharbeit (E1/D1) — nur wenn der Server die Revision gegen seinen Finanzbestand geprüft hat
-   * (`validated_version = 5`, Datenstand, Zeitpunkt). Fehlt die Angabe (alter Server, alte Revision), ist die Revision
+   * (`validated_version` 5 oder 6, Datenstand, Zeitpunkt). Fehlt die Angabe (alter Server, alte Revision), ist die Revision
    * nicht cloudbestätigt.
    */
   server?: AccountingPeriodServerConfirmation;
@@ -113,12 +113,14 @@ export function serverConfirmationFrom(
     | null
     | undefined,
 ): AccountingPeriodServerConfirmation | undefined {
-  if (!data || Number(data.validated_version) !== 5) return undefined;
+  // P1-KORREKTUR A04-WEISS-R2 — Fassung 6 ist die neue servervalidierte Fassung; Fassung-5-Revisionen bleiben bestätigt.
+  const fassung = Number(data?.validated_version);
+  if (!data || (fassung !== 5 && fassung !== 6)) return undefined;
   const fingerprint = typeof data.fingerprint === 'string' ? data.fingerprint : '';
   const bestaetigtAm = typeof data.validated_at === 'string' ? data.validated_at : '';
   const revision = Number(data.revision);
   const datenstand = Number(data.finance_revision);
-  if (!fingerprint.startsWith('p5:') || !bestaetigtAm || !Number.isFinite(revision) || revision < 1 || !Number.isFinite(datenstand)) {
+  if (!fingerprint.startsWith(`p${fassung}:`) || !bestaetigtAm || !Number.isFinite(revision) || revision < 1 || !Number.isFinite(datenstand)) {
     return undefined;
   }
   return { revision, fingerprint, validiert: true, datenstand, bestaetigtAm };
@@ -383,6 +385,8 @@ export function rowToAccountingPeriodClosure(
       ...(manifest.fingerprintVersion === 4 ? { fingerprintVersion: 4 as const } : {}),
       // Systemische Gesamtnacharbeit — Fassung 5 samt kumulierter offener Posten bleibt erhalten.
       ...(manifest.fingerprintVersion === 5 ? { fingerprintVersion: 5 as const } : {}),
+      // P1-KORREKTUR A04-WEISS-R2 — Fassung 6 samt steuerlicher Merkmale je Beleg bleibt erhalten.
+      ...(manifest.fingerprintVersion === 6 ? { fingerprintVersion: 6 as const } : {}),
       monthKey: (manifest.monthKey as string) ?? monthKey,
       chartOfAccounts: (manifest.chartOfAccounts as string) ?? '',
       documentCount: Number(manifest.documentCount ?? 0),

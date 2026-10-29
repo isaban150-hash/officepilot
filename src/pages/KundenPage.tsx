@@ -236,7 +236,7 @@ export function KundenPage() {
                   </>
                 ) : undefined
               }
-              meta={`${translate('kunden.meta.orders').replace('{count}', String(kunde.orderCount))}${
+              meta={`${(kunde.orderCount === 1 ? translate('kunden.meta.orderOne') : translate('kunden.meta.orders').replace('{count}', String(kunde.orderCount)))}${
                 kunde.openInvoiceCount > 0
                   ? ` · ${translate('kunden.meta.openInvoices').replace('{count}', String(kunde.openInvoiceCount))}`
                   : ''

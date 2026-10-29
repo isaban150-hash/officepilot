@@ -1071,7 +1071,8 @@ export function mapInboxItemToDocumentInput(
   const archiveTruthSnapshot = buildDocumentArchiveTruthSnapshotFromInbox({ item });
 
   return {
-    title: item.title,
+    // Abschluss-Rundgang R-12 — „Gerade erfasst:“ ist der Erfassungszustand der Prüfseite, kein Dokumenttitel.
+    title: item.title.replace(/^Gerade erfasst:\s*/i, '').trim() || item.title,
     category: mapDocumentCategory(item),
     issuer: item.sender,
     recognizedText: buildRecognizedTextFromInbox(item),

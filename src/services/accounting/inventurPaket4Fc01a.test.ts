@@ -9,7 +9,7 @@
  *  M4  Zahlungsart einer Zahlung (Bank → bar) ändert Datei und Abschluss
  *  M5  INV-05 über den Monatswechsel: Juni bleibt gültig, Juli trägt die Rücknahme; Rücknahme der Restzahlung ändert Juli
  *  M6  Beleg-Skonto in buchungen.csv; derselbe Stand ergibt dieselben Dateien und denselben Fingerabdruck
- *  M7  Cloud-Rundweg behält die Fassung (neue Stände: Version 5; Version 4 bleibt Version 4)
+ *  M7  Cloud-Rundweg behält die Fassung (neue Stände: Version 6 seit P1-KORREKTUR A04-WEISS-R2; Version 4 bleibt Version 4)
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resetTestStores } from '../../test/resetStores';
@@ -83,19 +83,20 @@ beforeEach(() => {
 });
 
 describe('INV-04 — der Abschluss bindet, was der Export über Zahlungen und Skonto sagt', () => {
-  it('M0 ein neuer Abschluss entsteht mit Version 5 (der Dienst bildet den Stand zum Abschließen so)', () => {
+  it('M0 ein neuer Abschluss entsteht mit Version 6 (der Dienst bildet den Stand zum Abschließen so)', () => {
     kundeIn('NW');
     const state = buildAccountingPeriodState(mappe(rechnung([zahlung('p1', 466.48, '2026-06-05')]), '2026-06'), [], 'SKR03', []);
     // Systemische Gesamtnacharbeit — Fassung 5: servervalidierbar, inklusive kumulierter offener Posten.
-    expect(state.currentManifest.fingerprintVersion).toBe(5);
-    expect(state.currentFingerprint.startsWith('p5:')).toBe(true);
+    // P1-KORREKTUR A04-WEISS-R2 — neue Stände in Fassung 6 (zusätzlich Steueraufteilung und Vorsteuerabzug).
+    expect(state.currentManifest.fingerprintVersion).toBe(6);
+    expect(state.currentFingerprint.startsWith('p6:')).toBe(true);
   });
 
-  it('M1 WEISS I01: Skontoabzug fällt aus der Zahlungsdatei → neuer Abschluss (Version 5) ist ungültig', () => {
+  it('M1 WEISS I01: Skontoabzug fällt aus der Zahlungsdatei → neuer Abschluss (Version 6) ist ungültig', () => {
     kundeIn('NW');
     const vorher = mappe(rechnung([zahlung('p1', 466.48, '2026-06-05')]), '2026-06');
     const closure = abschluss(vorher);
-    expect(closureFingerprintVersion(closure)).toBe(5);
+    expect(closureFingerprintVersion(closure)).toBe(6);
     kundeIn('NI');
     const nachher = mappe(rechnung([zahlung('p1', 466.48, '2026-06-05')]), '2026-06');
     expect(vorher.zahlungenAusgang[0]!.skontoAbzug).toBe(9.52);
@@ -187,7 +188,7 @@ describe('INV-04 — der Abschluss bindet, was der Export über Zahlungen und Sk
       fingerprint: neu.fingerprint, manifest: JSON.parse(JSON.stringify(neu.manifest)), reopened_at: null, reopened_by: null,
       reopen_reason: null, created_at: neu.createdAt, updated_at: neu.updatedAt,
     } as unknown as Parameters<typeof rowToAccountingPeriodClosure>[0]);
-    expect(zurueck.manifest.fingerprintVersion).toBe(5);
+    expect(zurueck.manifest.fingerprintVersion).toBe(6);
     expect(buildPeriodFingerprint(zurueck.manifest)).toBe(neu.fingerprint);
   });
 });
